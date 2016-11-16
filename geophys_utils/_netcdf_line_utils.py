@@ -6,7 +6,7 @@ Created on 16/11/2016
 import numpy as np
 import math
 from scipy.interpolate import griddata
-from geophys_utils import get_spatial_ref_from_crs
+from geophys_utils._crs_utils import get_spatial_ref_from_crs
 
 class NetCDFLineUtils(object):
     '''
