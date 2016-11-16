@@ -6,6 +6,16 @@ Created on 16Nov.,2016
 import re
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
+def get_spatial_ref_from_crs(crs):
+    spatial_ref = SpatialReference()
+    # Check for EPSG then Well Known Text
+    epsg_match = re.match('^EPSG:(\d+)$', crs)
+    if epsg_match:
+        spatial_ref.ImportFromEPSG(int(epsg_match.group(1)))
+    else:  # Assume valid WKT definition
+        spatial_ref.ImportFromWkt(crs)
+    return spatial_ref
+
 def get_coordinate_transformation(from_crs, to_crs):
     '''
     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
@@ -16,16 +26,6 @@ def get_coordinate_transformation(from_crs, to_crs):
     if from_crs == to_crs:
         return None
     
-    def get_spatial_ref_from_crs(crs):
-        spatial_ref = SpatialReference()
-        # Check for EPSG then Well Known Text
-        epsg_match = re.match('^EPSG:(\d+)$', crs)
-        if epsg_match:
-            spatial_ref.ImportFromEPSG(int(epsg_match.group(1)))
-        else:  # Assume valid WKT definition
-            spatial_ref.ImportFromWkt(crs)
-        return spatial_ref
-
     from_spatial_ref = get_spatial_ref_from_crs(from_crs)
     to_spatial_ref = get_spatial_ref_from_crs(to_crs)
 

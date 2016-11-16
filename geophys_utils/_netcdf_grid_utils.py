@@ -5,7 +5,7 @@ Created on 14Sep.,2016
 '''
 import numpy as np
 import math
-import scipy.ndimage
+from scipy.ndimage import map_coordinates
 from geophys_utils._crs_utils import get_utm_crs, transform_coords
 
 
@@ -275,7 +275,7 @@ class NetCDFGridUtils(object):
             result_array = np.ones(
                 shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
 
-            value_array = scipy.ndimage.map_coordinates(
+            value_array = map_coordinates(
                 data_variable, index_array.transpose(), cval=no_data_value)
 
             result_array[mask_array] = value_array
@@ -287,7 +287,7 @@ class NetCDFGridUtils(object):
 
             return list(result_array)
         except AssertionError:
-            return scipy.ndimage.map_coordinates(data_variable, np.array(
+            return map_coordinates(data_variable, np.array(
                 [[fractional_indices[0]], [fractional_indices[1]]]), cval=no_data_value)
 
     def sample_transect(self, transect_vertices, crs=None, sample_metres=None):

@@ -27,7 +27,7 @@ class TestNetCDFGridUtilsConstructor(unittest.TestCase):
         netcdf_grid_utils = NetCDFGridUtils(nc_dataset)
     
 class TestNetCDFGridUtilsFunctions(unittest.TestCase):
-    """Unit tests for geophys_utils._netcdf_grid_utils module."""
+    """Unit tests for geophys_utils._netcdf_grid_utils functions"""
     
     MAX_BYTES = 1600
     MAX_ERROR = 0.000001
@@ -61,9 +61,7 @@ class TestNetCDFGridUtilsFunctions(unittest.TestCase):
     def test_sample_transect(self):
         print 'Testing sample_transect function'
         #TODO: Finish this!
-        #transect_samples = netcdf_grid_utils.sample_transect(transect_vertices, crs=None, sample_metres=None):
-
-
+        #transect_samples = netcdf_grid_utils.sample_transect(transect_vertices, crs=None, sample_metres=None)
 
 # Define test suites
 def test_suite():
