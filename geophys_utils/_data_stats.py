@@ -6,7 +6,7 @@ Created on 15Aug.,2016
 import sys
 import netCDF4
 import numpy as np
-from geophys2netcdf.array_pieces import array_pieces
+from geophys_utils import array_pieces
 
 
 class DataStats(object):
@@ -17,12 +17,12 @@ class DataStats(object):
                 'max', 'mean']  # , 'median', 'std_dev', 'percentile_1', 'percentile_99']
 
     def __init__(self, netcdf_path=None, netcdf_dataset=None,
-                 max_array=500000000):
+                 max_bytes=500000000):
         '''
         DataStats Constructor
         Parameter:
             netcdf_path - string representing path to NetCDF file or URL for an OPeNDAP endpoint
-            max_array - maximum number of bytes to pull into memory
+            max_bytes - maximum number of bytes to pull into memory
         '''
         assert netcdf_dataset or netcdf_path, 'Either netcdf_dataset or netcdf_path must be defined'
         assert not (
@@ -53,7 +53,7 @@ class DataStats(object):
         weighted_mean = 0.0
 
         for piece_array, _piece_offsets in array_pieces(
-                self.data_variable, max_array):
+                self.data_variable, max_bytes):
 
             if isinstance(piece_array, np.ma.core.MaskedArray):
                 piece_array = piece_array.data

@@ -1,7 +1,7 @@
 """
 Unit tests for geophys_utils._crs_utils against a NetCDF file
 
-Created on 5Oct.,2016
+Created on 15/11/2016
 
 @author: Alex Ip
 """
@@ -9,8 +9,6 @@ import unittest
 import re
 from osgeo.osr import CoordinateTransformation
 from geophys_utils._crs_utils import get_coordinate_transformation, get_utm_crs, transform_coords
-
-
 
 class TestCRSUtils(unittest.TestCase):
     """Unit tests for geophys_utils._crs_utils module."""

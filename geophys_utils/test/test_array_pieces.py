@@ -1,7 +1,7 @@
 """
-Unit tests for geophys_utils._crs_utils against a NetCDF file
+Unit tests for geophys_utils._array_pieces module
 
-Created on 5Oct.,2016
+Created on 15/11/2016
 
 @author: Alex Ip
 """
@@ -14,7 +14,7 @@ class TestArrayPieces(unittest.TestCase):
     
     def test_array_pieces(self):
         print 'Testing array_pieces function'
-        # create 100 x 100 array
+        # create 100 x 100 array with unique elements
         test_array = np.reshape(np.arange(0, 10000, dtype='int16'), (100,100))
         sixteenth_bytes = test_array.dtype.itemsize * reduce(lambda x, y: x * y / 16, test_array.shape)
         overlap = 10
@@ -33,6 +33,7 @@ class TestArrayPieces(unittest.TestCase):
             piece_array = array_pieces_results[array_offset]
             
             assert piece_array.dtype.itemsize * reduce(lambda x, y: x * y / 16, piece_array.shape) <= sixteenth_bytes, 'piece_array too large'
+            
             expected_shape = tuple([test_array.shape[dim_index] / 4 
                                     for dim_index in range(2)])
             assert piece_array.shape == expected_shape, 'piece_array is wrong shape'

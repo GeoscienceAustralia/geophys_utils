@@ -40,9 +40,9 @@ class NetCDFGridUtils(object):
                 for coord_index in range(2):
                     centre_pixel_coords[coord_index].reverse()
 
-            nominal_utm_crs = get_utm_crs(centre_pixel_coords[0])
-            centre_pixel_utm_coords = self.transform_coords(
-                centre_pixel_coords, to_crs=nominal_utm_crs)
+            nominal_utm_crs = get_utm_crs(centre_pixel_coords[0], self.crs)
+            centre_pixel_utm_coords = transform_coords(
+                centre_pixel_coords, from_crs=self.crs, to_crs=nominal_utm_crs)
 
             return [abs(centre_pixel_utm_coords[1][
                         dim_index] - centre_pixel_utm_coords[0][dim_index]) for dim_index in range(2)]
@@ -84,6 +84,8 @@ class NetCDFGridUtils(object):
 
         self.grid_mapping_variable = netcdf_dataset.variables[
             self.data_variable.grid_mapping]
+        
+        self.crs = self.grid_mapping_variable.spatial_ref
 
         self.GeoTransform = [float(
             number) for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
@@ -108,7 +110,9 @@ class NetCDFGridUtils(object):
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
         @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
         '''
-        native_coordinates = transform_coords(coordinates, crs)
+        crs = crs or self.crs
+        native_coordinates = transform_coords(coordinates, self.crs, crs)
+        
 
         # Convert coordinates to same dimension ordering as array
         if self.YX_order:
@@ -139,7 +143,8 @@ class NetCDFGridUtils(object):
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
         @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
         '''
-        native_coordinates = self.transform_coords(coordinates, crs)
+        crs = crs or self.crs
+        native_coordinates = transform_coords(coordinates, self.crs, crs)
 
         self.pixel_size
 
