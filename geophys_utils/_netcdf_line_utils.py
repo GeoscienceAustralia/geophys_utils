@@ -23,7 +23,7 @@ class NetCDFLineUtils(object):
         try:
             self.crs = self.crs_variable.spatial_ref
         except:
-            get_spatial_ref_from_crs(self.crs_variable.epsg_code).ExportToWkt()
+            self.crs = get_spatial_ref_from_crs(self.crs_variable.epsg_code).ExportToWkt()
 
         
         # Pull lat/lon coordinates out of individual lat/lon arrays - note YX order
