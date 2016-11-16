@@ -22,10 +22,10 @@ class NetCDFLineUtils(object):
     def get_polygon(self):
         pass
     
-    def get_lines(self, bounds):
+    def get_lines(self, bounds, variables):
         pass
     
-    def grid_points(self, bounds, grid_resolution, grid_crs=None):
+    def grid_points(self, bounds, grid_resolution, variables, grid_crs=None):
         pass    
     
     def clean_lines(self, lines):
