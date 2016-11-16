@@ -326,7 +326,7 @@ class NetCDFGridUtils(object):
         # print 'average_coord = %s' % average_coord
         nominal_utm_crs = get_utm_crs(average_coord, crs)
         # print 'nominal_utm_crs = %s' % nominal_utm_crs
-        utm_transect_vertices = self.transform_coords(
+        utm_transect_vertices = transform_coords(
             transect_vertices, crs, nominal_utm_crs)
         # print 'utm_transect_vertices = %s' % utm_transect_vertices
 
@@ -380,5 +380,5 @@ class NetCDFGridUtils(object):
                                    len(utm_transect_vertices) - 1):
                 sample_points.pop()
 
-        return self.transform_coords(
+        return transform_coords(
             sample_points, nominal_utm_crs, crs), sample_metres
