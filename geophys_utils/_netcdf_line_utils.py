@@ -10,7 +10,7 @@ import os
 import re
 import tempfile
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords
+from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
 
 class NetCDFLineUtils(object):
     '''
@@ -94,9 +94,12 @@ class NetCDFLineUtils(object):
                               (bounds[0] <= self.latlon[:,1]) * (self.latlon[:,1] <= bounds[2]))
     
     def get_lines(self, bounds=None, variables=None, lines=None):
-        # Grid all data variables if not specified
         bounds = bounds or self.bounds
+
+        # Return all data variables if not specified
         variables = variables or self.point_variables
+        
+        # Return all lines if not specified
         lines = lines or self.netcdf_dataset.variables['line'][...]
     
     def grid_points(self, grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', grid_crs=None, point_step=1):
@@ -118,6 +121,7 @@ class NetCDFLineUtils(object):
         spatial_subset_mask = self.get_spatial_mask(expanded_grid_bounds)
         
         # Transform grid extents
+        #TODO: Take care of distortions to ensure nothing is clipped - need to reproject all corner points
         if grid_crs is not None:
             grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2.2)), self.crs, grid_crs)).flatten()
 
@@ -152,7 +156,7 @@ class NetCDFLineUtils(object):
         # Reproject coordinates if required
         if grid_crs is not None:
             # N.B: Be careful about XY vs YX coordinate order         
-            coordinates = transform_coords(coordinates[:,::-1], self.crs, grid_crs)[:,::-1]
+            coordinates = np.array(transform_coords(coordinates[:,::-1], self.crs, grid_crs))[:,::-1]
 
         # Interpolate required values to the grid
         grids = {}
@@ -166,3 +170,14 @@ class NetCDFLineUtils(object):
             return grids.values()[0]
         else:
             return grids
+        
+    def utm_grid_points(self, utm_grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', point_step=1):
+        grid_bounds = grid_bounds or self.bounds
+        
+        centre_coords = [(grid_bounds[dim_index] + grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
+        utm_crs = get_utm_crs(centre_coords, self.crs)
+        
+        return self.grid_points(utm_grid_resolution, grid_bounds, variables, resampling_method, utm_crs, point_step)
+
+        
+        
