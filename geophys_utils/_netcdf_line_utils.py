@@ -99,17 +99,26 @@ class NetCDFLineUtils(object):
         # Return all data variables if not specified
         variables = variables or self.point_variables
         
+        # Allow single variable to be given as a string
+        single_var = (type(variables) in [str, unicode])
+        if single_var:
+            variables = [variables]
+        
         # Return all lines if not specified
         lines = lines or self.netcdf_dataset.variables['line'][...]
     
     def grid_points(self, grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', grid_crs=None, point_step=1):
         '''
         '''
-        grid_bounds = grid_bounds or self.bounds
+        # Grid all data variables if not specified
+        variables = variables or self.point_variables
 
-        # Allow single variable to be specified as a string not in a list
-        if type(variables) in [str, unicode]:
+        # Allow single variable to be given as a string
+        single_var = (type(variables) in [str, unicode])
+        if single_var:
             variables = [variables]
+        
+        grid_bounds = grid_bounds or self.bounds
 
         # Extend area for points out beyond grid extents for nice interpolation at edges
         expanded_grid_bounds = [grid_bounds[0]-2*grid_resolution,
@@ -125,14 +134,6 @@ class NetCDFLineUtils(object):
         if grid_crs is not None:
             grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2,2)), self.crs, grid_crs)).flatten()
 
-        # Grid all data variables if not specified
-        variables = variables or self.point_variables
-
-        # Allow single variable to be given as a string
-        if type(variables) in [str, unicode]:
-            single_var = True
-            variables = [variables]
-        
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         min_lat = round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6)
         max_lat = round(math.floor(grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
@@ -140,7 +141,6 @@ class NetCDFLineUtils(object):
         max_lon = round(math.floor(grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6)
         grid_bounds = (min_lon, min_lat, max_lon, max_lat)    
         
-    
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2 fudge to avoid truncation due to rounding error
         grid_y, grid_x = np.mgrid[grid_bounds[3]:grid_bounds[1]-grid_resolution/2:-grid_resolution, 
@@ -179,6 +179,3 @@ class NetCDFLineUtils(object):
         utm_crs = get_utm_crs(centre_coords, self.crs)
         
         return self.grid_points(utm_grid_resolution, grid_bounds, variables, resampling_method, utm_crs, point_step)
-
-        
-        
