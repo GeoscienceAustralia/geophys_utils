@@ -10,7 +10,7 @@ import os
 import re
 import tempfile
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import get_spatial_ref_from_crs
+from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords
 
 class NetCDFLineUtils(object):
     '''
@@ -104,6 +104,11 @@ class NetCDFLineUtils(object):
         '''
         grid_bounds = grid_bounds or self.bounds
 
+        # Allow single variable to be specified as a string not in a list
+        if type(variables) in [str, unicode]:
+            variables = [variables]
+
+        # Extend area for points out beyond grid extents for nice interpolation at edges
         expanded_grid_bounds = [grid_bounds[0]-2*grid_resolution,
                                 grid_bounds[1]-2*grid_resolution,
                                 grid_bounds[2]+2*grid_resolution,
@@ -112,18 +117,20 @@ class NetCDFLineUtils(object):
 
         spatial_subset_mask = self.get_spatial_mask(expanded_grid_bounds)
         
+        # Transform grid extents
+        if grid_crs is not None:
+            grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2.2)), self.crs, grid_crs)).flatten()
+
         # Grid all data variables if not specified
         variables = variables or self.point_variables
-        # Allow single variable to be given as a string
-        if type(variables) in [str, unicode]:
-            variables = [variables]
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         min_lat = round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6)
         max_lat = round(math.floor(grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
         min_lon = round(math.floor(grid_bounds[0] / grid_resolution) * grid_resolution, 6)
         max_lon = round(math.floor(grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6)
-        grid_bounds = (min_lon, min_lat, max_lon, max_lat)            
+        grid_bounds = (min_lon, min_lat, max_lon, max_lat)    
+        
     
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2 fudge to avoid truncation due to rounding error
@@ -135,11 +142,17 @@ class NetCDFLineUtils(object):
         point_subset_mask = np.zeros(shape= self.netcdf_dataset.variables['point'].shape, dtype=bool)
         point_subset_mask[0:-1:2] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
+        
+        coordinates = self.latlon[...][point_subset_mask]
+        # Reproject coordinates if required
+        if grid_crs is not None:
+            # N.B: Be careful about XY vs YX coordinate order         
+            coordinates = transform_coords(coordinates[:,::-1], self.crs, grid_crs)[:,::-1]
 
         # Interpolate required values to the grid
         grids = {}
         for variable in [self.netcdf_dataset.variables[var_name] for var_name in variables]:
-            grids[variable.name] = griddata(self.latlon[...][point_subset_mask], 
+            grids[variable.name] = griddata(coordinates, 
                                   variable[...][point_subset_mask], #TODO: Check why this is faster than direct indexing
                                   (grid_y, grid_x), 
                                   method=resampling_method)

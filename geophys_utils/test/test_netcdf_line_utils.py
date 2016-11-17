@@ -1,5 +1,5 @@
 """
-Unit tests for geophys_utils._netcdf_line_utils against a NetCDF file
+Unit tests for geophys_utils._netcdf_line_utils against a NetCDF line data file
 
 Created on 15/11/2016
 
@@ -75,7 +75,7 @@ class TestNetCDFLineUtilsFunctions(unittest.TestCase):
         print grids
 
         grids = netcdf_line_utils.grid_points(grid_resolution=0.001, variables=['mag_awags'],
-                                              bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
+                                              grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
         print grids
 
 

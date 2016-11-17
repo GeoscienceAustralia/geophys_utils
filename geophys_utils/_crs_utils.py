@@ -60,7 +60,7 @@ def get_utm_crs(coordinate, from_crs):
     utm_spatial_ref.SetUTM(utm_getZone(
         latlon_coord[0]), utm_isNorthern(latlon_coord[1]))
 
-    return utm_spatial_ref.ExportToPrettyWkt()
+    return utm_spatial_ref.ExportToWkt()
 
 def transform_coords(coordinates, from_crs, to_crs):
     '''
