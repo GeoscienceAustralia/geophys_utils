@@ -103,21 +103,26 @@ class NetCDFLineUtils(object):
         '''
         '''
         grid_bounds = grid_bounds or self.bounds
+
         expanded_grid_bounds = [grid_bounds[0]-2*grid_resolution,
                                 grid_bounds[1]-2*grid_resolution,
                                 grid_bounds[2]+2*grid_resolution,
                                 grid_bounds[3]+2*grid_resolution
                                 ]
+
         spatial_subset_mask = self.get_spatial_mask(expanded_grid_bounds)
         
         # Grid all data variables if not specified
         variables = variables or self.point_variables
+        # Allow single variable to be given as a string
+        if type(variables) in [str, unicode]:
+            variables = [variables]
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
-        min_lat = round(math.floor(grid_bounds[0] / grid_resolution) * grid_resolution, 6)
-        max_lat = round(math.floor(grid_bounds[0] / grid_resolution + 1.0) * grid_resolution, 6)
+        min_lat = round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6)
+        max_lat = round(math.floor(grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
         min_lon = round(math.floor(grid_bounds[0] / grid_resolution) * grid_resolution, 6)
-        max_lon = round(math.floor(grid_bounds[0] / grid_resolution + 1.0) * grid_resolution, 6)
+        max_lon = round(math.floor(grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6)
         grid_bounds = (min_lon, min_lat, max_lon, max_lat)            
     
         # Create grids of Y and X values. Note YX ordering and inverted Y
@@ -130,7 +135,7 @@ class NetCDFLineUtils(object):
         point_subset_mask = np.zeros(shape= self.netcdf_dataset.variables['point'].shape, dtype=bool)
         point_subset_mask[0:-1:2] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
-        
+
         # Interpolate required values to the grid
         grids = {}
         for variable in [self.netcdf_dataset.variables[var_name] for var_name in variables]:
