@@ -123,7 +123,7 @@ class NetCDFLineUtils(object):
         # Transform grid extents
         #TODO: Take care of distortions to ensure nothing is clipped - need to reproject all corner points
         if grid_crs is not None:
-            grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2.2)), self.crs, grid_crs)).flatten()
+            grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2,2)), self.crs, grid_crs)).flatten()
 
         # Grid all data variables if not specified
         variables = variables or self.point_variables
@@ -165,7 +165,8 @@ class NetCDFLineUtils(object):
                                   variable[...][point_subset_mask], #TODO: Check why this is faster than direct indexing
                                   (grid_y, grid_x), 
                                   method=resampling_method)
-            
+
+        #TODO: Return CRS and GeoTransform for completeness    
         if single_var:
             return grids.values()[0]
         else:
