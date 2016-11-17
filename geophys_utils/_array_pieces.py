@@ -22,7 +22,7 @@ def array_pieces(ndarray, overlap=0, max_bytes=None):
         piece_array: array subset less than max_bytes in size
         array_offset: start indices of subset in whole array
     '''
-    max_bytes = max_bytes or 500000000  # Defaults to 500,000,000 for NCI's OPeNDAP
+    max_bytes = max_bytes or 500000000  # Defaults to 500MB for NCI's OPeNDAP
 
     array_shape = ndarray.shape
     array_dimensions = len(array_shape)
