@@ -99,7 +99,7 @@ class NetCDFLineUtils(object):
         variables = variables or self.point_variables
         lines = lines or self.netcdf_dataset.variables['line'][...]
     
-    def grid_points(self, grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', grid_crs=None):
+    def grid_points(self, grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', grid_crs=None, point_step=1):
         '''
         '''
         grid_bounds = grid_bounds or self.bounds
@@ -123,6 +123,11 @@ class NetCDFLineUtils(object):
 
         # Grid all data variables if not specified
         variables = variables or self.point_variables
+
+        # Allow single variable to be given as a string
+        if type(variables) in [str, unicode]:
+            single_var = True
+            variables = [variables]
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         min_lat = round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6)
@@ -140,7 +145,7 @@ class NetCDFLineUtils(object):
         # Skip points to reduce memory requirements - this is a horrible, lazy hack!
         #TODO: Implement function which grids spatial subsets.
         point_subset_mask = np.zeros(shape= self.netcdf_dataset.variables['point'].shape, dtype=bool)
-        point_subset_mask[0:-1:2] = True
+        point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
         coordinates = self.latlon[...][point_subset_mask]
@@ -157,4 +162,7 @@ class NetCDFLineUtils(object):
                                   (grid_y, grid_x), 
                                   method=resampling_method)
             
-        return grids
+        if single_var:
+            return grids.values()[0]
+        else:
+            return grids
