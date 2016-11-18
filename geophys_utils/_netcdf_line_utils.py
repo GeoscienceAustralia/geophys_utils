@@ -107,7 +107,7 @@ class NetCDFLineUtils(object):
         # Return all lines if not specified
         lines = lines or self.netcdf_dataset.variables['line'][...]
     
-    def grid_points(self, variables=None, grid_resolution, native_grid_bounds=None, reprojected_grid_bounds=None, resampling_method='linear', grid_crs=None, point_step=1):
+    def grid_points(self, grid_resolution, variables=None, native_grid_bounds=None, reprojected_grid_bounds=None, resampling_method='linear', grid_crs=None, point_step=1):
         '''
         '''
         def get_reprojected_bounds(bounds, from_crs, to_crs):
@@ -139,28 +139,28 @@ class NetCDFLineUtils(object):
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         pixel_centre_bounds = (round(math.floor(reprojected_grid_bounds[0] / grid_resolution) * grid_resolution, 6),
-                       round(math.floor(reprojected_grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6),
                        round(math.floor(reprojected_grid_bounds[1] / grid_resolution) * grid_resolution, 6),
-                       round(math.floor(reprojected_grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
+                       round(math.floor(reprojected_grid_bounds[2] / grid_resolution - 1.0) * grid_resolution + grid_resolution, 6),
+                       round(math.floor(reprojected_grid_bounds[3] / grid_resolution - 1.0) * grid_resolution + grid_resolution, 6)
                        )
         
         grid_size = [pixel_centre_bounds[dim_index+2] - pixel_centre_bounds[dim_index] for dim_index in range(2)]
 
         # Extend area for points an arbitrary 4% out beyond grid extents for nice interpolation at edges
-        expanded_grid_bounds = [pixel_centre_bounds[0]-grid_size/50.0,
-                                pixel_centre_bounds[1]-grid_size/50.0,
-                                pixel_centre_bounds[2]+grid_size/50.0,
-                                pixel_centre_bounds[3]+grid_size/50.0
+        expanded_grid_bounds = [pixel_centre_bounds[0]-grid_size[0]/50.0,
+                                pixel_centre_bounds[1]-grid_size[0]/50.0,
+                                pixel_centre_bounds[2]+grid_size[1]/50.0,
+                                pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
         spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(expanded_grid_bounds, grid_crs, self.crs))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
-        # Note GRID_RESOLUTION/2 fudge to avoid truncation due to rounding error
+        # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
         grid_y, grid_x = np.mgrid[pixel_centre_bounds[3]:pixel_centre_bounds[1]-grid_resolution/2.0:-grid_resolution, 
                                  pixel_centre_bounds[0]:pixel_centre_bounds[2]+grid_resolution/2.0:grid_resolution]
 
-        # Skip points to reduce memory requirements - this is a horrible, lazy hack!
+        # Skip points to reduce memory requirements
         #TODO: Implement function which grids spatial subsets.
         point_subset_mask = np.zeros(shape= self.netcdf_dataset.variables['point'].shape, dtype=bool)
         point_subset_mask[0:-1:point_step] = True
@@ -195,7 +195,7 @@ class NetCDFLineUtils(object):
         return (grid_crs or self.crs), geotransform, grids
     
     
-    def utm_grid_points(self, utm_grid_resolution, native_grid_bounds=None, variables=None, resampling_method='linear', point_step=1):
+    def utm_grid_points(self, utm_grid_resolution, variables=None, native_grid_bounds=None, resampling_method='linear', point_step=1):
         native_grid_bounds = native_grid_bounds or self.bounds
         
         centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
