@@ -20,6 +20,7 @@ class NetCDFLineUtils(object):
     def __init__(self, netcdf_dataset):
         '''
         NetCDFLineUtils Constructor
+        @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
         '''
         self.netcdf_dataset = netcdf_dataset
         self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
@@ -79,21 +80,37 @@ class NetCDFLineUtils(object):
 
         
     def __del__(self):
+        '''
+        NetCDFLineUtils Destructor
+        '''
         cache_file_path = self._nc_cache_dataset.filename()
         self._nc_cache_dataset.close()
         os.remove(cache_file_path)
         
     def get_polygon(self):
+        '''
+        Under construction - do not use except for testing
+        '''
         pass
     
-    def get_spatial_mask(self, bounds):
+    def get_spatial_mask(self, bounds, bounds_crs=None):
         '''
-        Return boolean mask of dimension 'point' for all coordinates within specified bounds
+        Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
         '''
-        return np.logical_and((bounds[0] <= self.xycoords[:,0]) * (self.xycoords[:,0] <= bounds[2]), 
-                              (bounds[1] <= self.xycoords[:,1]) * (self.xycoords[:,1] <= bounds[3]))
+        if bounds_crs is None:
+            coordinates = self.xycoords
+        else:
+            coordinates = np.array(transform_coords(self.xycoords[...], self.crs, bounds_crs))
+            
+        return np.logical_and((bounds[0] <= coordinates[:,0]) * (coordinates[:,0] <= bounds[2]), 
+                              (bounds[1] <= coordinates[:,1]) * (coordinates[:,1] <= bounds[3]))
+            
+        
     
     def get_lines(self, bounds=None, variables=None, lines=None):
+        '''
+        Under construction - do not use except for testing
+        '''
         bounds = bounds or self.bounds
 
         # Return all data variables if not specified
@@ -106,20 +123,51 @@ class NetCDFLineUtils(object):
         
         # Return all lines if not specified
         lines = lines or self.netcdf_dataset.variables['line'][...]
+        
+        #TODO: Finish this
     
-    def grid_points(self, grid_resolution, variables=None, native_grid_bounds=None, reprojected_grid_bounds=None, resampling_method='linear', grid_crs=None, point_step=1):
+    def get_reprojected_bounds(self, bounds, from_crs, to_crs):
         '''
+        Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
+        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_crs
+        @parameter from_crs: CRS from which to transform bounds
+        @parameter to_crs: CRS to which to transform bounds
+        
+        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_crs
         '''
-        def get_reprojected_bounds(bounds, from_crs, to_crs):
-            if (to_crs is None) or (from_crs is None) or (to_crs == from_crs):
-                return bounds
+        if (to_crs is None) or (from_crs is None) or (to_crs == from_crs):
+            return bounds
+        
+        # Need to look at all four bounding box corners, not just LL & UR
+        original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
+        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_crs, to_crs))
+        
+        return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
             
-            original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-            reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_crs, to_crs))
             
-            return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
-            
-            
+    def grid_points(self, grid_resolution, 
+                    variables=None, 
+                    native_grid_bounds=None, 
+                    reprojected_grid_bounds=None, 
+                    resampling_method='linear', 
+                    grid_crs=None, 
+                    point_step=1):
+        '''
+        Function to grid points in a specified bounding rectangle to a regular grid of the specified resolution and crs
+        @parameter grid_resolution: cell size of regular grid in grid CRS units
+        @parameter variables: Single variable name string or list of multiple variable name strings. Defaults to all point variables
+        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates 
+        @parameter reprojected_grid_bounds: Spatial bounding box of area to grid in grid coordinates
+        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
+        @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
+        @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
+        
+        @return crs: WKT for grid coordinate reference system.
+        @return geotransform: GDAL GeoTransform for grid
+        @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
+        a single grid array if 'variable' parameter value was a string
+        '''
         assert not (native_grid_bounds and reprojected_grid_bounds), 'Either native_grid_bounds or reprojected_grid_bounds can be provided, but not both'
         # Grid all data variables if not specified
         variables = variables or self.point_variables
@@ -130,9 +178,9 @@ class NetCDFLineUtils(object):
             variables = [variables]
         
         if native_grid_bounds:
-            reprojected_grid_bounds = get_reprojected_bounds(native_grid_bounds, self.crs, grid_crs)
+            reprojected_grid_bounds = self.get_reprojected_bounds(native_grid_bounds, self.crs, grid_crs)
         elif reprojected_grid_bounds:
-            native_grid_bounds = get_reprojected_bounds(reprojected_grid_bounds, grid_crs, self.crs)
+            native_grid_bounds = self.get_reprojected_bounds(reprojected_grid_bounds, grid_crs, self.crs)
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
@@ -153,7 +201,7 @@ class NetCDFLineUtils(object):
                                 pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(expanded_grid_bounds, grid_crs, self.crs))
+        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(expanded_grid_bounds, grid_crs, self.crs))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
@@ -196,6 +244,21 @@ class NetCDFLineUtils(object):
     
     
     def utm_grid_points(self, utm_grid_resolution, variables=None, native_grid_bounds=None, resampling_method='linear', point_step=1):
+        '''
+        Function to grid points in a specified native bounding rectangle to a regular grid of the specified resolution in its local UTM CRS
+        @parameter grid_resolution: cell size of regular grid in metres (UTM units)
+        @parameter variables: Single variable name string or list of multiple variable name strings. Defaults to all point variables
+        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates 
+        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
+        @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
+        @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
+        
+        @return crs: WKT for grid coordinate reference system (i.e. local UTM zone)
+        @return geotransform: GDAL GeoTransform for grid
+        @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
+        a single grid array if 'variable' parameter value was a string
+        '''
         native_grid_bounds = native_grid_bounds or self.bounds
         
         native_centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
