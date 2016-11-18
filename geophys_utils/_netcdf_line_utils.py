@@ -136,6 +136,9 @@ class NetCDFLineUtils(object):
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
+
+        print native_grid_bounds
+        print reprojected_grid_bounds
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         pixel_centre_bounds = (round(math.floor(reprojected_grid_bounds[0] / grid_resolution) * grid_resolution, 6),
@@ -198,10 +201,11 @@ class NetCDFLineUtils(object):
     def utm_grid_points(self, utm_grid_resolution, variables=None, native_grid_bounds=None, resampling_method='linear', point_step=1):
         native_grid_bounds = native_grid_bounds or self.bounds
         
-        centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
-        utm_crs = get_utm_crs(centre_coords, self.crs)
+        native_centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
+        utm_crs = get_utm_crs(native_centre_coords, self.crs)
         
-        return self.grid_points(variables, utm_grid_resolution, 
+        return self.grid_points(grid_resolution=utm_grid_resolution, 
+                                variables=variables,
                                 native_grid_bounds=native_grid_bounds, 
                                 resampling_method=resampling_method, 
                                 grid_crs=utm_crs, 
