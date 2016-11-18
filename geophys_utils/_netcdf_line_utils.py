@@ -47,34 +47,34 @@ class NetCDFLineUtils(object):
         self.point_count = len(point_dimension)
         
         self._nc_cache_dataset.createDimension('point', self.point_count if not point_dimension.isunlimited() else None)
-        self._nc_cache_dataset.createDimension('yx', 2)
+        self._nc_cache_dataset.createDimension('xy', 2)
     
         var_options = {'zlib': False}
-        self._nc_cache_dataset.createVariable('latlon', 
+        self._nc_cache_dataset.createVariable('xycoords', 
                                       self.netcdf_dataset.variables['longitude'].dtype, 
-                                      ('point', 'yx'),
+                                      ('point', 'xy'),
                                       **var_options
                                       )
-        self.latlon = self._nc_cache_dataset.variables['latlon']
+        self.xycoords = self._nc_cache_dataset.variables['xycoords']
 
-        pieces_required = max(self.latlon.dtype.itemsize * reduce(lambda x, y: x * y, self.latlon.shape) / self.max_bytes, 1)
+        pieces_required = max(self.xycoords.dtype.itemsize * reduce(lambda x, y: x * y, self.xycoords.shape) / self.max_bytes, 1)
         max_elements = self.point_count / pieces_required
 
-        # Populate latlon cache
+        # Populate xycoords cache
         start_index = 0
         while start_index < self.point_count:
             end_index = min(start_index + max_elements, self.point_count)
-            # Pull lat/lon coordinates out of individual lat/lon arrays - note YX order
-            latlon_slice = slice(start_index, end_index)
-            self.latlon[latlon_slice, 0] = self.netcdf_dataset.variables['latitude'][latlon_slice]
-            self.latlon[latlon_slice, 1] = self.netcdf_dataset.variables['longitude'][latlon_slice]
+            # Pull lat/lon coordinates out of individual lat/lon arrays - note XY order
+            xycoords_slice = slice(start_index, end_index)
+            self.xycoords[xycoords_slice, 0] = self.netcdf_dataset.variables['longitude'][xycoords_slice]
+            self.xycoords[xycoords_slice, 1] = self.netcdf_dataset.variables['latitude'][xycoords_slice]
             start_index += max_elements
  
         # Determine exact spatial bounds
-        min_lat = min(self.latlon[:,0])
-        max_lat = max(self.latlon[:,0])
-        min_lon = min(self.latlon[:,1])
-        max_lon = max(self.latlon[:,1])
+        min_lon = min(self.xycoords[:,0])
+        max_lon = max(self.xycoords[:,0])
+        min_lat = min(self.xycoords[:,1])
+        max_lat = max(self.xycoords[:,1])
         self.bounds = (min_lon, min_lat, max_lon, max_lat)
 
         
@@ -90,8 +90,8 @@ class NetCDFLineUtils(object):
         '''
         Return boolean mask of dimension 'point' for all coordinates within specified bounds
         '''
-        return np.logical_and((bounds[1] <= self.latlon[:,0]) * (self.latlon[:,0] <= bounds[3]), 
-                              (bounds[0] <= self.latlon[:,1]) * (self.latlon[:,1] <= bounds[2]))
+        return np.logical_and((bounds[0] <= self.xycoords[:,0]) * (self.xycoords[:,0] <= bounds[2]), 
+                              (bounds[1] <= self.xycoords[:,1]) * (self.xycoords[:,1] <= bounds[3]))
     
     def get_lines(self, bounds=None, variables=None, lines=None):
         bounds = bounds or self.bounds
@@ -107,9 +107,20 @@ class NetCDFLineUtils(object):
         # Return all lines if not specified
         lines = lines or self.netcdf_dataset.variables['line'][...]
     
-    def grid_points(self, grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', grid_crs=None, point_step=1):
+    def grid_points(self, variables=None, grid_resolution, native_grid_bounds=None, reprojected_grid_bounds=None, resampling_method='linear', grid_crs=None, point_step=1):
         '''
         '''
+        def get_reprojected_bounds(bounds, from_crs, to_crs):
+            if (to_crs is None) or (from_crs is None) or (to_crs == from_crs):
+                return bounds
+            
+            original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
+            reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_crs, to_crs))
+            
+            return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
+            
+            
+        assert not (native_grid_bounds and reprojected_grid_bounds), 'Either native_grid_bounds or reprojected_grid_bounds can be provided, but not both'
         # Grid all data variables if not specified
         variables = variables or self.point_variables
 
@@ -118,33 +129,36 @@ class NetCDFLineUtils(object):
         if single_var:
             variables = [variables]
         
-        grid_bounds = grid_bounds or self.bounds
+        if native_grid_bounds:
+            reprojected_grid_bounds = get_reprojected_bounds(native_grid_bounds, self.crs, grid_crs)
+        elif reprojected_grid_bounds:
+            native_grid_bounds = get_reprojected_bounds(reprojected_grid_bounds, grid_crs, self.crs)
+        else: # No reprojection required
+            native_grid_bounds = self.bounds
+            reprojected_grid_bounds = self.bounds
+        
+        # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
+        pixel_centre_bounds = (round(math.floor(reprojected_grid_bounds[0] / grid_resolution) * grid_resolution, 6),
+                       round(math.floor(reprojected_grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6),
+                       round(math.floor(reprojected_grid_bounds[1] / grid_resolution) * grid_resolution, 6),
+                       round(math.floor(reprojected_grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
+                       )
+        
+        grid_size = [pixel_centre_bounds[dim_index+2] - pixel_centre_bounds[dim_index] for dim_index in range(2)]
 
-        # Extend area for points out beyond grid extents for nice interpolation at edges
-        expanded_grid_bounds = [grid_bounds[0]-2*grid_resolution,
-                                grid_bounds[1]-2*grid_resolution,
-                                grid_bounds[2]+2*grid_resolution,
-                                grid_bounds[3]+2*grid_resolution
+        # Extend area for points an arbitrary 4% out beyond grid extents for nice interpolation at edges
+        expanded_grid_bounds = [pixel_centre_bounds[0]-grid_size/50.0,
+                                pixel_centre_bounds[1]-grid_size/50.0,
+                                pixel_centre_bounds[2]+grid_size/50.0,
+                                pixel_centre_bounds[3]+grid_size/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(expanded_grid_bounds)
-        
-        # Transform grid extents
-        #TODO: Take care of distortions to ensure nothing is clipped - need to reproject all corner points
-        if grid_crs is not None:
-            grid_bounds = np.array(transform_coords(np.reshape(np.array(grid_bounds), (2,2)), self.crs, grid_crs)).flatten()
-
-        # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
-        min_lat = round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6)
-        max_lat = round(math.floor(grid_bounds[3] / grid_resolution + 1.0) * grid_resolution, 6)
-        min_lon = round(math.floor(grid_bounds[0] / grid_resolution) * grid_resolution, 6)
-        max_lon = round(math.floor(grid_bounds[2] / grid_resolution + 1.0) * grid_resolution, 6)
-        grid_bounds = (min_lon, min_lat, max_lon, max_lat)    
+        spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(expanded_grid_bounds, grid_crs, self.crs))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2 fudge to avoid truncation due to rounding error
-        grid_y, grid_x = np.mgrid[grid_bounds[3]:grid_bounds[1]-grid_resolution/2:-grid_resolution, 
-                                 grid_bounds[0]:grid_bounds[2]+grid_resolution/2:grid_resolution]
+        grid_y, grid_x = np.mgrid[pixel_centre_bounds[3]:pixel_centre_bounds[1]-grid_resolution/2.0:-grid_resolution, 
+                                 pixel_centre_bounds[0]:pixel_centre_bounds[2]+grid_resolution/2.0:grid_resolution]
 
         # Skip points to reduce memory requirements - this is a horrible, lazy hack!
         #TODO: Implement function which grids spatial subsets.
@@ -152,30 +166,45 @@ class NetCDFLineUtils(object):
         point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
-        coordinates = self.latlon[...][point_subset_mask]
+        coordinates = self.xycoords[...][point_subset_mask]
         # Reproject coordinates if required
         if grid_crs is not None:
             # N.B: Be careful about XY vs YX coordinate order         
-            coordinates = np.array(transform_coords(coordinates[:,::-1], self.crs, grid_crs))[:,::-1]
+            coordinates = np.array(transform_coords(coordinates[...], self.crs, grid_crs))
 
-        # Interpolate required values to the grid
+        # Interpolate required values to the grid - Note YX ordering for image
         grids = {}
         for variable in [self.netcdf_dataset.variables[var_name] for var_name in variables]:
-            grids[variable.name] = griddata(coordinates, 
+            grids[variable.name] = griddata(coordinates[:,::-1],
                                   variable[...][point_subset_mask], #TODO: Check why this is faster than direct indexing
                                   (grid_y, grid_x), 
                                   method=resampling_method)
 
-        #TODO: Return CRS and GeoTransform for completeness    
         if single_var:
-            return grids.values()[0]
-        else:
-            return grids
+            grids = grids.values()[0]
+            
+        #  crs:GeoTransform = "109.1002342895272 0.00833333 0 -9.354948067227777 0 -0.00833333 "
+        geotransform = [pixel_centre_bounds[0]-grid_resolution/2.0,
+                        grid_resolution,
+                        0,
+                        pixel_centre_bounds[3]+grid_resolution/2.0,
+                        0,
+                        -grid_resolution
+                        ] 
+
+        return (grid_crs or self.crs), geotransform, grids
+    
+    
+    def utm_grid_points(self, utm_grid_resolution, native_grid_bounds=None, variables=None, resampling_method='linear', point_step=1):
+        native_grid_bounds = native_grid_bounds or self.bounds
         
-    def utm_grid_points(self, utm_grid_resolution, grid_bounds=None, variables=None, resampling_method='linear', point_step=1):
-        grid_bounds = grid_bounds or self.bounds
-        
-        centre_coords = [(grid_bounds[dim_index] + grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
+        centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
         utm_crs = get_utm_crs(centre_coords, self.crs)
         
-        return self.grid_points(utm_grid_resolution, grid_bounds, variables, resampling_method, utm_crs, point_step)
+        return self.grid_points(variables, utm_grid_resolution, 
+                                native_grid_bounds=native_grid_bounds, 
+                                resampling_method=resampling_method, 
+                                grid_crs=utm_crs, 
+                                point_step=point_step
+                                )
+
