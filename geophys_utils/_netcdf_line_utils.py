@@ -137,9 +137,6 @@ class NetCDFLineUtils(object):
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
 
-        print native_grid_bounds
-        print reprojected_grid_bounds
-        
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
         pixel_centre_bounds = (round(math.floor(reprojected_grid_bounds[0] / grid_resolution) * grid_resolution, 6),
                        round(math.floor(reprojected_grid_bounds[1] / grid_resolution) * grid_resolution, 6),
