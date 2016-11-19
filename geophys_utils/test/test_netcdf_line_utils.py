@@ -61,22 +61,37 @@ class TestNetCDFLineUtilsFunctions(unittest.TestCase):
         print spatial_mask
         print np.count_nonzero(spatial_mask)
         
-    def test_get_lines(self):
+    def test_get_line_masks(self):
         print 'Testing get_lines function'
-        lines = netcdf_line_utils.get_lines()
-        print lines
+        line_masks = netcdf_line_utils.get_line_masks()
+        print line_masks
         
-        lines = netcdf_line_utils.get_lines(TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
-        print lines
+        for line_number in sorted(line_masks.keys()): 
+            print line_number, np.count_nonzero(line_masks[line_number])
+        
+        line_masks = netcdf_line_utils.get_lines(bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
+        for line_number in sorted(line_masks.keys()): 
+            print line_number, np.count_nonzero(line_masks[line_number])
 
+class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
+    """Unit tests for geophys_utils._netcdf_line_utils functions"""
+    
     def test_grid_points(self):
         print 'Testing grid_points function'
-        grids = netcdf_line_utils.grid_points(grid_resolution=0.001, variables=['mag_awags'])
-        print grids
+        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=TestNetCDFLineUtilsFunctions.GRID_RESOLUTION, 
+                                                                 variables='mag_awags',
+                                                                 point_step = 100)
+        print crs
+        print geotransform
+        print grids.shape
 
-        grids = netcdf_line_utils.grid_points(grid_resolution=0.001, variables=['mag_awags'],
-                                              grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
-        print grids
+        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=TestNetCDFLineUtilsFunctions.GRID_RESOLUTION, 
+                                                                 variables='mag_awags',
+                                                                 grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS,
+                                                                 point_step = 100)
+        print crs
+        print geotransform
+        print grids.shape
 
 
 
@@ -85,7 +100,9 @@ def test_suite():
     """Returns a test suite of all the tests in this module."""
 
     test_classes = [TestNetCDFLineUtilsConstructor,
-                    TestNetCDFLineUtilsFunctions]
+                    TestNetCDFLineUtilsFunctions,
+                    #TestNetCDFLineUtilsGridFunctions
+                    ]
 
     suite_list = map(unittest.defaultTestLoader.loadTestsFromTestCase,
                      test_classes)

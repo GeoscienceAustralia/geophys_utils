@@ -107,24 +107,40 @@ class NetCDFLineUtils(object):
             
         
     
-    def get_lines(self, bounds=None, variables=None, lines=None):
+    def get_line_masks(self, line_numbers=None, bounds=None, bounds_crs=None):
         '''
         Under construction - do not use except for testing
         '''
         bounds = bounds or self.bounds
 
-        # Return all data variables if not specified
-        variables = variables or self.point_variables
+        line_number_array = self.netcdf_dataset.variables['line'][...]
+        line_start_array = self.netcdf_dataset.variables['_index_line'][...]
+        line_end_array = line_start_array + self.netcdf_dataset.variables['_index_count'][...]
         
-        # Allow single variable to be given as a string
-        single_var = (type(variables) in [str, unicode])
-        if single_var:
-            variables = [variables]
-        
+        # Deal with single line number not in list
+        single_line = ((line_numbers is not None) and (not hasattr(line_numbers, 'iteritems')))
+        if single_line: 
+            line_numbers = [line_numbers]
+
         # Return all lines if not specified
-        lines = lines or self.netcdf_dataset.variables['line'][...]
+        line_numbers = line_numbers or line_number_array
         
-        #TODO: Finish this
+        spatial_mask = self.get_spatial_mask(self, bounds, bounds_crs)
+                
+        line_mask_dict = {}
+        for line_number in line_numbers:
+            line_index = np.where(line_number_array == line_number)
+            
+            line_mask = np.zeros((self.point_count,), bool)
+            line_mask[line_start_array[line_index]:line_end_array[line_index]] = spatial_mask[line_start_array[line_index]:line_end_array[line_index]]
+            
+            line_mask_dict[line_number] = line_mask
+
+        if single_line: # Return mask not dict
+            return line_mask_dict.values()[0]
+        else:
+            return line_mask_dict
+    
     
     def get_reprojected_bounds(self, bounds, from_crs, to_crs):
         '''
@@ -163,10 +179,10 @@ class NetCDFLineUtils(object):
         @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
         
-        @return crs: WKT for grid coordinate reference system.
-        @return geotransform: GDAL GeoTransform for grid
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
+        @return crs: WKT for grid coordinate reference system.
+        @return geotransform: GDAL GeoTransform for grid
         '''
         assert not (native_grid_bounds and reprojected_grid_bounds), 'Either native_grid_bounds or reprojected_grid_bounds can be provided, but not both'
         # Grid all data variables if not specified
@@ -240,7 +256,7 @@ class NetCDFLineUtils(object):
                         -grid_resolution
                         ] 
 
-        return (grid_crs or self.crs), geotransform, grids
+        return grids, (grid_crs or self.crs), geotransform
     
     
     def utm_grid_points(self, utm_grid_resolution, variables=None, native_grid_bounds=None, resampling_method='linear', point_step=1):
@@ -254,10 +270,10 @@ class NetCDFLineUtils(object):
         @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
         
-        @return crs: WKT for grid coordinate reference system (i.e. local UTM zone)
-        @return geotransform: GDAL GeoTransform for grid
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
+        @return crs: WKT for grid coordinate reference system (i.e. local UTM zone)
+        @return geotransform: GDAL GeoTransform for grid
         '''
         native_grid_bounds = native_grid_bounds or self.bounds
         
