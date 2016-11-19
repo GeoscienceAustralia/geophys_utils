@@ -125,7 +125,7 @@ class NetCDFLineUtils(object):
         # Return all lines if not specified
         line_numbers = line_numbers or line_number_array
         
-        spatial_mask = self.get_spatial_mask(self, bounds, bounds_crs)
+        spatial_mask = self.get_spatial_mask(bounds, bounds_crs)
                 
         line_mask_dict = {}
         for line_number in line_numbers:
