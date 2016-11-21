@@ -116,17 +116,18 @@ class NetCDFLineUtils(object):
         line_start_array = self.netcdf_dataset.variables['_index_line'][...]
         line_end_array = line_start_array + self.netcdf_dataset.variables['_index_count'][...]
         
-        # Return all lines if not specified
-        line_numbers = line_numbers or line_number_array
         # Deal with single line number not in list
-        single_line = ((line_numbers is not None) and (not hasattr(line_numbers, 'iteritems')))
+        single_line = type(line_numbers) in [int, long]
         if single_line: 
             line_numbers = [line_numbers]
             
-        
+        # Return all lines if not specified
+        if line_numbers is None:
+            line_numbers = line_number_array
+            
         line_mask_dict = {}
         for line_number in line_numbers:
-            line_index = np.where(line_number_array == line_number)
+            line_index = np.where(line_number_array == line_number)[0]
             
             line_mask = np.zeros((self.point_count,), bool)
             line_mask[line_start_array[line_index]:line_end_array[line_index]] = True
@@ -143,12 +144,14 @@ class NetCDFLineUtils(object):
         '''
         Under construction - do not use except for testing
         '''
-        # Return all lines if not specified
-        line_numbers = line_numbers or self.netcdf_dataset.variables['line'][...]
         # Deal with single line number not in list
-        single_line = not hasattr(line_numbers, 'iteritems')
+        single_line = type(line_numbers) in [int, long]
         if single_line: 
             line_numbers = [line_numbers]
+
+        # Return all lines if not specified
+        if line_numbers is None:
+            line_numbers = self.netcdf_dataset.variables['line'][...]
 
         # Allow single variable to be given as a string
         variables = variables or self.point_variables
@@ -157,6 +160,8 @@ class NetCDFLineUtils(object):
             variables = [variables]
         
         line_masks = self.get_line_masks(line_numbers=line_numbers)
+        
+        bounds = bounds or self.bounds
         
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_crs, self.crs))
         

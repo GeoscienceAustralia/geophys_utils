@@ -14,41 +14,41 @@ from geophys_utils._netcdf_line_utils import NetCDFLineUtils
 
 netcdf_line_utils = None
 
+#NC_PATH = 'test_line.nc'
+NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
+
+TEST_BOUNDS = (137, -29, 138, -28)
+GRID_RESOLUTION = 0.001
+RESAMPLING_METHOD = 'linear' # 'linear', 'nearest' or 'cubic'. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
+
+MAX_BYTES = 1600
+MAX_ERROR = 0.000001
+TEST_COORDS = (148.213, -36.015)
+TEST_INDICES = [1, 1]
+TEST_FRACTIONAL_INDICES = [1.25, 1.25]
+TEST_VALUE = 0.0
+TEST_INTERPOLATED_VALUE = -99997.6171875
+    
 class TestNetCDFLineUtilsConstructor(unittest.TestCase):
     """Unit tests for TestNetCDFLineUtils Constructor.
     N.B: This should be run first"""
-    
-    #NC_PATH = 'test_line.nc'
-    NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
     
     def test_netcdf_line_utils_constructor(self):
         print 'Testing NetCDFLineUtils constructor'
         global netcdf_line_utils
         
-        if re.match('^http.*', TestNetCDFLineUtilsConstructor.NC_PATH):
-            nc_path = TestNetCDFLineUtilsConstructor.NC_PATH
+        if re.match('^http.*', NC_PATH):
+            nc_path = NC_PATH
         else:
-            nc_path = os.path.join(os.path.dirname(__file__), TestNetCDFLineUtilsConstructor.NC_PATH)
+            nc_path = os.path.join(os.path.dirname(__file__), NC_PATH)
         print nc_path    
         nc_dataset = netCDF4.Dataset(nc_path)
         netcdf_line_utils = NetCDFLineUtils(nc_dataset)
         
         print netcdf_line_utils.__dict__
     
-class TestNetCDFLineUtilsFunctions(unittest.TestCase):
+class TestNetCDFLineUtilsFunctions1(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
-    
-    TEST_BOUNDS = (137, -29, 138, -28)
-    GRID_RESOLUTION = 0.001
-    RESAMPLING_METHOD = 'linear' # 'linear', 'nearest' or 'cubic'. See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
-    
-    MAX_BYTES = 1600
-    MAX_ERROR = 0.000001
-    TEST_COORDS = (148.213, -36.015)
-    TEST_INDICES = [1, 1]
-    TEST_FRACTIONAL_INDICES = [1.25, 1.25]
-    TEST_VALUE = 0.0
-    TEST_INTERPOLATED_VALUE = -99997.6171875
     
     def test_get_polygon(self):
         print 'Testing get_polygon function'
@@ -57,7 +57,7 @@ class TestNetCDFLineUtilsFunctions(unittest.TestCase):
 
     def test_get_spatial_mask(self):
         print 'Testing get_spatial_mask function'
-        spatial_mask = netcdf_line_utils.get_spatial_mask(TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
+        spatial_mask = netcdf_line_utils.get_spatial_mask(TEST_BOUNDS)
         print spatial_mask
         print np.count_nonzero(spatial_mask)
         
@@ -67,9 +67,12 @@ class TestNetCDFLineUtilsFunctions(unittest.TestCase):
         print line_masks
         
         for line_number in sorted(line_masks.keys()): 
-            print line_number, np.count_nonzero(line_masks[line_number])
+            print 'Line %d has %d points' % (line_number, np.count_nonzero(line_masks[line_number]))
 
 
+class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
+    """Unit tests for geophys_utils._netcdf_line_utils functions"""
+    
     def test_get_lines(self):
         print 'Testing get_lines function'
         lines = netcdf_line_utils.get_lines()
@@ -87,16 +90,16 @@ class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
     
     def test_grid_points(self):
         print 'Testing grid_points function'
-        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=TestNetCDFLineUtilsFunctions.GRID_RESOLUTION, 
+        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
                                                                  point_step = 100)
         print crs
         print geotransform
         print grids.shape
 
-        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=TestNetCDFLineUtilsFunctions.GRID_RESOLUTION, 
+        grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
-                                                                 native_grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS,
+                                                                 native_grid_bounds=TEST_BOUNDS,
                                                                  point_step = 100)
         print crs
         print geotransform
@@ -109,8 +112,9 @@ def test_suite():
     """Returns a test suite of all the tests in this module."""
 
     test_classes = [TestNetCDFLineUtilsConstructor,
-                    TestNetCDFLineUtilsFunctions,
-                    #TestNetCDFLineUtilsGridFunctions
+                    TestNetCDFLineUtilsFunctions1,
+                    TestNetCDFLineUtilsFunctions2,
+                    TestNetCDFLineUtilsGridFunctions
                     ]
 
     suite_list = map(unittest.defaultTestLoader.loadTestsFromTestCase,
