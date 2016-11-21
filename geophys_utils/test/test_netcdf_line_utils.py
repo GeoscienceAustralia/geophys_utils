@@ -68,10 +68,19 @@ class TestNetCDFLineUtilsFunctions(unittest.TestCase):
         
         for line_number in sorted(line_masks.keys()): 
             print line_number, np.count_nonzero(line_masks[line_number])
+
+
+    def test_get_lines(self):
+        print 'Testing get_lines function'
+        lines = netcdf_line_utils.get_lines()
+        print lines
         
-        line_masks = netcdf_line_utils.get_lines(bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS)
-        for line_number in sorted(line_masks.keys()): 
-            print line_number, np.count_nonzero(line_masks[line_number])
+        for line_number in sorted(lines.keys()): 
+            print 'Line %d has %d variables with %d points' % (line_number,
+                                                               np.count_nonzero(lines[line_number])-1, 
+                                                               np.count_nonzero(lines[line_number]['coordinates'])
+                                                               )
+
 
 class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
@@ -87,7 +96,7 @@ class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
 
         grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=TestNetCDFLineUtilsFunctions.GRID_RESOLUTION, 
                                                                  variables='mag_awags',
-                                                                 grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS,
+                                                                 native_grid_bounds=TestNetCDFLineUtilsFunctions.TEST_BOUNDS,
                                                                  point_step = 100)
         print crs
         print geotransform

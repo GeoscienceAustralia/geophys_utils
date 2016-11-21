@@ -102,37 +102,34 @@ class NetCDFLineUtils(object):
         else:
             coordinates = np.array(transform_coords(self.xycoords[...], self.crs, bounds_crs))
             
-        return np.logical_and((bounds[0] <= coordinates[:,0]) * (coordinates[:,0] <= bounds[2]), 
-                              (bounds[1] <= coordinates[:,1]) * (coordinates[:,1] <= bounds[3]))
+        return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
+                              np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
+                              )
             
         
     
-    def get_line_masks(self, line_numbers=None, bounds=None, bounds_crs=None):
+    def get_line_masks(self, line_numbers=None):
         '''
         Under construction - do not use except for testing
         '''
-        bounds = bounds or self.bounds
-
         line_number_array = self.netcdf_dataset.variables['line'][...]
         line_start_array = self.netcdf_dataset.variables['_index_line'][...]
         line_end_array = line_start_array + self.netcdf_dataset.variables['_index_count'][...]
         
+        # Return all lines if not specified
+        line_numbers = line_numbers or line_number_array
         # Deal with single line number not in list
         single_line = ((line_numbers is not None) and (not hasattr(line_numbers, 'iteritems')))
         if single_line: 
             line_numbers = [line_numbers]
-
-        # Return all lines if not specified
-        line_numbers = line_numbers or line_number_array
+            
         
-        spatial_mask = self.get_spatial_mask(bounds, bounds_crs)
-                
         line_mask_dict = {}
         for line_number in line_numbers:
             line_index = np.where(line_number_array == line_number)
             
             line_mask = np.zeros((self.point_count,), bool)
-            line_mask[line_start_array[line_index]:line_end_array[line_index]] = spatial_mask[line_start_array[line_index]:line_end_array[line_index]]
+            line_mask[line_start_array[line_index]:line_end_array[line_index]] = True
             
             line_mask_dict[line_number] = line_mask
 
@@ -142,6 +139,41 @@ class NetCDFLineUtils(object):
             return line_mask_dict
     
     
+    def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_crs=None):
+        '''
+        Under construction - do not use except for testing
+        '''
+        # Return all lines if not specified
+        line_numbers = line_numbers or self.netcdf_dataset.variables['line'][...]
+        # Deal with single line number not in list
+        single_line = not hasattr(line_numbers, 'iteritems')
+        if single_line: 
+            line_numbers = [line_numbers]
+
+        # Allow single variable to be given as a string
+        variables = variables or self.point_variables
+        single_var = (type(variables) in [str, unicode])
+        if single_var:
+            variables = [variables]
+        
+        line_masks = self.get_line_masks(line_numbers=line_numbers)
+        
+        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_crs, self.crs))
+        
+        line_dict = {}
+        for line_number in line_numbers:
+            point_mask = np.logical_and(line_masks[line_number], spatial_subset_mask)
+            line_dict[line_number] = {'coordinates': self.xycoords[point_mask]}
+            for variable_name in variables:
+                line_dict[line_number][variable_name] = self.netcdf_dataset.variables[variable_name][point_mask]
+        
+        if single_line:
+            return line_dict.values()[0]
+        else:
+            return line_dict
+            
+            
+            
     def get_reprojected_bounds(self, bounds, from_crs, to_crs):
         '''
         Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
