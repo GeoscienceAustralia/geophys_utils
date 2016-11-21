@@ -110,7 +110,10 @@ class NetCDFLineUtils(object):
     
     def get_line_masks(self, line_numbers=None):
         '''
-        Under construction - do not use except for testing
+        Function to return boolean masks of dimension 'point' for specified lines
+        @param line_numbers: list of integer line number or single integer line number
+        
+        @return: either boolean mask for single line or dict containing multiple masks keyed by line number
         '''
         line_number_array = self.netcdf_dataset.variables['line'][...]
         line_start_array = self.netcdf_dataset.variables['_index_line'][...]
@@ -142,7 +145,13 @@ class NetCDFLineUtils(object):
     
     def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_crs=None):
         '''
-        Under construction - do not use except for testing
+        Function to return boolean masks for specified lines
+        @param line_numbers: list of integer line number or single integer line number
+        @param variables: list of variable name strings or single variable name string
+        @param bounds: Spatial bounds for point selection
+        @param bounds_crs: Coordinate Reference System for bounds
+        
+        @return: dict containing coords and values for required variables keyed by variable name
         '''
         # Deal with single line number not in list
         single_line = type(line_numbers) in [int, long]
