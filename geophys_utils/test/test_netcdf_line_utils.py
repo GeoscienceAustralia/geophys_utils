@@ -80,7 +80,7 @@ class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
         
         for line_number in sorted(lines.keys()): 
             print 'Line %d has %d variables with %d points' % (line_number,
-                                                               np.count_nonzero(lines[line_number])-1, 
+                                                               len(lines[line_number])-1, 
                                                                np.count_nonzero(lines[line_number]['coordinates'])
                                                                )
 
