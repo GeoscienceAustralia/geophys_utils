@@ -14,8 +14,10 @@ from geophys_utils._netcdf_line_utils import NetCDFLineUtils
 
 netcdf_line_utils = None
 
+#NC_PATH = '/g/data2/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
+NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
 #NC_PATH = 'test_line.nc'
-NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
+#NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
 
 TEST_BOUNDS = (137, -29, 138, -28)
 GRID_RESOLUTION = 0.001

@@ -11,6 +11,7 @@ import re
 import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
+from math import pow
 
 class NetCDFLineUtils(object):
     '''
@@ -168,14 +169,18 @@ class NetCDFLineUtils(object):
         line_number_array = self.line[...]
         line_start_end_array = self.line_start_end[...]
         
+        print line_numbers, type(line_numbers)
+        
         # Deal with single line number not in list
-        single_line = type(line_numbers) in [int, long]
+        single_line = type(line_numbers) in [int, long, np.int32, np.int64]
         if single_line: 
             line_numbers = [line_numbers]
             
         # Return all lines if not specified
         if line_numbers is None:
             line_numbers = line_number_array
+            
+        print line_numbers, type(line_numbers)
             
         for line_number in line_numbers:
             line_index = int(np.where(line_number_array == line_number)[0])
@@ -198,7 +203,7 @@ class NetCDFLineUtils(object):
         @return: dict containing coords and values for required variables keyed by variable name
         '''
         # Deal with single line number not in list
-        single_line = type(line_numbers) in [int, long]
+        single_line = type(line_numbers) in [int, long, np.int32, np.int64]
         if single_line: 
             line_numbers = [line_numbers]
 
@@ -374,3 +379,24 @@ class NetCDFLineUtils(object):
                                 point_step=point_step
                                 )
 
+
+    def coords2distance(self, coordinate_array):
+        '''
+        Under construction
+        '''
+        coord_count = coordinate_array.shape[0]
+        distance_array = np.zeros((coord_count,), coordinate_array.dtype)
+        cumulative_distance = 0.0
+        distance_array[0] = cumulative_distance
+        last_point = coordinate_array[0]
+        
+        for coord_index in range(1, coord_count):
+            point = coordinate_array[coord_index]
+            distance = math.sqrt(math.pow(point[0] - last_point[0], 2.0) + math.pow(point[1] - last_point[1], 2.0))
+            cumulative_distance += distance
+            distance_array[coord_index] = cumulative_distance
+            last_point = point
+            
+        return distance_array
+        
+        
