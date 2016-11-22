@@ -11,7 +11,6 @@ import re
 import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
-from math import pow
 
 class NetCDFLineUtils(object):
     '''
