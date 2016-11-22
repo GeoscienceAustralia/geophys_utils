@@ -22,6 +22,23 @@ class NetCDFLineUtils(object):
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
         '''
+        def fetch_array(source_array, dest_array):
+            '''
+            Helper function to retrieve entire 1D array in pieces < self.max_bytes in size
+            '''
+            source_len = source_array.shape[0]
+            pieces_required = max(source_array[0].itemsize * source_len / self.max_bytes, 1)
+            max_elements = source_len / pieces_required
+    
+            # Copy array in pieces
+            start_index = 0
+            while start_index < source_len:
+                end_index = min(start_index + max_elements, source_len)
+                array_slice = slice(start_index, end_index)
+                dest_array[array_slice] = source_array[array_slice]
+                dest_array[array_slice] = source_array[array_slice]
+                start_index += max_elements
+        
         self.netcdf_dataset = netcdf_dataset
         self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
         if self.opendap:
@@ -49,35 +66,62 @@ class NetCDFLineUtils(object):
         
         self._nc_cache_dataset.createDimension('point', self.point_count if not point_dimension.isunlimited() else None)
         self._nc_cache_dataset.createDimension('xy', 2)
-    
-        var_options = {'zlib': False}
+        
+        var_options = self.netcdf_dataset.variables['longitude'].filters() or {}
+        var_options['zlib'] = False
+        if hasattr(self.netcdf_dataset.variables['longitude'], '_FillValue'):
+            var_options['fill_value'] = self.netcdf_dataset.variables['longitude']._FillValue
+
         self._nc_cache_dataset.createVariable('xycoords', 
                                       self.netcdf_dataset.variables['longitude'].dtype, 
                                       ('point', 'xy'),
                                       **var_options
                                       )
         self.xycoords = self._nc_cache_dataset.variables['xycoords']
-
-        pieces_required = max(self.xycoords.dtype.itemsize * reduce(lambda x, y: x * y, self.xycoords.shape) / self.max_bytes, 1)
-        max_elements = self.point_count / pieces_required
-
-        # Populate xycoords cache
-        start_index = 0
-        while start_index < self.point_count:
-            end_index = min(start_index + max_elements, self.point_count)
-            # Pull lat/lon coordinates out of individual lat/lon arrays - note XY order
-            xycoords_slice = slice(start_index, end_index)
-            self.xycoords[xycoords_slice, 0] = self.netcdf_dataset.variables['longitude'][xycoords_slice]
-            self.xycoords[xycoords_slice, 1] = self.netcdf_dataset.variables['latitude'][xycoords_slice]
-            start_index += max_elements
+        fetch_array(self.netcdf_dataset.variables['longitude'], self.xycoords[:,0])
+        fetch_array(self.netcdf_dataset.variables['latitude'], self.xycoords[:,1])
  
         # Determine exact spatial bounds
-        min_lon = min(self.xycoords[:,0])
-        max_lon = max(self.xycoords[:,0])
-        min_lat = min(self.xycoords[:,1])
-        max_lat = max(self.xycoords[:,1])
+        min_lon = np.nanmin(self.xycoords[:,0])
+        max_lon = np.nanmax(self.xycoords[:,0])
+        min_lat = np.nanmin(self.xycoords[:,1])
+        max_lat = np.nanmax(self.xycoords[:,1])
         self.bounds = (min_lon, min_lat, max_lon, max_lat)
 
+        line_dimension = self.netcdf_dataset.dimensions['line']
+        self.line_count = len(line_dimension)
+        
+        self._nc_cache_dataset.createDimension('line', self.point_count if not point_dimension.isunlimited() else None)
+        
+        var_options = self.netcdf_dataset.variables['line'].filters() or {}
+        var_options['zlib'] = False
+        if hasattr(self.netcdf_dataset.variables['line'], '_FillValue'):
+            var_options['fill_value'] = self.netcdf_dataset.variables['line']._FillValue
+            
+        self._nc_cache_dataset.createVariable('line', 
+                                      self.netcdf_dataset.variables['line'].dtype, 
+                                      ('line'),
+                                      **var_options
+                                      )
+        self.line = self._nc_cache_dataset.variables['line']
+        fetch_array(self.netcdf_dataset.variables['line'], self.line)
+        
+        self._nc_cache_dataset.createDimension('start_end', 2)
+        
+        var_options = self.netcdf_dataset.variables['index_line'].filters() or {}
+        var_options['zlib'] = False
+        if hasattr(self.netcdf_dataset.variables['index_line'], '_FillValue'):
+            var_options['fill_value'] = self.netcdf_dataset.variables['index_line']._FillValue
+            
+        self._nc_cache_dataset.createVariable('line_start_end', 
+                                      self.netcdf_dataset.variables['index_line'].dtype, 
+                                      ('line', 'start_end'),
+                                      **var_options
+                                      )
+        self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
+        fetch_array(self.netcdf_dataset.variables['index_line'], self.line_start_end[:,0])
+        fetch_array(self.netcdf_dataset.variables['index_count'], self.line_start_end[:,1])
+        self.line_start_end[:,1] += self.line_start_end[:,0]
         
     def __del__(self):
         '''
@@ -110,14 +154,15 @@ class NetCDFLineUtils(object):
     
     def get_line_masks(self, line_numbers=None):
         '''
-        Function to return boolean masks of dimension 'point' for specified lines
+        Generator to return boolean masks of dimension 'point' for specified lines
         @param line_numbers: list of integer line number or single integer line number
         
-        @return: either boolean mask for single line or dict containing multiple masks keyed by line number
+        @return line_number: line number for single line
+        @return line_mask: boolean mask for single line
+
         '''
-        line_number_array = self.netcdf_dataset.variables['line'][...]
-        line_start_array = self.netcdf_dataset.variables['_index_line'][...]
-        line_end_array = line_start_array + self.netcdf_dataset.variables['_index_count'][...]
+        line_number_array = self.line[...]
+        line_start_end_array = self.line_start_end[...]
         
         # Deal with single line number not in list
         single_line = type(line_numbers) in [int, long]
@@ -128,29 +173,24 @@ class NetCDFLineUtils(object):
         if line_numbers is None:
             line_numbers = line_number_array
             
-        line_mask_dict = {}
         for line_number in line_numbers:
             line_index = np.where(line_number_array == line_number)[0]
             
             line_mask = np.zeros((self.point_count,), bool)
-            line_mask[line_start_array[line_index]:line_end_array[line_index]] = True
+            line_mask[line_start_end_array[line_index:0]:line_start_end_array[line_index:1]] = True
             
-            line_mask_dict[line_number] = line_mask
-
-        if single_line: # Return mask not dict
-            return line_mask_dict.values()[0]
-        else:
-            return line_mask_dict
+            yield line_number, line_mask
     
     
     def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_crs=None):
         '''
-        Function to return boolean masks for specified lines
+        Generator to return coordinates and specified variable values for specified lines
         @param line_numbers: list of integer line number or single integer line number
         @param variables: list of variable name strings or single variable name string
         @param bounds: Spatial bounds for point selection
         @param bounds_crs: Coordinate Reference System for bounds
         
+        @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
         # Deal with single line number not in list
@@ -160,7 +200,7 @@ class NetCDFLineUtils(object):
 
         # Return all lines if not specified
         if line_numbers is None:
-            line_numbers = self.netcdf_dataset.variables['line'][...]
+            line_numbers = self.line[...]
 
         # Allow single variable to be given as a string
         variables = variables or self.point_variables
@@ -168,23 +208,19 @@ class NetCDFLineUtils(object):
         if single_var:
             variables = [variables]
         
-        line_masks = self.get_line_masks(line_numbers=line_numbers)
-        
         bounds = bounds or self.bounds
         
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_crs, self.crs))
         
-        line_dict = {}
         for line_number in line_numbers:
-            point_mask = np.logical_and(line_masks[line_number], spatial_subset_mask)
-            line_dict[line_number] = {'coordinates': self.xycoords[point_mask]}
-            for variable_name in variables:
-                line_dict[line_number][variable_name] = self.netcdf_dataset.variables[variable_name][point_mask]
+            _line_number, line_mask = self.get_line_masks(line_numbers=line_number).next() # Only one mask per line
         
-        if single_line:
-            return line_dict.values()[0]
-        else:
-            return line_dict
+            point_mask = np.logical_and(line_mask, spatial_subset_mask)
+            line_dict = {'coordinates': self.xycoords[point_mask]}
+            for variable_name in variables:
+                line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_mask]
+        
+            yield line_number, line_dict
             
             
             
