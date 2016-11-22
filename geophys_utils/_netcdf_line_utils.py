@@ -169,8 +169,6 @@ class NetCDFLineUtils(object):
         line_number_array = self.line[...]
         line_start_end_array = self.line_start_end[...]
         
-        print line_numbers, type(line_numbers)
-        
         # Deal with single line number not in list
         single_line = type(line_numbers) in [int, long, np.int32, np.int64]
         if single_line: 
@@ -179,8 +177,6 @@ class NetCDFLineUtils(object):
         # Return all lines if not specified
         if line_numbers is None:
             line_numbers = line_number_array
-            
-        print line_numbers, type(line_numbers)
             
         for line_number in line_numbers:
             line_index = int(np.where(line_number_array == line_number)[0])
@@ -381,7 +377,11 @@ class NetCDFLineUtils(object):
 
     def utm_coords(self, coordinate_array):
         '''
-        Under construction
+        Function to convert coordinates to the appropriate UTM CRS
+        @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
+        
+        @return crs: WKT for UTM CRS
+        @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
         '''
         native_centre_coords = (np.nanmean(coordinate_array[0]), np.nanmean(coordinate_array[1]))
         utm_crs = get_utm_crs(native_centre_coords, self.crs)
@@ -389,7 +389,10 @@ class NetCDFLineUtils(object):
 
     def coords2distance(self, coordinate_array):
         '''
-        Under construction
+        Function to calculate cumulative distance in metres from native (lon/lat) coordinates
+        @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
+        
+        @return distance_array: Array of shape (n) containing cumulative distances from first coord
         '''
         coord_count = coordinate_array.shape[0]
         distance_array = np.zeros((coord_count,), coordinate_array.dtype)
