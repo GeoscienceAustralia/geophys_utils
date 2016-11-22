@@ -37,12 +37,10 @@ class NetCDFLineUtils(object):
             while start_index < source_len:
                 end_index = min(start_index + max_elements, source_len)
                 array_slice = slice(start_index, end_index)
-                print array_slice
                 cache_array[array_slice] = source_array[array_slice]
                 cache_array[array_slice] = source_array[array_slice]
                 start_index += max_elements
                 
-            print cache_array
             return cache_array
         
         self.netcdf_dataset = netcdf_dataset
@@ -114,19 +112,19 @@ class NetCDFLineUtils(object):
         
         self._nc_cache_dataset.createDimension('start_end', 2)
         
-        var_options = self.netcdf_dataset.variables['index_line'].filters() or {}
+        var_options = self.netcdf_dataset.variables['_index_line'].filters() or {}
         var_options['zlib'] = False
-        if hasattr(self.netcdf_dataset.variables['index_line'], '_FillValue'):
-            var_options['fill_value'] = self.netcdf_dataset.variables['index_line']._FillValue
+        if hasattr(self.netcdf_dataset.variables['_index_line'], '_FillValue'):
+            var_options['fill_value'] = self.netcdf_dataset.variables['_index_line']._FillValue
             
         self._nc_cache_dataset.createVariable('line_start_end', 
-                                      self.netcdf_dataset.variables['index_line'].dtype, 
+                                      self.netcdf_dataset.variables['_index_line'].dtype, 
                                       ('line', 'start_end'),
                                       **var_options
                                       )
         self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['index_line'])
-        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['index_count'])
+        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['_index_line'])
+        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['_index_count'])
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
     def __del__(self):
@@ -180,10 +178,10 @@ class NetCDFLineUtils(object):
             line_numbers = line_number_array
             
         for line_number in line_numbers:
-            line_index = np.where(line_number_array == line_number)[0]
+            line_index = int(np.where(line_number_array == line_number)[0])
             
             line_mask = np.zeros((self.point_count,), bool)
-            line_mask[line_start_end_array[line_index:0]:line_start_end_array[line_index:1]] = True
+            line_mask[line_start_end_array[line_index,0]:line_start_end_array[line_index,1]] = True
             
             yield line_number, line_mask
     
