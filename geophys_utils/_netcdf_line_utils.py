@@ -22,22 +22,28 @@ class NetCDFLineUtils(object):
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
         '''
-        def fetch_array(source_array, dest_array):
+        def fetch_array(source_array):
             '''
             Helper function to retrieve entire 1D array in pieces < self.max_bytes in size
             '''
             source_len = source_array.shape[0]
             pieces_required = max(source_array[0].itemsize * source_len / self.max_bytes, 1)
             max_elements = source_len / pieces_required
+            
+            cache_array = np.zeros((source_len,), dtype=source_array.dtype)
     
             # Copy array in pieces
             start_index = 0
             while start_index < source_len:
                 end_index = min(start_index + max_elements, source_len)
                 array_slice = slice(start_index, end_index)
-                dest_array[array_slice] = source_array[array_slice]
-                dest_array[array_slice] = source_array[array_slice]
+                print array_slice
+                cache_array[array_slice] = source_array[array_slice]
+                cache_array[array_slice] = source_array[array_slice]
                 start_index += max_elements
+                
+            print cache_array
+            return cache_array
         
         self.netcdf_dataset = netcdf_dataset
         self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
@@ -78,8 +84,8 @@ class NetCDFLineUtils(object):
                                       **var_options
                                       )
         self.xycoords = self._nc_cache_dataset.variables['xycoords']
-        fetch_array(self.netcdf_dataset.variables['longitude'], self.xycoords[:,0])
-        fetch_array(self.netcdf_dataset.variables['latitude'], self.xycoords[:,1])
+        self.xycoords[:,0] = fetch_array(self.netcdf_dataset.variables['longitude'])
+        self.xycoords[:,1] = fetch_array(self.netcdf_dataset.variables['latitude'])
  
         # Determine exact spatial bounds
         min_lon = np.nanmin(self.xycoords[:,0])
@@ -104,7 +110,7 @@ class NetCDFLineUtils(object):
                                       **var_options
                                       )
         self.line = self._nc_cache_dataset.variables['line']
-        fetch_array(self.netcdf_dataset.variables['line'], self.line)
+        self.line[:] = fetch_array(self.netcdf_dataset.variables['line'])
         
         self._nc_cache_dataset.createDimension('start_end', 2)
         
@@ -119,8 +125,8 @@ class NetCDFLineUtils(object):
                                       **var_options
                                       )
         self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        fetch_array(self.netcdf_dataset.variables['index_line'], self.line_start_end[:,0])
-        fetch_array(self.netcdf_dataset.variables['index_count'], self.line_start_end[:,1])
+        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['index_line'])
+        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['index_count'])
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
     def __del__(self):
