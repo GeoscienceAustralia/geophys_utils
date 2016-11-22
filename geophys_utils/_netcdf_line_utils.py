@@ -97,7 +97,7 @@ class NetCDFLineUtils(object):
         line_dimension = self.netcdf_dataset.dimensions['line']
         self.line_count = len(line_dimension)
         
-        self._nc_cache_dataset.createDimension('line', self.point_count if not point_dimension.isunlimited() else None)
+        self._nc_cache_dataset.createDimension('line', self.line_count if not point_dimension.isunlimited() else None)
         
         var_options = self.netcdf_dataset.variables['line'].filters() or {}
         var_options['zlib'] = False
