@@ -131,7 +131,7 @@ class NetCDFLineUtils(object):
         '''
         NetCDFLineUtils Destructor
         '''
-        cache_file_path = self._nc_cache_dataset.filename()
+        cache_file_path = self._nc_cache_dataset.filepath()
         self._nc_cache_dataset.close()
         os.remove(cache_file_path)
         
