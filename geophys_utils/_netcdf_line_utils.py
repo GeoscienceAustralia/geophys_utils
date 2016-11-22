@@ -379,6 +379,10 @@ class NetCDFLineUtils(object):
                                 point_step=point_step
                                 )
 
+    def utm_coords(self, coordinate_array):
+        native_centre_coords = (np.nanmean(coordinate_array[0]), np.nanmean(coordinate_array[1]))
+        utm_crs = get_utm_crs(native_centre_coords, self.crs)
+        return np.array(transform_coords(coordinate_array, self.crs, utm_crs))
 
     def coords2distance(self, coordinate_array):
         '''
