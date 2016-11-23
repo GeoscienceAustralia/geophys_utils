@@ -7,6 +7,7 @@ import numpy as np
 import math
 from scipy.ndimage import map_coordinates
 from geophys_utils._crs_utils import get_utm_crs, transform_coords
+from geophys_utils._transect_utils import sample_transect
 
 
 class NetCDFGridUtils(object):
@@ -31,9 +32,10 @@ class NetCDFGridUtils(object):
                 len(self.dimension_arrays[dim_index]) // 2 for dim_index in range(2)]
 
             # Get coordinates of centre pixel and next diagonal pixel
-            centre_pixel_coords = [[self.dimension_arrays[dim_index][centre_pixel_indices[dim_index]] for dim_index in range(2)],
-                                   [self.dimension_arrays[dim_index][centre_pixel_indices[
-                                       dim_index] + 1] for dim_index in range(2)]
+            centre_pixel_coords = [[self.dimension_arrays[dim_index][centre_pixel_indices[dim_index]] 
+                                    for dim_index in range(2)],
+                                   [self.dimension_arrays[dim_index][centre_pixel_indices[dim_index] + 1] 
+                                    for dim_index in range(2)]
                                    ]
 
             if self.YX_order:
@@ -290,95 +292,15 @@ class NetCDFGridUtils(object):
             return map_coordinates(data_variable, np.array(
                 [[fractional_indices[0]], [fractional_indices[1]]]), cval=no_data_value)
 
+
     def sample_transect(self, transect_vertices, crs=None, sample_metres=None):
         '''
         Function to return a list of sample points sample_metres apart along lines between transect vertices
-        @param transect_vertices: list of transect verticex points
+        @param transect_vertices: list or array of transect vertex coordinates
         @param crs: coordinate reference system for transect_vertices
-        @param sample_metres: distance between sample points in metresw
+        @param sample_metres: distance between sample points in metres
         '''
-        def line_length(line):
-            '''
-            Function to return length of line
-            '''
-            return math.sqrt(math.pow(
-                line[1][0] - line[0][0], 2.0) + math.pow(line[1][0] - line[0][0], 2.0))
-
-        def point_along_line(line, distance):
-            '''
-            Function to return a point the specified distance along the line
-            '''
-            length = line_length(line)
-            proportion = distance / length
-
-            if proportion < 0 or proportion > 1:
-                return None
-
-            return tuple([line[0][dim_index] + proportion * (line[1]
-                                                             [dim_index] - line[0][dim_index]) for dim_index in range(2)])
-
+        crs = crs or self.crs
         sample_metres = sample_metres or self.default_sample_metres
-
-        transect_vertex_array = np.array(transect_vertices)
-        # print 'transect_vertex_array = %s' % transect_vertex_array
-        average_coord = [np.average(transect_vertex_array[:, dim_index][
-                                    transect_vertex_array[:, dim_index] != float('inf')]) for dim_index in range(2)]
-        # print 'average_coord = %s' % average_coord
-        nominal_utm_crs = get_utm_crs(average_coord, crs)
-        # print 'nominal_utm_crs = %s' % nominal_utm_crs
-        utm_transect_vertices = transform_coords(
-            transect_vertices, crs, nominal_utm_crs)
-        # print 'utm_transect_vertices = %s' % utm_transect_vertices
-
-        sample_points = []
-        residual = 0
-        for vertex_index in range(len(utm_transect_vertices) - 1):
-            utm_line = (utm_transect_vertices[
-                        vertex_index], utm_transect_vertices[vertex_index + 1])
-            # print 'utm_line = %s' % (utm_line,)
-            utm_line_length = line_length(utm_line)
-            # print 'utm_line_length = %s' % utm_line_length
-
-            # Skip lines of infinite length
-            if utm_line_length == float('inf'):
-                continue
-
-            sample_count = (utm_line_length + residual) // sample_metres
-            # print 'sample_count = %s' % sample_count
-            if not sample_count:
-                residual += utm_line_length
-                continue
-
-            if residual:  # Use un-sampled distance from last line
-                start_point = point_along_line(
-                    utm_line, sample_metres - residual)
-            else:
-                start_point = utm_line[0]  # Start at beginning
-            # print 'start_point = %s' % (start_point,)
-
-            # Calculate new residual
-            residual = (utm_line_length + residual) % sample_metres
-            # print 'residual = %s' % residual
-
-            end_point = point_along_line(utm_line, utm_line_length - residual)
-            # print 'end_point = %s' % (end_point,)
-
-            try:
-                sample_point_array = np.stack([np.linspace(start_point[dim_index], end_point[
-                                              dim_index], sample_count + 1) for dim_index in range(2)]).transpose()
-                # print 'sample_point_array.shape = %s' %
-                # (sample_point_array.shape,)
-            except Exception as e:
-                print 'Line sampling failed: %s' % e.message
-                residual = 0
-                continue
-
-            sample_points += list(sample_point_array)
-
-            # Don't double up end point with next start point
-            if (not residual) and (vertex_index <
-                                   len(utm_transect_vertices) - 1):
-                sample_points.pop()
-
-        return transform_coords(
-            sample_points, nominal_utm_crs, crs), sample_metres
+        return sample_transect(self, transect_vertices, crs, sample_metres)
+        

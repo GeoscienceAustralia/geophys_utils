@@ -11,6 +11,7 @@ import re
 import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
+from geophys_utils._transect_utils import utm_coords
 
 class NetCDFLineUtils(object):
     '''
@@ -374,38 +375,29 @@ class NetCDFLineUtils(object):
                                 point_step=point_step
                                 )
 
-    def utm_coords(self, coordinate_array):
+
+    def utm_coords(self, coordinate_array, crs=None):
         '''
         Function to convert coordinates to the appropriate UTM CRS
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
         
-        @return crs: WKT for UTM CRS
+        @return crs: WKT for UTM CRS - default to native
         @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
         '''
-        native_centre_coords = (np.nanmean(coordinate_array[:,0]), np.nanmean(coordinate_array[:,1]))
-        utm_crs = get_utm_crs(native_centre_coords, self.crs)
-        return utm_crs, np.array(transform_coords(coordinate_array, self.crs, utm_crs))
-
-    def coords2distance(self, coordinate_array):
+        crs = crs or self.crs
+        return utm_coords(coordinate_array, crs)
+    
+    
+    def coords2distance(self, coordinate_array, crs=None):
         '''
         Function to calculate cumulative distance in metres from native (lon/lat) coordinates
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
+        @param crs: WKT for coordinate CRS - default to native
         
         @return distance_array: Array of shape (n) containing cumulative distances from first coord
         '''
-        coord_count = coordinate_array.shape[0]
-        distance_array = np.zeros((coord_count,), coordinate_array.dtype)
-        cumulative_distance = 0.0
-        distance_array[0] = cumulative_distance
-        last_point = coordinate_array[0]
-        
-        for coord_index in range(1, coord_count):
-            point = coordinate_array[coord_index]
-            distance = math.sqrt(math.pow(point[0] - last_point[0], 2.0) + math.pow(point[1] - last_point[1], 2.0))
-            cumulative_distance += distance
-            distance_array[coord_index] = cumulative_distance
-            last_point = point
-            
-        return distance_array
-        
-        
+        crs = crs or self.crs
+
+        _utm_crs, utm_coords = utm_coords(coordinate_array, crs)
+        return  self.coords2distance(utm_coords)
+
