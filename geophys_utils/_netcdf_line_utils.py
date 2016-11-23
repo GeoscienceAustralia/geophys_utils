@@ -382,7 +382,7 @@ class NetCDFLineUtils(object):
         @return crs: WKT for UTM CRS
         @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
         '''
-        native_centre_coords = (np.nanmean(coordinate_array[0]), np.nanmean(coordinate_array[1]))
+        native_centre_coords = (np.nanmean(coordinate_array[:,0]), np.nanmean(coordinate_array[:,1]))
         utm_crs = get_utm_crs(native_centre_coords, self.crs)
         return utm_crs, np.array(transform_coords(coordinate_array, self.crs, utm_crs))
 
