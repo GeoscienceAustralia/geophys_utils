@@ -15,8 +15,8 @@ def line_length(line):
     
     @return length: Distance between start & end points in native units
     '''
-    return math.sqrt(math.pow(
-        line[1][0] - line[0][0], 2.0) + math.pow(line[1][0] - line[0][0], 2.0))
+    return math.sqrt(math.pow(line[1][0] - line[0][0], 2.0) + 
+                     math.pow(line[1][1] - line[0][1], 2.0))
 
 
 def point_along_line(line, distance):

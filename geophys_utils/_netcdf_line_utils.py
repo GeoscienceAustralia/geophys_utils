@@ -11,7 +11,7 @@ import re
 import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
-from geophys_utils._transect_utils import utm_coords
+from geophys_utils._transect_utils import utm_coords, coords2distance
 
 class NetCDFLineUtils(object):
     '''
@@ -388,9 +388,9 @@ class NetCDFLineUtils(object):
         return utm_coords(coordinate_array, crs)
     
     
-    def coords2distance(self, coordinate_array, crs=None):
+    def coords2metres(self, coordinate_array, crs=None):
         '''
-        Function to calculate cumulative distance in metres from native (lon/lat) coordinates
+        Function to calculate cumulative distance in metres from coordinates
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
         @param crs: WKT for coordinate CRS - default to native
         
@@ -398,6 +398,6 @@ class NetCDFLineUtils(object):
         '''
         crs = crs or self.crs
 
-        _utm_crs, utm_coords = utm_coords(coordinate_array, crs)
-        return  self.coords2distance(utm_coords)
+        _utm_crs, utm_coordinate_array = utm_coords(coordinate_array, crs)
+        return coords2distance(utm_coordinate_array)
 
