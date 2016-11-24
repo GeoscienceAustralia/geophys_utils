@@ -11,7 +11,7 @@ import re
 import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
-from geophys_utils._transect_utils import utm_coords, coords2distance
+from geophys_utils._transect_utils import utm_coords
 
 class NetCDFLineUtils(object):
     '''
@@ -113,19 +113,19 @@ class NetCDFLineUtils(object):
         
         self._nc_cache_dataset.createDimension('start_end', 2)
         
-        var_options = self.netcdf_dataset.variables['_index_line'].filters() or {}
+        var_options = self.netcdf_dataset.variables['index_line'].filters() or {}
         var_options['zlib'] = False
-        if hasattr(self.netcdf_dataset.variables['_index_line'], '_FillValue'):
-            var_options['fill_value'] = self.netcdf_dataset.variables['_index_line']._FillValue
+        if hasattr(self.netcdf_dataset.variables['index_line'], '_FillValue'):
+            var_options['fill_value'] = self.netcdf_dataset.variables['index_line']._FillValue
             
         self._nc_cache_dataset.createVariable('line_start_end', 
-                                      self.netcdf_dataset.variables['_index_line'].dtype, 
+                                      self.netcdf_dataset.variables['index_line'].dtype, 
                                       ('line', 'start_end'),
                                       **var_options
                                       )
         self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['_index_line'])
-        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['_index_count'])
+        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['index_line'])
+        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['index_count'])
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
     def __del__(self):
@@ -388,9 +388,9 @@ class NetCDFLineUtils(object):
         return utm_coords(coordinate_array, crs)
     
     
-    def coords2metres(self, coordinate_array, crs=None):
+    def coords2distance(self, coordinate_array, crs=None):
         '''
-        Function to calculate cumulative distance in metres from coordinates
+        Function to calculate cumulative distance in metres from native (lon/lat) coordinates
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
         @param crs: WKT for coordinate CRS - default to native
         
@@ -398,6 +398,6 @@ class NetCDFLineUtils(object):
         '''
         crs = crs or self.crs
 
-        _utm_crs, utm_coordinate_array = utm_coords(coordinate_array, crs)
-        return coords2distance(utm_coordinate_array)
+        _utm_crs, utm_coords = utm_coords(coordinate_array, crs)
+        return  self.coords2distance(utm_coords)
 
