@@ -302,5 +302,5 @@ class NetCDFGridUtils(object):
         '''
         crs = crs or self.crs
         sample_metres = sample_metres or self.default_sample_metres
-        return sample_transect(self, transect_vertices, crs, sample_metres)
+        return sample_transect(transect_vertices, crs, sample_metres)
         
