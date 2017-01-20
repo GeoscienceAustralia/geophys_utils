@@ -5,9 +5,13 @@ Created on 14Sep.,2016
 '''
 import numpy as np
 import math
+import re
 from scipy.ndimage import map_coordinates
+from osgeo.osr import SpatialReference, CoordinateTransformation
 from geophys_utils._crs_utils import get_utm_crs, transform_coords
 from geophys_utils._transect_utils import sample_transect
+from geophys_utils._polygon_utils import netcdf2convex_hull
+from geophys_utils._data_stats import DataStats
 
 
 class NetCDFGridUtils(object):
@@ -24,9 +28,9 @@ class NetCDFGridUtils(object):
         '''
         NetCDFGridUtils Constructor - wraps a NetCDF dataset
         '''
-        def get_nominal_pixel_metres():
+        def set_nominal_pixel_sizes():
             '''
-            Function to return a tuple with the nominal vertical and horizontal sizes of the centre pixel in metres
+            Function to set tuples with the nominal vertical and horizontal sizes of the centre pixel in metres and degrees
             '''
             centre_pixel_indices = [
                 len(self.dimension_arrays[dim_index]) // 2 for dim_index in range(2)]
@@ -44,10 +48,17 @@ class NetCDFGridUtils(object):
 
             nominal_utm_crs = get_utm_crs(centre_pixel_coords[0], self.crs)
             centre_pixel_utm_coords = transform_coords(
-                centre_pixel_coords, from_crs=self.crs, to_crs=nominal_utm_crs)
-
-            return [abs(centre_pixel_utm_coords[1][
-                        dim_index] - centre_pixel_utm_coords[0][dim_index]) for dim_index in range(2)]
+                centre_pixel_coords, from_crs=self.crs, to_crs=nominal_utm_crs)          
+            
+            self.nominal_pixel_metres = [round(abs(centre_pixel_utm_coords[1][
+                        dim_index] - centre_pixel_utm_coords[0][dim_index]), 8) for dim_index in range(2)]
+            
+            
+            centre_pixel_wgs84_coords = transform_coords(
+                centre_pixel_coords, from_crs=self.crs, to_crs='EPSG:4326')
+            
+            self.nominal_pixel_degrees = [round(abs(centre_pixel_wgs84_coords[1][
+                        dim_index] - centre_pixel_wgs84_coords[0][dim_index]), 8) for dim_index in range(2)]
 
         def get_default_sample_metres():
             '''
@@ -61,6 +72,8 @@ class NetCDFGridUtils(object):
             return round(math.pow(10.0, math.floor(log_10_avg_pixel_metres) +
                                   (log_10_5 if((log_10_avg_pixel_metres % 1.0) < log_10_5) else 1.0)))
 
+    
+        # Start of init function
         self.netcdf_dataset = netcdf_dataset
 
 # assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
@@ -94,18 +107,28 @@ class NetCDFGridUtils(object):
 
         self.pixel_size = [abs(self.GeoTransform[1]),
                            abs(self.GeoTransform[5])]
+        
+        self.pixel_count = list(self.data_variable.shape)
+        
         if self.YX_order:
             self.pixel_size.reverse()
+            self.pixel_count.reverse()
 
         self.min_extent = tuple([min(self.dimension_arrays[
                                 dim_index]) - self.pixel_size[dim_index] / 2.0 for dim_index in range(2)])
         self.max_extent = tuple([max(self.dimension_arrays[
                                 dim_index]) + self.pixel_size[dim_index] / 2.0 for dim_index in range(2)])
 
-        self.nominal_pixel_metres = get_nominal_pixel_metres()
+        set_nominal_pixel_sizes()
 
         self.default_sample_metres = get_default_sample_metres()
 
+        # Create nested list of bounding box corner coordinates
+        self.native_bbox = [[self.GeoTransform[0] + (x_pixel_offset * self.GeoTransform[1]) + (y_pixel_offset * self.GeoTransform[2]),
+                         self.GeoTransform[3] + (x_pixel_offset * self.GeoTransform[4]) + (y_pixel_offset * self.GeoTransform[5])]
+                        for x_pixel_offset in [0, self.pixel_count[0]]
+                        for y_pixel_offset in [0, self.pixel_count[1]]]
+        
     def get_indices_from_coords(self, coordinates, crs=None):
         '''
         Returns list of netCDF array indices corresponding to coordinates to support nearest neighbour queries
