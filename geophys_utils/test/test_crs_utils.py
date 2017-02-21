@@ -42,7 +42,9 @@ class TestCRSUtils(unittest.TestCase):
         print 'Testing get_utm_crs function'
         utm_crs = get_utm_crs(TestCRSUtils.EPSG4326_COORDS, 
                               TestCRSUtils.EPSG4326_EPSG)
-        assert re.sub('\s+', ' ', utm_crs) == re.sub('\s+', ' ', TestCRSUtils.UTM_WKT)
+        utm_crs = re.sub(',\s+', ',', re.sub('\s+', ' ', utm_crs))
+        test_crs = re.sub(',\s+', ',', re.sub('\s+', ' ', TestCRSUtils.UTM_WKT))
+        assert utm_crs == test_crs, 'Incorrect UTM CRS: %s instead of %s' % (utm_crs, test_crs)
 
     def test_transform_coords(self):
         print 'Testing transform_coords function'

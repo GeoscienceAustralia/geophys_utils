@@ -18,7 +18,7 @@ MAX_ERROR = 0.000001
 TEST_COORDS = (148.213, -36.015)
 TEST_INDICES = [1, 1]
 TEST_FRACTIONAL_INDICES = [1.25, 1.25]
-TEST_VALUE = 0.0
+TEST_VALUE = -99999.0
 TEST_INTERPOLATED_VALUE = -99997.6171875
     
 class TestNetCDFGridUtilsConstructor(unittest.TestCase):
@@ -50,7 +50,7 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
     def test_get_value_at_coords(self):
         print 'Testing get_value_at_coords function'
         value = netcdf_grid_utils.get_value_at_coords(TEST_COORDS)
-        assert value.data == TEST_VALUE, 'Incorrect retrieved value'
+        assert value.data == TEST_VALUE, 'Incorrect retrieved value: %s instead of %s' % (value.data, TEST_VALUE)
 
     def test_get_interpolated_value_at_coords(self):
         print 'Testing get_interpolated_value_at_coords function'
