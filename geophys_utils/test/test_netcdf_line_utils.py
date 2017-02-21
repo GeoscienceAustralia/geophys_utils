@@ -16,6 +16,7 @@ netcdf_line_utils = None
 
 #NC_PATH = '/g/data2/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
 NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
+NC_TITLE = 'Marree Airborne Magnetic & Radiometric Survey, SA, 2012'
 #NC_PATH = 'test_line.nc'
 #NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
 
@@ -30,7 +31,28 @@ TEST_INDICES = [1, 1]
 TEST_FRACTIONAL_INDICES = [1.25, 1.25]
 TEST_VALUE = 0.0
 TEST_INTERPOLATED_VALUE = -99997.6171875
-    
+SPATIAL_MASK_COUNT = 4613089
+
+
+TEST_GRID_RESULTS = (('GEOGCS["GDA94",DATUM["Geocentric_Datum_of_Australia_1994",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY["EPSG","6283"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4283"]]',
+                      [136.4805, 0.001, 0, -27.988500000000002, 0, -0.001],
+                      (1778, 3047)
+                      ),
+                     ('GEOGCS["GDA94",DATUM["Geocentric_Datum_of_Australia_1994",SPHEROID["GRS 1980",6378137,298.257222101,AUTHORITY["EPSG","7019"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY["EPSG","6283"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4283"]]',
+                      [136.9995, 0.001, 0, -27.9995, 0, -0.001],
+                      (1001, 1001)
+                      )
+                     )
+
+TEST_GET_LINE_MASK_RESULTS = ((190520, 5032),
+                              (190500, 4994)
+                              )
+
+TEST_GET_LINE_RESULTS = ((190520, 4, 10064),
+                         (190500, 4, 9988)
+                         )
+
+   
 class TestNetCDFLineUtilsConstructor(unittest.TestCase):
     """Unit tests for TestNetCDFLineUtils Constructor.
     N.B: This should be run first"""
@@ -47,7 +69,8 @@ class TestNetCDFLineUtilsConstructor(unittest.TestCase):
         nc_dataset = netCDF4.Dataset(nc_path)
         netcdf_line_utils = NetCDFLineUtils(nc_dataset)
         
-        print netcdf_line_utils.__dict__
+        #print netcdf_line_utils.__dict__
+        assert nc_dataset.title == NC_TITLE, 'Invalid dataset title: "%s" != "%s"' % (nc_dataset.title, NC_TITLE)
     
 class TestNetCDFLineUtilsFunctions1(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
@@ -55,18 +78,23 @@ class TestNetCDFLineUtilsFunctions1(unittest.TestCase):
     def test_get_polygon(self):
         print 'Testing get_polygon function'
         polygon = netcdf_line_utils.get_polygon()
-        print polygon
+        assert polygon is None, 'This is just plain messed up' #TODO: Find out why None is returned
 
     def test_get_spatial_mask(self):
         print 'Testing get_spatial_mask function'
         spatial_mask = netcdf_line_utils.get_spatial_mask(TEST_BOUNDS)
-        print spatial_mask
-        print np.count_nonzero(spatial_mask)
+        #print spatial_mask
+        assert np.count_nonzero(spatial_mask) == SPATIAL_MASK_COUNT, 'Unexpected spatial mask count'
         
     def test_get_line_masks(self):
-        print 'Testing get_lines function'
+        print 'Testing get_line_masks function'
+        count = 0
         for line_number, line_mask in netcdf_line_utils.get_line_masks():
-            print 'Line %d has %d points' % (line_number, np.count_nonzero(line_mask))
+            # print 'Line %d has %d points' % (line_number, np.count_nonzero(line_mask))
+            assert (line_number, np.count_nonzero(line_mask)) == TEST_GET_LINE_MASK_RESULTS[count], "Invalid get_line_masks result"
+            count += 1
+            if count >= 2:
+                break
 
 
 class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
@@ -74,12 +102,19 @@ class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
     
     def test_get_lines(self):
         print 'Testing get_lines function'
+        count = 0
         for line_number, line_dict in netcdf_line_utils.get_lines():
-            print 'Line %d has %d variables with %d points' % (line_number,
-                                                               len(line_dict)-1, 
-                                                               np.count_nonzero(line_dict['coordinates'])
-                                                               )
-
+            #===================================================================
+            # print 'Line %d has %d variables with %d points' % (line_number,
+            #                                                    len(line_dict)-1, 
+            #                                                    np.count_nonzero(line_dict['coordinates'])
+            #                                                    )
+            #===================================================================
+            assert (line_number, len(line_dict)-1, np.count_nonzero(line_dict['coordinates'])) == TEST_GET_LINE_RESULTS[count], "Invalid get_lines result"
+            
+            count += 1
+            if count >= 2:
+                break
 
 class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
@@ -89,17 +124,14 @@ class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
         grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
                                                                  point_step = 100)
-        print crs
-        print geotransform
-        print grids.shape
+        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[0], 'Invalid grid results: %s != %s' % ((crs, geotransform, grids.shape), TEST_GRID_RESULTS[0])
 
+        print 'Testing bounded grid_points function'
         grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
                                                                  native_grid_bounds=TEST_BOUNDS,
                                                                  point_step = 100)
-        print crs
-        print geotransform
-        print grids.shape
+        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[1], 'Invalid grid results: %s != %s' % ((crs, geotransform, grids.shape), TEST_GRID_RESULTS[1])
 
 
 
