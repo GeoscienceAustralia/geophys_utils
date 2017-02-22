@@ -40,7 +40,7 @@ class DataStats(object):
                 'Unable to determine data variable (must have "grid_mapping" attribute')
 
         self._data_stats = {}
-        self._data_stats['nc_path'] = netcdf_dataset.filepath()
+        self._data_stats['nc_path'] = netcdf_path or netcdf_dataset.filepath()
         self._data_stats['data_type'] = str(self.data_variable.dtype)
         self._data_stats['nodata_value'] = self.data_variable._FillValue
 
