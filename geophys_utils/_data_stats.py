@@ -4,6 +4,7 @@ Created on 15Aug.,2016
 @author: Alex
 '''
 import sys
+import os
 import netCDF4
 import numpy as np
 from geophys_utils import array_pieces
@@ -28,6 +29,7 @@ class DataStats(object):
         assert not (
             netcdf_dataset and netcdf_path), 'netcdf_dataset and netcdf_path cannot both be defined'
 
+        netcdf_path = os.path.abspath(netcdf_path) if netcdf_path else None
         netcdf_dataset = netcdf_dataset or netCDF4.Dataset(netcdf_path, 'r')
 
         # Find variable with "grid_mapping" attribute - assumed to be 2D data
@@ -84,7 +86,7 @@ class DataStats(object):
             #     print 'Empty array'
             #==================================================================
 
-        self._data_stats['mean'] = weighted_mean / length_read
+        self._data_stats['mean'] = weighted_mean / length_read if length_read else None
 
         #===================================================================
         # #TODO: Implement something clever for these
