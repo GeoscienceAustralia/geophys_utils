@@ -164,6 +164,13 @@ class CSWUtils(object):
                   ):
         '''
         Function to query CSW using AND combination of provided search parameters
+        @param keyword_list: List of strings or comma-separated string containing keyword search terms
+        @param bounding_box: Bounding box to search as a list of ordinates [bbox.minx, bbox.minx, bbox.maxx, bbox.maxy]
+        @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of CSWUtils.DEFAULT_CRS
+        @param anytext_list: List of strings or comma-separated string containing any text search terms
+        @param titleword: List of strings or comma-separated string containing title search terms
+        @param start_datetime: Datetime object defining start of temporal search period
+        @param stop_datetime: Datetime object defining end of temporal search period
         '''
         
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
@@ -186,6 +193,13 @@ class CSWUtils(object):
             fes_filter_list += [fes.PropertyIsLike(propertyname='anyText', literal=phrase, matchCase=False) for phrase in anytext_list]
         if start_datetime or stop_datetime:
             fes_filter_list += self.get_date_filter(start_datetime, stop_datetime)
+        if titleword_list:
+            fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
+        if bounding_box:
+            fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
+
+        assert fes_filter_list, 'No search criteria defined'
+
         if titleword_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
         if bounding_box:
