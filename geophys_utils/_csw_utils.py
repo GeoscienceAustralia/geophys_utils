@@ -112,7 +112,7 @@ class CSWUtils(object):
                                'author': record.creator,
                                'abstract': record.abstract,
                                'bbox': [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
-                               'bbox_crs': record.bbox.crs or 'EPSG:4326'
+                               'bbox_crs': record.bbox.crs or CSWUtils.DEFAULT_CRS
                               }
 
                 distribution_info_list = copy.deepcopy(record.uris)
@@ -158,6 +158,13 @@ class CSWUtils(object):
                   ):
         '''
         Function to query CSW using AND combination of provided search parameters
+        @param keyword_list: List of strings or comma-separated string containing keyword search terms
+        @param bounding_box: Bounding box to search as a list of ordinates [bbox.minx, bbox.minx, bbox.maxx, bbox.maxy]
+        @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of CSWUtils.DEFAULT_CRS 
+        @param anytext_list: List of strings or comma-separated string containing any text search terms 
+        @param titleword: List of strings or comma-separated string containing title search terms 
+        @param start_datetime: Datetime object defining start of temporal search period
+        @param stop_datetime: Datetime object defining end of temporal search period
         '''
         
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
@@ -179,6 +186,8 @@ class CSWUtils(object):
         if start_datetime or stop_datetime:
             fes_filter_list += self.get_date_filter(start_datetime, stop_datetime)
             
+        assert fes_filter_list, 'No search criteria defined'
+        
         return self.get_csw_info(fes_filter_list)
             
 def main():
