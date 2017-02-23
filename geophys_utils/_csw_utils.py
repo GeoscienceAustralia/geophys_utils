@@ -17,6 +17,7 @@ class CSWUtils(object):
     DEFAULT_CSW_URL = 'http://ecat.ga.gov.au/geonetwork/srv/eng/csw' # GA's externally-facing eCat
     DEFAULT_TIMEOUT = 30 # Timeout in seconds
     DEFAULT_CRS = 'EPSG:4326' # Unprojected WGS84
+    DEFAULT_MAXRECORDS = 100 # Retrieve only this many datasets per CSW query
 
     def __init__(self, csw_url=None, timeout=None):
         '''
@@ -58,13 +59,13 @@ class CSWUtils(object):
         
         return [start_filter, stop_filter]
 
-    def get_csw_info(self, fes_filters):
+    def get_csw_info(self, fes_filters, maxrecords=None):
         '''
-        Find all distributions for all National Coverage records returned
+        Find all distributions for all records returned
         '''
         dataset_dict = {} # Dataset details keyed by title
     
-        maxrecords = 10 # Retrieve only this many datasets per query
+        maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS 
         startposition = 1 # N.B: This is 1-based, not 0-based
         while True: # Keep querying until all results have been retrieved
             # apply all the filters using the "and" syntax: [[filter1, filter2]]
@@ -90,10 +91,11 @@ class CSWUtils(object):
 #                print 'bbox = %s' % record.bbox.__dict__
                     
                 record_dict = {'uuid': uuid,
+                               'title': title,
                                'publisher': record.publisher
                               }
 
-                info_list = copy.deepcopy(record.uris)
+                distribution_info_list = copy.deepcopy(record.uris)
 
 #===========================================================================
 #                 # Add layer information for web services
@@ -106,10 +108,10 @@ class CSWUtils(object):
 #                     info['layers'] = wcs.contents.keys()
 #===========================================================================
 
-                record_dict['distributions'] = info_list
+                record_dict['distributions'] = distribution_info_list
                 record_dict['keywords'] = record.subjects
 
-                dataset_dict[title] = record_dict
+                dataset_dict[uuid] = record_dict
                 #print '%d distribution(s) found for "%s"' % (len(info_list), title)
 
             if record_count < maxrecords: # Don't go around again for another query - should be the end
