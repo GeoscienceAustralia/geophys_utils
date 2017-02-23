@@ -3,12 +3,13 @@ Created on 23Feb.,2017
 
 @author: u76345
 '''
-from owslib.csw import CatalogueServiceWeb
-from owslib import fes
-from datetime import datetime
 import re
 import copy
 from pprint import pprint
+from owslib import fes
+from owslib.csw import CatalogueServiceWeb
+from owslib.wms import WebMapService
+from owslib.wcs import WebCoverageService
 
 class CSWUtils(object):
     '''
@@ -22,6 +23,8 @@ class CSWUtils(object):
     def __init__(self, csw_url=None, timeout=None):
         '''
         Constructor for CSWUtils class
+        @param csw_url: URL for CSW service. Defaults to value of CSWUtils.DEFAULT_CSW_URL
+        @param timeout: Timeout in seconds. Defaults to value of CSWUtils.DEFAULT_TIMEOUT
         '''
         csw_url = csw_url or CSWUtils.DEFAULT_CSW_URL
         timeout = timeout or CSWUtils.DEFAULT_TIMEOUT
@@ -32,6 +35,8 @@ class CSWUtils(object):
         '''
         Helper function to return list of strings from a comma-separated string
         Substitute single-character wildcard for whitespace characters 
+        @param comma_separated_string: comma-separated string
+        @return: list of strings
         '''
         return [re.sub('(\s)', '_', keyword.strip()) for keyword in comma_separated_string.split(',')] 
         
@@ -39,6 +44,11 @@ class CSWUtils(object):
     def get_date_filter(self, start_datetime=None, stop_datetime=None, constraint='overlaps'):
         '''
         Helper function to return a list containing a pair of FES filters for a date range
+        @param  start_datetime: datetime object for start of time period to search
+        @param stop_datetime: datetime object for end of time period to search
+        @param constraint: string value of either 'overlaps' or 'within' to indicate type of temporal search
+        
+        @return: list containing a pair of FES filters for a date range
         '''
         if start_datetime:
             start_date_string = start_datetime.isoformat()
@@ -61,12 +71,18 @@ class CSWUtils(object):
 
     def get_csw_info(self, fes_filters, maxrecords=None):
         '''
-        Find all distributions for all records returned
+        Function to find all distributions for all records returned
+        Returns a nested dict keyed by UUID
+        @param fes_filters: List of fes filters to apply to CSW query
+        @param maxrecords: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
+        
+        @return: Nested dict object containing information about each record including distributions
         '''
         dataset_dict = {} # Dataset details keyed by title
     
         maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS 
         startposition = 1 # N.B: This is 1-based, not 0-based
+        
         while True: # Keep querying until all results have been retrieved
             # apply all the filters using the "and" syntax: [[filter1, filter2]]
             self.csw.getrecords2(constraints=[fes_filters], 
@@ -92,21 +108,29 @@ class CSWUtils(object):
                     
                 record_dict = {'uuid': uuid,
                                'title': title,
-                               'publisher': record.publisher
+                               'publisher': record.publisher,
+                               'author': record.creator,
+                               'abstract': record.abstract,
+                               'bbox': [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
+                               'bbox_crs': record.bbox.crs or 'EPSG:4326'
                               }
 
                 distribution_info_list = copy.deepcopy(record.uris)
 
-#===========================================================================
-#                 # Add layer information for web services
-#                 for info in [info for info in info_list if info['protocol'] == 'OGC:WMS']:
-#                     wms = WebMapService(info['url'], version='1.1.1')
-#                     info['layers'] = wms.contents.keys()
-# 
-#                 for info in [info for info in info_list if info['protocol'] == 'OGC:WCS']:
-#                     wcs = WebCoverageService(info['url'], version='1.0.0')
-#                     info['layers'] = wcs.contents.keys()
-#===========================================================================
+                # Add layer information for web services
+                for distribution_info in [distribution_info 
+                                          for distribution_info in distribution_info_list 
+                                          if distribution_info['protocol'] == 'OGC:WMS'
+                                          ]:
+                    wms = WebMapService(distribution_info['url'], version='1.1.1')
+                    distribution_info['layers'] = wms.contents.keys()
+ 
+                for distribution_info in [distribution_info 
+                                          for distribution_info in distribution_info_list 
+                                          if distribution_info['protocol'] == 'OGC:WCS'
+                                          ]:
+                    wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
+                    distribution_info['layers'] = wcs.contents.keys()
 
                 record_dict['distributions'] = distribution_info_list
                 record_dict['keywords'] = record.subjects
@@ -118,7 +142,7 @@ class CSWUtils(object):
                 break
     
             startposition += maxrecords
-    
+            
         #assert distribution_dict, 'No URLs found'  
         #print '%d records found.' % len(dataset_dict)
         return dataset_dict
@@ -132,6 +156,9 @@ class CSWUtils(object):
                   start_datetime=None,
                   stop_datetime=None
                   ):
+        '''
+        Function to query CSW using AND combination of provided search parameters
+        '''
         
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
         
@@ -155,8 +182,11 @@ class CSWUtils(object):
         return self.get_csw_info(fes_filter_list)
             
 def main():
-    #keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
-    keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
+    '''
+    Quick and dirty main function for on-the-fly testing
+    '''
+    keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
+    #keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
     
     cswu = CSWUtils()
     
