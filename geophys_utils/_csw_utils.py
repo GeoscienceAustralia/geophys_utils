@@ -19,6 +19,7 @@ class CSWUtils(object):
     DEFAULT_TIMEOUT = 30 # Timeout in seconds
     DEFAULT_CRS = 'EPSG:4326' # Unprojected WGS84
     DEFAULT_MAXRECORDS = 100 # Retrieve only this many datasets per CSW query
+    DEFAULT_MAXTOTALRECORDS = 500 # Maximum total number of records to retrieve
 
     def __init__(self, csw_url=None, timeout=None):
         '''
@@ -111,9 +112,11 @@ class CSWUtils(object):
                                'publisher': record.publisher,
                                'author': record.creator,
                                'abstract': record.abstract,
-                               'bbox': [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
-                               'bbox_crs': record.bbox.crs or 'EPSG:4326'
                               }
+
+                if record.bbox:
+                    record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
+                    record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
 
                 distribution_info_list = copy.deepcopy(record.uris)
 
@@ -138,9 +141,12 @@ class CSWUtils(object):
                 dataset_dict[uuid] = record_dict
                 #print '%d distribution(s) found for "%s"' % (len(info_list), title)
 
-            if record_count < maxrecords: # Don't go around again for another query - should be the end
+            if len(dataset_dict) >= CSWUtils.DEFAULT_MAXTOTALRECORDS:  # Don't go around again for another query - maximum retrieved
                 break
-    
+
+            if record_count < maxrecords:  # Don't go around again for another query - should be the end
+                break
+
             startposition += maxrecords
             
         #assert distribution_dict, 'No URLs found'  
@@ -161,15 +167,17 @@ class CSWUtils(object):
         '''
         
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
-        
+
         # Convert strings to lists if required
         if type(keyword_list) == str:
             keyword_list = self.list_from_comma_separated_string(keyword_list)
             
         if type(anytext_list) == str:
             anytext_list = self.list_from_comma_separated_string(anytext_list)
-            
-            
+
+        if type(titleword_list) == str:
+            titleword_list = self.list_from_comma_separated_string(titleword_list)
+
         # Build filter list
         fes_filter_list = []    
         if keyword_list:
@@ -178,20 +186,34 @@ class CSWUtils(object):
             fes_filter_list += [fes.PropertyIsLike(propertyname='anyText', literal=phrase, matchCase=False) for phrase in anytext_list]
         if start_datetime or stop_datetime:
             fes_filter_list += self.get_date_filter(start_datetime, stop_datetime)
-            
+        if titleword_list:
+            fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
+        if bounding_box:
+            fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
+
+
+        if len(fes_filter_list) == 1:
+            fes_filter_list = fes_filter_list[0]
+        print fes_filter_list
+
         return self.get_csw_info(fes_filter_list)
             
 def main():
     '''
     Quick and dirty main function for on-the-fly testing
     '''
-    keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
-    #keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
-    
+    #keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
+    keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
+    #titlewords = "onshore, gravity, grid, Australia, 2016"
+    anytext = "Magnetism, Palaeomagnetism"
+    bounds = [148.996, -35.48, 149.399, -35.124]
+
     cswu = CSWUtils()
     
-    result_dict = cswu.query_csw(keyword_list=keywords)
-    
+    result_dict = cswu.query_csw(keyword_list=keywords, bounding_box=bounds, anytext_list=anytext)
+    #result_dict = cswu.query_csw(titleword_list=titlewords)
+
+
     pprint(result_dict)
     
     print '%d results found.' % len(result_dict)
