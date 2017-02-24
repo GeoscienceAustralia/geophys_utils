@@ -259,16 +259,16 @@ def main():
 
     pprint(result_dict)    
     print '%d results found.' % len(result_dict)
-    
-    distribution_list = cswu.find_distributions('file', result_dict)
-    
-    #pprint(distribution_list)
-    #print '%d distributions found.' % len(distribution_list)
-    
-    for distribution in distribution_list:
+
+    print 'Files:'
+    for distribution in cswu.find_distributions('file', result_dict):
         print distribution['url'], distribution['title']
 
-    
+    print 'WMS:'
+    for distribution in cswu.find_distributions('wms', result_dict):
+        print distribution['url'], distribution['title']
+
+
 
 if __name__ == '__main__':
     main()
