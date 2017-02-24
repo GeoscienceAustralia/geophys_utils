@@ -208,10 +208,40 @@ class CSWUtils(object):
 
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
-        print fes_filter_list
 
         return self.get_csw_info(fes_filter_list)
             
+    def find_distributions(self, distribution_protocol, dataset_dict):
+        '''
+        Function to return flattened list of dicts containing information for all 
+        distributions matching specified distribution_protocol (partial string match)
+        '''
+        result_list = []
+        for record_dict in dataset_dict.values():
+            for distribution_dict in record_dict['distributions']:
+                if distribution_protocol.upper() in distribution_dict['protocol'].upper(): # If protocol match is found
+                    dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
+                    
+                    # Delete list of all distributions from copy of record dict
+                    del dataset_distribution_dict['distributions'] 
+                    
+                    # Convert lists to strings
+                    #dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords']) 
+                    #dataset_distribution_dict['bbox'] = ', '.join([str(ordinate) for ordinate in dataset_distribution_dict['bbox']])
+                    
+                    # Merge distribution info into copy of record dict
+                    dataset_distribution_dict.update(distribution_dict) 
+                    # Remove any leading " file://" from URL to give plain filename
+                    dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
+                    
+                    result_list.append(dataset_distribution_dict)
+                    
+        return result_list
+
+            
+            
+    
+    
 def main():
     '''
     Quick and dirty main function for on-the-fly testing
@@ -227,10 +257,18 @@ def main():
     result_dict = cswu.query_csw(keyword_list=keywords, bounding_box=bounds, anytext_list=anytext)
     #result_dict = cswu.query_csw(titleword_list=titlewords)
 
-
-    pprint(result_dict)
-    
+    pprint(result_dict)    
     print '%d results found.' % len(result_dict)
+    
+    distribution_list = cswu.find_distributions('file', result_dict)
+    
+    #pprint(distribution_list)
+    #print '%d distributions found.' % len(distribution_list)
+    
+    for distribution in distribution_list:
+        print distribution['url'], distribution['title']
+
+    
 
 if __name__ == '__main__':
     main()
