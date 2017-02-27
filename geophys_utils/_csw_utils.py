@@ -298,7 +298,7 @@ def main():
     protocol_list = ([protocol.strip() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
     
     # Default to showing URL and title
-    field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['url', 'title']
+    field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     
     # Set default delimiter to " "
     delimiter = args.delimiter or ' '
@@ -317,10 +317,7 @@ def main():
 
     for distribution_protocol in protocol_list:
         for distribution in cswu.find_distributions(distribution_protocol, result_dict):
-            print '%s%s%s' % (distribution_protocol, 
-                              delimiter, 
-                              delimiter.join(['"' + distribution[field] + '"' for field in field_list])
-                              )
+            print delimiter.join(['"' + distribution[field] + '"' for field in field_list])
 
 
 if __name__ == '__main__':
