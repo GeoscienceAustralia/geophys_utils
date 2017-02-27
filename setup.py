@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
+import os
 
 version = '0.0.0'
 
@@ -12,23 +13,19 @@ setup(name='geophys_utils',
       ],
       package_data={
       },
-      scripts=[
-          ],
+      scripts=(['bin/csw_find'] if (os.name == 'posix')
+               else (['bin\\csw_find.bat'] if (os.name == 'nt')
+                     else [])),
       requires=[
             'distutils',
             'functools',
             'itertools',
-            'logging',
-            'math',
             'netCDF4',
             'numpy',
-            'os',
             'osgeo',
             'owslib',
-            're',
             'scipy',
             'shapely',
-            'sys',
             'tempfile',
             'unittest',
             ],
