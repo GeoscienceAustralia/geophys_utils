@@ -301,7 +301,7 @@ def main():
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     
     # Set default delimiter to " "
-    delimiter = args.delimiter or ' '
+    delimiter = args.delimiter or '\t'
     
     #create a CSW object and populate the parameters with argparse inputs - print results
     cswu = CSWUtils()
@@ -315,6 +315,7 @@ def main():
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
 
+    print delimiter.join(['"' + field + '"' for field in field_list])
     for distribution_protocol in protocol_list:
         for distribution in cswu.find_distributions(distribution_protocol, result_dict):
             print delimiter.join(['"' + distribution[field] + '"' for field in field_list])
