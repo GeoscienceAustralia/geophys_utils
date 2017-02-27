@@ -6,7 +6,9 @@ Created on 23Feb.,2017
 import re
 import copy
 from pprint import pprint
+from datetime import datetime, timedelta
 from owslib import fes
+import argparse
 from owslib.csw import CatalogueServiceWeb
 from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
@@ -29,18 +31,18 @@ class CSWUtils(object):
         '''
         csw_url = csw_url or CSWUtils.DEFAULT_CSW_URL
         timeout = timeout or CSWUtils.DEFAULT_TIMEOUT
-        
+
         self.csw = CatalogueServiceWeb(csw_url, timeout=timeout)
-        
-    def list_from_comma_separated_string(self, comma_separated_string):  
+
+    def list_from_comma_separated_string(self, comma_separated_string):
         '''
         Helper function to return list of strings from a comma-separated string
-        Substitute single-character wildcard for whitespace characters 
+        Substitute single-character wildcard for whitespace characters
         @param comma_separated_string: comma-separated string
         @return: list of strings
         '''
-        return [re.sub('(\s)', '_', keyword.strip()) for keyword in comma_separated_string.split(',')] 
-        
+        return [re.sub('(\s)', '_', keyword.strip()) for keyword in comma_separated_string.split(',')]
+
     # A helper function for date range filtering
     def get_date_filter(self, start_datetime=None, stop_datetime=None, constraint='overlaps'):
         '''
@@ -48,26 +50,26 @@ class CSWUtils(object):
         @param  start_datetime: datetime object for start of time period to search
         @param stop_datetime: datetime object for end of time period to search
         @param constraint: string value of either 'overlaps' or 'within' to indicate type of temporal search
-        
+
         @return: list containing a pair of FES filters for a date range
         '''
         if start_datetime:
             start_date_string = start_datetime.isoformat()
         else:
             start_date_string = '1900-01-01T00:00:00'
-            
+
         if start_datetime:
             stop_date_string = start_datetime.isoformat()
         else:
             stop_date_string = '2100-01-01T23:59:59'
-        
+
         if constraint == 'overlaps':
             start_filter = fes.PropertyIsLessThanOrEqualTo(propertyname='ows100:TempExtent_begin', literal=stop_date_string)
             stop_filter = fes.PropertyIsGreaterThanOrEqualTo(propertyname='ows100:TempExtent_end', literal=start_date_string)
         elif constraint == 'within':
             start_filter = fes.PropertyIsGreaterThanOrEqualTo(propertyname='ows100:TempExtent_begin', literal=start_date_string)
             stop_filter = fes.PropertyIsLessThanOrEqualTo(propertyname='ows100:TempExtent_end', literal=stop_date_string)
-        
+
         return [start_filter, stop_filter]
 
     def get_csw_info(self, fes_filters, maxrecords=None):
@@ -76,37 +78,37 @@ class CSWUtils(object):
         Returns a nested dict keyed by UUID
         @param fes_filters: List of fes filters to apply to CSW query
         @param maxrecords: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
-        
+
         @return: Nested dict object containing information about each record including distributions
         '''
         dataset_dict = {} # Dataset details keyed by title
-    
-        maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS 
+
+        maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS
         startposition = 1 # N.B: This is 1-based, not 0-based
-        
+
         while True: # Keep querying until all results have been retrieved
             # apply all the filters using the "and" syntax: [[filter1, filter2]]
-            self.csw.getrecords2(constraints=[fes_filters], 
-                                 esn='full', 
-                                 maxrecords=maxrecords, 
+            self.csw.getrecords2(constraints=[fes_filters],
+                                 esn='full',
+                                 maxrecords=maxrecords,
                                  startposition=startposition)
-            
+
     #        print 'csw.request = %s' % csw.request
     #        print 'csw.response = %s' % csw.response
-            
+
             record_count = len(self.csw.records)
-    
+
             for uuid in self.csw.records.keys():
                 record = self.csw.records[uuid]
                 title = record.title
-                
+
                 # Ignore datasets with no distributions
                 if not record.uris:
                     #print 'No distribution(s) found for "%s"' % title
                     continue
-                    
+
 #                print 'bbox = %s' % record.bbox.__dict__
-                    
+
                 record_dict = {'uuid': uuid,
                                'title': title,
                                'publisher': record.publisher,
@@ -121,15 +123,15 @@ class CSWUtils(object):
                 distribution_info_list = copy.deepcopy(record.uris)
 
                 # Add layer information for web services
-                for distribution_info in [distribution_info 
-                                          for distribution_info in distribution_info_list 
+                for distribution_info in [distribution_info
+                                          for distribution_info in distribution_info_list
                                           if distribution_info['protocol'] == 'OGC:WMS'
                                           ]:
                     wms = WebMapService(distribution_info['url'], version='1.1.1')
                     distribution_info['layers'] = wms.contents.keys()
- 
-                for distribution_info in [distribution_info 
-                                          for distribution_info in distribution_info_list 
+
+                for distribution_info in [distribution_info
+                                          for distribution_info in distribution_info_list
                                           if distribution_info['protocol'] == 'OGC:WCS'
                                           ]:
                     wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
@@ -148,16 +150,16 @@ class CSWUtils(object):
                 break
 
             startposition += maxrecords
-            
-        #assert distribution_dict, 'No URLs found'  
+
+        #assert distribution_dict, 'No URLs found'
         #print '%d records found.' % len(dataset_dict)
         return dataset_dict
 
-    def query_csw(self, 
-                  keyword_list=None, 
-                  bounding_box=None, 
+    def query_csw(self,
+                  keyword_list=None,
+                  bounding_box=None,
                   bounding_box_crs=None,
-                  anytext_list=None, 
+                  anytext_list=None,
                   titleword_list=None,
                   start_datetime=None,
                   stop_datetime=None
@@ -172,13 +174,13 @@ class CSWUtils(object):
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
         '''
-        
+
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
 
         # Convert strings to lists if required
         if type(keyword_list) == str:
             keyword_list = self.list_from_comma_separated_string(keyword_list)
-            
+
         if type(anytext_list) == str:
             anytext_list = self.list_from_comma_separated_string(anytext_list)
 
@@ -186,7 +188,7 @@ class CSWUtils(object):
             titleword_list = self.list_from_comma_separated_string(titleword_list)
 
         # Build filter list
-        fes_filter_list = []    
+        fes_filter_list = []
         if keyword_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='Subject', literal=keyword, matchCase=False) for keyword in keyword_list]
         if anytext_list:
@@ -210,10 +212,10 @@ class CSWUtils(object):
             fes_filter_list = fes_filter_list[0]
 
         return self.get_csw_info(fes_filter_list)
-            
+
     def find_distributions(self, distribution_protocol, dataset_dict):
         '''
-        Function to return flattened list of dicts containing information for all 
+        Function to return flattened list of dicts containing information for all
         distributions matching specified distribution_protocol (partial string match)
         '''
         result_list = []
@@ -221,43 +223,96 @@ class CSWUtils(object):
             for distribution_dict in record_dict['distributions']:
                 if distribution_protocol.upper() in distribution_dict['protocol'].upper(): # If protocol match is found
                     dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
-                    
+
                     # Delete list of all distributions from copy of record dict
-                    del dataset_distribution_dict['distributions'] 
-                    
+                    del dataset_distribution_dict['distributions']
+
                     # Convert lists to strings
-                    #dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords']) 
+                    #dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
                     #dataset_distribution_dict['bbox'] = ', '.join([str(ordinate) for ordinate in dataset_distribution_dict['bbox']])
-                    
+
                     # Merge distribution info into copy of record dict
-                    dataset_distribution_dict.update(distribution_dict) 
+                    dataset_distribution_dict.update(distribution_dict)
                     # Remove any leading " file://" from URL to give plain filename
                     dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
-                    
+
                     result_list.append(dataset_distribution_dict)
-                    
+
         return result_list
 
-            
-            
-    
-    
+
+
+
+
 def main():
     '''
     Quick and dirty main function for on-the-fly testing
     '''
-    #keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
-    keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
-    #titlewords = "onshore, gravity, grid, Australia, 2016"
-    anytext = "Magnetism, Palaeomagnetism"
-    bounds = [148.996, -35.48, 149.399, -35.124]
 
+    DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%Y']
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-k", "--keywords", help="comma-separated list of keywords", type=str)
+    parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords", type=str)
+    parser.add_argument("-a", "--anytext", help="comma-seperated list of text snippets", type=str)
+    parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box",
+                        type=str)
+    parser.add_argument("-bc", "--bounds_crs", help="coordinate reference system for bounding box coordinates",
+                        type=str)
+    parser.add_argument("-s", "--start_date", help="start date", type=str)
+    parser.add_argument("-e", "--end_date", help="end date", type=str)
+    args = parser.parse_args()
+
+    print 'args.keywords = "%s"' % args.keywords
+    print 'args.titlewords = "%s"' % args.titlewords
+    print args.anytext
+    print 'args.bounds = "%s"' % args.bounds
+    print 'args.bounds_crs = "%s"' % args.bounds_crs
+    print 'args.start_date = "%s"' % args.start_date
+
+    if args.bounds:
+        bounds = [float(ordinate) for ordinate in args.bounds.split(',')]
+    else:
+        bounds = None
+
+    print 'bounds = "%s"' % bounds
+
+    start_date = None
+    if args.start_date:
+        for format_string in DATE_FORMAT_LIST:
+            try:
+                start_date = datetime.strptime(args.start_date, format_string)
+                break
+            except ValueError:
+                pass
+
+    print 'start_date = "%s"' % start_date.isoformat()
+
+    end_date = None
+    if args.end_date:
+        for format_string in DATE_FORMAT_LIST:
+            try:
+                # Add one day to make date inclusive
+                end_date = datetime.strptime(args.end_date, format_string) + timedelta(days=1)
+                break
+            except ValueError:
+                pass
+
+    print 'end_date = "%s"' % end_date.isoformat()
+
+    #create a CSW object and populate the parameters with argparse inputs - print results
     cswu = CSWUtils()
-    
-    result_dict = cswu.query_csw(keyword_list=keywords, bounding_box=bounds, anytext_list=anytext)
-    #result_dict = cswu.query_csw(titleword_list=titlewords)
+    result_dict = cswu.query_csw(keyword_list=args.keywords,
+                                 anytext_list=args.anytext,
+                                 titleword_list=args.titlewords,
+                                 bounding_box=bounds,
+                                 start_datetime=start_date,
+                                 stop_datetime=end_date
+                                 )
+    pprint(result_dict)
+    print '%d results found.' % len(result_dict)
 
-    pprint(result_dict)    
+    pprint(result_dict)
     print '%d results found.' % len(result_dict)
 
     print 'Files:'
