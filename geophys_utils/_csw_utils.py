@@ -241,65 +241,68 @@ class CSWUtils(object):
         return result_list
 
 
-
+def date_string2datetime(date_string):
+    '''
+    Helper function to convert date string in one of several formats to a datetime object
+    '''
+    DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%y', '%d/%m/%Y']
+    if date_string:
+        for format_string in DATE_FORMAT_LIST:
+            try:
+                datetime_result = datetime.strptime(date_string, format_string)
+                break
+            except ValueError:
+                pass
+            
+        return datetime_result
 
 
 def main():
     '''
-    Quick and dirty main function for on-the-fly testing
+    Main function
     '''
-
-    DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%Y']
-
+    # Define command line arguments
     parser = argparse.ArgumentParser()
     parser.add_argument("-k", "--keywords", help="comma-separated list of keywords", type=str)
     parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords", type=str)
-    parser.add_argument("-a", "--anytext", help="comma-seperated list of text snippets", type=str)
+    parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets", type=str)
     parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box",
                         type=str)
-    parser.add_argument("-bc", "--bounds_crs", help="coordinate reference system for bounding box coordinates",
+    parser.add_argument("-c", "--bounds_crs", help="coordinate reference system for bounding box coordinates",
                         type=str)
     parser.add_argument("-s", "--start_date", help="start date", type=str)
     parser.add_argument("-e", "--end_date", help="end date", type=str)
+    parser.add_argument("-p", "--protocols", help="comma-separated list of distribution protocols for output", type=str)
+    parser.add_argument("-f", "--fields", help="comma-separated list of fields for output", type=str)
+    parser.add_argument("-d", "--delimiter", help="field delimiter for output", type=str)
     args = parser.parse_args()
 
-    print 'args.keywords = "%s"' % args.keywords
-    print 'args.titlewords = "%s"' % args.titlewords
-    print args.anytext
-    print 'args.bounds = "%s"' % args.bounds
-    print 'args.bounds_crs = "%s"' % args.bounds_crs
-    print 'args.start_date = "%s"' % args.start_date
-
+    # Convert string to list of floats
     if args.bounds:
         bounds = [float(ordinate) for ordinate in args.bounds.split(',')]
     else:
         bounds = None
 
-    print 'bounds = "%s"' % bounds
+    # Convert string to datetime
+    start_date = date_string2datetime(args.start_date)
+    #if args.start_date:        
+        #print 'start_date = "%s"' % start_date.isoformat()
 
-    start_date = None
-    if args.start_date:
-        for format_string in DATE_FORMAT_LIST:
-            try:
-                start_date = datetime.strptime(args.start_date, format_string)
-                break
-            except ValueError:
-                pass
-
-    print 'start_date = "%s"' % start_date.isoformat()
-
-    end_date = None
+    # Convert string to datetime
+    end_date = date_string2datetime(args.end_date)
     if args.end_date:
-        for format_string in DATE_FORMAT_LIST:
-            try:
-                # Add one day to make date inclusive
-                end_date = datetime.strptime(args.end_date, format_string) + timedelta(days=1)
-                break
-            except ValueError:
-                pass
-
-    print 'end_date = "%s"' % end_date.isoformat()
-
+        end_date += timedelta(days=1) # Add one day to make end date inclusive        
+        #print 'end_date = "%s"' % end_date.isoformat()
+        
+    # Default to listing file path
+    protocol_list = ([protocol.strip() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
+    
+    # Default to showing URL and title
+    field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['url', 'title']
+    
+    # Set default delimiter to " "
+    delimiter = args.delimiter or ' '
+    
     #create a CSW object and populate the parameters with argparse inputs - print results
     cswu = CSWUtils()
     result_dict = cswu.query_csw(keyword_list=args.keywords,
@@ -309,20 +312,15 @@ def main():
                                  start_datetime=start_date,
                                  stop_datetime=end_date
                                  )
-    pprint(result_dict)
-    print '%d results found.' % len(result_dict)
+    #pprint(result_dict)
+    #print '%d results found.' % len(result_dict)
 
-    pprint(result_dict)
-    print '%d results found.' % len(result_dict)
-
-    print 'Files:'
-    for distribution in cswu.find_distributions('file', result_dict):
-        print distribution['url'], distribution['title']
-
-    print 'WMS:'
-    for distribution in cswu.find_distributions('wms', result_dict):
-        print distribution['url'], distribution['title']
-
+    for distribution_protocol in protocol_list:
+        for distribution in cswu.find_distributions(distribution_protocol, result_dict):
+            print '%s%s%s' % (distribution_protocol, 
+                              delimiter, 
+                              delimiter.join(['"' + distribution[field] + '"' for field in field_list])
+                              )
 
 
 if __name__ == '__main__':
