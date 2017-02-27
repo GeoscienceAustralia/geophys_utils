@@ -6,7 +6,9 @@ Created on 23Feb.,2017
 import re
 import copy
 from pprint import pprint
+from datetime import datetime, timedelta
 from owslib import fes
+import argparse
 from owslib.csw import CatalogueServiceWeb
 from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
@@ -246,18 +248,71 @@ def main():
     '''
     Quick and dirty main function for on-the-fly testing
     '''
-    #keywords = "Geophysical National Coverage, NCI, geoscientific%Information, grid" # National Coverages
-    keywords = "TMI, magnetics, NCI, AU, Magnetism and Palaeomagnetism, Airborne Digital Data, Geophysical Survey, grid" # Magnetic survey grids
-    #titlewords = "onshore, gravity, grid, Australia, 2016"
-    anytext = "Magnetism, Palaeomagnetism"
-    bounds = [148.996, -35.48, 149.399, -35.124]
 
+    DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%Y']
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-k", "--keywords", help="comma-separated list of keywords", type=str)
+    parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords", type=str)
+    parser.add_argument("-a", "--anytext", help="comma-seperated list of text snippets", type=str)
+    parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box",
+                        type=str)
+    parser.add_argument("-bc", "--bounds_crs", help="coordinate reference system for bounding box coordinates",
+                        type=str)
+    parser.add_argument("-s", "--start_date", help="start date", type=str)
+    parser.add_argument("-e", "--end_date", help="end date", type=str)
+    args = parser.parse_args()
+
+    print 'args.keywords = "%s"' % args.keywords
+    print 'args.titlewords = "%s"' % args.titlewords
+    print args.anytext
+    print 'args.bounds = "%s"' % args.bounds
+    print 'args.bounds_crs = "%s"' % args.bounds_crs
+    print 'args.start_date = "%s"' % args.start_date
+
+    if args.bounds:
+        bounds = [float(ordinate) for ordinate in args.bounds.split(',')]
+    else:
+        bounds = None
+
+    print 'bounds = "%s"' % bounds
+
+    start_date = None
+    if args.start_date:
+        for format_string in DATE_FORMAT_LIST:
+            try:
+                start_date = datetime.strptime(args.start_date, format_string)
+                break
+            except ValueError:
+                pass
+
+    print 'start_date = "%s"' % start_date.isoformat()
+
+    end_date = None
+    if args.end_date:
+        for format_string in DATE_FORMAT_LIST:
+            try:
+                # Add one day to make date inclusive
+                end_date = datetime.strptime(args.end_date, format_string) + timedelta(days=1)
+                break
+            except ValueError:
+                pass
+
+    print 'end_date = "%s"' % end_date.isoformat()
+
+    #create a CSW object and populate the parameters with argparse inputs - print results
     cswu = CSWUtils()
-    
-    result_dict = cswu.query_csw(keyword_list=keywords, bounding_box=bounds, anytext_list=anytext)
-    #result_dict = cswu.query_csw(titleword_list=titlewords)
+    result_dict = cswu.query_csw(keyword_list=args.keywords,
+                                 anytext_list=args.anytext,
+                                 titleword_list=args.titlewords,
+                                 bounding_box=bounds,
+                                 start_datetime=start_date,
+                                 stop_datetime=end_date
+                                 )
+    pprint(result_dict)
+    print '%d results found.' % len(result_dict)
 
-    pprint(result_dict)    
+    pprint(result_dict)
     print '%d results found.' % len(result_dict)
 
     print 'Files:'
