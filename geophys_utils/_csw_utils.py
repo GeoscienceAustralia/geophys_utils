@@ -21,7 +21,7 @@ class CSWUtils(object):
     DEFAULT_TIMEOUT = 30 # Timeout in seconds
     DEFAULT_CRS = 'EPSG:4326' # Unprojected WGS84
     DEFAULT_MAXRECORDS = 100 # Retrieve only this many datasets per CSW query
-    DEFAULT_MAXTOTALRECORDS = 500 # Maximum total number of records to retrieve
+    DEFAULT_MAXTOTALRECORDS = 1000 # Maximum total number of records to retrieve
 
     def __init__(self, csw_url=None, timeout=None):
         '''
@@ -72,18 +72,20 @@ class CSWUtils(object):
 
         return [start_filter, stop_filter]
 
-    def get_csw_info(self, fes_filters, maxrecords=None):
+    def get_csw_info(self, fes_filters, csw_url=None, maxrecords=None, max_total_records=None):
         '''
         Function to find all distributions for all records returned
         Returns a nested dict keyed by UUID
         @param fes_filters: List of fes filters to apply to CSW query
-        @param maxrecords: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
+        @param max_total_records: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
 
         @return: Nested dict object containing information about each record including distributions
         '''
         dataset_dict = {} # Dataset details keyed by title
 
         maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS
+        max_total_records = max_total_records or CSWUtils.DEFAULT_MAXTOTALRECORDS
+        
         startposition = 1 # N.B: This is 1-based, not 0-based
 
         while True: # Keep querying until all results have been retrieved
@@ -162,7 +164,8 @@ class CSWUtils(object):
                   anytext_list=None,
                   titleword_list=None,
                   start_datetime=None,
-                  stop_datetime=None
+                  stop_datetime=None,
+                  csw_url = None
                   ):
         '''
         Function to query CSW using AND combination of provided search parameters
@@ -174,7 +177,6 @@ class CSWUtils(object):
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
         '''
-
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
 
         # Convert strings to lists if required
@@ -211,7 +213,7 @@ class CSWUtils(object):
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
 
-        return self.get_csw_info(fes_filter_list)
+        return self.get_csw_info(fes_filter_list, csw_url)
 
     def find_distributions(self, distribution_protocol, dataset_dict):
         '''
@@ -268,13 +270,15 @@ def main():
     parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets", type=str)
     parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box",
                         type=str)
-    parser.add_argument("-c", "--bounds_crs", help="coordinate reference system for bounding box coordinates",
+    parser.add_argument("-c", "--crs", help="coordinate reference system for bounding box coordinates",
                         type=str)
     parser.add_argument("-s", "--start_date", help="start date", type=str)
     parser.add_argument("-e", "--end_date", help="end date", type=str)
+    
     parser.add_argument("-p", "--protocols", help="comma-separated list of distribution protocols for output", type=str)
     parser.add_argument("-f", "--fields", help="comma-separated list of fields for output", type=str)
     parser.add_argument("-d", "--delimiter", help="field delimiter for output", type=str)
+    parser.add_argument("-u", "--url", help="CSW URL - Defaults to GA's external eCat", type=str)
     args = parser.parse_args()
 
     # Convert string to list of floats
@@ -300,11 +304,11 @@ def main():
     # Default to showing URL and title
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     
-    # Set default delimiter to " "
+    # Set default delimiter to tab character
     delimiter = args.delimiter or '\t'
     
     #create a CSW object and populate the parameters with argparse inputs - print results
-    cswu = CSWUtils()
+    cswu = CSWUtils(args.url)
     result_dict = cswu.query_csw(keyword_list=args.keywords,
                                  anytext_list=args.anytext,
                                  titleword_list=args.titlewords,
