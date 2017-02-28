@@ -77,7 +77,8 @@ class CSWUtils(object):
         Function to find all distributions for all records returned
         Returns a nested dict keyed by UUID
         @param fes_filters: List of fes filters to apply to CSW query
-        @param max_total_records: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
+        @param maxrecords: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
+        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS
 
         @return: Nested dict object containing information about each record including distributions
         '''
@@ -166,7 +167,6 @@ class CSWUtils(object):
                   titleword_list=None,
                   start_datetime=None,
                   stop_datetime=None,
-                  csw_url = None, 
                   max_total_records=None
                   ):
         '''
@@ -178,6 +178,9 @@ class CSWUtils(object):
         @param titleword: List of strings or comma-separated string containing title search terms
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
+        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS
+
+        @return: Nested dict object containing information about each record including distributions
         '''
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
 
@@ -221,7 +224,12 @@ class CSWUtils(object):
     def find_distributions(self, distribution_protocol, dataset_dict):
         '''
         Function to return flattened list of dicts containing information for all
-        distributions matching specified distribution_protocol (partial string match)
+        distributions matching specified distribution_protocol
+        @param distribution_protocol: distribution_protocol to match (case insensitive partial string match)
+        @param dataset_dict: Nested dict object containing information about each record including distributions
+        
+        @return: flattened list of dicts containing information for all  distributions matching specified 
+        distribution_protocol
         '''
         result_list = []
         for record_dict in dataset_dict.values():
@@ -249,6 +257,9 @@ class CSWUtils(object):
 def date_string2datetime(date_string):
     '''
     Helper function to convert date string in one of several possible formats to a datetime object
+    @param date_string: date string in one of several possible formats
+    
+    @return datetime object
     '''
     DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%y', '%d/%m/%Y']
     if date_string:
