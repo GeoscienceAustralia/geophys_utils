@@ -279,6 +279,7 @@ def main():
     '''
     # Define command line arguments
     parser = argparse.ArgumentParser()
+    
     parser.add_argument("-k", "--keywords", help="comma-separated list of keywords for search", type=str)
     parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords for search", type=str)
     parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets for search", type=str)
@@ -294,6 +295,9 @@ def main():
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
     parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat", type=str)
     parser.add_argument("-m", "--max_results", help="Maximum number of records to return. Defaults to %d" % CSWUtils.DEFAULT_MAXTOTALRECORDS, type=int)
+    parser.add_argument('-r', '--header_row', action='store_const', const=True, default=False,
+                        help='display header row. Default is no header')
+    
     args = parser.parse_args()
 
     # Convert string to list of floats
@@ -335,7 +339,11 @@ def main():
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
 
-    print delimiter.join(['"' + field + '"' for field in field_list])
+    # Print header if required
+    if args.header_row:
+        print delimiter.join(['"' + field + '"' for field in field_list])
+    
+    # Print results
     for distribution_protocol in protocol_list:
         for distribution in cswu.find_distributions(distribution_protocol, result_dict):
             print delimiter.join(['"' + distribution[field] + '"' for field in field_list])
