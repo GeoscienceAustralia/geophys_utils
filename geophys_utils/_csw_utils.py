@@ -72,7 +72,7 @@ class CSWUtils(object):
 
         return [start_filter, stop_filter]
 
-    def get_csw_info(self, fes_filters, csw_url=None, maxrecords=None, max_total_records=None):
+    def get_csw_info(self, fes_filters, maxrecords=None, max_total_records=None):
         '''
         Function to find all distributions for all records returned
         Returns a nested dict keyed by UUID
@@ -85,10 +85,11 @@ class CSWUtils(object):
 
         maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS
         max_total_records = max_total_records or CSWUtils.DEFAULT_MAXTOTALRECORDS
-        
+
         startposition = 1 # N.B: This is 1-based, not 0-based
 
-        while True: # Keep querying until all results have been retrieved
+        # Keep querying until all results have been retrieved
+        while len(dataset_dict) < max_total_records:
             # apply all the filters using the "and" syntax: [[filter1, filter2]]
             self.csw.getrecords2(constraints=[fes_filters],
                                  esn='full',
@@ -145,9 +146,9 @@ class CSWUtils(object):
                 dataset_dict[uuid] = record_dict
                 #print '%d distribution(s) found for "%s"' % (len(info_list), title)
 
-            if len(dataset_dict) >= CSWUtils.DEFAULT_MAXTOTALRECORDS:  # Don't go around again for another query - maximum retrieved
-                break
-
+                if len(dataset_dict) >= max_total_records:  # Don't go around again for another query - maximum retrieved
+                    break
+    
             if record_count < maxrecords:  # Don't go around again for another query - should be the end
                 break
 
@@ -165,7 +166,8 @@ class CSWUtils(object):
                   titleword_list=None,
                   start_datetime=None,
                   stop_datetime=None,
-                  csw_url = None
+                  csw_url = None, 
+                  max_total_records=None
                   ):
         '''
         Function to query CSW using AND combination of provided search parameters
@@ -213,7 +215,8 @@ class CSWUtils(object):
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
 
-        return self.get_csw_info(fes_filter_list, csw_url)
+        return self.get_csw_info(fes_filter_list, 
+                                 max_total_records=max_total_records)
 
     def find_distributions(self, distribution_protocol, dataset_dict):
         '''
@@ -245,7 +248,7 @@ class CSWUtils(object):
 
 def date_string2datetime(date_string):
     '''
-    Helper function to convert date string in one of several formats to a datetime object
+    Helper function to convert date string in one of several possible formats to a datetime object
     '''
     DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%y', '%d/%m/%Y']
     if date_string:
@@ -261,24 +264,25 @@ def date_string2datetime(date_string):
 
 def main():
     '''
-    Main function
+    Main function to take command line parameters, perform CSW query and print required output
     '''
     # Define command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("-k", "--keywords", help="comma-separated list of keywords", type=str)
-    parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords", type=str)
-    parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets", type=str)
-    parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box",
+    parser.add_argument("-k", "--keywords", help="comma-separated list of keywords for search", type=str)
+    parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords for search", type=str)
+    parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets for search", type=str)
+    parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for search",
                         type=str)
-    parser.add_argument("-c", "--crs", help="coordinate reference system for bounding box coordinates",
+    parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Defaults to "EPSG:4326".',
                         type=str)
-    parser.add_argument("-s", "--start_date", help="start date", type=str)
-    parser.add_argument("-e", "--end_date", help="end date", type=str)
-    
-    parser.add_argument("-p", "--protocols", help="comma-separated list of distribution protocols for output", type=str)
-    parser.add_argument("-f", "--fields", help="comma-separated list of fields for output", type=str)
-    parser.add_argument("-d", "--delimiter", help="field delimiter for output", type=str)
-    parser.add_argument("-u", "--url", help="CSW URL - Defaults to GA's external eCat", type=str)
+    parser.add_argument("-s", "--start_date", help="start date for search", type=str)
+    parser.add_argument("-e", "--end_date", help="end date for search", type=str)
+    # Parameters to define output
+    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Defaults to "file".', type=str)
+    parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Defaults to "protocol,url,title"', type=str)
+    parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
+    parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat", type=str)
+    parser.add_argument("-m", "--max_results", help="Maximum number of records to return. Defaults to %d" % CSWUtils.DEFAULT_MAXTOTALRECORDS, type=int)
     args = parser.parse_args()
 
     # Convert string to list of floats
@@ -314,7 +318,8 @@ def main():
                                  titleword_list=args.titlewords,
                                  bounding_box=bounds,
                                  start_datetime=start_date,
-                                 stop_datetime=end_date
+                                 stop_datetime=end_date,
+                                 max_total_records=args.max_results
                                  )
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
