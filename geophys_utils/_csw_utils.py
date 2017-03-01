@@ -146,15 +146,22 @@ class CSWUtils(object):
                                           for distribution_info in distribution_info_list
                                           if distribution_info['protocol'] == 'OGC:WMS'
                                           ]:
-                    wms = WebMapService(distribution_info['url'], version='1.1.1')
-                    distribution_info['layers'] = wms.contents.keys()
+                    try:
+                        wms = WebMapService(distribution_info['url'], version='1.1.1')
+                        distribution_info['layers'] = wms.contents.keys()
+                    except:
+                        pass
+                        
 
                 for distribution_info in [distribution_info
                                           for distribution_info in distribution_info_list
                                           if distribution_info['protocol'] == 'OGC:WCS'
                                           ]:
-                    wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
-                    distribution_info['layers'] = wcs.contents.keys()
+                    try:
+                        wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
+                        distribution_info['layers'] = wcs.contents.keys()
+                    except:
+                        pass
 
                 record_dict['distributions'] = distribution_info_list
                 record_dict['keywords'] = record.subjects
@@ -249,7 +256,8 @@ class CSWUtils(object):
         result_list = []
         for record_dict in dataset_dict.values():
             for distribution_dict in record_dict['distributions']:
-                if distribution_protocol.upper() in distribution_dict['protocol'].upper(): # If protocol match is found
+                if (distribution_dict['protocol'] and 
+                    distribution_protocol.upper() in distribution_dict['protocol'].upper()): # If protocol match is found
                     dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
 
                     # Delete list of all distributions from copy of record dict
