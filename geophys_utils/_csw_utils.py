@@ -71,6 +71,21 @@ class CSWUtils(object):
             stop_filter = fes.PropertyIsLessThanOrEqualTo(propertyname='ows100:TempExtent_end', literal=stop_date_string)
 
         return [start_filter, stop_filter]
+    
+    def any_case_match_filters(self, propertyname, word_list):
+        '''
+        Helper function to return and/or filter from a word list for partial case insensitivity
+        Resolves issue where "matchCase=False" is ignored
+        @param propertyname: String denoting CSW property to search
+        @param word_list: List of strings for (partially) case-insensitive "and" search
+        
+        @return: List of FES filters expressing "and" query
+        '''
+        return [fes.Or([fes.PropertyIsLike(propertyname=propertyname, literal=word_variant, matchCase=False)
+                        for word_variant in set([word, word.upper(), word.lower(), word.title()])
+                        ]
+                       ) for word in word_list
+                ]
 
     def get_csw_info(self, fes_filters, maxrecords=None, max_total_records=None):
         '''
@@ -97,8 +112,8 @@ class CSWUtils(object):
                                  maxrecords=maxrecords,
                                  startposition=startposition)
 
-    #        print 'csw.request = %s' % csw.request
-    #        print 'csw.response = %s' % csw.response
+            print 'csw.request = %s' % self.csw.request
+    #        print 'self.csw.response = %s' % csw.response
 
             record_count = len(self.csw.records)
 
@@ -196,24 +211,24 @@ class CSWUtils(object):
 
         # Build filter list
         fes_filter_list = []
+        
+        # Check for unchanged, upper-case, lower-case and capitalised keywords
         if keyword_list:
-            fes_filter_list += [fes.PropertyIsLike(propertyname='Subject', literal=keyword, matchCase=False) for keyword in keyword_list]
+            fes_filter_list += self.any_case_match_filters('Subject', keyword_list)
+          
         if anytext_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='anyText', literal=phrase, matchCase=False) for phrase in anytext_list]
+        
         if start_datetime or stop_datetime:
             fes_filter_list += self.get_date_filter(start_datetime, stop_datetime)
+        
         if titleword_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
+        
         if bounding_box:
             fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
 
         assert fes_filter_list, 'No search criteria defined'
-
-        if titleword_list:
-            fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
-        if bounding_box:
-            fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
-
 
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
@@ -241,8 +256,8 @@ class CSWUtils(object):
                     del dataset_distribution_dict['distributions']
 
                     # Convert lists to strings
-                    #dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
-                    #dataset_distribution_dict['bbox'] = ', '.join([str(ordinate) for ordinate in dataset_distribution_dict['bbox']])
+                    dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
+                    dataset_distribution_dict['bbox'] = ', '.join([str(ordinate) for ordinate in dataset_distribution_dict['bbox']])
 
                     # Merge distribution info into copy of record dict
                     dataset_distribution_dict.update(distribution_dict)
