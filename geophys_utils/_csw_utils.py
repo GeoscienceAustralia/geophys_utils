@@ -112,8 +112,8 @@ class CSWUtils(object):
                                  maxrecords=maxrecords,
                                  startposition=startposition)
 
-            print 'csw.request = %s' % self.csw.request
-    #        print 'self.csw.response = %s' % csw.response
+#            print 'csw.request = %s' % self.csw.request
+#            print 'self.csw.response = %s' % self.csw.response
 
             record_count = len(self.csw.records)
 
