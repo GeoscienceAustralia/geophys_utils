@@ -5,7 +5,6 @@ Created on 23Feb.,2017
 '''
 import re
 import copy
-from pprint import pprint
 from datetime import datetime, timedelta
 from owslib import fes
 import argparse
@@ -275,12 +274,17 @@ class CSWUtils(object):
 
                     # Convert lists to strings
                     dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
-                    dataset_distribution_dict['bbox'] = ', '.join([str(ordinate) for ordinate in dataset_distribution_dict['bbox']])
+                    print dataset_distribution_dict['bbox']
+                    dataset_distribution_dict['bbox'] = ', '.join(dataset_distribution_dict['bbox'][0]) #TODO: Cater for multiple bounding boxes
+                    print dataset_distribution_dict['bbox']
 
                     # Merge distribution info into copy of record dict
                     dataset_distribution_dict.update(distribution_dict)
                     # Remove any leading " file://" from URL to give plain filename
                     dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
+                    
+                    if 'layers' in dataset_distribution_dict.keys():
+                        dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
 
                     result_list.append(dataset_distribution_dict)
 
@@ -356,6 +360,10 @@ def main():
     # Default to showing URL and title
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     
+    # Allow wildcard
+    if '*' in field_list:
+        field_list = None
+        
     # Set default delimiter to tab character
     delimiter = args.delimiter or '\t'
     
@@ -372,14 +380,21 @@ def main():
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
 
-    # Print header if required
-    if args.header_row:
-        print delimiter.join(['"' + field + '"' for field in field_list])
-    
     # Print results
+    header_printed = False
     for distribution_protocol in protocol_list:
         for distribution in cswu.find_distributions(distribution_protocol, result_dict):
-            print delimiter.join(['"' + distribution[field] + '"' for field in field_list])
+            # Print header if required
+            if args.header_row and not header_printed:
+                print delimiter.join(['"' + field + '"' 
+                                      for field in (field_list or sorted(distribution.keys()))
+                                      ]
+                                     )
+                header_printed = True;
+            
+            print delimiter.join(['"' + distribution[field] + '"' 
+                                  for field in (field_list or sorted(distribution.keys()))]
+                                 )
 
 
 if __name__ == '__main__':
