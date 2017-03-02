@@ -81,11 +81,20 @@ class CSWUtils(object):
         
         @return: List of FES filters expressing "and" query
         '''
-        return [fes.Or([fes.PropertyIsLike(propertyname=propertyname, literal=word_variant, matchCase=False)
-                        for word_variant in set([word, word.upper(), word.lower(), word.title()])
-                        ]
-                       ) for word in word_list
-                ]
+        filter_list = []
+        for word in word_list:
+            word_variant_set = set([word, word.upper(), word.lower(), word.title()])
+            
+            if len(word_variant_set) == 1: # Use single filter if no "or" required
+                filter_list.append(fes.PropertyIsLike(propertyname=propertyname, literal=word_variant_set.pop(), matchCase=False))
+            else:
+                filter_list.append(fes.Or([fes.PropertyIsLike(propertyname=propertyname, literal=word_variant, matchCase=False)
+                                           for word_variant in set([word, word.upper(), word.lower(), word.title()])
+                                           ]
+                                          )
+                                   )
+                
+        return filter_list
 
     def get_csw_info(self, fes_filters, maxrecords=None, max_total_records=None):
         '''
@@ -237,6 +246,7 @@ class CSWUtils(object):
 
         assert fes_filter_list, 'No search criteria defined'
 
+        # Use single filter if no "and" required
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
 
