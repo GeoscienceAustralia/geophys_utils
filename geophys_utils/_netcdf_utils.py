@@ -1,4 +1,6 @@
 '''
+NetCDFUtils class implementing useful functionality against netCDF files
+
 Created on 2Mar.,2017
 
 @author: u76345
@@ -11,7 +13,7 @@ import argparse
 
 class NetCDFUtils(object):
     '''
-    classdocs
+    NetCDFUtils class implementing useful functionality against netCDF files
     '''
     DEFAULT_COPY_OPTIONS = {'complevel': 2, 
                             'zlib': True, 
@@ -36,7 +38,7 @@ class NetCDFUtils(object):
                  nc_format=None,
                  limit_dim_size=False):
         '''
-        Function to copy a netCDF dataset to another one with potential changes to format, 
+        Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
             
             :param nc_in_path: path to existing netCDF input file 
