@@ -7,7 +7,7 @@ import sys
 import os
 import netCDF4
 import numpy as np
-from geophys_utils import array_pieces
+from geophys_utils._array_pieces import array_pieces
 
 
 class DataStats(object):
