@@ -274,9 +274,7 @@ class CSWUtils(object):
 
                     # Convert lists to strings
                     dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
-                    print dataset_distribution_dict['bbox']
                     dataset_distribution_dict['bbox'] = ', '.join(dataset_distribution_dict['bbox'][0]) #TODO: Cater for multiple bounding boxes
-                    print dataset_distribution_dict['bbox']
 
                     # Merge distribution info into copy of record dict
                     dataset_distribution_dict.update(distribution_dict)
