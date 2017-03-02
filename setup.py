@@ -13,8 +13,12 @@ setup(name='geophys_utils',
       ],
       package_data={
       },
-      scripts=(['bin/csw_find'] if (os.name == 'posix')
-               else (['bin\\csw_find.bat'] if (os.name == 'nt')
+      scripts=(['bin/csw_find',
+                'bin/rechunk'] 
+               if (os.name == 'posix')
+               else (['bin\\csw_find.bat',
+                      'bin\\rechunk.bat'] 
+                     if (os.name == 'nt')
                      else [])),
       requires=[
             'distutils',

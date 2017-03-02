@@ -8,7 +8,6 @@ import netCDF4
 import math
 import itertools
 import argparse
-from pprint import pprint
 
 class NetCDFUtils(object):
     '''
@@ -129,7 +128,8 @@ class NetCDFUtils(object):
                 var_options.update(variable_options_dict.get(variable_name) or {})
                 
                 # Ensure chunk sizes aren't bigger than variable sizes
-                if 'chunksizes' in var_options.keys():
+                print var_options
+                if var_options.get('chunksizes'):
                     for dimension_index in range(len(input_variable.dimensions)):
                         var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index],
                                                                          dim_size[input_variable.dimensions[dimension_index]])
@@ -271,7 +271,7 @@ def main():
              #datatype_map_dict={},
              variable_options_dict={data_variable.name: {'chunksizes': chunking}
                                for data_variable in ncu.data_variable_list
-                               },
+                               } if chunking else {},
              #dim_range_dict={},
              #nc_format=None,
              #limit_dim_size=False
