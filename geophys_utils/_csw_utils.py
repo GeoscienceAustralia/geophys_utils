@@ -19,8 +19,8 @@ class CSWUtils(object):
     DEFAULT_CSW_URL = 'http://ecat.ga.gov.au/geonetwork/srv/eng/csw' # GA's externally-facing eCat
     DEFAULT_TIMEOUT = 30 # Timeout in seconds
     DEFAULT_CRS = 'EPSG:4326' # Unprojected WGS84
-    DEFAULT_MAXRECORDS = 100 # Retrieve only this many datasets per CSW query
-    DEFAULT_MAXTOTALRECORDS = 1000 # Maximum total number of records to retrieve
+    DEFAULT_MAXQUERYRECORDS = 100 # Retrieve only this many datasets per CSW query
+    DEFAULT_MAXTOTALRECORDS = 2000 # Maximum total number of records to retrieve
 
     def __init__(self, csw_url=None, timeout=None):
         '''
@@ -95,35 +95,32 @@ class CSWUtils(object):
                 
         return filter_list
 
-    def get_csw_info(self, fes_filters, maxrecords=None, max_total_records=None):
+    def get_csw_records(self, fes_filters, max_query_records=None, max_total_records=None):
         '''
-        Function to find all distributions for all records returned
-        Returns a nested dict keyed by UUID
+        Generator yeilding nested dicts containing information about each CSW query result record including distributions
         @param fes_filters: List of fes filters to apply to CSW query
-        @param maxrecords: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
+        @param max_query_records: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
         @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS
-
-        @return: Nested dict object containing information about each record including distributions
+ 
         '''
-        dataset_dict = {} # Dataset details keyed by title
-
-        maxrecords = maxrecords or CSWUtils.DEFAULT_MAXRECORDS
+        max_query_records = max_query_records or CSWUtils.DEFAULT_MAXQUERYRECORDS
         max_total_records = max_total_records or CSWUtils.DEFAULT_MAXTOTALRECORDS
 
         startposition = 1 # N.B: This is 1-based, not 0-based
+        record_count = 0
 
         # Keep querying until all results have been retrieved
-        while len(dataset_dict) < max_total_records:
+        while record_count < max_total_records:
             # apply all the filters using the "and" syntax: [[filter1, filter2]]
             self.csw.getrecords2(constraints=[fes_filters],
                                  esn='full',
-                                 maxrecords=maxrecords,
+                                 maxrecords=max_query_records,
                                  startposition=startposition)
 
 #            print 'csw.request = %s' % self.csw.request
 #            print 'self.csw.response = %s' % self.csw.response
 
-            record_count = len(self.csw.records)
+            query_record_count = len(self.csw.records)
 
             for uuid in self.csw.records.keys():
                 record = self.csw.records[uuid]
@@ -174,20 +171,21 @@ class CSWUtils(object):
                 record_dict['distributions'] = distribution_info_list
                 record_dict['keywords'] = record.subjects
 
-                dataset_dict[uuid] = record_dict
+                record_count += 1
+                yield record_dict
                 #print '%d distribution(s) found for "%s"' % (len(info_list), title)
 
-                if len(dataset_dict) >= max_total_records:  # Don't go around again for another query - maximum retrieved
-                    break
+                if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
+                    raise Exception('Maximum number of records retrieved ($d)' % max_total_records)
     
-            if record_count < maxrecords:  # Don't go around again for another query - should be the end
+            if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
                 break
 
-            startposition += maxrecords
+            # Increment start position and repeat query
+            startposition += max_query_records
 
-        #assert distribution_dict, 'No URLs found'
-        #print '%d records found.' % len(dataset_dict)
-        return dataset_dict
+        #print '%d records found.' % record_count
+
 
     def query_csw(self,
                   keyword_list=None,
@@ -200,7 +198,8 @@ class CSWUtils(object):
                   max_total_records=None
                   ):
         '''
-        Function to query CSW using AND combination of provided search parameters
+        Function to query CSW using AND combination of provided search parameters and return generator object
+            yielding nested dicts containing information about each record including distributions
         @param keyword_list: List of strings or comma-separated string containing keyword search terms
         @param bounding_box: Bounding box to search as a list of ordinates [bbox.minx, bbox.minx, bbox.maxx, bbox.maxy]
         @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of CSWUtils.DEFAULT_CRS
@@ -208,9 +207,9 @@ class CSWUtils(object):
         @param titleword: List of strings or comma-separated string containing title search terms
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
-        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS
-
-        @return: Nested dict object containing information about each record including distributions
+        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS 
+        
+        @return: generator object yielding nested dicts containing information about each record including distributions
         '''
         bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
 
@@ -249,24 +248,42 @@ class CSWUtils(object):
         if len(fes_filter_list) == 1:
             fes_filter_list = fes_filter_list[0]
 
-        return self.get_csw_info(fes_filter_list, 
-                                 max_total_records=max_total_records)
+        # Return generator object
+        return self.get_csw_records(fes_filter_list, 
+                                    max_total_records=max_total_records)
 
-    def find_distributions(self, distribution_protocol, dataset_dict):
+    def get_distributions(self, distribution_protocols, dataset_dict_generator):
         '''
-        Function to return flattened list of dicts containing information for all
-        distributions matching specified distribution_protocol
-        @param distribution_protocol: distribution_protocol to match (case insensitive partial string match)
-        @param dataset_dict: Nested dict object containing information about each record including distributions
+        Generator to yield flattened dicts containing information for all distributions matching 
+        specified distribution_protocols
+        @param distribution_protocols: comma-separated string or list containing distribution_protocols to match (case insensitive partial string match)
+        @param dataset_dict_generator: Generator yeilding nested dict objects containing information about each record including distributions
+
+        '''
+        def protocol_match(protocol, search_protocol_list):
+            '''
+            Helper function to perform partial string match for strings in a list
+            '''
+            for search_protocol in search_protocol_list:
+                if search_protocol in protocol:
+                    return True
+            return False
+            
+            
+        # Ensure protocol_list contains upper case strings for case insensitivity
+        if type(distribution_protocols) == str:
+            search_protocol_list = [distribution_protocol.upper() 
+                                    for distribution_protocol in 
+                                    self.list_from_comma_separated_string(distribution_protocols)]
+        elif type(distribution_protocols) == list:
+            search_protocol_list = [distribution_protocol.upper() 
+                                    for distribution_protocol in distribution_protocols]
         
-        @return: flattened list of dicts containing information for all  distributions matching specified 
-        distribution_protocol
-        '''
-        result_list = []
-        for record_dict in dataset_dict.values():
+        for record_dict in dataset_dict_generator:
             for distribution_dict in record_dict['distributions']:
+                # If protocol match is found (case insensitive partial match)
                 if (distribution_dict['protocol'] and 
-                    distribution_protocol.upper() in distribution_dict['protocol'].upper()): # If protocol match is found
+                    protocol_match(distribution_dict['protocol'].upper(), search_protocol_list)): 
                     dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
 
                     # Delete list of all distributions from copy of record dict
@@ -284,9 +301,8 @@ class CSWUtils(object):
                     if 'layers' in dataset_distribution_dict.keys():
                         dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
 
-                    result_list.append(dataset_distribution_dict)
+                    yield dataset_distribution_dict
 
-        return result_list
 
 
 def date_string2datetime(date_string):
@@ -353,7 +369,7 @@ def main():
         #print 'end_date = "%s"' % end_date.isoformat()
         
     # Default to listing file path
-    protocol_list = ([protocol.strip() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
+    protocol_list = args.protocols or ['file']
     
     # Default to showing URL and title
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
@@ -367,7 +383,7 @@ def main():
     
     #create a CSW object and populate the parameters with argparse inputs - print results
     cswu = CSWUtils(args.url)
-    result_dict = cswu.query_csw(keyword_list=args.keywords,
+    record_generator = cswu.query_csw(keyword_list=args.keywords,
                                  anytext_list=args.anytext,
                                  titleword_list=args.titlewords,
                                  bounding_box=bounds,
@@ -380,19 +396,18 @@ def main():
 
     # Print results
     header_printed = False
-    for distribution_protocol in protocol_list:
-        for distribution in cswu.find_distributions(distribution_protocol, result_dict):
-            # Print header if required
-            if args.header_row and not header_printed:
-                print delimiter.join(['"' + field + '"' 
-                                      for field in (field_list or sorted(distribution.keys()))
-                                      ]
-                                     )
-                header_printed = True;
-            
-            print delimiter.join(['"' + distribution[field] + '"' 
-                                  for field in (field_list or sorted(distribution.keys()))]
+    for distribution in cswu.get_distributions(protocol_list, record_generator):
+        # Print header if required
+        if args.header_row and not header_printed:
+            print delimiter.join(['"' + field + '"' 
+                                  for field in (field_list or sorted(distribution.keys()))
+                                  ]
                                  )
+            header_printed = True;
+        
+        print delimiter.join(['"' + distribution[field] + '"' 
+                              for field in (field_list or sorted(distribution.keys()))]
+                             )
 
 
 if __name__ == '__main__':
