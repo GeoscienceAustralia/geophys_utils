@@ -264,26 +264,32 @@ class CSWUtils(object):
             '''
             Helper function to perform partial string match for strings in a list
             '''
+            # Treat empty list or None as wildcard match
+            if not search_protocol_list:
+                return True
+            
             for search_protocol in search_protocol_list:
                 if search_protocol in protocol:
                     return True
             return False
             
             
-        # Ensure protocol_list contains upper case strings for case insensitivity
+        # Ensure protocol_list contains lower case strings for case insensitivity
         if type(distribution_protocols) == str:
-            search_protocol_list = [distribution_protocol.upper() 
+            search_protocol_list = [distribution_protocol.lower() 
                                     for distribution_protocol in 
                                     self.list_from_comma_separated_string(distribution_protocols)]
         elif type(distribution_protocols) == list:
-            search_protocol_list = [distribution_protocol.upper() 
+            search_protocol_list = [distribution_protocol.lower() 
                                     for distribution_protocol in distribution_protocols]
+        else: 
+            search_protocol_list = distribution_protocols
         
         for record_dict in dataset_dict_generator:
             for distribution_dict in record_dict['distributions']:
                 # If protocol match is found (case insensitive partial match)
                 if (distribution_dict['protocol'] and 
-                    protocol_match(distribution_dict['protocol'].upper(), search_protocol_list)): 
+                    protocol_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
                     dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
 
                     # Delete list of all distributions from copy of record dict
@@ -369,11 +375,13 @@ def main():
         #print 'end_date = "%s"' % end_date.isoformat()
         
     # Default to listing file path
-    protocol_list = args.protocols or ['file']
-    
+    protocol_list =  ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
+    # Allow wildcard
+    if '*' in protocol_list:
+        protocol_list = None
+            
     # Default to showing URL and title
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
-    
     # Allow wildcard
     if '*' in field_list:
         field_list = None
