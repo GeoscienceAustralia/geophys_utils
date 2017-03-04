@@ -256,7 +256,8 @@ class CSWUtils(object):
         '''
         Generator to yield flattened dicts containing information for all distributions matching 
         specified distribution_protocols
-        @param distribution_protocols: comma-separated string or list containing distribution_protocols to match (case insensitive partial string match)
+        @param distribution_protocols: comma-separated string or list containing distribution_protocols to 
+        match (case insensitive partial string match). None or empty list treated as wildcard.
         @param dataset_dict_generator: Generator yeilding nested dict objects containing information about each record including distributions
 
         '''
@@ -347,8 +348,8 @@ def main():
     parser.add_argument("-s", "--start_date", help="start date for search", type=str)
     parser.add_argument("-e", "--end_date", help="end date for search", type=str)
     # Parameters to define output
-    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Defaults to "file".', type=str)
-    parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Defaults to "protocol,url,title"', type=str)
+    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Defaults to "file", "*" = wildcard.', type=str)
+    parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Defaults to "protocol,url,title", "*" = wildcard.', type=str)
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
     parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat", type=str)
     parser.add_argument("-m", "--max_results", help="Maximum number of records to return. Defaults to %d" % CSWUtils.DEFAULT_MAXTOTALRECORDS, type=int)
