@@ -319,7 +319,12 @@ def date_string2datetime(date_string):
     
     @return datetime object
     '''
+    #?
     DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%y', '%d/%m/%Y']
+    #If there is a date_string (start date or end date from argparse) then for each format type
+    # in the DATE FORMAT LIST try to use the datetime.strptime method.
+    #datetime.strptime() returns a datetime variable from the input parsed into the correct formatt.
+    #  OR does it check if it is the correct format?
     if date_string:
         for format_string in DATE_FORMAT_LIST:
             try:
@@ -327,7 +332,7 @@ def date_string2datetime(date_string):
                 break
             except ValueError:
                 pass
-            
+         #if successful return the input as a datetime class object.
         return datetime_result
 
 
@@ -358,7 +363,13 @@ def main():
     
     args = parser.parse_args()
 
+
+#CONVERTING INPUT TO CORRECT DATA TYPES AND FORMATS
+
     # Convert string to list of floats
+    # if the user inputs an argument for bounds, then convert this string to a list of floats
+    #  whereas each list object is split at the commas.
+    # If the user does not call the bounds argument, then don't use it.
     if args.bounds:
         bounds = [float(ordinate) for ordinate in args.bounds.split(',')]
     else:
@@ -370,18 +381,26 @@ def main():
         #print 'start_date = "%s"' % start_date.isoformat()
 
     # Convert string to datetime
+    #this does the same thing as above but adds one day. Is this so you can just set the start day
+    # and it automatically sets that as a single day?
     end_date = date_string2datetime(args.end_date)
     if args.end_date:
         end_date += timedelta(days=1) # Add one day to make end date inclusive        
         #print 'end_date = "%s"' % end_date.isoformat()
-        
+
+
+
     # Default to listing file path
-    protocol_list =  ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
+    #If there is a protocol, then create a list of protocols that are split at the comma
+    #what is the [file] part?
+    protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
     # Allow wildcard
+    # How does this work?? doesn't this say don't make a list if there is a *?
     if '*' in protocol_list:
         protocol_list = None
             
     # Default to showing URL and title
+    #formatting the output for fields
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     # Allow wildcard
     if '*' in field_list:
@@ -390,7 +409,8 @@ def main():
     # Set default delimiter to tab character
     delimiter = args.delimiter or '\t'
     
-    #create a CSW object and populate the parameters with argparse inputs - print results
+    #creatse a CSW object and populates the parameters with argparse inputs
+
     cswu = CSWUtils(args.url)
     record_generator = cswu.query_csw(keyword_list=args.keywords,
                                  anytext_list=args.anytext,
