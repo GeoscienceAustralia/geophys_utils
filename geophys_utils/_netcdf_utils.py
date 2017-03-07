@@ -147,13 +147,13 @@ class NetCDFUtils(object):
                                                                                  input_variable.datatype, 
                                                                                  dtype, 
                                                                                  options_string)
-                # Create output variable
+                # Create output variable using var_options to specify output options
                 output_variable = nc_output_dataset.createVariable(variable_name, 
                                               dtype, 
                                               input_variable.dimensions,
                                               **var_options
                                               )
-        
+                
                 # Copy variable attributes
                 print '\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs()))
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs()})
