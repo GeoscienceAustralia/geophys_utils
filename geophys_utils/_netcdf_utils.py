@@ -15,9 +15,12 @@ class NetCDFUtils(object):
     '''
     NetCDFUtils class implementing useful functionality against netCDF files
     '''
-    DEFAULT_COPY_OPTIONS = {'complevel': 2, 
+    DEFAULT_COPY_OPTIONS = {'complevel': 4, 
                             'zlib': True, 
-                            'chunksizes': [8192, 8192]
+                            'fletcher32': True,
+                            'shuffle': True,
+                            'endian': 'little',
+                            'chunksizes': [1024, 1024]
                             }
 
     def __init__(self, nc_path):
@@ -109,11 +112,14 @@ class NetCDFUtils(object):
                 # Chunking is defined outside the filters() result
                 chunking = input_variable.chunking()
                 if chunking and chunking != 'contiguous':
-                    # Input variable is chunked
+                    # Input variable is chunked - use same chunking by default unless overridden
                     input_variable_chunking = [min(chunking[dimension_index], dim_size[input_variable.dimensions[dimension_index]])
                                                  for dimension_index in range(len(chunking))]
-                elif len(input_variable.dimensions) == 2: #TODO: Improve this
-                    # Input variable is 2D and not chunked - assume row chunking
+                elif (len(input_variable.dimensions) == 2 and 
+                      variable_options_dict.get(variable_name) and
+                      variable_options_dict.get(variable_name).get('chunksizes')
+                      ): #TODO: Improve this
+                    # If input variable is unchunked 2D and output chunking is specified - assume row chunking for input
                     input_variable_chunking = [1, dim_size[input_variable.dimensions[1]]]
                 else:
                     # Input variable is not chunked
