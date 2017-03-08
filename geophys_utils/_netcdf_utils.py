@@ -10,6 +10,7 @@ import netCDF4
 import math
 import itertools
 import argparse
+from distutils.util import strtobool
 
 class NetCDFUtils(object):
     '''
@@ -32,6 +33,13 @@ class NetCDFUtils(object):
                                    if hasattr(variable, 'grid_mapping')]
         
         assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute'
+        
+        #TODO: Make sure this is general for all CRSs
+        self.y_variable = (self.netcdf_dataset.variables.get('lat') 
+                           or self.netcdf_dataset.variables.get('y')
+                           )
+        
+        self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
 
                  
     def copy(self, nc_out_path, 
@@ -39,23 +47,30 @@ class NetCDFUtils(object):
                  variable_options_dict={},
                  dim_range_dict={},
                  nc_format=None,
-                 limit_dim_size=False):
+                 limit_dim_size=False,
+                 invert_y=None):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
             
-            :param nc_in_path: path to existing netCDF input file 
-            :param nc_out_path: path to netCDF output file 
-            :param datatype_map_dict: dict containing any maps from source datatype to new datatype.
+            @param nc_in_path: path to existing netCDF input file 
+            @param nc_out_path: path to netCDF output file 
+            @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
                 e.g. datatype_map_dict={'uint64': 'uint32'}  would onvert all uint64 variables to uint32.
-            :param variable_options_dict: dict containing any overrides for per-variable variable creation 
+            @param variable_options_dict: dict containing any overrides for per-variable variable creation 
                 options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
                 compression to variable 'sst'
-            :param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
-            :param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
+            @param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
                 'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
-            :param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
-        '''       
+            @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
+        '''  
+             
+        if invert_y is None: # Default y-axis inversion to same as source
+            invert_y = self.y_inverted
+            
+        flip_y = (invert_y != self.y_inverted)
         
         # Override default variable options with supplied ones for all data variables
         for data_variable in self.data_variable_list:
@@ -174,6 +189,13 @@ class NetCDFUtils(object):
                     if (not input_variable_chunking or 
                         len(input_variable.dimensions) != 2): 
                         # No chunking - Try to copy in one hit
+                        
+                        if ((input_variable == self.y_variable) and flip_y): 
+                            # Y-axis flip required
+                            assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
+                            overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
+                            print 'Inverting y-axis variable'
+                            
                         output_variable[...] = input_variable[overall_slices]
                     
                     else: # Chunked - perform copy in pieces
@@ -201,6 +223,11 @@ class NetCDFUtils(object):
                                                                       ' x '.join([str(piece_size) for piece_size in piece_sizes])
                                                                       )
                         
+                        try:
+                            ydim_index = input_variable.dimensions.index(self.y_variable.name)
+                        except ValueError:
+                            ydim_index = None
+                        
                         # Iterate over every piece
                         for piece_indices in itertools.product(*[range(piece_index_ranges[dimension_index][0], 
                                                                       piece_index_ranges[dimension_index][1])
@@ -227,7 +254,14 @@ class NetCDFUtils(object):
                                             for dimension_index in range(len(input_variable.dimensions))
                                            ]
                             
-                            #print piece_read_slices, piece_write_slices
+                            if flip_y and ydim_index is not None:
+                                # Flip required
+                                piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
+                                                                      output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
+                                                                        if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
+                                                                        else None, -1)
+                            
+                            print piece_read_slices, piece_write_slices
                             
                             output_variable[piece_write_slices] = input_variable[piece_read_slices]
                     
@@ -264,8 +298,14 @@ def main():
                         type=str)
     parser.add_argument("input_path")
     parser.add_argument("output_path")
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
     
     args = parser.parse_args()
+    
+    if args.invert_y is not None:
+        invert_y = bool(strtobool(args.invert_y))
+    else:
+        invert_y = None # Default to same as source
     
     if args.do_copy:
         if args.chunking:
@@ -283,6 +323,7 @@ def main():
              #dim_range_dict={},
              #nc_format=None,
              #limit_dim_size=False
+             invert_y=invert_y
              )
             
         
