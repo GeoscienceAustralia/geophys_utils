@@ -157,7 +157,6 @@ class NetCDFUtils(object):
                 var_options.update(variable_options_dict.get(variable_name) or {})
                 
                 # Ensure chunk sizes aren't bigger than variable sizes
-                print var_options
                 if var_options.get('chunksizes'):
                     for dimension_index in range(len(input_variable.dimensions)):
                         var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index],
@@ -183,7 +182,7 @@ class NetCDFUtils(object):
                     output_GeoTransform = list(self.GeoTransform)
                     output_GeoTransform[5] = - output_GeoTransform[5]
                     output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
-                    print '%s.GeoTransform rewritten as %s' % (variable_name, output_variable.GeoTransform)
+                    print '%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform)
     
                 # Copy data
                 if input_variable.shape: # array
