@@ -232,7 +232,7 @@ class NetCDFUtils(object):
                                         for dimension_index in range(len(input_variable.dimensions)) 
                                         ]
                     
-                        print 'Copying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
+                        print '\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
                                                                       ' x '.join([str(piece_size) for piece_size in piece_sizes])
                                                                       )
                         
@@ -249,7 +249,7 @@ class NetCDFUtils(object):
                                                         ):
                             
                                                
-                            print '\tCopying piece %s' % (piece_indices,)
+                            print '\t\tCopying piece %s' % (piece_indices,)
                             
                             piece_read_slices = [slice(max(overall_slices[dimension_index].start,
                                                      piece_indices[dimension_index] * piece_sizes[dimension_index]
