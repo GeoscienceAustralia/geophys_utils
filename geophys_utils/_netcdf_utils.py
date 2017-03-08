@@ -32,7 +32,7 @@ class NetCDFUtils(object):
         self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                    if hasattr(variable, 'grid_mapping')]
         
-        assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute'
+        assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute)'
         
         #TODO: Make sure this is general for all CRSs
         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
@@ -56,7 +56,7 @@ class NetCDFUtils(object):
             @param nc_in_path: path to existing netCDF input file 
             @param nc_out_path: path to netCDF output file 
             @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
-                e.g. datatype_map_dict={'uint64': 'uint32'}  would onvert all uint64 variables to uint32.
+                e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
             @param variable_options_dict: dict containing any overrides for per-variable variable creation 
                 options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
                 compression to variable 'sst'
