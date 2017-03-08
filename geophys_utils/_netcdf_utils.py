@@ -207,7 +207,7 @@ class NetCDFUtils(object):
                             # Y-axis flip required
                             assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
                             overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
-                            print 'Inverting y-axis variable'
+                            print '\tInverting y-axis variable %s' % variable_name
                             
                         output_variable[...] = input_variable[overall_slices]
                     
