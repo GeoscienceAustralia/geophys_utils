@@ -178,11 +178,13 @@ class NetCDFUtils(object):
                 print '\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs()))
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs()})
                 
-                if (flip_y and (input_variable == self.grid_mapping_variable)):                    
-                    output_GeoTransform = list(self.GeoTransform)
-                    output_GeoTransform[5] = - output_GeoTransform[5]
-                    output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
-                    print '%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform)
+                #===============================================================
+                # if (flip_y and (input_variable == self.grid_mapping_variable)):                    
+                #     output_GeoTransform = list(self.GeoTransform)
+                #     output_GeoTransform[5] = - output_GeoTransform[5]
+                #     output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
+                #     print '%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform)
+                #===============================================================
     
                 # Copy data
                 if input_variable.shape: # array
