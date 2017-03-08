@@ -388,7 +388,7 @@ def date_string2datetime(date_string):
                 break
             except ValueError:
                 pass
-         #if successful return the input as a datetime class object.
+        #if successful return the input as a datetime class object.
         return datetime_result
 
 
