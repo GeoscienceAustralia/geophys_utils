@@ -261,7 +261,7 @@ class NetCDFUtils(object):
                                                                         if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
                                                                         else None, -1)
                             
-                            print piece_read_slices, piece_write_slices
+                            #print piece_read_slices, piece_write_slices
                             
                             output_variable[piece_write_slices] = input_variable[piece_read_slices]
                     
