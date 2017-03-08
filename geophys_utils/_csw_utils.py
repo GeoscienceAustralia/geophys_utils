@@ -343,7 +343,7 @@ class CSWUtils(object):
                 filename = re.sub('^file://', '', file_distribution['url']) # Strip leading "file://" from URL
                 try:
                     if os.path.isfile(filename) and netCDF4.Dataset(filename): # Test for valid netCDF file
-                        print 'file found'
+                        #print 'file found'
                         file_distribution['url'] = filename # Change URL to straight filename
                         distribution_dict = file_distribution
                         break
