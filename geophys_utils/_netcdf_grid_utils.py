@@ -46,6 +46,13 @@ class NetCDFGridUtils(object):
                 for coord_index in range(2):
                     centre_pixel_coords[coord_index].reverse()
 
+            #TODO: Make sure this is general for all CRSs
+            self.y_variable = (self.netcdf_dataset.variables.get('lat') 
+                               or self.netcdf_dataset.variables.get('y')
+                               )
+            
+            self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
+        
             nominal_utm_crs = get_utm_crs(centre_pixel_coords[0], self.crs)
             centre_pixel_utm_coords = transform_coords(
                 centre_pixel_coords, from_crs=self.crs, to_crs=nominal_utm_crs)          
