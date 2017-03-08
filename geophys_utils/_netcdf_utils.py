@@ -40,6 +40,12 @@ class NetCDFUtils(object):
                            )
         
         self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
+        
+        self.grid_mapping_variable = self.netcdf_dataset.variables[
+            self.data_variable_list[0].grid_mapping]
+        
+        self.GeoTransform = [float(
+            number) for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
 
                  
     def copy(self, nc_out_path, 
@@ -118,7 +124,7 @@ class NetCDFUtils(object):
                 dtype = datatype_map_dict.get(str(input_variable.datatype)) or input_variable.datatype
                 
                 # Special case for "crs" or "transverse_mercator" - want byte datatype
-                if variable_name in ['crs', 'transverse_mercator']: 
+                if input_variable == self.grid_mapping_variable: 
                     dtype = 'i1'
                     
                 # Start off by copying options from input variable (if specified)
@@ -172,6 +178,12 @@ class NetCDFUtils(object):
                 # Copy variable attributes
                 print '\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs()))
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs()})
+                
+                if (flip_y and (input_variable == self.grid_mapping_variable)):                    
+                    output_GeoTransform = list(self.GeoTransform)
+                    output_GeoTransform[5] = - output_GeoTransform[5]
+                    output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
+                    print '%s.GeoTransform rewritten as %s' % (variable_name, output_variable.GeoTransform)
     
                 # Copy data
                 if input_variable.shape: # array
