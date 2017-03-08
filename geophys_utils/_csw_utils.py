@@ -4,6 +4,7 @@ Created on 23Feb.,2017
 @author: u76345
 '''
 import re
+import os
 import copy
 from datetime import datetime, timedelta
 from owslib import fes
@@ -11,6 +12,7 @@ import argparse
 from owslib.csw import CatalogueServiceWeb
 from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
+import netCDF4
 
 class CSWUtils(object):
     '''
@@ -252,29 +254,61 @@ class CSWUtils(object):
         return self.get_csw_records(fes_filter_list, 
                                     max_total_records=max_total_records)
 
+    def flatten_distribution_dict(self, record_dict, distribution_dict):
+        '''
+        Helper function to create a flattened dict from a record dict and a single distribution dict as returned by query_csw
+        @param record_dict:
+        @param distribution_dict
+        
+        @return dict: flattened dict containing information about specified record and distribution
+        '''
+        dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
+
+        # Delete list of all distributions from copy of record dict
+        del dataset_distribution_dict['distributions']
+
+        # Convert lists to strings
+        dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
+        dataset_distribution_dict['bbox'] = ', '.join(dataset_distribution_dict['bbox'][0]) #TODO: Cater for multiple bounding boxes
+
+        # Merge distribution info into copy of record dict
+        dataset_distribution_dict.update(distribution_dict)
+        # Remove any leading " file://" from URL to give plain filename
+        dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
+        
+        if 'layers' in dataset_distribution_dict.keys():
+            dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
+        
+        return dataset_distribution_dict
+    
+        
+    def partial_string_match(self, superstring, partial_string_list):
+        '''
+        Helper function to perform partial string match for strings in a list
+        @param superstring: Whole string against which to search for partial matches
+        @param partial_string_list: List of partial strings for which to search superstring
+        
+        @return bool: True if any partial string found in superstring
+        '''
+        # Treat empty list or None as wildcard match
+        if not partial_string_list:
+            return True
+        
+        for search_string in partial_string_list:
+            if search_string in superstring:
+                return True
+        return False
+            
+            
     def get_distributions(self, distribution_protocols, dataset_dict_generator):
         '''
         Generator to yield flattened dicts containing information for all distributions matching 
         specified distribution_protocols
         @param distribution_protocols: comma-separated string or list containing distribution_protocols to 
         match (case insensitive partial string match). None or empty list treated as wildcard.
-        @param dataset_dict_generator: Generator yeilding nested dict objects containing information about each record including distributions
+        @param dataset_dict_generator: Generator yeilding dict objects containing information about each record including distributions
 
         '''
-        def protocol_match(protocol, search_protocol_list):
-            '''
-            Helper function to perform partial string match for strings in a list
-            '''
-            # Treat empty list or None as wildcard match
-            if not search_protocol_list:
-                return True
-            
-            for search_protocol in search_protocol_list:
-                if search_protocol in protocol:
-                    return True
-            return False
-            
-            
         # Ensure protocol_list contains lower case strings for case insensitivity
         if type(distribution_protocols) == str:
             search_protocol_list = [distribution_protocol.lower() 
@@ -290,27 +324,49 @@ class CSWUtils(object):
             for distribution_dict in record_dict['distributions']:
                 # If protocol match is found (case insensitive partial match)
                 if (distribution_dict['protocol'] and 
-                    protocol_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
-                    dataset_distribution_dict = copy.copy(record_dict) # Create shallow copy of record dict
+                    self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
 
-                    # Delete list of all distributions from copy of record dict
-                    del dataset_distribution_dict['distributions']
+                    yield self.flatten_distribution_dict(record_dict, distribution_dict)
 
-                    # Convert lists to strings
-                    dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
-                    dataset_distribution_dict['bbox'] = ', '.join(dataset_distribution_dict['bbox'][0]) #TODO: Cater for multiple bounding boxes
 
-                    # Merge distribution info into copy of record dict
-                    dataset_distribution_dict.update(distribution_dict)
-                    # Remove any leading " file://" from URL to give plain filename
-                    dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
+    def get_netcdf_urls(self, dataset_dict_generator):
+        '''
+        Generator to yield flattened dicts containing information for any netCDF distributions (file or OPeNDAP URL, file by preference)
+        @param dataset_dict_generator: Generator yeilding dict objects containing information about each record including distributions
+        '''
+        for record_dict in dataset_dict_generator:
+            distribution_dict = None
+            for file_distribution in [distribution for distribution in record_dict['distributions'] 
+                                      if 'file' in distribution['protocol'].lower()
+                                      and re.match('.*\.nc$', distribution['url'])
+                                      ]:
+                filename = re.sub('^file://', '', file_distribution['url']) # Strip leading "file://" from URL
+                try:
+                    if os.path.isfile(filename) and netCDF4.Dataset(filename): # Test for valid netCDF file
+                        print 'file found'
+                        file_distribution['url'] = filename # Change URL to straight filename
+                        distribution_dict = file_distribution
+                        break
+                except:
+                    print 'Unable to open netCDF file %s' % filename
+                    pass
                     
-                    if 'layers' in dataset_distribution_dict.keys():
-                        dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
-
-                    yield dataset_distribution_dict
-
-
+            if not distribution_dict:
+                # Check for valid OPeNDAP endpoint if no valid file found
+                for opendap_distribution in [distribution for distribution in record_dict['distributions'] 
+                                             if 'opendap' in distribution['protocol'].lower()
+                                             and re.match('.*\.nc$', distribution['url'])
+                                             ]:
+                    try:
+                        if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                            distribution_dict = opendap_distribution
+                            break
+                    except:
+                        pass
+            
+            if distribution_dict:
+                yield self.flatten_distribution_dict(record_dict, distribution_dict)
+                continue
 
 def date_string2datetime(date_string):
     '''
@@ -406,6 +462,7 @@ def main():
     # Print results
     header_printed = False
     for distribution in cswu.get_distributions(protocol_list, record_generator):
+    #for distribution in cswu.get_netcdf_urls(record_generator):
         # Print header if required
         if args.header_row and not header_printed:
             print delimiter.join(['"' + field + '"' 
