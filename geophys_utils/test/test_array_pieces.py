@@ -45,8 +45,8 @@ class TestArrayPieces(unittest.TestCase):
         
         print'\tTesting sixteenth arrays with overlap'
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array,
-                                                                                                        overlap=overlap,
-                                                                                                        max_bytes=sixteenth_bytes)}
+                                                                                                        max_bytes=sixteenth_bytes,
+                                                                                                        overlap=overlap)}
 
         assert len(array_pieces_results) == 16, '16 arrays not returned for overlap=%d, max_bytes=%d' % (overlap,
                                                                                                                   sixteenth_bytes)

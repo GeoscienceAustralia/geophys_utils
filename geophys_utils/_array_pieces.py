@@ -10,7 +10,7 @@ import math
 import itertools
 from functools import reduce
 
-def array_pieces(ndarray, overlap=0, max_bytes=None):
+def array_pieces(ndarray, max_bytes=None, overlap=0):
     '''
     Generator to return a series of numpy arrays less than max_bytes in size and the offset within the complete data from a NetCDF variable
     Parameters:

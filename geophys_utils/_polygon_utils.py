@@ -25,7 +25,7 @@ def get_grid_edge_points(grid_array, dimension_ordinates, nodata_value, max_byte
     assert len(grid_array.shape) == 2, 'grid_array is not 2D'
 
     edge_point_list = []  # Complete list of edge points (unknown length)
-    for piece_array, array_offset in array_pieces(grid_array, max_bytes):
+    for piece_array, array_offset in array_pieces(grid_array, max_bytes=max_bytes):
         dimension_subset = [dimension_ordinates[dim_index][array_offset[dim_index]:array_offset[
             dim_index] + piece_array.shape[dim_index]] for dim_index in range(2)]
 

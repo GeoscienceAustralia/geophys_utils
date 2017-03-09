@@ -55,7 +55,7 @@ class DataStats(object):
         weighted_mean = 0.0
 
         for piece_array, _piece_offsets in array_pieces(
-                self.data_variable, max_bytes):
+                self.data_variable, max_bytes=max_bytes):
 
             if isinstance(piece_array, np.ma.core.MaskedArray):
                 piece_array = piece_array.data
