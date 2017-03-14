@@ -113,19 +113,29 @@ class NetCDFLineUtils(object):
         
         self._nc_cache_dataset.createDimension('start_end', 2)
         
-        var_options = self.netcdf_dataset.variables['_index_line'].filters() or {}
+        # Cater for two possible variable naming conventions
+        #TODO: Remove this after the variable naming scheme has been finalised
+        try:
+            index_line_variable = self.netcdf_dataset.variables['index_line']
+            index_count_variable = self.netcdf_dataset.variables['index_count']
+        except:
+            index_line_variable = self.netcdf_dataset.variables['_index_line']
+            index_count_variable = self.netcdf_dataset.variables['_index_count']
+        
+        var_options = index_line_variable.filters() or {}
+        
         var_options['zlib'] = False
-        if hasattr(self.netcdf_dataset.variables['_index_line'], '_FillValue'):
-            var_options['fill_value'] = self.netcdf_dataset.variables['_index_line']._FillValue
+        if hasattr(index_line_variable, '_FillValue'):
+            var_options['fill_value'] = index_line_variable._FillValue
             
         self._nc_cache_dataset.createVariable('line_start_end', 
-                                      self.netcdf_dataset.variables['_index_line'].dtype, 
+                                      index_line_variable.dtype, 
                                       ('line', 'start_end'),
                                       **var_options
                                       )
         self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        self.line_start_end[:,0] = fetch_array(self.netcdf_dataset.variables['_index_line'])
-        self.line_start_end[:,1] = fetch_array(self.netcdf_dataset.variables['_index_count'])
+        self.line_start_end[:,0] = fetch_array(index_line_variable)
+        self.line_start_end[:,1] = fetch_array(index_count_variable)
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
     def __del__(self):
