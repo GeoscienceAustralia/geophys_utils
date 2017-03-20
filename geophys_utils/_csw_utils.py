@@ -167,7 +167,7 @@ class CSWUtils(object):
                         wms = WebMapService(distribution_info['url'], version='1.1.1')
                         distribution_info['layers'] = wms.contents.keys()
                     except:
-                        pass
+                        distribution_info['layers'] = ''
                         
 
                 for distribution_info in [distribution_info
@@ -178,7 +178,7 @@ class CSWUtils(object):
                         wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
                         distribution_info['layers'] = wcs.contents.keys()
                     except:
-                        pass
+                        distribution_info['layers'] = ''
 
                 record_dict['distributions'] = distribution_info_list
                 record_dict['keywords'] = record.subjects
