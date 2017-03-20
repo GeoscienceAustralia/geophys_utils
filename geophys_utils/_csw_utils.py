@@ -6,7 +6,7 @@ Created on 23Feb.,2017
 import re
 import os
 import copy
-from datetime import datetime, timedelta
+from datetime import datetime
 from owslib import fes
 import argparse
 from owslib.csw import CatalogueServiceWeb
@@ -60,14 +60,14 @@ class CSWUtils(object):
         @return: list containing a pair of FES filters for a date range
         '''
         if start_datetime:
-            start_date_string = start_datetime.isoformat()
+            start_date_string = start_datetime.date().isoformat()
         else:
-            start_date_string = '1900-01-01T00:00:00' # Distant past
+            start_date_string = '1900-01-01' # Distant past
 
         if start_datetime:
-            stop_date_string = stop_datetime.isoformat()
+            stop_date_string = stop_datetime.date().isoformat()
         else:
-            stop_date_string = '2100-01-01T23:59:59' # Distant future
+            stop_date_string = '2100-01-01' # Distant future
             
         if constraint == 'overlaps':
             start_filter = fes.PropertyIsLessThanOrEqualTo(propertyname='ows100:TempExtent_begin', literal=stop_date_string)
@@ -449,22 +449,12 @@ def main():
 
     # Convert string to datetime
     start_date = date_string2datetime(args.start_date)
-    #if args.start_date:        
-        #print 'start_date = "%s"' % start_date.isoformat()
 
     # Convert string to datetime
-    #this does the same thing as above but adds one day. Is this so you can just set the start day
-    # and it automatically sets that as a single day?
     end_date = date_string2datetime(args.end_date)
-    if args.end_date:
-        end_date += timedelta(days=1) # Add one day to make end date inclusive        
-        #print 'end_date = "%s"' % end_date.isoformat()
-
-
 
     # Default to listing file path
-    #If there is a protocol, then create a list of protocols that are split at the comma
-    #what is the [file] part?
+    # If there is a protocol list, then create a list of protocols that are split at the comma, use 'file' if there isn't
     protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
     # Allow wildcard
     # How does this work?? doesn't this say don't make a list if there is a *?
@@ -472,7 +462,7 @@ def main():
         protocol_list = None
             
     # Default to showing URL and title
-    #formatting the output for fields
+    # formatting the output for fields
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
     # Allow wildcard
     if '*' in field_list:
