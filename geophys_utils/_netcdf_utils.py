@@ -10,7 +10,9 @@ import netCDF4
 import math
 import itertools
 import argparse
+import re
 from distutils.util import strtobool
+from geophys_utils._crs_utils import get_spatial_ref_from_crs
 
 class NetCDFUtils(object):
     '''
@@ -24,15 +26,26 @@ class NetCDFUtils(object):
                             'chunksizes': [1024, 1024]
                             }
 
-    def __init__(self, nc_path):
-        self.nc_path = nc_path
-        self.netcdf_dataset = netCDF4.Dataset(nc_path, mode="r") 
+    def __init__(self, netcdf_dataset):
+        
+        if type(netcdf_dataset) == str: # String provided as path to netCDF file
+            self.nc_path = netcdf_dataset
+            self.netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+        elif type(netcdf_dataset) == netCDF4.Dataset: # NetCDF4.Dataset object provided
+            self.netcdf_dataset = netcdf_dataset 
+            self.nc_path = netcdf_dataset.filepath()
+        
+        self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
+        if self.opendap:
+            self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
+        else:
+            self.max_bytes = 8000000000 # 8GB limit for direct netCDF file access
         
         # Identify all spatial grid variables
         self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                    if hasattr(variable, 'grid_mapping')]
         
-        assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute)'
+        #assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute)'
         
         #TODO: Make sure this is general for all CRSs
         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
@@ -41,12 +54,26 @@ class NetCDFUtils(object):
         
         self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
         
-        self.grid_mapping_variable = self.netcdf_dataset.variables[
-            self.data_variable_list[0].grid_mapping]
-        
-        self.GeoTransform = [float(
-            number) for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
+        try:
+            self.grid_mapping_variable = self.netcdf_dataset.variables[
+                self.data_variable_list[0].grid_mapping]
+        except:
+            (self.netcdf_dataset.variables.get('crs') 
+                 or self.netcdf_dataset.variables.get('transverse_mercator')
+                 )
+            
+        try:
+            self.crs = self.grid_mapping_variable.spatial_ref
+        except:
+            self.crs = get_spatial_ref_from_crs(self.crs_variable.epsg_code).ExportToWkt()
 
+        try:
+            # String representation of GeoTransform
+            self.GeoTransform = [float(number.strip()) 
+                                 for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
+        except:
+            # Array representation of GeoTransform
+            self.GeoTransform = self.grid_mapping_variable.GeoTransform
                  
     def copy(self, nc_out_path, 
                  datatype_map_dict={},

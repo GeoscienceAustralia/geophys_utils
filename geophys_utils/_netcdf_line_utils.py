@@ -12,8 +12,9 @@ import tempfile
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
 from geophys_utils._transect_utils import utm_coords, coords2distance
+from geophys_utils._netcdf_utils import NetCDFUtils
 
-class NetCDFLineUtils(object):
+class NetCDFLineUtils(NetCDFUtils):
     '''
     NetCDFLineUtils class to do various fiddly things with NetCDF geophysics line data files.
     '''
@@ -44,18 +45,8 @@ class NetCDFLineUtils(object):
                 
             return cache_array
         
-        self.netcdf_dataset = netcdf_dataset
-        self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
-        if self.opendap:
-            self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
-        else:
-            self.max_bytes = 8000000000 # 8GB limit for direct netCDF file access
-        
-        self.crs_variable = netcdf_dataset.variables['crs'] #TODO: Make this more general
-        try:
-            self.crs = self.crs_variable.spatial_ref
-        except:
-            self.crs = get_spatial_ref_from_crs(self.crs_variable.epsg_code).ExportToWkt()
+        # Start of init function - Call inherited constructor first
+        NetCDFUtils.__init__(self, netcdf_dataset)
 
         self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
                                      if 'point' in self.netcdf_dataset.variables[var_name].dimensions
@@ -91,7 +82,9 @@ class NetCDFLineUtils(object):
         max_lon = np.nanmax(self.xycoords[:,0])
         min_lat = np.nanmin(self.xycoords[:,1])
         max_lat = np.nanmax(self.xycoords[:,1])
-        self.bounds = (min_lon, min_lat, max_lon, max_lat)
+        
+        # Create nested list of bounding box corner coordinates
+        self.native_bbox = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat]]
 
         line_dimension = self.netcdf_dataset.dimensions['line']
         self.line_count = len(line_dimension)

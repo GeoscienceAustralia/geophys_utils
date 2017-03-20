@@ -12,9 +12,10 @@ from geophys_utils._crs_utils import get_utm_crs, transform_coords
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._data_stats import DataStats
+from geophys_utils._netcdf_utils import NetCDFUtils
 
 
-class NetCDFGridUtils(object):
+class NetCDFGridUtils(NetCDFUtils):
     '''
     NetCDFGridUtils class to do various fiddly things with gridded NetCDF geophysics files.
     '''
@@ -80,21 +81,15 @@ class NetCDFGridUtils(object):
                                   (log_10_5 if((log_10_avg_pixel_metres % 1.0) < log_10_5) else 1.0)))
 
     
-        # Start of init function
-        self.netcdf_dataset = netcdf_dataset
+        # Start of init function - Call inherited constructor first
+        NetCDFUtils.__init__(self, netcdf_dataset)
 
 # assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
 # 2D' # This is not valid
 
-        # Find variable with "grid_mapping" attribute - assumed to be 2D data
-        # variable
-        try:
-            self.data_variable = [variable for variable in self.netcdf_dataset.variables.values(
-            ) if hasattr(variable, 'grid_mapping')][0]
-        except:
-            raise Exception(
-                'Unable to determine data variable (must have "grid_mapping" attribute')
-
+        assert len(self.data_variable_list) == 1, 'Unable to determine single data variable (must have "grid_mapping" attribute)'
+        self.data_variable = self.data_variable_list[0]
+        
         # Boolean flag indicating YX array ordering
         # TODO: Find a nicer way of dealing with this
         self.YX_order = self.data_variable.dimensions[
@@ -103,14 +98,6 @@ class NetCDFGridUtils(object):
         # Two-element list of dimension varibles.
         self.dimension_arrays = [self.netcdf_dataset.variables[dimension_name][
             :] for dimension_name in self.data_variable.dimensions]
-
-        self.grid_mapping_variable = netcdf_dataset.variables[
-            self.data_variable.grid_mapping]
-        
-        self.crs = self.grid_mapping_variable.spatial_ref
-
-        self.GeoTransform = [float(
-            number) for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
 
         self.pixel_size = [abs(self.GeoTransform[1]),
                            abs(self.GeoTransform[5])]
