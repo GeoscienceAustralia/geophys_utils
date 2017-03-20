@@ -179,17 +179,13 @@ class DEMUtils(NetCDFGridUtils):
         return pixel_size_grid
 
 
-    def __init__(self, dem_dataset, slope_path=None, aspect_path=None):
+    def __init__(self, dem_dataset):
         """Constructor
         Arguments:
             source_dem_nc: NetCDF dataset containing DEM data
-        """
-        
+        """    
         # Start of init function - Call inherited constructor first
-        NetCDFGridUtils.__init__(self, dem_dataset)
-        
-        self.create_slope_and_aspect(slope_path, aspect_path)
-        
+        NetCDFGridUtils.__init__(self, dem_dataset)        
 
     def create_slope_and_aspect(self, slope_path=None, aspect_path=None):
         '''
@@ -291,4 +287,6 @@ if __name__ == '__main__':
     except:
         aspect_path = None
     
-    dem_utils = DEMUtils(dem_path, slope_path, aspect_path)
+    dem_utils = DEMUtils(dem_path)
+    
+    dem_utils.create_slope_and_aspect(slope_path, aspect_path)
