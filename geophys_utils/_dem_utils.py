@@ -235,12 +235,12 @@ class DEMUtils(NetCDFGridUtils):
             hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
             slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
             #Blank out no-data cells
-            slope_array[piece_array == numpy.NaN] = self.data_variable._FillValue
+            slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
              
             # Convert angles from conventional radians to compass heading 0-360
             aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
             #Blank out no-data cells
-            aspect_array[piece_array == numpy.NaN] = self.data_variable._FillValue
+            aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
             
             # Calculate raw source & destination slices including overlaps
             source_slices = [slice(0, 
