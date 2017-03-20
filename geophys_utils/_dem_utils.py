@@ -194,13 +194,16 @@ class DEMUtils(NetCDFGridUtils):
         
 
     def create_slope_and_aspect(self, slope_path=None, aspect_path=None):
-        #TODO: Do this in pieces - this won't work for really big datasets
+        '''
+        Create slope & aspect datasets from elevation
+        '''
         slope_path = slope_path or os.path.splitext(self.nc_path)[0] + '_slope.nc'
         self.copy(slope_path)
         slope_nc_dataset = netCDF4.Dataset(slope_path, 'r+')
         slope_nc_dataset.renameVariable(self.data_variable.name, 'slope')
         slope_variable = slope_nc_dataset.variables['slope']
         slope_variable.long_name = 'slope expressed in degrees from horizontal (+90 = upwards vertical)'
+        slope_variable.units = 'degrees'
 
         aspect_path = aspect_path or os.path.splitext(self.nc_path)[0] + '_aspect.nc'
         self.copy(aspect_path)
@@ -208,6 +211,7 @@ class DEMUtils(NetCDFGridUtils):
         aspect_nc_dataset.renameVariable(self.data_variable.name, 'aspect')
         aspect_variable = aspect_nc_dataset.variables['aspect']
         aspect_variable.long_name = 'aspect expressed compass bearing of normal to plane (0 = North, 90 = East)'
+        aspect_variable.units = 'degrees'
         
         native_pixel_x_size = abs(self.GeoTransform[1])
         native_pixel_y_size = abs(self.GeoTransform[5])
