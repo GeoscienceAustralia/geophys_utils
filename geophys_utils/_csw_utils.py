@@ -24,7 +24,11 @@ class CSWUtils(object):
     DEFAULT_MAXQUERYRECORDS = 100 # Retrieve only this many datasets per CSW query
     DEFAULT_MAXTOTALRECORDS = 2000 # Maximum total number of records to retrieve
 
-    def __init__(self, csw_url=None, timeout=None):
+    def __init__(self, 
+                 csw_url=None, 
+                 timeout=None,
+                 debug=False
+                 ):
         '''
         Constructor for CSWUtils class
         @param csw_url: URL for CSW service. Defaults to value of CSWUtils.DEFAULT_CSW_URL
@@ -32,6 +36,7 @@ class CSWUtils(object):
         '''
         csw_url = csw_url or CSWUtils.DEFAULT_CSW_URL
         timeout = timeout or CSWUtils.DEFAULT_TIMEOUT
+        self.debug = debug
 
         self.csw = CatalogueServiceWeb(csw_url, timeout=timeout)
 
@@ -57,13 +62,13 @@ class CSWUtils(object):
         if start_datetime:
             start_date_string = start_datetime.isoformat()
         else:
-            start_date_string = '1900-01-01T00:00:00'
+            start_date_string = '1900-01-01T00:00:00' # Distant past
 
         if start_datetime:
-            stop_date_string = start_datetime.isoformat()
+            stop_date_string = stop_datetime.isoformat()
         else:
-            stop_date_string = '2100-01-01T23:59:59'
-
+            stop_date_string = '2100-01-01T23:59:59' # Distant future
+            
         if constraint == 'overlaps':
             start_filter = fes.PropertyIsLessThanOrEqualTo(propertyname='ows100:TempExtent_begin', literal=stop_date_string)
             stop_filter = fes.PropertyIsGreaterThanOrEqualTo(propertyname='ows100:TempExtent_end', literal=start_date_string)
@@ -97,7 +102,11 @@ class CSWUtils(object):
                 
         return filter_list
 
-    def get_csw_records(self, fes_filters, max_query_records=None, max_total_records=None):
+    def get_csw_records(self, 
+                        fes_filters, 
+                        max_query_records=None, 
+                        max_total_records=None
+                        ):
         '''
         Generator yeilding nested dicts containing information about each CSW query result record including distributions
         @param fes_filters: List of fes filters to apply to CSW query
@@ -119,8 +128,9 @@ class CSWUtils(object):
                                  maxrecords=max_query_records,
                                  startposition=startposition)
 
-#            print 'csw.request = %s' % self.csw.request
-#            print 'self.csw.response = %s' % self.csw.response
+            if self.debug:
+                print 'CSW request:\n%s' % self.csw.request
+                print 'CSW response:\n %s' % self.csw.response
 
             query_record_count = len(self.csw.records)
 
@@ -376,11 +386,13 @@ def date_string2datetime(date_string):
     @return datetime object
     '''
     #?
-    DATE_FORMAT_LIST = ['%Y%m%d', '%d/%m/%y', '%d/%m/%Y']
+    DATE_FORMAT_LIST = ['%Y%m%d', '%Y-%m-%d', '%d/%m/%y', '%d/%m/%Y']
     #If there is a date_string (start date or end date from argparse) then for each format type
     # in the DATE FORMAT LIST try to use the datetime.strptime method.
-    #datetime.strptime() returns a datetime variable from the input parsed into the correct formatt.
+    #datetime.strptime() returns a datetime variable from the input parsed into the correct format.
     #  OR does it check if it is the correct format?
+    datetime_result = None
+    
     if date_string:
         for format_string in DATE_FORMAT_LIST:
             try:
@@ -388,8 +400,9 @@ def date_string2datetime(date_string):
                 break
             except ValueError:
                 pass
-        #if successful return the input as a datetime class object.
-        return datetime_result
+            
+    #if successful return the input as a datetime class object or None.
+    return datetime_result
 
 
 def main():
@@ -412,10 +425,13 @@ def main():
     parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Defaults to "file", "*" = wildcard.', type=str)
     parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Defaults to "protocol,url,title", "*" = wildcard.', type=str)
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
-    parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat", type=str)
+    parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat (%s)" %
+                        CSWUtils.DEFAULT_CSW_URL, type=str)
     parser.add_argument("-m", "--max_results", help="Maximum number of records to return. Defaults to %d" % CSWUtils.DEFAULT_MAXTOTALRECORDS, type=int)
     parser.add_argument('-r', '--header_row', action='store_const', const=True, default=False,
                         help='display header row. Default is no header')
+    parser.add_argument('--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
     
     args = parser.parse_args()
 
@@ -467,7 +483,9 @@ def main():
     
     #creatse a CSW object and populates the parameters with argparse inputs
 
-    cswu = CSWUtils(args.url)
+    cswu = CSWUtils(args.url,
+                    debug=args.debug)
+    
     record_generator = cswu.query_csw(keyword_list=args.keywords,
                                  anytext_list=args.anytext,
                                  titleword_list=args.titlewords,
