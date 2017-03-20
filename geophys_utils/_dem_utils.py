@@ -57,8 +57,6 @@ if not logger.level:
     logger.setLevel(logging.DEBUG) # Default logging level for all modules
     logger.addHandler(console_handler)
                 
-CONTIGUITY_BIT_INDEX = 8
-nan = numpy.float32(numpy.NaN) # Smoothed DSM should have all valid data values - need this for edges only
 RADIANS_PER_DEGREE = 0.01745329251994329576923690768489
     
 class earth(object):
@@ -218,7 +216,12 @@ class DEMUtils(NetCDFGridUtils):
 
         overlap=2
         for piece_array, offsets in array_pieces(self.data_variable, max_bytes=None, overlap=overlap):
-
+            try:
+                piece_array = piece_array.data # Convert from masked array
+            except:
+                pass
+            piece_array[piece_array == self.data_variable._FillValue] = numpy.NaN
+            
             m_array = self.get_pixel_size_grid(piece_array, offsets)
             x_m_array = m_array[:,:,0]
             y_m_array = m_array[:,:,1]
