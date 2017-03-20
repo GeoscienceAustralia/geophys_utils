@@ -170,7 +170,7 @@ class DEMUtils(NetCDFGridUtils):
         
         pixel_size_function = [get_pixel_x_size, get_pixel_y_size]
         
-        pixel_size_grid = numpy.zeros(shape=(source_array.shape[0], source_array.shape[1], 2)).astype(numpy.float32)
+        pixel_size_grid = numpy.zeros(shape=(source_array.shape[0], source_array.shape[1], 2)).astype(source_array.dtype)
         
         for dim_index in range(2):
             interpolate_grid(depth=1, 
@@ -231,10 +231,14 @@ class DEMUtils(NetCDFGridUtils):
     
             hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
             slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
+            #Blank out no-data cells
+            slope_array[piece_array == self.data_variable._FillValue] = self.data_variable._FillValue
              
             # Convert angles from conventional radians to compass heading 0-360
             aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
-
+            #Blank out no-data cells
+            aspect_array[piece_array == self.data_variable._FillValue] = self.data_variable._FillValue
+            
             # Calculate raw source & destination slices including overlaps
             source_slices = [slice(0, 
                                    piece_array.shape[dim_index])
