@@ -287,7 +287,7 @@ class DEMUtils(NetCDFGridUtils):
                            ]
                                   
             # Write pieces to new datasets
-            print 'Writing %s slope array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print 'Writing slope array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
@@ -297,7 +297,7 @@ class DEMUtils(NetCDFGridUtils):
             slope_variable[dest_slices] = slope_array[source_slices]  
             slope_nc_dataset.sync()   
                  
-            print 'Writing %s aspect array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print 'Writing aspect array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
