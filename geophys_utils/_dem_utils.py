@@ -39,6 +39,7 @@ import numpy
 from osgeo import osr
 import numexpr
 import netCDF4
+import gc
 from scipy import ndimage
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils 
 from geophys_utils._array_pieces import array_pieces 
@@ -157,24 +158,14 @@ class DEMUtils(NetCDFGridUtils):
         logger.debug('(x_size, y_size) = (%f, %f)', x_size, y_size)
         return (x_size, y_size)
 
-    def get_pixel_size_grid(self, source_array, offsets):
-        """ Returns grid with interpolated X and Y pixel sizes for given arrays"""
+    def get_pixel_size_grids(self, source_array, offsets, dimension_index):
+        """ Returns two grids with interpolated X and Y pixel sizes for given datasets"""
         
-        def get_pixel_x_size(x, y):
-            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[0]
+        def get_pixel_size(x, y):
+            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[dimension_index]
         
-        def get_pixel_y_size(x, y):
-            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[1]
-        
-        pixel_size_function = [get_pixel_x_size, get_pixel_y_size]
-        
-        pixel_size_grid = numpy.zeros(shape=(source_array.shape[0], source_array.shape[1], 2)).astype(source_array.dtype)
-        
-        for dim_index in range(2):
-            interpolate_grid(depth=1, 
-                             shape=pixel_size_grid[:,:,dim_index].shape, 
-                             eval_func=pixel_size_function[dim_index], 
-                             grid=pixel_size_grid[:,:,dim_index])
+        pixel_size_grid = numpy.zeros(source_array.shape).astype(source_array.dtype)
+        interpolate_grid(depth=1, shape=pixel_size_grid.shape, eval_func=get_pixel_size, grid=pixel_size_grid)
         
         return pixel_size_grid
 
@@ -213,7 +204,7 @@ class DEMUtils(NetCDFGridUtils):
 
         overlap=2
         for piece_array, offsets in array_pieces(self.data_variable, 
-                                                 max_bytes=self.max_bytes, 
+                                                 max_bytes=self.max_bytes/2, # Halve max_bytes to allow for multiple arrays
                                                  overlap=overlap):
             print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
             try:
@@ -222,26 +213,18 @@ class DEMUtils(NetCDFGridUtils):
                 pass
             piece_array[piece_array == self.data_variable._FillValue] = numpy.NaN
             
-            m_array = self.get_pixel_size_grid(piece_array, offsets)
-            x_m_array = m_array[:,:,0]
-            y_m_array = m_array[:,:,1]
-             
+            x_m_array = self.get_pixel_size_grid(piece_array, offsets, 0)
             dzdx_array = ndimage.sobel(piece_array, axis=1)/(8. * abs(self.GeoTransform[1]))
             dzdx_array = numexpr.evaluate("dzdx_array * native_pixel_x_size / x_m_array")
+            del x_m_array
+            gc.collect()
             
+            y_m_array = self.get_pixel_size_grid(piece_array, offsets, 1)
             dzdy_array = ndimage.sobel(piece_array, axis=0)/(8. * abs(self.GeoTransform[5]))
             dzdy_array = numexpr.evaluate("dzdy_array * native_pixel_y_size / y_m_array")
+            del y_m_array
+            gc.collect()
     
-            hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
-            slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
-            #Blank out no-data cells
-            slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
-             
-            # Convert angles from conventional radians to compass heading 0-360
-            aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
-            #Blank out no-data cells
-            aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
-            
             # Calculate raw source & destination slices including overlaps
             source_slices = [slice(0, 
                                    piece_array.shape[dim_index])
@@ -264,12 +247,33 @@ class DEMUtils(NetCDFGridUtils):
                            for dim_index in range(2)
                            ]
                                   
+            hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
+            
+            # Compute slope
+            slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
+            del hypotenuse_array
+            gc.collect()
+            
+            #Blank out no-data cells
+            slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
             # Write pieces to new datasets
             slope_variable[dest_slices] = slope_array[source_slices]  
             slope_nc_dataset.sync()   
+            del slope_array
+            gc.collect()
+             
+            # Convert angles from conventional radians to compass heading 0-360
+            aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
+            del dzdx_array, dzdy_array
+            gc.collect() 
+            
+            #Blank out no-data cells
+            aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
                  
             aspect_variable[dest_slices] = aspect_array[source_slices]      
             aspect_nc_dataset.sync()   
+            del aspect_array
+            gc.collect()
             
         slope_nc_dataset.close() 
         print 'Finished writing slope dataset %s' % slope_path
