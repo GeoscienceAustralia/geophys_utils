@@ -39,7 +39,7 @@ class NetCDFUtils(object):
         if self.opendap:
             self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
         else:
-            self.max_bytes = 8000000000 # 8GB limit for direct netCDF file access
+            self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
         # Identify all spatial grid variables
         self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
