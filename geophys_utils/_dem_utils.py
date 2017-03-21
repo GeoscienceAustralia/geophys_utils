@@ -158,7 +158,7 @@ class DEMUtils(NetCDFGridUtils):
         logger.debug('(x_size, y_size) = (%f, %f)', x_size, y_size)
         return (x_size, y_size)
 
-    def get_pixel_size_grids(self, source_array, offsets, dimension_index):
+    def get_pixel_size_grid(self, source_array, offsets, dimension_index):
         """ Returns two grids with interpolated X and Y pixel sizes for given datasets"""
         
         def get_pixel_size(x, y):
