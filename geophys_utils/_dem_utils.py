@@ -238,12 +238,12 @@ class DEMUtils(NetCDFGridUtils):
                                   
             # Trim overlaps off source & destination slices
             source_slices = [slice(0 if dest_slices[dim_index].start < overlap else source_slices[dim_index].start+overlap, 
-                                  piece_array.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else source_slices[dim_index].stop-overlap)
+                                   piece_array.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else source_slices[dim_index].stop-overlap)
                              for dim_index in range(2)
                              ]
                                   
             dest_slices = [slice(0 if dest_slices[dim_index].start < overlap else dest_slices[dim_index].start+overlap, 
-                                  self.data_variable.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else dest_slices[dim_index].stop-overlap)
+                                 self.data_variable.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else dest_slices[dim_index].stop-overlap)
                            for dim_index in range(2)
                            ]
                                   
@@ -257,6 +257,13 @@ class DEMUtils(NetCDFGridUtils):
             #Blank out no-data cells
             slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
             # Write pieces to new datasets
+            print 'Writing %s slope array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+                                                     for dim_index in range(2)
+                                                     ]),
+                                              tuple([dest_slices[dim_index].start
+                                                     for dim_index in range(2)
+                                                     ])
+                                              )
             slope_variable[dest_slices] = slope_array[source_slices]  
             slope_nc_dataset.sync()   
             del slope_array
@@ -270,6 +277,13 @@ class DEMUtils(NetCDFGridUtils):
             #Blank out no-data cells
             aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
                  
+            print 'Writing %s aspect array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+                                                     for dim_index in range(2)
+                                                     ]),
+                                              tuple([dest_slices[dim_index].start
+                                                     for dim_index in range(2)
+                                                     ])
+                                              )
             aspect_variable[dest_slices] = aspect_array[source_slices]      
             aspect_nc_dataset.sync()   
             del aspect_array
