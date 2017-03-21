@@ -215,6 +215,7 @@ class DEMUtils(NetCDFGridUtils):
         for piece_array, offsets in array_pieces(self.data_variable, 
                                                  max_bytes=self.max_bytes, 
                                                  overlap=overlap):
+            print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
             try:
                 piece_array = piece_array.data # Convert from masked array
             except:
