@@ -207,11 +207,11 @@ class DEMUtils(NetCDFGridUtils):
                                                  max_bytes=self.max_bytes/2, # Halve max_bytes to allow for multiple arrays
                                                  overlap=overlap):
             print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
-            try:
-                piece_array = piece_array.data # Convert from masked array
-            except:
-                pass
-            piece_array[piece_array == self.data_variable._FillValue] = numpy.NaN
+            
+            if type(piece_array) == numpy.ma.masked_array:
+                piece_array = piece_array.data # Convert from masked array to plain array
+
+            piece_array[(piece_array == self.data_variable._FillValue)] = numpy.NaN
             
             x_m_array = self.get_pixel_size_grid(piece_array, offsets, 0)
             dzdx_array = ndimage.sobel(piece_array, axis=1)/(8. * abs(self.GeoTransform[1]))
