@@ -312,7 +312,7 @@ class NetCDFUtils(object):
                         print '\tCopying %s scalar data' % variable_name
                         output_variable = input_variable
                 else:
-                    print 'Not copying data for variable %s' % variable_name
+                    print '\tNot copying data for variable %s' % variable_name
                     
             # Copy global attributes  
             print "Copying global attributes: %s" % ', '.join(self.netcdf_dataset.__dict__.keys())

@@ -159,7 +159,7 @@ class DEMUtils(NetCDFGridUtils):
         return (x_size, y_size)
 
     def get_pixel_size_grid(self, source_array, offsets, dimension_index):
-        """ Returns two grids with interpolated X and Y pixel sizes for given datasets"""
+        """ Returns grid with interpolated X or Y pixel sizes for given datasets"""
         
         def get_pixel_size(x, y):
             return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[dimension_index]
@@ -188,7 +188,7 @@ class DEMUtils(NetCDFGridUtils):
         slope_nc_dataset = netCDF4.Dataset(slope_path, 'r+')
         slope_nc_dataset.renameVariable(self.data_variable.name, 'slope')
         slope_variable = slope_nc_dataset.variables['slope']
-        slope_variable.long_name = 'slope expressed in degrees from horizontal (+90 = upwards vertical)'
+        slope_variable.long_name = 'slope expressed in degrees from horizontal (0=horizontal, 90=vertical)'
         slope_variable.units = 'degrees'
 
         aspect_path = aspect_path or os.path.splitext(self.nc_path)[0] + '_aspect.nc'
@@ -196,13 +196,13 @@ class DEMUtils(NetCDFGridUtils):
         aspect_nc_dataset = netCDF4.Dataset(aspect_path, 'r+')
         aspect_nc_dataset.renameVariable(self.data_variable.name, 'aspect')
         aspect_variable = aspect_nc_dataset.variables['aspect']
-        aspect_variable.long_name = 'aspect expressed compass bearing of normal to plane (0 = North, 90 = East)'
+        aspect_variable.long_name = 'aspect expressed compass bearing of normal to plane (0=North, 90=East, etc.)'
         aspect_variable.units = 'degrees'
         
         native_pixel_x_size = abs(self.GeoTransform[1])
         native_pixel_y_size = abs(self.GeoTransform[5])
 
-        overlap=2
+        overlap=4
         for piece_array, offsets in array_pieces(self.data_variable, 
                                                  max_bytes=self.max_bytes/2, # Halve max_bytes to allow for multiple arrays
                                                  overlap=overlap):
