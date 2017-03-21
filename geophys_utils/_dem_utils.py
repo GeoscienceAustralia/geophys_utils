@@ -159,7 +159,7 @@ class DEMUtils(NetCDFGridUtils):
         return (x_size, y_size)
 
     def get_pixel_size_grid(self, source_array, offsets, dimension_index):
-        """ Returns two grids with interpolated X and Y pixel sizes for given datasets"""
+        """ Returns grid with interpolated X or Y pixel sizes for given datasets"""
         
         def get_pixel_size(x, y):
             return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[dimension_index]
