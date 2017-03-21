@@ -52,7 +52,7 @@ def array_pieces(ndarray, max_bytes=None, overlap=0):
         piece_shape = [array_shape[index] / axis_divisions / chunking[index]
                        * chunking[index] for index in range(array_dimensions)]
 
-        # Determine number of pieces in each axis
+        # Determine total number of pieces in each axis
         axis_pieces = [int(math.ceil(float(array_shape[index]) / piece_shape[index]))
                        for index in range(array_dimensions)]
 
