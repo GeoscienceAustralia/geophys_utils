@@ -81,6 +81,7 @@ class NetCDFUtils(object):
                  dim_range_dict={},
                  nc_format=None,
                  limit_dim_size=False,
+                 empty_var_list=[],
                  invert_y=None):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
@@ -97,6 +98,7 @@ class NetCDFUtils(object):
             @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
                 'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
             @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
         '''  
              
@@ -213,101 +215,102 @@ class NetCDFUtils(object):
                 #     print '%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform)
                 #===============================================================
     
-                # Copy data
-                if input_variable.shape: # array
-                    overall_slices = [slice(*dim_range_dict[input_variable.dimensions[dimension_index]])  
-                              if dim_range_dict.get(input_variable.dimensions[dimension_index])
-                              else slice(0, input_variable.shape[dimension_index])
-                              for dimension_index in range(len(input_variable.dimensions))
-                             ]
-                    #print overall_slices
-                    print '\tCopying %s array data of shape %s' % (variable_name,
-                                                                   tuple([overall_slices[dimension_index].stop - overall_slices[dimension_index].start
-                                                                          for dimension_index in range(len(input_variable.dimensions))])
-                                                                  )
-                    
-                    if (not input_variable_chunking or 
-                        len(input_variable.dimensions) != 2): 
-                        # No chunking - Try to copy in one hit
-                        
-                        if ((input_variable == self.y_variable) and flip_y): 
-                            # Y-axis flip required
-                            assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
-                            overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
-                            print '\tInverting y-axis variable %s' % variable_name
-                            
-                        output_variable[...] = input_variable[overall_slices]
-                    
-                    else: # Chunked - perform copy in pieces
-                        #TODO: Improve this for small chunks
-                        assert len(input_variable.dimensions) == 2, 'Can only chunk copy 2D data at the moment'
-                        
-                        # Use largest chunk sizes between input and output
-                        piece_sizes = [max(var_options['chunksizes'][dimension_index],
-                                          input_variable_chunking[dimension_index])
-                                      for dimension_index in range(len(input_variable.dimensions))
-                                     ]
-    
-                        piece_index_ranges = [(overall_slices[dimension_index].start / piece_sizes[dimension_index],
-                                              int(math.ceil(float(overall_slices[dimension_index].stop) / piece_sizes[dimension_index]))
-                                             )
-                                             for dimension_index in range(len(input_variable.dimensions))
-                                            ]
-                                             
-                        piece_counts = [int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / 
-                                                      piece_sizes[dimension_index]))
-                                        for dimension_index in range(len(input_variable.dimensions)) 
-                                        ]
-                    
-                        print '\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
-                                                                      ' x '.join([str(piece_size) for piece_size in piece_sizes])
+                if variable_name not in empty_var_list:
+                    # Copy data
+                    if input_variable.shape: # array
+                        overall_slices = [slice(*dim_range_dict[input_variable.dimensions[dimension_index]])  
+                                  if dim_range_dict.get(input_variable.dimensions[dimension_index])
+                                  else slice(0, input_variable.shape[dimension_index])
+                                  for dimension_index in range(len(input_variable.dimensions))
+                                 ]
+                        #print overall_slices
+                        print '\tCopying %s array data of shape %s' % (variable_name,
+                                                                       tuple([overall_slices[dimension_index].stop - overall_slices[dimension_index].start
+                                                                              for dimension_index in range(len(input_variable.dimensions))])
                                                                       )
                         
-                        try:
-                            ydim_index = input_variable.dimensions.index(self.y_variable.name)
-                        except ValueError:
-                            ydim_index = None
+                        if (not input_variable_chunking or 
+                            len(input_variable.dimensions) != 2): 
+                            # No chunking - Try to copy in one hit
+                            
+                            if ((input_variable == self.y_variable) and flip_y): 
+                                # Y-axis flip required
+                                assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
+                                overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
+                                print '\tInverting y-axis variable %s' % variable_name
+                                
+                            output_variable[...] = input_variable[overall_slices]
                         
-                        # Iterate over every piece
-                        for piece_indices in itertools.product(*[range(piece_index_ranges[dimension_index][0], 
-                                                                      piece_index_ranges[dimension_index][1])
-                                                           for dimension_index in range(len(input_variable.dimensions))
-                                                          ]
-                                                        ):
+                        else: # Chunked - perform copy in pieces
+                            #TODO: Improve this for small chunks
+                            assert len(input_variable.dimensions) == 2, 'Can only chunk copy 2D data at the moment'
                             
-                                               
-                            print '\t\tCopying piece %s' % (piece_indices,)
-                            
-                            piece_read_slices = [slice(max(overall_slices[dimension_index].start,
-                                                     piece_indices[dimension_index] * piece_sizes[dimension_index]
-                                                    ),                                                 
-                                                 min(overall_slices[dimension_index].stop,
-                                                     (piece_indices[dimension_index] + 1) * piece_sizes[dimension_index]
-                                                    )
-                                                )
-                                           for dimension_index in range(len(input_variable.dimensions))
-                                           ]
-                            
-                            piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_slices[dimension_index].start,
-                                                  piece_read_slices[dimension_index].stop - overall_slices[dimension_index].start,
+                            # Use largest chunk sizes between input and output
+                            piece_sizes = [max(var_options['chunksizes'][dimension_index],
+                                              input_variable_chunking[dimension_index])
+                                          for dimension_index in range(len(input_variable.dimensions))
+                                         ]
+        
+                            piece_index_ranges = [(overall_slices[dimension_index].start / piece_sizes[dimension_index],
+                                                  int(math.ceil(float(overall_slices[dimension_index].stop) / piece_sizes[dimension_index]))
                                                  )
-                                            for dimension_index in range(len(input_variable.dimensions))
-                                           ]
+                                                 for dimension_index in range(len(input_variable.dimensions))
+                                                ]
+                                                 
+                            piece_counts = [int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / 
+                                                          piece_sizes[dimension_index]))
+                                            for dimension_index in range(len(input_variable.dimensions)) 
+                                            ]
+                        
+                            print '\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
+                                                                          ' x '.join([str(piece_size) for piece_size in piece_sizes])
+                                                                          )
                             
-                            if flip_y and ydim_index is not None:
-                                # Flip required
-                                piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
-                                                                      output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
-                                                                        if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
-                                                                        else None, -1)
+                            try:
+                                ydim_index = input_variable.dimensions.index(self.y_variable.name)
+                            except ValueError:
+                                ydim_index = None
                             
-                            #print piece_read_slices, piece_write_slices
-                            
-                            output_variable[piece_write_slices] = input_variable[piece_read_slices]
-                    
-                else: # scalar variable - simple copy
-                    print '\tCopying %s scalar data' % variable_name
-                    output_variable = input_variable
+                            # Iterate over every piece
+                            for piece_indices in itertools.product(*[range(piece_index_ranges[dimension_index][0], 
+                                                                          piece_index_ranges[dimension_index][1])
+                                                               for dimension_index in range(len(input_variable.dimensions))
+                                                              ]
+                                                            ):
+                                
+                                                   
+                                print '\t\tCopying piece %s' % (piece_indices,)
+                                
+                                piece_read_slices = [slice(max(overall_slices[dimension_index].start,
+                                                         piece_indices[dimension_index] * piece_sizes[dimension_index]
+                                                        ),                                                 
+                                                     min(overall_slices[dimension_index].stop,
+                                                         (piece_indices[dimension_index] + 1) * piece_sizes[dimension_index]
+                                                        )
+                                                    )
+                                               for dimension_index in range(len(input_variable.dimensions))
+                                               ]
+                                
+                                piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_slices[dimension_index].start,
+                                                      piece_read_slices[dimension_index].stop - overall_slices[dimension_index].start,
+                                                     )
+                                                for dimension_index in range(len(input_variable.dimensions))
+                                               ]
+                                
+                                if flip_y and ydim_index is not None:
+                                    # Flip required
+                                    piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
+                                                                          output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
+                                                                            if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
+                                                                            else None, -1)
+                                
+                                #print piece_read_slices, piece_write_slices
+                                
+                                output_variable[piece_write_slices] = input_variable[piece_read_slices]
+                        
+                    else: # scalar variable - simple copy
+                        print '\tCopying %s scalar data' % variable_name
+                        output_variable = input_variable
                 
             # Copy global attributes  
             print "Copying global attributes: %s" % ', '.join(self.netcdf_dataset.__dict__.keys())
