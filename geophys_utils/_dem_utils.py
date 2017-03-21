@@ -254,11 +254,11 @@ class DEMUtils(NetCDFGridUtils):
                                                  max_bytes=self.max_bytes, 
                                                  overlap=overlap):
             print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
-            try:
-                piece_array = piece_array.data # Convert from masked array
-            except:
-                pass
-            piece_array[piece_array == self.data_variable._FillValue] = numpy.NaN
+            
+            if type(piece_array) == numpy.ma.masked_array:
+                piece_array = piece_array.data # Convert from masked array to plain array
+
+            piece_array[(piece_array == self.data_variable._FillValue)] = numpy.NaN
             
             dzdx_array, dzdy_array = self.create_dzdxy_arrays(piece_array, offsets)
             slope_array = self.create_slope_array(dzdx_array, dzdy_array)
