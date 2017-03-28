@@ -232,8 +232,9 @@ class DEMUtils(NetCDFGridUtils):
         '''
         Create slope & aspect datasets from elevation
         '''
+        # Copy dataset structure but not data
         slope_path = slope_path or os.path.splitext(self.nc_path)[0] + '_slope.nc'
-        self.copy(slope_path)
+        self.copy(slope_path, empty_var_list=[self.data_variable.name])
         slope_nc_dataset = netCDF4.Dataset(slope_path, 'r+')
         slope_nc_dataset.renameVariable(self.data_variable.name, 'slope')
         slope_variable = slope_nc_dataset.variables['slope']
@@ -241,7 +242,7 @@ class DEMUtils(NetCDFGridUtils):
         slope_variable.units = 'degrees'
 
         aspect_path = aspect_path or os.path.splitext(self.nc_path)[0] + '_aspect.nc'
-        self.copy(aspect_path)
+        self.copy(aspect_path, empty_var_list=[self.data_variable.name])
         aspect_nc_dataset = netCDF4.Dataset(aspect_path, 'r+')
         aspect_nc_dataset.renameVariable(self.data_variable.name, 'aspect')
         aspect_variable = aspect_nc_dataset.variables['aspect']
@@ -249,7 +250,9 @@ class DEMUtils(NetCDFGridUtils):
         aspect_variable.units = 'degrees'
               
         # Process dataset in small pieces
-        for piece_array, offsets in array_pieces(self.data_variable, max_bytes=None, overlap=overlap):
+        for piece_array, offsets in array_pieces(self.data_variable, 
+                                                 max_bytes=self.max_bytes, 
+                                                 overlap=overlap):
             try:
                 piece_array = piece_array.data # Convert from masked array
             except:
