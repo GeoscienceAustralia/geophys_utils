@@ -36,11 +36,12 @@ import os
 import sys
 import logging
 import numpy
+import gc
 from osgeo import osr
 import numexpr
 import netCDF4
 import gc
-from scipy import ndimage
+from scipy.ndimage import sobel
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils 
 from geophys_utils._array_pieces import array_pieces 
 
@@ -124,11 +125,11 @@ class DEMUtils(NetCDFGridUtils):
         """
         logger.debug('(x, y) = (%f, %f)', x, y)
         
-        spatial_reference = osr.SpatialReference()
-        spatial_reference.ImportFromWkt(self.crs)
+        native_spatial_reference = osr.SpatialReference()
+        native_spatial_reference.ImportFromWkt(self.crs)
         
-        latlong_spatial_reference = spatial_reference.CloneGeogCS()
-        coord_transform_to_latlong = osr.CoordinateTransformation(spatial_reference, latlong_spatial_reference)
+        latlong_spatial_reference = native_spatial_reference.CloneGeogCS()
+        coord_transform_to_latlong = osr.CoordinateTransformation(native_spatial_reference, latlong_spatial_reference)
 
         # Determine pixel centre and edges in georeferenced coordinates
         xw = self.GeoTransform[0] + x * self.GeoTransform[1]
@@ -178,7 +179,70 @@ class DEMUtils(NetCDFGridUtils):
         # Start of init function - Call inherited constructor first
         NetCDFGridUtils.__init__(self, dem_dataset)        
 
-    def create_slope_and_aspect(self, slope_path=None, aspect_path=None):
+    def create_dzdxy_arrays(self, elevation_array, offsets):
+        '''
+        Function to return two arrays containing dzdx and dzdy values
+        '''
+        def pixels_in_m(): 
+            ''' 
+            Function returning True if pixels are in metres
+            '''
+            result = True
+            for dimension_name in self.data_variable.dimensions:
+                try:
+                    if self.netcdf_dataset.variables[dimension_name].units == 'm':
+                        continue
+                    else:
+                        result = False
+                        break
+                except:
+                    result = False
+                    break
+                
+            return result
+                    
+        native_pixel_x_size = float(abs(self.GeoTransform[1]))
+        native_pixel_y_size = float(abs(self.GeoTransform[5]))
+
+        if pixels_in_m():  
+            print 'Pixels are a uniform size of %f x %f metres' % (native_pixel_x_size, native_pixel_y_size)       
+            # Pixel sizes are in metres - use scalars
+            pixel_x_metres = native_pixel_x_size
+            pixel_y_metres = native_pixel_y_size
+        else:  
+            print 'Pixels are of varying sizes. Computing size arrays'       
+            # Compute variable pixel size  
+            m_array = self.get_pixel_size_grid(elevation_array, offsets)
+            pixel_x_metres = m_array[:,:,0]
+            pixel_y_metres = m_array[:,:,1]
+         
+        dzdx_array = sobel(elevation_array, axis=1)/(8. * abs(self.GeoTransform[1]))
+        dzdx_array = numexpr.evaluate("dzdx_array * (native_pixel_x_size / pixel_x_metres)")
+        
+        dzdy_array = sobel(elevation_array, axis=0)/(8. * abs(self.GeoTransform[5]))
+        dzdy_array = numexpr.evaluate("dzdy_array * (native_pixel_y_size / pixel_y_metres)")
+        
+        return dzdx_array, dzdy_array
+    
+    def create_slope_array(self, dzdx_array, dzdy_array):
+        hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
+        slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
+        #Blank out no-data cells
+        slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
+        
+        return slope_array
+    
+        
+    def create_aspect_array(self, dzdx_array, dzdy_array):
+        # Convert angles from conventional radians to compass heading 0-360
+        aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
+        #Blank out no-data cells
+        aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
+        
+        return aspect_array
+
+        
+    def create_slope_and_aspect(self, slope_path=None, aspect_path=None, overlap=2):
         '''
         Create slope & aspect datasets from elevation
         '''
@@ -198,13 +262,10 @@ class DEMUtils(NetCDFGridUtils):
         aspect_variable = aspect_nc_dataset.variables['aspect']
         aspect_variable.long_name = 'aspect expressed compass bearing of normal to plane (0=North, 90=East, etc.)'
         aspect_variable.units = 'degrees'
-        
-        native_pixel_x_size = abs(self.GeoTransform[1])
-        native_pixel_y_size = abs(self.GeoTransform[5])
-
-        overlap=4
+              
+        # Process dataset in small pieces
         for piece_array, offsets in array_pieces(self.data_variable, 
-                                                 max_bytes=self.max_bytes/2, # Halve max_bytes to allow for multiple arrays
+                                                 max_bytes=self.max_bytes if self.opendap else self.max_bytes/2, # Need to allow for multiple arrays in memory 
                                                  overlap=overlap):
             print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
             
@@ -213,18 +274,6 @@ class DEMUtils(NetCDFGridUtils):
 
             piece_array[(piece_array == self.data_variable._FillValue)] = numpy.NaN
             
-            x_m_array = self.get_pixel_size_grid(piece_array, offsets, 0)
-            dzdx_array = ndimage.sobel(piece_array, axis=1)/(8. * abs(self.GeoTransform[1]))
-            dzdx_array = numexpr.evaluate("dzdx_array * native_pixel_x_size / x_m_array")
-            del x_m_array
-            gc.collect()
-            
-            y_m_array = self.get_pixel_size_grid(piece_array, offsets, 1)
-            dzdy_array = ndimage.sobel(piece_array, axis=0)/(8. * abs(self.GeoTransform[5]))
-            dzdy_array = numexpr.evaluate("dzdy_array * native_pixel_y_size / y_m_array")
-            del y_m_array
-            gc.collect()
-    
             # Calculate raw source & destination slices including overlaps
             source_slices = [slice(0, 
                                    piece_array.shape[dim_index])
@@ -246,48 +295,35 @@ class DEMUtils(NetCDFGridUtils):
                                  self.data_variable.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else dest_slices[dim_index].stop-overlap)
                            for dim_index in range(2)
                            ]
-                                  
-            hypotenuse_array = numpy.hypot(dzdx_array, dzdy_array)
             
-            # Compute slope
-            slope_array = numexpr.evaluate("arctan(hypotenuse_array) / RADIANS_PER_DEGREE")
-            del hypotenuse_array
-            gc.collect()
+            print 'Computing dzdx and dzdy arrays'
+            dzdx_array, dzdy_array = self.create_dzdxy_arrays(piece_array, offsets)
             
-            #Blank out no-data cells
-            slope_array[numpy.isnan(slope_array)] = self.data_variable._FillValue
-            # Write pieces to new datasets
-            print 'Writing %s slope array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print 'Computing slope array'
+            result_array = self.create_slope_array(dzdx_array, dzdy_array)
+
+            print 'Writing slope array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ])
                                               )
-            slope_variable[dest_slices] = slope_array[source_slices]  
-            slope_nc_dataset.sync()   
-            del slope_array
-            gc.collect()
-             
-            # Convert angles from conventional radians to compass heading 0-360
-            aspect_array = numexpr.evaluate("(450 - arctan2(dzdy_array, -dzdx_array) / RADIANS_PER_DEGREE) % 360")
-            del dzdx_array, dzdy_array
-            gc.collect() 
-            
-            #Blank out no-data cells
-            aspect_array[numpy.isnan(aspect_array)] = self.data_variable._FillValue
+            slope_variable[dest_slices] = result_array[source_slices]  
+            slope_nc_dataset.sync()
                  
-            print 'Writing %s aspect array at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print 'Computing aspect array'
+            result_array = self.create_aspect_array(dzdx_array, dzdy_array)
+                                  
+            print 'Writing aspect array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ])
                                               )
-            aspect_variable[dest_slices] = aspect_array[source_slices]      
+            aspect_variable[dest_slices] = result_array[source_slices]      
             aspect_nc_dataset.sync()   
-            del aspect_array
-            gc.collect()
             
         slope_nc_dataset.close() 
         print 'Finished writing slope dataset %s' % slope_path
