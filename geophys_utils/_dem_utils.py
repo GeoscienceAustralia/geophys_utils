@@ -36,6 +36,7 @@ import os
 import sys
 import logging
 import numpy
+import gc
 from osgeo import osr
 import numexpr
 import netCDF4
@@ -188,15 +189,37 @@ class DEMUtils(NetCDFGridUtils):
         NetCDFGridUtils.__init__(self, dem_dataset)        
 
     def create_dzdxy_arrays(self, elevation_array, offsets):
-        
+        '''
+        Function to return two arrays containing dzdx and dzdy values
+        '''
+        def pixels_in_m(): 
+            ''' 
+            Function returning True if pixels are in metres
+            '''
+            result = True
+            for dimension_name in self.data_variable.dimensions:
+                try:
+                    if self.netcdf_dataset.variables[dimension_name].units == 'm':
+                        continue
+                    else:
+                        result = False
+                        break
+                except:
+                    result = False
+                    break
+                
+            return result
+                    
         native_pixel_x_size = abs(self.GeoTransform[1])
         native_pixel_y_size = abs(self.GeoTransform[5])
 
-        if self.data_variable.units == 'm':
+        if pixels_in_m():  
+            print 'Pixels are a uniform size of %f x %f metres' % (native_pixel_x_size, native_pixel_y_size)       
             # Pixel sizes are in metres - use scalars
             pixel_x_metres = native_pixel_x_size
             pixel_y_metres = native_pixel_y_size
         else:  
+            print 'Pixels are of varying sizes. Computing size arrays'       
             # Compute variable pixel size  
             m_array = self.get_pixel_size_grid(elevation_array, offsets)
             pixel_x_metres = m_array[:,:,0]
@@ -260,10 +283,6 @@ class DEMUtils(NetCDFGridUtils):
 
             piece_array[(piece_array == self.data_variable._FillValue)] = numpy.NaN
             
-            dzdx_array, dzdy_array = self.create_dzdxy_arrays(piece_array, offsets)
-            slope_array = self.create_slope_array(dzdx_array, dzdy_array)
-            aspect_array = self.create_aspect_array(dzdx_array, dzdy_array)
-            
             # Calculate raw source & destination slices including overlaps
             source_slices = [slice(0, 
                                    piece_array.shape[dim_index])
@@ -285,8 +304,13 @@ class DEMUtils(NetCDFGridUtils):
                                  self.data_variable.shape[dim_index] if (self.data_variable.shape[dim_index] - dest_slices[dim_index].stop) < overlap else dest_slices[dim_index].stop-overlap)
                            for dim_index in range(2)
                            ]
-                                  
-            # Write pieces to new datasets
+            
+            print 'Computing dzdx and dzdy arrays'
+            dzdx_array, dzdy_array = self.create_dzdxy_arrays(piece_array, offsets)
+            
+            print 'Computing slope array'
+            result_array = self.create_slope_array(dzdx_array, dzdy_array)
+
             print 'Writing slope array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
@@ -294,9 +318,12 @@ class DEMUtils(NetCDFGridUtils):
                                                      for dim_index in range(2)
                                                      ])
                                               )
-            slope_variable[dest_slices] = slope_array[source_slices]  
-            slope_nc_dataset.sync()   
+            slope_variable[dest_slices] = result_array[source_slices]  
+            slope_nc_dataset.sync()
                  
+            print 'Computing aspect array'
+            result_array = self.create_aspect_array(dzdx_array, dzdy_array)
+                                  
             print 'Writing aspect array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
@@ -304,7 +331,7 @@ class DEMUtils(NetCDFGridUtils):
                                                      for dim_index in range(2)
                                                      ])
                                               )
-            aspect_variable[dest_slices] = aspect_array[source_slices]      
+            aspect_variable[dest_slices] = result_array[source_slices]      
             aspect_nc_dataset.sync()   
             
         slope_nc_dataset.close() 
