@@ -204,23 +204,23 @@ class DEMUtils(NetCDFGridUtils):
         native_pixel_x_size = float(abs(self.GeoTransform[1]))
         native_pixel_y_size = float(abs(self.GeoTransform[5]))
 
+        dzdx_array = sobel(elevation_array, axis=1)/(8. * native_pixel_x_size)
+        dzdy_array = sobel(elevation_array, axis=0)/(8. * native_pixel_y_size)
+
         if pixels_in_m():  
-            print 'Pixels are a uniform size of %f x %f metres' % (native_pixel_x_size, native_pixel_y_size)       
+            print 'Pixels are a uniform size of %f x %f metres.' % (native_pixel_x_size, native_pixel_y_size)       
             # Pixel sizes are in metres - use scalars
             pixel_x_metres = native_pixel_x_size
             pixel_y_metres = native_pixel_y_size
         else:  
-            print 'Pixels are of varying sizes. Computing size arrays'       
+            print 'Pixels are of varying sizes. Computing and applying pixel size arrays.'       
             # Compute variable pixel size  
             m_array = self.get_pixel_size_grid(elevation_array, offsets)
             pixel_x_metres = m_array[:,:,0]
             pixel_y_metres = m_array[:,:,1]
          
-        dzdx_array = sobel(elevation_array, axis=1)/(8. * abs(self.GeoTransform[1]))
-        dzdx_array = numexpr.evaluate("dzdx_array * (native_pixel_x_size / pixel_x_metres)")
-        
-        dzdy_array = sobel(elevation_array, axis=0)/(8. * abs(self.GeoTransform[5]))
-        dzdy_array = numexpr.evaluate("dzdy_array * (native_pixel_y_size / pixel_y_metres)")
+            dzdx_array = numexpr.evaluate("dzdx_array * native_pixel_x_size / pixel_x_metres")
+            dzdy_array = numexpr.evaluate("dzdy_array * native_pixel_y_size / pixel_y_metres")
         
         return dzdx_array, dzdy_array
     
