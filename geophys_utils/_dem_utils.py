@@ -36,11 +36,9 @@ import os
 import sys
 import logging
 import numpy
-import gc
 from osgeo import osr
 import numexpr
 import netCDF4
-import gc
 from scipy.ndimage import sobel
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils 
 from geophys_utils._array_pieces import array_pieces 
