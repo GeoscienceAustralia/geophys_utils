@@ -157,14 +157,24 @@ class DEMUtils(NetCDFGridUtils):
         logger.debug('(x_size, y_size) = (%f, %f)', x_size, y_size)
         return (x_size, y_size)
 
-    def get_pixel_size_grid(self, source_array, offsets, dimension_index):
-        """ Returns grid with interpolated X or Y pixel sizes for given datasets"""
+    def get_pixel_size_grid(self, source_array, offsets):
+        """ Returns grid with interpolated X and Y pixel sizes for given arrays"""
         
-        def get_pixel_size(x, y):
-            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[dimension_index]
+        def get_pixel_x_size(x, y):
+            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[0]
         
-        pixel_size_grid = numpy.zeros(source_array.shape).astype(source_array.dtype)
-        interpolate_grid(depth=1, shape=pixel_size_grid.shape, eval_func=get_pixel_size, grid=pixel_size_grid)
+        def get_pixel_y_size(x, y):
+            return self.get_pixel_size((offsets[0] + x, offsets[1] + y))[1]
+        
+        pixel_size_function = [get_pixel_x_size, get_pixel_y_size]
+        
+        pixel_size_grid = numpy.zeros(shape=(source_array.shape[0], source_array.shape[1], 2)).astype(source_array.dtype)
+        
+        for dim_index in range(2):
+            interpolate_grid(depth=1, 
+                             shape=pixel_size_grid[:,:,dim_index].shape, 
+                             eval_func=pixel_size_function[dim_index], 
+                             grid=pixel_size_grid[:,:,dim_index])
         
         return pixel_size_grid
 
