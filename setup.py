@@ -32,6 +32,7 @@ setup(name='geophys_utils',
             'shapely',
             'tempfile',
             'unittest',
+            'yaml'
             ],
       url='https://github.com/alex-ip/geophys_utils',
       author='Alex Ip - Geoscience Australia',
