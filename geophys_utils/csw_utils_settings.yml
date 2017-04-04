@@ -3,7 +3,7 @@ DEFAULT_CSW_URLS: # List of CSW URLs to query
   - "http://ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's externally-facing eCat
 #  - "http://geonetwork.nci.org.au/geonetwork/srv/eng/csw" # NCI's GeoNetwork
 
-ENVIRONMENT_VARIABLES:
+ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
   NO_PROXY: ""
@@ -19,7 +19,7 @@ DEFAULT_MAXQUERYRECORDS: 100 # Retrieve only this many datasets per CSW query pe
 DEFAULT_MAXTOTALRECORDS: 2000 # Maximum total number of records to retrieve per server
 DEFAULT_GET_LAYERS: False # Boolean flag indicating whether WMS & WCS layer names should be discovered (potentially slow)
 
-OUTPUT_DEFAULTS:
+OUTPUT_DEFAULTS: # Parameters governing the defaults for printed output
   DEFAULT_PROTOCOLS: # List of protocols to display by default. * = wildcard
     - "file"
     
@@ -28,5 +28,5 @@ OUTPUT_DEFAULTS:
     - "url"
     - "title"
     
-  DEFAULT_DELIMITER: "\t"
-  DEFAULT_SHOW_HEADER_ROW: False
+  DEFAULT_DELIMITER: "\t" # Delimiter character used to separate fields
+  DEFAULT_SHOW_HEADER_ROW: False # Boolean flag indicating whether to show header row containing field labels
