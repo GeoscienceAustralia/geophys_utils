@@ -31,6 +31,7 @@ class CSWUtils(object):
         Constructor for CSWUtils class
         @param csw_url_list: List of URLs for CSW services. Defaults to value of self.settings['DEFAULT_CSW_URLS']
         @param timeout: Timeout in seconds. Defaults to value of self.settings['DEFAULT_TIMEOUT']
+        @param settings_path: Path to settings file defaults to csw_utils_settings.yml in package directory
         '''
         self.debug = debug
         package_dir = os.path.dirname(os.path.abspath(__file__))
@@ -130,7 +131,7 @@ class CSWUtils(object):
         @param fes_filters: List of fes filters to apply to CSW query
         @param max_query_records: Maximum number of records to return per CSW query. Defaults to value of self.settings['DEFAULT_MAXRECORDS']
         @param max_total_records: Maximum total number of records to return. Defaults to value of self.settings['DEFAULT_MAXTOTALRECORDS']
- 
+        @param get_layers: Boolean flag indicating whether to get WMS/WCS layer names. Defaults to False
         '''
         max_query_records = max_query_records or self.settings['DEFAULT_MAXQUERYRECORDS']
         max_total_records = max_total_records or self.settings['DEFAULT_MAXTOTALRECORDS']
