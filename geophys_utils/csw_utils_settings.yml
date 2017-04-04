@@ -17,7 +17,7 @@ DEFAULT_TIMEOUT: 30 # Timeout in seconds
 DEFAULT_CRS: "EPSG:4326" # Unprojected WGS84
 DEFAULT_MAXQUERYRECORDS: 100 # Retrieve only this many datasets per CSW query per server
 DEFAULT_MAXTOTALRECORDS: 2000 # Maximum total number of records to retrieve per server
-DEFAULT_GET_LAYERS: False # Boolean flag indicating whether WMS & WCS layer names should be discovered (slow)
+DEFAULT_GET_LAYERS: False # Boolean flag indicating whether WMS & WCS layer names should be discovered (potentially slow)
 
 OUTPUT_DEFAULTS:
   DEFAULT_PROTOCOLS: # List of protocols to display by default. * = wildcard

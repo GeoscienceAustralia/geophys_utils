@@ -122,7 +122,8 @@ class CSWUtils(object):
     def get_csw_records(self, 
                         fes_filters, 
                         max_query_records=None, 
-                        max_total_records=None
+                        max_total_records=None,
+                        get_layers=False
                         ):
         '''
         Generator yeilding nested dicts containing information about each CSW query result record including distributions
@@ -182,7 +183,7 @@ class CSWUtils(object):
                     distribution_info_list = copy.deepcopy(record.uris)
     
                     # Add layer information for web services
-                    if self.settings['DEFAULT_GET_LAYERS']:
+                    if get_layers:
                         for distribution_info in [distribution_info
                                                   for distribution_info in distribution_info_list
                                                   if distribution_info['protocol'] == 'OGC:WMS'
@@ -231,7 +232,8 @@ class CSWUtils(object):
                   titleword_list=None,
                   start_datetime=None,
                   stop_datetime=None,
-                  max_total_records=None
+                  max_total_records=None,
+                  get_layers=None
                   ):
         '''
         Function to query CSW using AND combination of provided search parameters and return generator object
@@ -244,10 +246,12 @@ class CSWUtils(object):
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
         @param max_total_records: Maximum total number of records to return. Defaults to value of self.settings['DEFAULT_MAXTOTALRECORDS']
+        @param get_layers: Boolean flag indicating whether to get WMS/WCS layer names. Defaults to value of self.settings['DEFAULT_GET_LAYERS']
         
         @return: generator object yielding nested dicts containing information about each record including distributions
         '''
         bounding_box_crs = bounding_box_crs or self.settings['DEFAULT_CRS']
+        get_layers = self.settings['DEFAULT_GET_LAYERS'] if get_layers is None else get_layers
 
         # Convert strings to lists if required
         if type(keyword_list) == str:
@@ -286,7 +290,9 @@ class CSWUtils(object):
 
         # Return generator object
         return self.get_csw_records(fes_filter_list, 
-                                    max_total_records=max_total_records)
+                                    max_total_records=max_total_records,
+                                    get_layers=get_layers
+                                    )
 
     def flatten_distribution_dict(self, record_dict, distribution_dict):
         '''
@@ -461,8 +467,10 @@ def main():
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
     parser.add_argument("-u", "--urls", help="CSW URL(s) to query (comma separated list). Default determined by settings file.", type=str)
     parser.add_argument("-m", "--max_results", help="Maximum number of records to return", type=int)
-    parser.add_argument('-r', '--header_row', action='store_const', const=True, #default=False,
-                        help='display header row. Default determined by settings file')
+    parser.add_argument('-r', '--header_row', action='store_const', const=True,
+                        help='show header row. Default determined by settings file')
+    parser.add_argument('-l', '--get_layers', action='store_const', const=True,
+                        help='get WMS/WCS layer names. Default determined by settings file')
     parser.add_argument('--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     
@@ -517,7 +525,8 @@ def main():
                                  bounding_box=bounds,
                                  start_datetime=start_date,
                                  stop_datetime=end_date,
-                                 max_total_records=args.max_results
+                                 max_total_records=args.max_results,
+                                 get_layers=args.get_layers
                                  )
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
