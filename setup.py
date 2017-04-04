@@ -11,8 +11,8 @@ setup(name='geophys_utils',
           'geophys_utils',
           'geophys_utils.test'
       ],
-      package_data={
-      },
+      package_data={'geophys_utils': ['csw_utils_settings.yml']
+                    },
       scripts=(['bin/csw_find',
                 'bin/rechunk'] 
                if (os.name == 'posix')
