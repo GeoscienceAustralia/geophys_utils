@@ -13,32 +13,49 @@ from owslib.csw import CatalogueServiceWeb
 from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
 import netCDF4
+import yaml
+from pprint import pprint
 
 class CSWUtils(object):
     '''
     CSW query utilities
     '''
-    DEFAULT_CSW_URL = 'http://ecat.ga.gov.au/geonetwork/srv/eng/csw' # GA's externally-facing eCat
-    DEFAULT_TIMEOUT = 30 # Timeout in seconds
-    DEFAULT_CRS = 'EPSG:4326' # Unprojected WGS84
-    DEFAULT_MAXQUERYRECORDS = 100 # Retrieve only this many datasets per CSW query
-    DEFAULT_MAXTOTALRECORDS = 2000 # Maximum total number of records to retrieve
 
     def __init__(self, 
-                 csw_url=None, 
+                 csw_url_list=None, 
                  timeout=None,
-                 debug=False
+                 debug=False,
+                 settings_path=None
                  ):
         '''
         Constructor for CSWUtils class
-        @param csw_url: URL for CSW service. Defaults to value of CSWUtils.DEFAULT_CSW_URL
-        @param timeout: Timeout in seconds. Defaults to value of CSWUtils.DEFAULT_TIMEOUT
+        @param csw_url_list: List of URLs for CSW services. Defaults to value of self.settings['DEFAULT_CSW_URLS']
+        @param timeout: Timeout in seconds. Defaults to value of self.settings['DEFAULT_TIMEOUT']
         '''
-        csw_url = csw_url or CSWUtils.DEFAULT_CSW_URL
-        timeout = timeout or CSWUtils.DEFAULT_TIMEOUT
         self.debug = debug
+        package_dir = os.path.dirname(os.path.abspath(__file__))
+        settings_path = settings_path or os.path.join(package_dir, 'csw_utils_settings.yml')
+        self.settings = yaml.safe_load(open(settings_path))
+        
+        if self.debug:
+            print 'Settings:'
+            pprint(self.settings)
+        
+        self.csw_url_list = csw_url_list or self.settings['DEFAULT_CSW_URLS']
+        timeout = timeout or self.settings['DEFAULT_TIMEOUT']
+        
+        for key, value in self.settings['ENVIRONMENT_VARIABLES'].iteritems():
+            if value:
+                os.environ[key] = value
 
-        self.csw = CatalogueServiceWeb(csw_url, timeout=timeout)
+        self.csw_list = []
+        for csw_url in self.csw_url_list:
+            try:
+                self.csw_list.append(CatalogueServiceWeb(csw_url, timeout=timeout))
+            except Exception as e:
+                print 'Unable to open CSW URL %s: %s' % (csw_url, e.message)
+                
+        assert self.csw_list, 'No valid CSW URLs provided'
 
     def list_from_comma_separated_string(self, comma_separated_string):
         '''
@@ -110,92 +127,99 @@ class CSWUtils(object):
         '''
         Generator yeilding nested dicts containing information about each CSW query result record including distributions
         @param fes_filters: List of fes filters to apply to CSW query
-        @param max_query_records: Maximum number of records to return per CSW query. Defaults to value of CSWUtils.DEFAULT_MAXRECORDS
-        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS
+        @param max_query_records: Maximum number of records to return per CSW query. Defaults to value of self.settings['DEFAULT_MAXRECORDS']
+        @param max_total_records: Maximum total number of records to return. Defaults to value of self.settings['DEFAULT_MAXTOTALRECORDS']
  
         '''
-        max_query_records = max_query_records or CSWUtils.DEFAULT_MAXQUERYRECORDS
-        max_total_records = max_total_records or CSWUtils.DEFAULT_MAXTOTALRECORDS
-
-        startposition = 1 # N.B: This is 1-based, not 0-based
-        record_count = 0
-
-        # Keep querying until all results have been retrieved
-        while record_count < max_total_records:
-            # apply all the filters using the "and" syntax: [[filter1, filter2]]
-            self.csw.getrecords2(constraints=[fes_filters],
-                                 esn='full',
-                                 maxrecords=max_query_records,
-                                 startposition=startposition)
-
+        max_query_records = max_query_records or self.settings['DEFAULT_MAXQUERYRECORDS']
+        max_total_records = max_total_records or self.settings['DEFAULT_MAXTOTALRECORDS']
+        
+        uuid_list = []
+        for csw in self.csw_list:
             if self.debug:
-                print 'CSW request:\n%s' % self.csw.request
-                print 'CSW response:\n %s' % self.csw.response
+                print 'Querying %s' % csw.url
 
-            query_record_count = len(self.csw.records)
-
-            for uuid in self.csw.records.keys():
-                record = self.csw.records[uuid]
-                title = record.title
-
-                # Ignore datasets with no distributions
-                if not record.uris:
-                    #print 'No distribution(s) found for "%s"' % title
-                    continue
-
-#                print 'bbox = %s' % record.bbox.__dict__
-
-                record_dict = {'uuid': uuid,
-                               'title': title,
-                               'publisher': record.publisher,
-                               'author': record.creator,
-                               'abstract': record.abstract,
-                              }
-
-                if record.bbox:
-                    record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
-                    record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
-
-                distribution_info_list = copy.deepcopy(record.uris)
-
-                # Add layer information for web services
-                for distribution_info in [distribution_info
-                                          for distribution_info in distribution_info_list
-                                          if distribution_info['protocol'] == 'OGC:WMS'
-                                          ]:
-                    try:
-                        wms = WebMapService(distribution_info['url'], version='1.1.1')
-                        distribution_info['layers'] = wms.contents.keys()
-                    except:
-                        distribution_info['layers'] = ''
-                        
-
-                for distribution_info in [distribution_info
-                                          for distribution_info in distribution_info_list
-                                          if distribution_info['protocol'] == 'OGC:WCS'
-                                          ]:
-                    try:
-                        wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
-                        distribution_info['layers'] = wcs.contents.keys()
-                    except:
-                        distribution_info['layers'] = ''
-
-                record_dict['distributions'] = distribution_info_list
-                record_dict['keywords'] = record.subjects
-
-                record_count += 1
-                yield record_dict
-                #print '%d distribution(s) found for "%s"' % (len(info_list), title)
-
-                if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
-                    raise Exception('Maximum number of records retrieved ($d)' % max_total_records)
+            startposition = 1 # N.B: This is 1-based, not 0-based
+            record_count = 0
     
-            if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
-                break
-
-            # Increment start position and repeat query
-            startposition += max_query_records
-
+            # Keep querying until all results have been retrieved
+            while record_count < max_total_records:
+                # apply all the filters using the "and" syntax: [[filter1, filter2]]
+                csw.getrecords2(constraints=[fes_filters],
+                                     esn='full',
+                                     maxrecords=max_query_records,
+                                     startposition=startposition)
+    
+                if self.debug:
+                    print 'CSW request:\n%s' % csw.request
+                    print 'CSW response:\n %s' % csw.response
+    
+                query_record_count = len(csw.records)
+    
+                for uuid in [uuid for uuid in csw.records.keys() if uuid not in uuid_list]:
+                    uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
+                    record = csw.records[uuid]
+                    title = record.title
+    
+                    # Ignore datasets with no distributions
+                    if not record.uris:
+                        #print 'No distribution(s) found for "%s"' % title
+                        continue
+    
+    #                print 'bbox = %s' % record.bbox.__dict__
+    
+                    record_dict = {'uuid': uuid,
+                                   'title': title,
+                                   'publisher': record.publisher,
+                                   'author': record.creator,
+                                   'abstract': record.abstract,
+                                  }
+    
+                    if record.bbox:
+                        record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
+                        record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
+    
+                    distribution_info_list = copy.deepcopy(record.uris)
+    
+                    # Add layer information for web services
+                    if self.settings['DEFAULT_GET_LAYERS']:
+                        for distribution_info in [distribution_info
+                                                  for distribution_info in distribution_info_list
+                                                  if distribution_info['protocol'] == 'OGC:WMS'
+                                                  ]:
+                            try:
+                                wms = WebMapService(distribution_info['url'], version='1.1.1')
+                                distribution_info['layers'] = wms.contents.keys()
+                            except:
+                                distribution_info['layers'] = ''
+                                
+        
+                        for distribution_info in [distribution_info
+                                                  for distribution_info in distribution_info_list
+                                                  if distribution_info['protocol'] == 'OGC:WCS'
+                                                  ]:
+                            try:
+                                wcs = WebCoverageService(distribution_info['url'], version='1.0.0')
+                                distribution_info['layers'] = wcs.contents.keys()
+                            except:
+                                distribution_info['layers'] = ''
+    
+                    record_dict['distributions'] = distribution_info_list
+                    record_dict['keywords'] = record.subjects
+    
+                    record_count += 1
+                    yield record_dict
+                    #print '%d distribution(s) found for "%s"' % (len(info_list), title)
+    
+                    if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
+                        raise Exception('Maximum number of records retrieved ($d)' % max_total_records)
+        
+                if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
+                    break
+    
+                # Increment start position and repeat query
+                startposition += max_query_records
+    
         #print '%d records found.' % record_count
 
 
@@ -214,16 +238,16 @@ class CSWUtils(object):
             yielding nested dicts containing information about each record including distributions
         @param keyword_list: List of strings or comma-separated string containing keyword search terms
         @param bounding_box: Bounding box to search as a list of ordinates [bbox.minx, bbox.minx, bbox.maxx, bbox.maxy]
-        @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of CSWUtils.DEFAULT_CRS
+        @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of self.settings['DEFAULT_CRS']
         @param anytext_list: List of strings or comma-separated string containing any text search terms
         @param titleword: List of strings or comma-separated string containing title search terms
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
-        @param max_total_records: Maximum total number of records to return. Defaults to value of CSWUtils.DEFAULT_MAXTOTALRECORDS 
+        @param max_total_records: Maximum total number of records to return. Defaults to value of self.settings['DEFAULT_MAXTOTALRECORDS']
         
         @return: generator object yielding nested dicts containing information about each record including distributions
         '''
-        bounding_box_crs = bounding_box_crs or CSWUtils.DEFAULT_CRS
+        bounding_box_crs = bounding_box_crs or self.settings['DEFAULT_CRS']
 
         # Convert strings to lists if required
         if type(keyword_list) == str:
@@ -409,6 +433,16 @@ def main():
     '''
     Main function to take command line parameters, perform CSW query and print required output
     '''
+    def quote_delimitedtext(text, delimiter, quote_char='"'):
+        '''
+        Helper function to quote text containing delimiters or whitespace
+        '''
+        if delimiter in text or re.search('\s', text):
+            return quote_char + text + quote_char
+        else:
+            return text
+            
+        
     # Define command line arguments
     parser = argparse.ArgumentParser()
     
@@ -417,19 +451,18 @@ def main():
     parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets for search", type=str)
     parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for search",
                         type=str)
-    parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Defaults to "EPSG:4326".',
+    parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Default determined by settings file.',
                         type=str)
     parser.add_argument("-s", "--start_date", help="start date for search", type=str)
     parser.add_argument("-e", "--end_date", help="end date for search", type=str)
     # Parameters to define output
-    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Defaults to "file", "*" = wildcard.', type=str)
-    parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Defaults to "protocol,url,title", "*" = wildcard.', type=str)
+    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Default determined by settings file, "*" = wildcard.', type=str)
+    parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Default determined by settings file, "*" = wildcard.', type=str)
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
-    parser.add_argument("-u", "--url", help="CSW URL to query - Defaults to GA's external eCat (%s)" %
-                        CSWUtils.DEFAULT_CSW_URL, type=str)
-    parser.add_argument("-m", "--max_results", help="Maximum number of records to return. Defaults to %d" % CSWUtils.DEFAULT_MAXTOTALRECORDS, type=int)
-    parser.add_argument('-r', '--header_row', action='store_const', const=True, default=False,
-                        help='display header row. Default is no header')
+    parser.add_argument("-u", "--urls", help="CSW URL(s) to query (comma separated list). Default determined by settings file.", type=str)
+    parser.add_argument("-m", "--max_results", help="Maximum number of records to return", type=int)
+    parser.add_argument('-r', '--header_row', action='store_const', const=True, #default=False,
+                        help='display header row. Default determined by settings file')
     parser.add_argument('--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     
@@ -452,10 +485,17 @@ def main():
 
     # Convert string to datetime
     end_date = date_string2datetime(args.end_date)
+    
+    #creatse a CSW object and populates the parameters with argparse inputs
+
+    url_list = ([url.strip() for url in args.args.urls.split(',')] if args.urls else None)
+
+    cswu = CSWUtils(url_list,
+                    debug=args.debug)
 
     # Default to listing file path
     # If there is a protocol list, then create a list of protocols that are split at the comma, use 'file' if there isn't
-    protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or ['file']
+    protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_PROTOCOLS']
     # Allow wildcard
     # How does this work?? doesn't this say don't make a list if there is a *?
     if '*' in protocol_list:
@@ -463,18 +503,13 @@ def main():
             
     # Default to showing URL and title
     # formatting the output for fields
-    field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or ['protocol', 'url', 'title']
+    field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_FIELDS']
     # Allow wildcard
     if '*' in field_list:
         field_list = None
         
     # Set default delimiter to tab character
-    delimiter = args.delimiter or '\t'
-    
-    #creatse a CSW object and populates the parameters with argparse inputs
-
-    cswu = CSWUtils(args.url,
-                    debug=args.debug)
+    delimiter = args.delimiter or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_DELIMITER']
     
     record_generator = cswu.query_csw(keyword_list=args.keywords,
                                  anytext_list=args.anytext,
@@ -486,21 +521,26 @@ def main():
                                  )
     #pprint(result_dict)
     #print '%d results found.' % len(result_dict)
+    header_row_required = (cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_SHOW_HEADER_ROW'] 
+                           if args.header_row is None 
+                           else args.header_row)
 
     # Print results
     header_printed = False
     for distribution in cswu.get_distributions(protocol_list, record_generator):
     #for distribution in cswu.get_netcdf_urls(record_generator):
         # Print header if required
-        if args.header_row and not header_printed:
-            print delimiter.join(['"' + field + '"' 
+        if header_row_required and not header_printed:
+            print delimiter.join([field
                                   for field in (field_list or sorted(distribution.keys()))
                                   ]
                                  )
             header_printed = True;
         
-        print delimiter.join(['"' + distribution[field] + '"' 
-                              for field in (field_list or sorted(distribution.keys()))]
+        # Quote fields if required
+        print delimiter.join([quote_delimitedtext(str(distribution[field]), delimiter)
+                              for field in (field_list or sorted(distribution.keys()))
+                              ]
                              )
 
 

@@ -250,7 +250,7 @@ class DEMUtils(NetCDFGridUtils):
         return aspect_array
 
         
-    def create_slope_and_aspect(self, slope_path=None, aspect_path=None, overlap=2):
+    def create_slope_and_aspect(self, slope_path=None, aspect_path=None, overlap=4):
         '''
         Create slope & aspect datasets from elevation
         '''

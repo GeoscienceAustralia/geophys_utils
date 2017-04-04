@@ -58,9 +58,16 @@ class NetCDFUtils(object):
             self.grid_mapping_variable = self.netcdf_dataset.variables[
                 self.data_variable_list[0].grid_mapping]
         except:
-            (self.netcdf_dataset.variables.get('crs') 
-                 or self.netcdf_dataset.variables.get('transverse_mercator')
-                 )
+            self.grid_mapping_variable = None
+            for grid_mapping_variable_name in ['crs',
+                                               'transverse_mercator'
+                                               ]:
+                try:
+                    self.grid_mapping_variable = self.netcdf_dataset.variables[grid_mapping_variable_name]
+                    break
+                except: 
+                    continue
+
             
         try:
             self.crs = self.grid_mapping_variable.spatial_ref
