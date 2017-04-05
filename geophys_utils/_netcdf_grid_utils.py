@@ -84,6 +84,18 @@ class NetCDFGridUtils(NetCDFUtils):
         # Start of init function - Call inherited constructor first
         NetCDFUtils.__init__(self, netcdf_dataset)
 
+        try:
+            # String representation of GeoTransform
+            self.GeoTransform = [float(number.strip())
+                                 for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
+        except:
+            try:
+                # Array representation of GeoTransform
+                self.GeoTransform = self.grid_mapping_variable.GeoTransform
+            except:
+                #TODO: create GeoTransform from x & y variables
+                self.GeoTransform = None
+
 # assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
 # 2D' # This is not valid
 

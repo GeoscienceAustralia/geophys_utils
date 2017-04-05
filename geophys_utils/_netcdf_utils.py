@@ -35,7 +35,7 @@ class NetCDFUtils(object):
             self.netcdf_dataset = netcdf_dataset 
             self.nc_path = netcdf_dataset.filepath()
         
-        self.opendap = (re.match('^http.*', self.netcdf_dataset.filepath()) is not None)
+        self.opendap = (re.match('^http.*', self.nc_path) is not None)
         if self.opendap:
             self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
         else:
@@ -48,6 +48,10 @@ class NetCDFUtils(object):
         #assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute)'
         
         #TODO: Make sure this is general for all CRSs
+        self.x_variable = (self.netcdf_dataset.variables.get('lon') 
+                           or self.netcdf_dataset.variables.get('x')
+                           )
+        
         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
                            or self.netcdf_dataset.variables.get('y')
                            )
@@ -72,16 +76,12 @@ class NetCDFUtils(object):
         try:
             self.crs = self.grid_mapping_variable.spatial_ref
         except:
-            self.crs = get_spatial_ref_from_crs(self.crs_variable.epsg_code).ExportToWkt()
+            try:
+                self.crs = get_spatial_ref_from_crs(self.grid_mapping_variable.epsg_code).ExportToWkt()
+            except:
+                #TODO: Do something a bit better than assuming unprojected WGS84
+                self.crs = get_spatial_ref_from_crs('EPSG:4326').ExportToWkt()
 
-        try:
-            # String representation of GeoTransform
-            self.GeoTransform = [float(number.strip()) 
-                                 for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
-        except:
-            # Array representation of GeoTransform
-            self.GeoTransform = self.grid_mapping_variable.GeoTransform
-                 
     def copy(self, nc_out_path, 
                  datatype_map_dict={},
                  variable_options_dict={},
@@ -212,7 +212,7 @@ class NetCDFUtils(object):
                 
                 # Copy variable attributes
                 print '\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs()))
-                output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs()})
+                output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs() if not k.startswith('_')})
                 
                 #===============================================================
                 # if (flip_y and (input_variable == self.grid_mapping_variable)):                    
