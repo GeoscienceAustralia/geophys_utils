@@ -147,19 +147,23 @@ class CSWUtils(object):
             # Keep querying until all results have been retrieved
             while record_count < max_total_records:
                 # apply all the filters using the "and" syntax: [[filter1, filter2]]
-                csw.getrecords2(constraints=[fes_filters],
+                try:
+                    csw.getrecords2(constraints=[fes_filters],
                                      esn='full',
-                                     maxrecords=max_query_records,
-                                     startposition=startposition)
-    
-                if self.debug:
-                    print 'CSW request:\n%s' % csw.request
-                    print 'CSW response:\n %s' % csw.response
+                                         #outputschema="http://www.opengis.net/cat/csw/2.0.2",
+                                         maxrecords=max_query_records,
+                                         startposition=startposition)
+                except Exception as e:
+                    print 'CSW Query failed: %s' % e.message
+                    break
+                finally:
+                    if self.debug:
+                        print 'CSW request:\n%s' % csw.request
+                        print 'CSW response:\n %s' % csw.response
     
                 query_record_count = len(csw.records)
     
                 for uuid in [uuid for uuid in csw.records.keys() if uuid not in uuid_list]:
-                    uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
                     record = csw.records[uuid]
                     title = record.title
     
@@ -168,6 +172,8 @@ class CSWUtils(object):
                         #print 'No distribution(s) found for "%s"' % title
                         continue
     
+                    uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
+                    
     #                print 'bbox = %s' % record.bbox.__dict__
     
                     record_dict = {'uuid': uuid,
