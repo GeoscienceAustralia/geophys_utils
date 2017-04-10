@@ -61,11 +61,10 @@ class CSWUtils(object):
     def list_from_comma_separated_string(self, comma_separated_string):
         '''
         Helper function to return list of strings from a comma-separated string
-        Substitute single-character wildcard for whitespace characters
         @param comma_separated_string: comma-separated string
         @return: list of strings
         '''
-        return [re.sub('(\s)', '_', keyword.strip()) for keyword in comma_separated_string.split(',')]
+        return [keyword.strip() for keyword in comma_separated_string.split(',')]
 
     # A helper function for date range filtering
     def get_date_filter(self, start_datetime=None, stop_datetime=None, constraint='overlaps'):
@@ -274,8 +273,15 @@ class CSWUtils(object):
         fes_filter_list = []
         
         # Check for unchanged, upper-case, lower-case and capitalised keywords
+        # GeoNetwork keyword search is always case sensitive
         if keyword_list:
-            fes_filter_list += self.any_case_match_filters('Subject', keyword_list)
+            # Note work-around for spaces in keywords not returning any results
+            #Substitute single-character wildcard for whitespace characters
+            #TODO: Get keyword search with spaces fixed in GeoNetwork
+            fes_filter_list += self.any_case_match_filters('Subject',
+                                                           [re.sub('(\s)', '_', keyword.strip()) 
+                                                            for keyword in keyword_list]
+                                                           )
           
         if anytext_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='anyText', literal=phrase, matchCase=False) for phrase in anytext_list]
@@ -316,7 +322,10 @@ class CSWUtils(object):
 
         # Convert lists to strings
         dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
-        dataset_distribution_dict['bbox'] = ', '.join(dataset_distribution_dict['bbox'][0]) #TODO: Cater for multiple bounding boxes
+        
+        bbox = dataset_distribution_dict.get('bbox')
+        if bbox:
+            dataset_distribution_dict['bbox'] = ', '.join(bbox[0]) #TODO: Cater for multiple bounding boxes
 
         # Merge distribution info into copy of record dict
         dataset_distribution_dict.update(distribution_dict)
