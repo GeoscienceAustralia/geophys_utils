@@ -98,7 +98,7 @@ class CSWUtils(object):
     def any_case_match_filters(self, propertyname, word_list):
         '''
         Helper function to return and/or filter from a word list for partial case insensitivity
-        Resolves issue where "matchCase=False" is ignored
+        Work-around resolves issues where "matchCase=False" is ignored and keywords with whitespace characters are not found
         @param propertyname: String denoting CSW property to search
         @param word_list: List of strings for (partially) case-insensitive "and" search
         
@@ -111,7 +111,10 @@ class CSWUtils(object):
             if len(word_variant_set) == 1: # Use single filter if no "or" required
                 filter_list.append(fes.PropertyIsLike(propertyname=propertyname, literal=word_variant_set.pop(), matchCase=False))
             else:
-                filter_list.append(fes.Or([fes.PropertyIsLike(propertyname=propertyname, literal=word_variant, matchCase=False)
+                filter_list.append(fes.Or([fes.PropertyIsLike(propertyname=propertyname, 
+                                                              literal=re.sub('(\s)', '_', word_variant), 
+                                                              matchCase=False
+                                                              )
                                            for word_variant in set([word, word.upper(), word.lower(), word.title()])
                                            ]
                                           )
@@ -272,16 +275,11 @@ class CSWUtils(object):
         # Build filter list
         fes_filter_list = []
         
-        # Check for unchanged, upper-case, lower-case and capitalised keywords
+        # Check for unchanged, upper-case, lower-case and capitalised keywords 
+        # with single-character wildcards substituted for whitespace characters
         # GeoNetwork keyword search is always case sensitive
         if keyword_list:
-            # Note work-around for spaces in keywords not returning any results
-            #Substitute single-character wildcard for whitespace characters
-            #TODO: Get keyword search with spaces fixed in GeoNetwork
-            fes_filter_list += self.any_case_match_filters('Subject',
-                                                           [re.sub('(\s)', '_', keyword.strip()) 
-                                                            for keyword in keyword_list]
-                                                           )
+            fes_filter_list += self.any_case_match_filters('Subject', keyword_list)
           
         if anytext_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='anyText', literal=phrase, matchCase=False) for phrase in anytext_list]
