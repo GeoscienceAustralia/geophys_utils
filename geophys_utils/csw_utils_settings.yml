@@ -8,12 +8,19 @@ ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
   NO_PROXY: ""
+#  HTTP_PROXY: "http://proxy.ga.gov.au:8080"
+#  HTTPS_PROXY: "https://proxy.ga.gov.au:8080"
+#  HTTP_PROXY: "http://user:password@proxy.ga.gov.au:8080"
+#  HTTPS_PROXY: "https://user:password@proxy.ga.gov.au:8080"
+#  NO_PROXY: "intranet.ga.gov.au"
   
 DEFAULT_TIMEOUT: 30 # Timeout in seconds
 DEFAULT_CRS: "EPSG:4326" # Unprojected WGS84
 DEFAULT_MAXQUERYRECORDS: 100 # Retrieve only this many datasets per CSW query per server
 DEFAULT_MAXTOTALRECORDS: 2000 # Maximum total number of records to retrieve per server
 DEFAULT_GET_LAYERS: False # Boolean flag indicating whether WMS & WCS layer names should be discovered (potentially slow)
+DEFAULT_RECORD_TYPES: # List of record types to return (empty means return all)
+#  - "dataset"
 
 OUTPUT_DEFAULTS: # Parameters governing the defaults for printed output
   DEFAULT_PROTOCOLS: # List of protocols to display by default. * = wildcard

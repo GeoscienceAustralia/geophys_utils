@@ -179,19 +179,27 @@ class CSWUtils(object):
                     uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
                     
     #                print 'bbox = %s' % record.bbox.__dict__
-    
+                    #pprint(record.__dict__)
                     record_dict = {'uuid': uuid,
                                    'title': title,
                                    'publisher': record.publisher,
                                    'author': record.creator,
                                    'abstract': record.abstract,
+                                   'type': record.type,
                                   }
     
                     if record.bbox:
                         record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
                         record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
     
-                    distribution_info_list = copy.deepcopy(record.uris)
+                    # Deal with weird OWSLib behaviour where a single dict containing 'None' string values is returned
+                    # when no distributions exist
+                    if (len(record.uris) > 1 or 
+                        ((len(record.uris) == 1) and record.uris[0]['url'] and (record.uris[0]['url'] != 'None'))
+                        ):
+                        distribution_info_list = copy.deepcopy(record.uris)
+                    else:
+                        distribution_info_list = []
     
                     # Add layer information for web services
                     if get_layers:
@@ -243,6 +251,7 @@ class CSWUtils(object):
                   titleword_list=None,
                   start_datetime=None,
                   stop_datetime=None,
+                  record_type_list=None,
                   max_total_records=None,
                   get_layers=None
                   ):
@@ -256,6 +265,7 @@ class CSWUtils(object):
         @param titleword: List of strings or comma-separated string containing title search terms
         @param start_datetime: Datetime object defining start of temporal search period
         @param stop_datetime: Datetime object defining end of temporal search period
+        @param record_type_list: List of strings or comma-separated string containing record type(s) to return
         @param max_total_records: Maximum total number of records to return. Defaults to value of self.settings['DEFAULT_MAXTOTALRECORDS']
         @param get_layers: Boolean flag indicating whether to get WMS/WCS layer names. Defaults to value of self.settings['DEFAULT_GET_LAYERS']
         
@@ -274,6 +284,10 @@ class CSWUtils(object):
         if type(titleword_list) == str:
             titleword_list = self.list_from_comma_separated_string(titleword_list)
 
+        record_type_list = record_type_list or self.settings['DEFAULT_RECORD_TYPES']
+        if type(record_type_list) == str:
+            record_type_list = self.list_from_comma_separated_string(record_type_list)
+
         # Build filter list
         fes_filter_list = []
         
@@ -291,6 +305,12 @@ class CSWUtils(object):
         
         if titleword_list:
             fes_filter_list += [fes.PropertyIsLike(propertyname='title', literal=titleword, matchCase=False) for titleword in titleword_list]
+        
+        # Check for unchanged, upper-case, lower-case and capitalised keywords 
+        # with single-character wildcards substituted for whitespace characters
+        # GeoNetwork type search is always case sensitive
+        if record_type_list:
+            fes_filter_list += self.any_case_match_filters('type', record_type_list)
         
         if bounding_box:
             fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
@@ -493,6 +513,7 @@ def main():
                         help='get WMS/WCS layer names. Default determined by settings file')
     parser.add_argument('--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
+    parser.add_argument("-y", "--types", help="comma-separated list of record types for search", type=str)
     
     args = parser.parse_args()
 
@@ -521,18 +542,15 @@ def main():
     cswu = CSWUtils(url_list,
                     debug=args.debug)
 
-    # Default to listing file path
-    # If there is a protocol list, then create a list of protocols that are split at the comma, use 'file' if there isn't
+    # If there is a protocol list, then create a list of protocols that are split at the comma, use defaults if there isn't
     protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_PROTOCOLS']
-    # Allow wildcard
-    # How does this work?? doesn't this say don't make a list if there is a *?
+    # Allow wildcard - protocol_list=None means show all protocols
     if '*' in protocol_list:
         protocol_list = None
             
-    # Default to showing URL and title
     # formatting the output for fields
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_FIELDS']
-    # Allow wildcard
+    # Allow wildcard - field_list=None means show all fields
     if '*' in field_list:
         field_list = None
         
@@ -545,6 +563,7 @@ def main():
                                  bounding_box=bounds,
                                  start_datetime=start_date,
                                  stop_datetime=end_date,
+                                 record_type_list=args.types,
                                  max_total_records=args.max_results,
                                  get_layers=args.get_layers
                                  )
