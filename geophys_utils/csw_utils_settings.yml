@@ -1,17 +1,13 @@
 --- 
 DEFAULT_CSW_URLS: # List of CSW URLs to query
   - "http://ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's externally-facing eCat
+  - "https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's internal eCat
 #  - "http://geonetwork.nci.org.au/geonetwork/srv/eng/csw" # NCI's GeoNetwork
 
 ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
   NO_PROXY: ""
-#  HTTP_PROXY: "http://proxy.ga.gov.au:8080"
-#  HTTPS_PROXY: "https://proxy.ga.gov.au:8080"
-#  NO_PROXY: "intranet.ga.gov.au"
-#  HTTP_PROXY: "http://sun-web-intdev.ga.gov.au:2710"
-#  HTTPS_PROXY: "https://sun-web-intdev.ga.gov.au:2710"
   
 DEFAULT_TIMEOUT: 30 # Timeout in seconds
 DEFAULT_CRS: "EPSG:4326" # Unprojected WGS84
