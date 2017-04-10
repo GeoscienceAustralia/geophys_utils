@@ -169,10 +169,12 @@ class CSWUtils(object):
                     record = csw.records[uuid]
                     title = record.title
     
-                    # Ignore datasets with no distributions
-                    if not record.uris:
-                        #print 'No distribution(s) found for "%s"' % title
-                        continue
+                    #===========================================================
+                    # # Ignore datasets with no distributions
+                    # if not record.uris:
+                    #     #print 'No distribution(s) found for "%s"' % title
+                    #     continue
+                    #===========================================================
     
                     uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
                     
@@ -326,12 +328,13 @@ class CSWUtils(object):
             dataset_distribution_dict['bbox'] = ', '.join(bbox[0]) #TODO: Cater for multiple bounding boxes
 
         # Merge distribution info into copy of record dict
-        dataset_distribution_dict.update(distribution_dict)
-        # Remove any leading " file://" from URL to give plain filename
-        dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
-        
-        if 'layers' in dataset_distribution_dict.keys():
-            dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
+        if distribution_dict:
+            dataset_distribution_dict.update(distribution_dict)
+            # Remove any leading " file://" from URL to give plain filename
+            dataset_distribution_dict['url'] = re.sub('^file://', '', dataset_distribution_dict['url'])
+            
+            if 'layers' in dataset_distribution_dict.keys():
+                dataset_distribution_dict['layers'] = ', '.join(dataset_distribution_dict['layers'])
         
         return dataset_distribution_dict
     
@@ -375,13 +378,16 @@ class CSWUtils(object):
             search_protocol_list = distribution_protocols
         
         for record_dict in dataset_dict_generator:
-            for distribution_dict in record_dict['distributions']:
-                # If protocol match is found (case insensitive partial match)
-                if (distribution_dict['protocol'] and 
-                    self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
-
-                    yield self.flatten_distribution_dict(record_dict, distribution_dict)
-
+            if record_dict['distributions']:
+                for distribution_dict in record_dict['distributions']:
+                    # If protocol match is found (case insensitive partial match)
+                    if (distribution_dict['protocol'] and 
+                        self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
+    
+                        yield self.flatten_distribution_dict(record_dict, distribution_dict)
+            else:
+                yield self.flatten_distribution_dict(record_dict, None)
+                
 
     def get_netcdf_urls(self, dataset_dict_generator):
         '''
@@ -561,7 +567,7 @@ def main():
             header_printed = True;
         
         # Quote fields if required
-        print delimiter.join([quote_delimitedtext(str(distribution[field]), delimiter)
+        print delimiter.join([quote_delimitedtext(str(distribution.get(field) or ''), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )
