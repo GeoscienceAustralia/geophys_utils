@@ -1,7 +1,7 @@
 --- 
 DEFAULT_CSW_URLS: # List of CSW URLs to query
   - "http://ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's externally-facing eCat
-  - "https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's internal eCat
+#  - "https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's internal eCat
 #  - "http://geonetwork.nci.org.au/geonetwork/srv/eng/csw" # NCI's GeoNetwork
 
 ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs

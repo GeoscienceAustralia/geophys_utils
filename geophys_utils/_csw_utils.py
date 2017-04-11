@@ -537,7 +537,7 @@ def main():
     
     #creatse a CSW object and populates the parameters with argparse inputs
 
-    url_list = ([url.strip() for url in args.args.urls.split(',')] if args.urls else None)
+    url_list = ([url.strip() for url in args.urls.split(',')] if args.urls else None)
 
     cswu = CSWUtils(url_list,
                     debug=args.debug)
