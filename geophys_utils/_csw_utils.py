@@ -180,7 +180,8 @@ class CSWUtils(object):
                     
     #                print 'bbox = %s' % record.bbox.__dict__
                     #pprint(record.__dict__)
-                    record_dict = {'uuid': uuid,
+                    record_dict = {'csw': csw.url,
+                                   'uuid': uuid,
                                    'title': title,
                                    'publisher': record.publisher,
                                    'author': record.creator,
@@ -238,7 +239,7 @@ class CSWUtils(object):
                     #print '%d distribution(s) found for "%s"' % (len(info_list), title)
     
                     if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
-                        raise Exception('Maximum number of records retrieved ($d)' % max_total_records)
+                        raise Exception('Maximum number of records retrieved (%d)' % max_total_records)
         
                 if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
                     break
@@ -408,6 +409,11 @@ class CSWUtils(object):
         for record_dict in dataset_dict_generator:
             if record_dict['distributions']:
                 for distribution_dict in record_dict['distributions']:
+                    # Replace None with empty string for all values
+                    for key, value in distribution_dict.iteritems():
+                        if value is None:
+                            distribution_dict[key] = ''
+                                    
                     # If protocol match is found (case insensitive partial match) or 
                     if self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list): 
                         yield self.flatten_distribution_dict(record_dict, distribution_dict)
@@ -596,6 +602,7 @@ def main():
             header_printed = True;
         
         # Quote fields if required
+        #TODO: Fix problem with non-ascii characters
         print delimiter.join([quote_delimitedtext(str(distribution.get(field) or ''), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
