@@ -199,7 +199,13 @@ class CSWUtils(object):
                         ):
                         distribution_info_list = copy.deepcopy(record.uris)
                     else:
-                        distribution_info_list = []
+                        # Create single dummy distribution for no protocol
+                        distribution_info_list = [{'description': '',
+                                                   'name': '',
+                                                   'protocol': '',
+                                                   'url': ''
+                                                   }
+                                                  ]
     
                     # Add layer information for web services
                     if get_layers:
@@ -367,12 +373,14 @@ class CSWUtils(object):
         
         @return bool: True if any partial string found in superstring
         '''
-        # Treat empty list or None as wildcard match
-        if not partial_string_list:
+        # Treat empty list as wildcard match
+        if partial_string_list is None:
             return True
         
         for search_string in partial_string_list:
-            if search_string in superstring:
+            if (not (search_string or superstring) # Both empty strings
+                or (search_string and search_string in superstring) # Substring
+                ):
                 return True
         return False
             
@@ -400,12 +408,10 @@ class CSWUtils(object):
         for record_dict in dataset_dict_generator:
             if record_dict['distributions']:
                 for distribution_dict in record_dict['distributions']:
-                    # If protocol match is found (case insensitive partial match)
-                    if (distribution_dict['protocol'] and 
-                        self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list)): 
-    
+                    # If protocol match is found (case insensitive partial match) or 
+                    if self.partial_string_match(distribution_dict['protocol'].lower(), search_protocol_list): 
                         yield self.flatten_distribution_dict(record_dict, distribution_dict)
-            else:
+            else: # This shouldn't be needed - "fake" distribution now created for no distributions
                 yield self.flatten_distribution_dict(record_dict, None)
                 
 
@@ -502,7 +508,7 @@ def main():
     parser.add_argument("-s", "--start_date", help="start date for search", type=str)
     parser.add_argument("-e", "--end_date", help="end date for search", type=str)
     # Parameters to define output
-    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Default determined by settings file, "*" = wildcard.', type=str)
+    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Default determined by settings file, "*" = wildcard, "None" = no distributions.', type=str)
     parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Default determined by settings file, "*" = wildcard.', type=str)
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
     parser.add_argument("-u", "--urls", help="CSW URL(s) to query (comma separated list). Default determined by settings file.", type=str)
@@ -543,11 +549,15 @@ def main():
                     debug=args.debug)
 
     # If there is a protocol list, then create a list of protocols that are split at the comma, use defaults if there isn't
-    protocol_list = ([protocol.strip().lower() for protocol in args.protocols.split(',')] if args.protocols else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_PROTOCOLS']
+    # Replace "None" with empty string
+    protocol_list = (([protocol.strip().lower().replace('none', '') for protocol in args.protocols.split(',')] 
+                     if args.protocols is not None else None) 
+                     or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_PROTOCOLS'])
+    
     # Allow wildcard - protocol_list=None means show all protocols
     if '*' in protocol_list:
         protocol_list = None
-            
+
     # formatting the output for fields
     field_list = ([field.strip().lower() for field in args.fields.split(',')] if args.fields else None) or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_FIELDS']
     # Allow wildcard - field_list=None means show all fields
