@@ -43,6 +43,9 @@ class CSWUtils(object):
             pprint(self.settings)
         
         self.csw_url_list = csw_url_list or self.settings['DEFAULT_CSW_URLS']
+        if type(self.csw_url_list) == str:
+            self.csw_url_list = [self.csw_url_list]
+            
         timeout = timeout or self.settings['DEFAULT_TIMEOUT']
         
         for key, value in self.settings['ENVIRONMENT_VARIABLES'].iteritems():
