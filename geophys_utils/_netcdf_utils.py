@@ -56,7 +56,7 @@ class NetCDFUtils(object):
                            or self.netcdf_dataset.variables.get('y')
                            )
         
-        self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
+        self.y_inverted = (self.y_variable[-1] < self.y_variable[0]) if self.y_variable else False
         
         try:
             self.grid_mapping_variable = self.netcdf_dataset.variables[
