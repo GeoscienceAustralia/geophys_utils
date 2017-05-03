@@ -131,10 +131,17 @@ class NetCDFGridUtils(NetCDFUtils):
 
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[self.GeoTransform[0] + (x_pixel_offset * self.GeoTransform[1]) + (y_pixel_offset * self.GeoTransform[2]),
-                         self.GeoTransform[3] + (x_pixel_offset * self.GeoTransform[4]) + (y_pixel_offset * self.GeoTransform[5])]
-                        for x_pixel_offset in [0, self.pixel_count[0]]
-                        for y_pixel_offset in [0, self.pixel_count[1]]]
+                             self.GeoTransform[3] + (x_pixel_offset * self.GeoTransform[4]) + (y_pixel_offset * self.GeoTransform[5])]
+                            for x_pixel_offset, y_pixel_offset in [[0, self.pixel_count[1]], 
+                                                                   [self.pixel_count[0], self.pixel_count[1]],
+                                                                   [self.pixel_count[0], 0],
+                                                                   [0, 0]
+                                                                   ]
+                            ]
         
+        # Create bounds
+        self.bounds = self.native_bbox[0] + self.native_bbox[2]
+
     def get_indices_from_coords(self, coordinates, crs=None):
         '''
         Returns list of netCDF array indices corresponding to coordinates to support nearest neighbour queries

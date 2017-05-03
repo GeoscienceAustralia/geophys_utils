@@ -86,6 +86,9 @@ class NetCDFLineUtils(NetCDFUtils):
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat]]
 
+        # Define bounds
+        self.bounds = [min_lon, min_lat, max_lon, max_lat]
+
         line_dimension = self.netcdf_dataset.dimensions['line']
         self.line_count = len(line_dimension)
         
