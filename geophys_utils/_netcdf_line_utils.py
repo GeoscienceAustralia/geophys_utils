@@ -85,6 +85,7 @@ class NetCDFLineUtils(NetCDFUtils):
         
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat]]
+        #self.wgs84_bbox = transform_coords(self.native_bbox, from_crs=self.crs, to_crs='EPSG:4326')
 
         # Define bounds
         self.bounds = [min_lon, min_lat, max_lon, max_lat]

@@ -139,6 +139,8 @@ class NetCDFGridUtils(NetCDFUtils):
                                                                    ]
                             ]
         
+        self.wgs84_bbox = transform_coords(self.native_bbox, from_crs=self.crs, to_crs='EPSG:4326')
+
         # Create bounds
         self.bounds = self.native_bbox[0] + self.native_bbox[2]
 
@@ -339,4 +341,15 @@ class NetCDFGridUtils(NetCDFUtils):
         crs = crs or self.crs
         sample_metres = sample_metres or self.default_sample_metres
         return sample_transect(transect_vertices, crs, sample_metres)
+        
+
+    def get_convex_hull(self, to_crs=None):
+        try:
+            convex_hull = netcdf2convex_hull(self.netcdf_dataset, NetCDFGridUtils.DEFAULT_MAX_BYTES)
+        except:
+            #logger.info('Unable to compute convex hull. Using rectangular bounding box instead.')
+            convex_hull = self.native_bbox
+            
+        return transform_coords(convex_hull, self.crs, to_crs)
+
         
