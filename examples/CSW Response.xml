@@ -1,0 +1,61 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+<csw:GetRecordsResponse xmlns:csw="http://www.opengis.net/cat/csw/2.0.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.opengis.net/cat/csw/2.0.2 http://schemas.opengis.net/csw/2.0.2/CSW-discovery.xsd">
+  <csw:SearchStatus timestamp="2017-04-05T08:52:37" />
+  <csw:SearchResults numberOfRecordsMatched="1" numberOfRecordsReturned="1" elementSet="full" nextRecord="0">
+    <csw:Record xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:ows="http://www.opengis.net/ows" xmlns:dct="http://purl.org/dc/terms/" xmlns:geonet="http://www.fao.org/geonetwork" xmlns:gml="http://www.opengis.net/gml">
+      <dc:identifier>dbcc0c59-81e6-4eed-e044-00144fdd4fa6</dc:identifier>
+      <dc:date>2013-05-03T00:00:00</dc:date>
+      <dc:title>Isostatic Residual Gravity Anomaly Grid of Onshore Australia - 2011</dc:title>
+      <dc:type>dataset</dc:type>
+      <dc:subject>National dataset</dc:subject>
+      <dc:subject>gravity</dc:subject>
+      <dc:subject>grid</dc:subject>
+      <dc:subject>NCI</dc:subject>
+      <dc:subject>Gravimetrics</dc:subject>
+      <dc:subject>Isostatic anomaly</dc:subject>
+      <dc:subject>Geophysical National Coverage</dc:subject>
+      <dc:subject>Gravity Digital Data</dc:subject>
+      <dc:subject>geoscientificInformation</dc:subject>
+      <dc:format>html</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <dc:format>Zipped ERS</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>WCS</dc:format>
+      <dc:format>WMS</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <dc:publisher>Geoscience Australia</dc:publisher>
+      <dct:abstract>Gravity data measure small changes in gravity due to changes in the density of rocks beneath the Earth surface. This grid represents isostatic residual gravity anomalies over onshore Australia made from onshore gravity measurements collected on geophysical surveys conducted by Commonwealth, State and Northern Territory governments, and the private sector. The grid cell size is approximately 800 metres. As the effect of the long wavelength anomalies are removed, the isostatic residual anomalies reveal better than most gravity maps, the density distributions within the upper crust.</dct:abstract>
+      <dc:description>Gravity data measure small changes in gravity due to changes in the density of rocks beneath the Earth surface. This grid represents isostatic residual gravity anomalies over onshore Australia made from onshore gravity measurements collected on geophysical surveys conducted by Commonwealth, State and Northern Territory governments, and the private sector. The grid cell size is approximately 800 metres. As the effect of the long wavelength anomalies are removed, the isostatic residual anomalies reveal better than most gravity maps, the density distributions within the upper crust.</dc:description>
+      <dc:rights>license</dc:rights>
+      <dc:rights>license</dc:rights>
+      <dc:source>The gravity data set of onshore Australia contains more than 1.57 million reliable onshore stations gathered during more than 1800 surveys and held in the Australian National Gravity Database (ANGD). Continental Australia has a basic station spacing coverage of 11 km, with South Australia, Tasmania and part of New South Wales covered at a spacing of 7 km. Victoria has station coverage of approximately 1.5 km. Some areas of scientific or economic interest have been infilled with station spacings between 2 km and 4 km by recent Commonwealth, State and Territory Government initiatives. Other areas of detailed coverage have been surveyed by private companies for exploration purposes. Only open file data as held in the ANGD at March 2011 were used in the creation of the grid.
+The data values contained in the grid are Isostatic Residual Gravity anomalies over Continental Australia. A depth to mantle model and subsequent isostatic corrections were produced using a modified version of the USGS program AIRYROOT (Simpson et al., 1983) provided by Intrepid Geophysics. Geoscience Australia's 2009 Bathymetry and Topography Grid (Whiteway, 2009) was used to calculate the depth to crustal bottom following the Airy-Heiskanen crustal-root model. The isostatic corrections were then applied to the complete Bouguer anomalies (Tracey and Nakamura, 2010) to produce the Isostatic Residual Gravity Anomaly Grid of Australia. The gravity anomalies are based on the Australian Absolute Gravity Datum 2007 and 1994 Geodetic Datum of Australia (Tracey et al., 2008).
+A crustal density of 2.67 tonnes per cubic meter was used for the calculation, with an assumed density contrast between the crust and mantle of 0.4 tonnes per cubic meter. A depth to mantle at sea level of 37 km was used in the calculation.  This was derived from the average Australian depth to the MohoroviÃ‚Â¿iÃ‚Â¿ discontinuity (Moho) at sea level using data from seismic studies around Australia (Goncharov et al., 2007).
+The original grid was converted from ERMapper (.ers) format to netCDF4_classic format using GDAL1.11.1. The main purpose of this conversion is to enable access to the data by relevant open source tools and software. The netCDF grid was created on 2016-03-29. 
+References
+Goncharov, A., Deighton, I., Tischer, M. and Collins, C., 2007. Crustal thickness in Australia: where, how and what for?: ASEG Extended Abstracts, vol. 2007, pp. 1-4, ASEG2007 19th Geophysical Conference. 
+Simpson, R.W., Jachens, R.C. and Blakely, R.J., 1983. AIRYROOT: A FORTRAN program for calculating the gravitational attraction of an Airy isostatic root out to 166.7 km: US Geological Survey Open File Report 83-883.
+Tracey, R., Bacchin, M., and Wynne, P., 2008. AAGD07: A new absolute gravity datum for Australian gravity and new standards for the Australian National Gravity Database: ASEG Extended Abstracts, vol. 2007, No.1, pp. 1-3, ASEG2007 19th Geophysical Conference. 
+Tracey, R. and Nakamura, A., 2010. Complete Bouguer Anomalies for the Australian National Gravity Database: ASEG Extended Abstracts, vol. 2010, pp. 1-3, ASEG2010 21st Geophysical Conference. 
+Whiteway, T.G., 2009. Australian Bathymetry and Topography Grid: Geoscience Australia Record 2009/21, 46pp.</dc:source>
+      <dc:relation>c6b58f54-102c-19e9-e044-00144fdd4fa6</dc:relation>
+      <dc:format>html</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <dc:format>Zipped ERS</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>WCS</dc:format>
+      <dc:format>WMS</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>html</dc:format>
+      <dc:format>NetCDF</dc:format>
+      <ows:BoundingBox crs="urn:ogc:def:crs:EPSG:6.6:4326">
+        <ows:LowerCorner>156.741882 -44.204934</ows:LowerCorner>
+        <ows:UpperCorner>109.100234 -9.354948</ows:UpperCorner>
+      </ows:BoundingBox>
+    </csw:Record>
+  </csw:SearchResults>
+</csw:GetRecordsResponse>
