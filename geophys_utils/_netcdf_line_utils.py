@@ -27,7 +27,7 @@ import os
 import re
 import tempfile
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import get_spatial_ref_from_crs, transform_coords, get_utm_crs
+from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
 
@@ -102,7 +102,7 @@ class NetCDFLineUtils(NetCDFUtils):
         
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat]]
-        #self.wgs84_bbox = transform_coords(self.native_bbox, from_crs=self.crs, to_crs='EPSG:4326')
+        #self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
 
         # Define bounds
         self.bounds = [min_lon, min_lat, max_lon, max_lat]
@@ -169,14 +169,14 @@ class NetCDFLineUtils(NetCDFUtils):
         '''
         pass
     
-    def get_spatial_mask(self, bounds, bounds_crs=None):
+    def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
         Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
         '''
-        if bounds_crs is None:
+        if bounds_wkt is None:
             coordinates = self.xycoords
         else:
-            coordinates = np.array(transform_coords(self.xycoords[...], self.crs, bounds_crs))
+            coordinates = np.array(transform_coords(self.xycoords[...], self.wkt, bounds_wkt))
             
         return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
                               np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
@@ -214,13 +214,13 @@ class NetCDFLineUtils(NetCDFUtils):
             yield line_number, line_mask
     
     
-    def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_crs=None):
+    def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_wkt=None):
         '''
         Generator to return coordinates and specified variable values for specified lines
         @param line_numbers: list of integer line number or single integer line number
         @param variables: list of variable name strings or single variable name string
         @param bounds: Spatial bounds for point selection
-        @param bounds_crs: Coordinate Reference System for bounds
+        @param bounds_wkt: WKT for bounds Coordinate Reference System 
         
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
@@ -242,7 +242,7 @@ class NetCDFLineUtils(NetCDFUtils):
         
         bounds = bounds or self.bounds
         
-        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_crs, self.crs))
+        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         
         for line_number in line_numbers:
             _line_number, line_mask = self.get_line_masks(line_numbers=line_number).next() # Only one mask per line
@@ -256,21 +256,21 @@ class NetCDFLineUtils(NetCDFUtils):
             
             
             
-    def get_reprojected_bounds(self, bounds, from_crs, to_crs):
+    def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
         '''
         Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
-        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_crs
-        @parameter from_crs: CRS from which to transform bounds
-        @parameter to_crs: CRS to which to transform bounds
+        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
+        @parameter from_wkt: WKT for CRS from which to transform bounds
+        @parameter to_wkt: WKT for CRS to which to transform bounds
         
-        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_crs
+        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
         '''
-        if (to_crs is None) or (from_crs is None) or (to_crs == from_crs):
+        if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
             return bounds
         
         # Need to look at all four bounding box corners, not just LL & UR
         original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_crs, to_crs))
+        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
         
         return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
             
@@ -280,7 +280,7 @@ class NetCDFLineUtils(NetCDFUtils):
                     native_grid_bounds=None, 
                     reprojected_grid_bounds=None, 
                     resampling_method='linear', 
-                    grid_crs=None, 
+                    grid_wkt=None, 
                     point_step=1):
         '''
         Function to grid points in a specified bounding rectangle to a regular grid of the specified resolution and crs
@@ -290,12 +290,12 @@ class NetCDFLineUtils(NetCDFUtils):
         @parameter reprojected_grid_bounds: Spatial bounding box of area to grid in grid coordinates
         @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
-        @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
+        @parameter grid_wkt: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
         
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
-        @return crs: WKT for grid coordinate reference system.
+        @return wkt: WKT for grid coordinate reference system.
         @return geotransform: GDAL GeoTransform for grid
         '''
         assert not (native_grid_bounds and reprojected_grid_bounds), 'Either native_grid_bounds or reprojected_grid_bounds can be provided, but not both'
@@ -308,9 +308,9 @@ class NetCDFLineUtils(NetCDFUtils):
             variables = [variables]
         
         if native_grid_bounds:
-            reprojected_grid_bounds = self.get_reprojected_bounds(native_grid_bounds, self.crs, grid_crs)
+            reprojected_grid_bounds = self.get_reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
         elif reprojected_grid_bounds:
-            native_grid_bounds = self.get_reprojected_bounds(reprojected_grid_bounds, grid_crs, self.crs)
+            native_grid_bounds = self.get_reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
@@ -331,7 +331,7 @@ class NetCDFLineUtils(NetCDFUtils):
                                 pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(expanded_grid_bounds, grid_crs, self.crs))
+        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
@@ -346,9 +346,9 @@ class NetCDFLineUtils(NetCDFUtils):
         
         coordinates = self.xycoords[...][point_subset_mask]
         # Reproject coordinates if required
-        if grid_crs is not None:
+        if grid_wkt is not None:
             # N.B: Be careful about XY vs YX coordinate order         
-            coordinates = np.array(transform_coords(coordinates[...], self.crs, grid_crs))
+            coordinates = np.array(transform_coords(coordinates[...], self.wkt, grid_wkt))
 
         # Interpolate required values to the grid - Note YX ordering for image
         grids = {}
@@ -370,7 +370,7 @@ class NetCDFLineUtils(NetCDFUtils):
                         -grid_resolution
                         ] 
 
-        return grids, (grid_crs or self.crs), geotransform
+        return grids, (grid_wkt or self.wkt), geotransform
     
     
     def utm_grid_points(self, utm_grid_resolution, variables=None, native_grid_bounds=None, resampling_method='linear', point_step=1):
@@ -381,50 +381,51 @@ class NetCDFLineUtils(NetCDFUtils):
         @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates 
         @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
         See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
-        @parameter grid_crs: WKT for grid coordinate reference system. Defaults to native CRS
+        @parameter grid_wkt: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
         
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
-        @return crs: WKT for grid coordinate reference system (i.e. local UTM zone)
+        @return wkt: WKT for grid coordinate reference system (i.e. local UTM zone)
         @return geotransform: GDAL GeoTransform for grid
         '''
         native_grid_bounds = native_grid_bounds or self.bounds
         
         native_centre_coords = [(native_grid_bounds[dim_index] + native_grid_bounds[dim_index+2]) / 2.0 for dim_index in range(2)]
-        utm_crs = get_utm_crs(native_centre_coords, self.crs)
+        utm_wkt = get_utm_wkt(native_centre_coords, self.wkt)
         
         return self.grid_points(grid_resolution=utm_grid_resolution, 
                                 variables=variables,
                                 native_grid_bounds=native_grid_bounds, 
                                 resampling_method=resampling_method, 
-                                grid_crs=utm_crs, 
+                                grid_wkt=utm_wkt, 
                                 point_step=point_step
                                 )
 
 
-    def utm_coords(self, coordinate_array, crs=None):
+    def utm_coords(self, coordinate_array, wkt=None):
         '''
         Function to convert coordinates to the appropriate UTM CRS
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
-        
-        @return crs: WKT for UTM CRS - default to native
+        @param wkt: WKT for source CRS - default to native
+       
+        @return wkt: WKT for UTM CRS - default to native
         @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
         '''
-        crs = crs or self.crs
-        return utm_coords(coordinate_array, crs)
+        wkt = wkt or self.wkt
+        return utm_coords(coordinate_array, wkt)
     
     
-    def coords2metres(self, coordinate_array, crs=None):
+    def coords2metres(self, coordinate_array, wkt=None):
         '''
         Function to calculate cumulative distance in metres from coordinates in specified CRS
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
-        @param crs: WKT for coordinate CRS - default to native
+        @param wkt: WKT for coordinate CRS - default to native
         
         @return distance_array: Array of shape (n) containing cumulative distances from first coord
         '''
-        crs = crs or self.crs # Default to native CRS for coordinates
+        wkt = wkt or self.wkt # Default to native CRS for coordinates
 
-        _utm_crs, utm_coord_array = utm_coords(coordinate_array, crs)
+        _utm_wkt, utm_coord_array = utm_coords(coordinate_array, wkt)
         return coords2distance(utm_coord_array)
 

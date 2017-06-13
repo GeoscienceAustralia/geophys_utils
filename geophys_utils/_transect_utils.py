@@ -22,7 +22,7 @@ Created on 23Nov.,2016
 '''
 import numpy as np
 import math
-from geophys_utils._crs_utils import get_utm_crs, transform_coords
+from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 
 
 def line_length(line):
@@ -54,17 +54,17 @@ def point_along_line(line, distance):
                   (line[1][dim_index] - line[0][dim_index]) for dim_index in range(2)])
 
 
-def utm_coords(coordinate_array, crs):
+def utm_coords(coordinate_array, wkt):
     '''
     Function to convert coordinates to the appropriate UTM CRS
     @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
     
-    @return crs: WKT for UTM CRS
+    @return wkt: WKT for UTM CRS
     @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
     '''
     native_centre_coords = (np.nanmean(coordinate_array[:,0]), np.nanmean(coordinate_array[:,1]))
-    utm_crs = get_utm_crs(native_centre_coords, crs)
-    return utm_crs, np.array(transform_coords(coordinate_array, crs, utm_crs))
+    utm_wkt = get_utm_wkt(native_centre_coords, wkt)
+    return utm_wkt, np.array(transform_coords(coordinate_array, wkt, utm_wkt))
 
 
 def coords2distance(coordinate_array):
@@ -91,17 +91,17 @@ def coords2distance(coordinate_array):
     return distance_array
     
     
-def sample_transect(transect_vertices, crs, sample_metres):
+def sample_transect(transect_vertices, wkt, sample_metres):
     '''
     Function to return a list of sample points sample_metres apart along lines between transect vertices
     @param transect_vertices: list or array of transect vertex coordinates
-    @param crs: coordinate reference system for transect_vertices
+    @param wkt: coordinate reference system for transect_vertices
     @param sample_metres: distance between sample points in metres
     '''
     transect_vertex_array = np.array(transect_vertices)
     # print 'transect_vertex_array = %s' % transect_vertex_array
-    nominal_utm_crs, utm_transect_vertices = utm_coords(transect_vertex_array, crs)
-    # print 'nominal_utm_crs = %s' % nominal_utm_crs
+    nominal_utm_wkt, utm_transect_vertices = utm_coords(transect_vertex_array, wkt)
+    # print 'nominal_utm_wkt = %s' % nominal_utm_wkt
     # print 'utm_transect_vertices = %s' % utm_transect_vertices
 
     sample_points = []
@@ -155,4 +155,4 @@ def sample_transect(transect_vertices, crs, sample_metres):
             sample_points.pop()
 
     return transform_coords(
-        sample_points, nominal_utm_crs, crs), sample_metres
+        sample_points, nominal_utm_wkt, wkt), sample_metres

@@ -23,28 +23,33 @@ Created on 16Nov.,2016
 import re
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
-def get_spatial_ref_from_crs(crs):
+def get_spatial_ref_from_wkt(wkt):
+    '''
+    Function to return SpatialReference object for supplied WKT
+    @param wkt: Well-known text for SpatialReference
+    @return spatial_ref: SpatialReference from WKT
+    '''
     spatial_ref = SpatialReference()
     # Check for EPSG then Well Known Text
-    epsg_match = re.match('^EPSG:(\d+)$', crs)
+    epsg_match = re.match('^EPSG:(\d+)$', wkt)
     if epsg_match:
         spatial_ref.ImportFromEPSG(int(epsg_match.group(1)))
     else:  # Assume valid WKT definition
-        spatial_ref.ImportFromWkt(crs)
+        spatial_ref.ImportFromWkt(wkt)
     return spatial_ref
 
-def get_coordinate_transformation(from_crs, to_crs):
+def get_coordinate_transformation(from_wkt, to_wkt):
     '''
     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
-    @parameter from_crs: WKT or "EPSG:nnnn" string from which to transform
-    @parameter to_crs: WKT or "EPSG:nnnn" string to which to transform
+    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
+    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
     '''
-    # Assume native coordinates if no crs given
-    if from_crs == to_crs:
+    # Assume native coordinates if no wkt given
+    if from_wkt == to_wkt:
         return None
     
-    from_spatial_ref = get_spatial_ref_from_crs(from_crs)
-    to_spatial_ref = get_spatial_ref_from_crs(to_crs)
+    from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
+    to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
 
     # This is probably redundant
     if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
@@ -52,7 +57,7 @@ def get_coordinate_transformation(from_crs, to_crs):
 
     return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
 
-def get_utm_crs(coordinate, from_crs):
+def get_utm_wkt(coordinate, from_wkt):
     '''
     Function to return CRS for UTM zone of specified coordinates.
     Used to transform coords to metres
@@ -67,7 +72,7 @@ def get_utm_crs(coordinate, from_crs):
             return 1
 
     latlon_coord_trans = get_coordinate_transformation(
-        from_crs, 'EPSG:4326')
+        from_wkt, 'EPSG:4326')
     latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.TransformPoint(
         *coordinate)[0:2]
 
@@ -79,15 +84,15 @@ def get_utm_crs(coordinate, from_crs):
 
     return utm_spatial_ref.ExportToWkt()
 
-def transform_coords(coordinates, from_crs, to_crs):
+def transform_coords(coordinates, from_wkt, to_wkt):
     '''
     Convert coordinates between specified coordinate reference systems
     @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-    @parameter from_crs: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
-    @parameter to_crs: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
+    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
+    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
     '''
     coord_trans = get_coordinate_transformation(
-        from_crs, to_crs)  # Transform from specified CRS to native CRS
+        from_wkt, to_wkt)  # Transform from specified CRS to native CRS
 
     if not coord_trans:  # No transformation required
         return list(coordinates) # Return copy of original coordinates

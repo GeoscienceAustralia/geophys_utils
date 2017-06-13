@@ -29,7 +29,7 @@ import itertools
 import argparse
 import re
 from distutils.util import strtobool
-from geophys_utils._crs_utils import get_spatial_ref_from_crs
+from geophys_utils._crs_utils import get_spatial_ref_from_wkt
 
 class NetCDFUtils(object):
     '''
@@ -94,10 +94,10 @@ class NetCDFUtils(object):
             self.crs = self.grid_mapping_variable.spatial_ref
         except:
             try:
-                self.crs = get_spatial_ref_from_crs(self.grid_mapping_variable.epsg_code).ExportToWkt()
+                self.wkt = get_spatial_ref_from_wkt(self.grid_mapping_variable.epsg_code).ExportToWkt()
             except:
                 #TODO: Do something a bit better than assuming unprojected WGS84
-                self.crs = get_spatial_ref_from_crs('EPSG:4326').ExportToWkt()
+                self.wkt = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
 
     def copy(self, nc_out_path, 
                  datatype_map_dict={},

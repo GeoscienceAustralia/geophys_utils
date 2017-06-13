@@ -22,13 +22,10 @@ Created on 14Sep.,2016
 '''
 import numpy as np
 import math
-import re
 from scipy.ndimage import map_coordinates
-from osgeo.osr import SpatialReference, CoordinateTransformation
-from geophys_utils._crs_utils import get_utm_crs, transform_coords
+from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
-from geophys_utils._data_stats import DataStats
 from geophys_utils._netcdf_utils import NetCDFUtils
 
 
@@ -71,16 +68,16 @@ class NetCDFGridUtils(NetCDFUtils):
             
             self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
         
-            nominal_utm_crs = get_utm_crs(centre_pixel_coords[0], self.crs)
+            nominal_utm_wkt = get_utm_wkt(centre_pixel_coords[0], self.wkt)
             centre_pixel_utm_coords = transform_coords(
-                centre_pixel_coords, from_crs=self.crs, to_crs=nominal_utm_crs)          
+                centre_pixel_coords, from_wkt=self.wkt, to_wkt=nominal_utm_wkt)          
             
             self.nominal_pixel_metres = [round(abs(centre_pixel_utm_coords[1][
                         dim_index] - centre_pixel_utm_coords[0][dim_index]), 8) for dim_index in range(2)]
             
             
             centre_pixel_wgs84_coords = transform_coords(
-                centre_pixel_coords, from_crs=self.crs, to_crs='EPSG:4326')
+                centre_pixel_coords, from_wkt=self.wkt, to_wkt='EPSG:4326')
             
             self.nominal_pixel_degrees = [round(abs(centre_pixel_wgs84_coords[1][
                         dim_index] - centre_pixel_wgs84_coords[0][dim_index]), 8) for dim_index in range(2)]
@@ -156,19 +153,19 @@ class NetCDFGridUtils(NetCDFUtils):
                                                                    ]
                             ]
         
-        self.wgs84_bbox = transform_coords(self.native_bbox, from_crs=self.crs, to_crs='EPSG:4326')
+        self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
 
         # Create bounds
         self.bounds = self.native_bbox[0] + self.native_bbox[2]
 
-    def get_indices_from_coords(self, coordinates, crs=None):
+    def get_indices_from_coords(self, coordinates, wkt=None):
         '''
         Returns list of netCDF array indices corresponding to coordinates to support nearest neighbour queries
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-        @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
+        @parameter wkt: Coordinate Reference System for coordinates. None == native NetCDF CRS
         '''
-        crs = crs or self.crs
-        native_coordinates = transform_coords(coordinates, self.crs, crs)
+        wkt = wkt or self.wkt
+        native_coordinates = transform_coords(coordinates, self.wkt, wkt)
         
 
         # Convert coordinates to same dimension ordering as array
@@ -194,14 +191,14 @@ class NetCDFGridUtils(NetCDFUtils):
 
         return indices
 
-    def get_fractional_indices_from_coords(self, coordinates, crs=None):
+    def get_fractional_indices_from_coords(self, coordinates, wkt=None):
         '''
         Returns list of fractional array indices corresponding to coordinates to support interpolation
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-        @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
+        @parameter wkt: Coordinate Reference System for coordinates. None == native NetCDF CRS
         '''
-        crs = crs or self.crs
-        native_coordinates = transform_coords(coordinates, self.crs, crs)
+        wkt = wkt or self.wkt
+        native_coordinates = transform_coords(coordinates, self.wkt, wkt)
 
         self.pixel_size
 
@@ -229,12 +226,12 @@ class NetCDFGridUtils(NetCDFUtils):
 
         return fractional_indices
 
-    def get_value_at_coords(self, coordinates, crs=None,
+    def get_value_at_coords(self, coordinates, wkt=None,
                             max_bytes=None, variable_name=None):
         '''
         Returns list of array values at specified coordinates
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-        @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
+        @parameter wkt: WKT for coordinate Coordinate Reference System. None == native NetCDF CRS
         @parameter max_bytes: Maximum number of bytes to read in a single query. Defaults to NetCDFGridUtils.DEFAULT_MAX_BYTES
         @parameter variable_name: NetCDF variable_name if not default data variable
         '''
@@ -249,7 +246,7 @@ class NetCDFGridUtils(NetCDFUtils):
 
         no_data_value = data_variable._FillValue
 
-        indices = self.get_indices_from_coords(coordinates, crs)
+        indices = self.get_indices_from_coords(coordinates, wkt)
 
         # Allow for the fact that the NetCDF advanced indexing will pull back
         # n^2 cells rather than n
@@ -291,11 +288,11 @@ class NetCDFGridUtils(NetCDFUtils):
             return data_variable[indices[0], indices[1]]
 
     def get_interpolated_value_at_coords(
-            self, coordinates, crs=None, max_bytes=None, variable_name=None):
+            self, coordinates, wkt=None, max_bytes=None, variable_name=None):
         '''
         Returns list of interpolated array values at specified coordinates
         @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-        @parameter crs: Coordinate Reference System for coordinates. None == native NetCDF CRS
+        @parameter wkt: Coordinate Reference System for coordinates. None == native NetCDF CRS
         @parameter max_bytes: Maximum number of bytes to read in a single query. Defaults to NetCDFGridUtils.DEFAULT_MAX_BYTES
         @parameter variable_name: NetCDF variable_name if not default data variable
         '''
@@ -312,7 +309,7 @@ class NetCDFGridUtils(NetCDFUtils):
         no_data_value = data_variable._FillValue
 
         fractional_indices = self.get_fractional_indices_from_coords(
-            coordinates, crs)
+            coordinates, wkt)
 
         # Make this a vectorised operation for speed (one query for as many
         # points as possible)
@@ -340,7 +337,7 @@ class NetCDFGridUtils(NetCDFUtils):
             # Mask out any coordinates falling in no-data areas. Need to do this to stop no-data value from being interpolated
             # This is a bit ugly.
             result_array[np.array(self.get_value_at_coords(
-                coordinates, crs, max_bytes, variable_name)) == no_data_value] = no_data_value
+                coordinates, wkt, max_bytes, variable_name)) == no_data_value] = no_data_value
 
             return list(result_array)
         except AssertionError:
@@ -348,25 +345,25 @@ class NetCDFGridUtils(NetCDFUtils):
                 [[fractional_indices[0]], [fractional_indices[1]]]), cval=no_data_value)
 
 
-    def sample_transect(self, transect_vertices, crs=None, sample_metres=None):
+    def sample_transect(self, transect_vertices, wkt=None, sample_metres=None):
         '''
         Function to return a list of sample points sample_metres apart along lines between transect vertices
         @param transect_vertices: list or array of transect vertex coordinates
-        @param crs: coordinate reference system for transect_vertices
+        @param wkt: coordinate reference system for transect_vertices
         @param sample_metres: distance between sample points in metres
         '''
-        crs = crs or self.crs
+        wkt = wkt or self.wkt
         sample_metres = sample_metres or self.default_sample_metres
-        return sample_transect(transect_vertices, crs, sample_metres)
+        return sample_transect(transect_vertices, wkt, sample_metres)
         
 
-    def get_convex_hull(self, to_crs=None):
+    def get_convex_hull(self, to_wkt=None):
         try:
             convex_hull = netcdf2convex_hull(self.netcdf_dataset, NetCDFGridUtils.DEFAULT_MAX_BYTES)
         except:
             #logger.info('Unable to compute convex hull. Using rectangular bounding box instead.')
             convex_hull = self.native_bbox
             
-        return transform_coords(convex_hull, self.crs, to_crs)
+        return transform_coords(convex_hull, self.wkt, to_wkt)
 
         

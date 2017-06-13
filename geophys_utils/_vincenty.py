@@ -153,9 +153,9 @@ class GreatCircle(object):
             azimuth = self.azimuth12
             lons = [math.degrees(lonpt)]
             lats = [math.degrees(latpt)]
-            for n in range(npoints-2):
-                latptnew, lonptnew, alpha21=vinc_pt(self.f,self.a,latpt,lonpt,azimuth,incdist)
-                d,azimuth, a21=vinc_dist(self.f,self.a,latptnew,lonptnew,lat2,lon2)
+            for _n in range(npoints-2):
+                latptnew, lonptnew, _alpha21=vinc_pt(self.f,self.a,latpt,lonpt,azimuth,incdist)
+                d,azimuth, _a21=vinc_dist(self.f,self.a,latptnew,lonptnew,lat2,lon2)
                 lats.append(math.degrees(latptnew))
                 lons.append(math.degrees(lonptnew))
                 latpt = latptnew; lonpt = lonptnew
