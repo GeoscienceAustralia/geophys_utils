@@ -59,3 +59,6 @@ target/
 
 # pycharm project files
 .idea/
+
+# iPython checkpoints
+*-checkpoint.ipynb
