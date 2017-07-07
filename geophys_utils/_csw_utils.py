@@ -369,7 +369,7 @@ class CSWUtils(object):
         del dataset_distribution_dict['distributions']
 
         # Convert lists to strings
-        dataset_distribution_dict['keywords'] = ', '.join(dataset_distribution_dict['keywords'])
+        dataset_distribution_dict['keywords'] = ', '.join(sorted(dataset_distribution_dict['keywords']))
         
         bbox = dataset_distribution_dict.get('bbox')
         if bbox:
