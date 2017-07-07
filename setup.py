@@ -48,6 +48,7 @@ setup(name='geophys_utils',
             'tempfile',
             'unittest',
             'yaml'
+            'unidecode'
             ],
       url='https://github.com/alex-ip/geophys_utils',
       author='Alex Ip - Geoscience Australia',

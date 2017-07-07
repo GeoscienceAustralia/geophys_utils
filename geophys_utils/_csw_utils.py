@@ -32,6 +32,7 @@ from owslib.wcs import WebCoverageService
 import netCDF4
 import yaml
 from pprint import pprint
+from unidecode import unidecode
 
 class CSWUtils(object):
     '''
@@ -621,9 +622,8 @@ def main():
                                  )
             header_printed = True;
         
-        # Quote fields if required
-        #TODO: Fix problem with non-ascii characters
-        print delimiter.join([quote_delimitedtext(str(distribution.get(field) or ''), delimiter)
+        # Decode and quote fields if required
+        print delimiter.join([quote_delimitedtext(unidecode(distribution.get(field) or ''), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )
