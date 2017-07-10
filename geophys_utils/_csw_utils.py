@@ -516,8 +516,11 @@ def main():
         '''
         Helper function to quote text containing delimiters or whitespace
         '''
-        if delimiter in text or re.search('\s', text):
-            return quote_char + text + quote_char
+        if delimiter in text or quote_char in text or re.search('\s', text):
+            if delimiter == ',': # Use double quote to escape quote character for CSV
+                return quote_char + text.replace(quote_char, quote_char + quote_char) + quote_char
+            else: # Use backslash to escape quote character for tab or space delimited text
+                return quote_char + text.replace(quote_char, '\\' + quote_char) + quote_char
         else:
             return text
             
