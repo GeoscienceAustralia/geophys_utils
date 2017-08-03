@@ -91,7 +91,7 @@ class NetCDFUtils(object):
 
             
         try:
-            self.crs = self.grid_mapping_variable.spatial_ref
+            self.wkt = self.grid_mapping_variable.spatial_ref
         except:
             try:
                 self.wkt = get_spatial_ref_from_wkt(self.grid_mapping_variable.epsg_code).ExportToWkt()
