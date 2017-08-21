@@ -22,7 +22,7 @@ Created on 23Nov.,2016
 '''
 import numpy as np
 import math
-from geophys_utils._crs_utils import get_utm_wkt, transform_coords
+from ._crs_utils import get_utm_wkt, transform_coords
 
 
 def line_length(line):

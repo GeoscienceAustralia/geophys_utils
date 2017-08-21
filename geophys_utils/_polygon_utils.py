@@ -28,7 +28,7 @@ from scipy import ndimage
 import shapely.geometry as geometry
 from shapely.ops import cascaded_union, polygonize
 from scipy.spatial import Delaunay
-from geophys_utils._array_pieces import array_pieces
+from ._array_pieces import array_pieces
 
 
 def get_grid_edge_points(grid_array, dimension_ordinates, nodata_value, max_bytes=None):

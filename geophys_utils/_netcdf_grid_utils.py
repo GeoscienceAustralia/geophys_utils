@@ -23,10 +23,10 @@ Created on 14Sep.,2016
 import numpy as np
 import math
 from scipy.ndimage import map_coordinates
-from geophys_utils._crs_utils import get_utm_wkt, transform_coords
-from geophys_utils._transect_utils import sample_transect
-from geophys_utils._polygon_utils import netcdf2convex_hull
-from geophys_utils._netcdf_utils import NetCDFUtils
+from ._crs_utils import get_utm_wkt, transform_coords
+from ._transect_utils import sample_transect
+from ._polygon_utils import netcdf2convex_hull
+from ._netcdf_utils import NetCDFUtils
 
 
 class NetCDFGridUtils(NetCDFUtils):
@@ -200,7 +200,7 @@ class NetCDFGridUtils(NetCDFUtils):
         wkt = wkt or self.wkt
         native_coordinates = transform_coords(coordinates, self.wkt, wkt)
 
-        self.pixel_size
+        #self.pixel_size
 
         # Convert coordinates to same order as array
         if self.YX_order:
