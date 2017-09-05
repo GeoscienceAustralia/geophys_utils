@@ -626,7 +626,7 @@ def main():
             header_printed = True;
         
         # Decode and quote fields if required
-        print delimiter.join([quote_delimitedtext(unidecode(distribution.get(field) or ''), delimiter)
+        print delimiter.join([quote_delimitedtext(unidecode(unicode(distribution.get(field) or '')), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )
