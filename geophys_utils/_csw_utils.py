@@ -449,33 +449,32 @@ class CSWUtils(object):
         '''
         for record_dict in dataset_dict_generator:
             distribution_dict = None
-            for file_distribution in [distribution for distribution in record_dict['distributions'] 
-                                      if 'file' in distribution['protocol'].lower()
-                                      and re.match('.*\.nc$', distribution['url'])
-                                      ]:
-                filename = re.sub('^file://', '', file_distribution['url']) # Strip leading "file://" from URL
-                try:
-                    if os.path.isfile(filename) and netCDF4.Dataset(filename): # Test for valid netCDF file
-                        #print 'file found'
-                        file_distribution['url'] = filename # Change URL to straight filename
-                        distribution_dict = file_distribution
-                        break
-                except:
-                    print 'Unable to open netCDF file %s' % filename
-                    pass
+            for file_distribution in record_dict['distributions']:
+                if 'file' in file_distribution['protocol'].lower():
+                    match = re.match('(^file://)*(.*\.nc)$', file_distribution['url'])
+                    try:
+                        file_distribution['url'] = match.group(2) # Ignore any leading "file://"
+                        if os.path.isfile(file_distribution['url']) and netCDF4.Dataset(file_distribution['url']): # Test for valid netCDF file
+                            #print 'file found'
+                            distribution_dict = file_distribution
+                            break
+                    except:
+                        print 'Unable to open netCDF file %s' % file_distribution['url']
+                        pass
                     
             if not distribution_dict:
                 # Check for valid OPeNDAP endpoint if no valid file found
-                for opendap_distribution in [distribution for distribution in record_dict['distributions'] 
-                                             if 'opendap' in distribution['protocol'].lower()
-                                             and re.match('.*\.nc$', distribution['url'])
-                                             ]:
-                    try:
-                        if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
-                            distribution_dict = opendap_distribution
-                            break
-                    except:
-                        pass
+                for opendap_distribution in record_dict['distributions']:
+                    if 'opendap' in opendap_distribution['protocol'].lower():
+                        match = re.match('(.*\.nc)(\.html)*$', opendap_distribution['url'])
+                        try:
+                            opendap_distribution['url'] = match.group(1) # Ignore any trailing ".html"
+                            if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                                distribution_dict = opendap_distribution
+                                break
+                        except:
+                            print 'Unable to open OPeNDAP URL %s' % opendap_distribution['url']
+                            pass
             
             if distribution_dict:
                 yield self.flatten_distribution_dict(record_dict, distribution_dict)
