@@ -196,11 +196,12 @@ class NetCDFLineUtils(NetCDFUtils):
         line_number_array = self.line[...]
         line_start_end_array = self.line_start_end[...]
         
-        # Deal with single line number not in list
-        single_line = type(line_numbers) in [int, long, np.int32, np.int64]
-        if single_line: 
+        # Convert single line number to single element list
+        try:
+            _line_numbers_iterator = iter(line_numbers)
+        except TypeError:
             line_numbers = [line_numbers]
-            
+
         # Yield masks for all lines if not specified
         if line_numbers is None:
             line_numbers = line_number_array
@@ -229,9 +230,10 @@ class NetCDFLineUtils(NetCDFUtils):
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
-        # Deal with single line number not in list
-        single_line = type(line_numbers) in [int, long, np.int32, np.int64]
-        if single_line: 
+        # Convert single line number to single element list
+        try:
+            _line_numbers_iterator = iter(line_numbers)
+        except TypeError:
             line_numbers = [line_numbers]
 
         # Return all lines if not specified
