@@ -201,12 +201,16 @@ class NetCDFLineUtils(NetCDFUtils):
         if single_line: 
             line_numbers = [line_numbers]
             
-        # Return all lines if not specified
+        # Yield masks for all lines if not specified
         if line_numbers is None:
             line_numbers = line_number_array
             
         for line_number in line_numbers:
-            line_index = int(np.where(line_number_array == line_number)[0])
+            try:
+                line_index = int(np.where(line_number_array == line_number)[0])
+            except TypeError:
+                print 'Invalid line number %d' % line_number
+                continue # Should this be break?
             
             line_mask = np.zeros((self.point_count,), bool)
             line_mask[line_start_end_array[line_index,0]:line_start_end_array[line_index,1]] = True
