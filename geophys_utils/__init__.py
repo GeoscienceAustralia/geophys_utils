@@ -31,3 +31,4 @@ from geophys_utils._crs_utils import get_spatial_ref_from_wkt, get_coordinate_tr
 from geophys_utils._gdal_grid_utils import get_gdal_wcs_dataset, get_gdal_grid_values
 from geophys_utils._transect_utils import line_length, point_along_line, utm_coords, coords2distance, sample_transect
 from geophys_utils._dem_utils import DEMUtils
+from geophys_utils._array2file import array2file
