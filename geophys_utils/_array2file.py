@@ -30,7 +30,7 @@ def array2file(data_arrays,
     for band_index in range(len(data_arrays)):
         raster_band = gdal_dataset.GetRasterBand(band_index+1)
         raster_band.WriteArray(data_arrays[band_index])
+        raster_band.FlushCache()
         
     gdal_dataset.FlushCache()
-        
-    return gdal_dataset    
+    del gdal_dataset    
