@@ -33,4 +33,4 @@ def array2file(data_arrays,
         raster_band.FlushCache()
         
     gdal_dataset.FlushCache()
-    del gdal_dataset    
+    return gdal_dataset    
