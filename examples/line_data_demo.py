@@ -129,15 +129,15 @@ def dataset_point_generator(dataset_list,
             #print netcdf_line_utils.__dict__
             
             if flight_lines_only:
+                print 'Excluding tie-lines'
                 line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
+                line_mask = np.zeros(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
+                for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
+                    line_mask = np.logical_or(line_mask, single_line_mask)
             else:
-                line_numbers = None
-                
-            line_mask = np.zeros(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
-            for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
-                line_mask = np.logical_or(line_mask, single_line_mask)
-                
+                line_mask = np.ones(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
             
+            print 'Computing spatial mask'
             selection_indices = np.where(np.logical_and(netcdf_line_utils.get_spatial_mask(reprojected_bounds),
                                                         line_mask
                                                         ))[0]
