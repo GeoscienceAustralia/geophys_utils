@@ -14,6 +14,7 @@ import requests
 import math
 from scipy.interpolate import griddata
 from geophys_utils import transform_coords, get_utm_wkt, get_spatial_ref_from_wkt
+from geophys_utils._csw_utils import date_string2datetime
 
 
 # Setup proxy as required
@@ -54,7 +55,11 @@ WGS84_WKT = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
 #print utm_bounds
 
 
-def get_netcdf_datasets(keywords, wgs84_bounds, csw_url=None):
+def get_netcdf_datasets(keywords, 
+                        wgs84_bounds=None, 
+                        start_date_string=None, 
+                        end_date_string=None, 
+                        csw_url=None):
     '''
     Find all datasets of interest and return a list of NetCDF file paths or OPeNDAP web service endpoints
     '''    
@@ -66,13 +71,25 @@ def get_netcdf_datasets(keywords, wgs84_bounds, csw_url=None):
     except:
         cswu = CSWUtils(csw_url, verify=False) 
         
+    if start_date_string:
+        start_datetime = date_string2datetime(start_date_string)
+        assert start_datetime is not None, 'Invalid date string for start date'
+    else:
+        start_datetime = None
+        
+    if end_date_string:
+        end_datetime = date_string2datetime(end_date_string)
+        assert end_datetime is not None, 'Invalid date string for end date'
+    else:
+        end_datetime = None
+        
     print 'Querying CSW'
     record_list = [record for record in cswu.query_csw(keyword_list=keywords,
                                       #anytext_list=allwords,
                                       #titleword_list=titlewords,
                                       bounding_box=wgs84_bounds,
-                                      #start_datetime=start_date,
-                                      #stop_datetime=end_date,
+                                      start_datetime=start_datetime,
+                                      stop_datetime=end_datetime,
                                       #max_total_records=2000
                                       )
               ]
@@ -91,50 +108,69 @@ def dataset_point_generator(dataset_list,
                             wgs84_bounds, 
                             variable_name, 
                             coordinate_wkt,
+                            flight_lines_only=True,
                             min_points=None,
-                            max_points=None):
+                            max_points=None
+                            ):
     '''
     Generator yielding coordinates and values of the specified variable for all points from the supplied dataset list 
     which fall within bounds
     '''    
     line_dataset_count = 0
     for dataset in dataset_list:
+        line_data = {}
         print 'Reading and reprojecting points from line dataset %s' % dataset
-        if True:#try:
+        try:
             nc_dataset = Dataset(dataset)
             mag_awags_variable = nc_dataset.variables[variable_name]
             netcdf_line_utils = NetCDFLineUtils(nc_dataset) 
+            
             reprojected_bounds = netcdf_line_utils.get_reprojected_bounds(wgs84_bounds, WGS84_WKT, netcdf_line_utils.wkt)
             #print netcdf_line_utils.__dict__
-            spatial_selection_indices = np.where(netcdf_line_utils.get_spatial_mask(reprojected_bounds))[0]
-            print '%d/%d points found in bounding box' % (len(spatial_selection_indices), len(mag_awags_variable))
+            
+            if flight_lines_only:
+                line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
+            else:
+                line_numbers = None
+                
+            line_mask = np.zeros(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
+            for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
+                line_mask = np.logical_or(line_mask, single_line_mask)
+                
+            
+            selection_indices = np.where(np.logical_and(netcdf_line_utils.get_spatial_mask(reprojected_bounds),
+                                                        line_mask
+                                                        ))[0]
+            print '%d/%d points found in bounding box' % (len(selection_indices), len(mag_awags_variable))
             
             # Enforce min/max point counts
-            if min_points and len(spatial_selection_indices) < min_points:
+            if min_points and len(selection_indices) < min_points:
                 print 'Skipping dataset with < %d points' % min_points
                 continue
-            if max_points and len(spatial_selection_indices) > max_points:
+            if max_points and len(selection_indices) > max_points:
                 print 'Skipping dataset with > %d points' % max_points
                 continue
                 
-            coordinates = np.array(transform_coords(netcdf_line_utils.xycoords[spatial_selection_indices],
+            coordinates = np.array(transform_coords(netcdf_line_utils.xycoords[selection_indices],
                                                  netcdf_line_utils.wkt, 
                                                  coordinate_wkt))
-            values = mag_awags_variable[spatial_selection_indices]
+            values = mag_awags_variable[selection_indices]
             
             mask=np.ma.getmask(values)
             if mask is not np.ma.nomask:
                 print 'Discarding %d invalid values' % np.count_nonzero(mask)
-                values = values[~mask]
+                values = values[~mask].data
                 coordinates = coordinates[~mask]
                 print "%d valid points were found" % values.shape[0]
             
             line_dataset_count += 1
             yield dataset, coordinates, values
     
-        else:#except Exception as e:
+        except Exception as e:
             print 'Unable to read line dataset %s: %s' % (dataset, e.message)
-    
+        finally:
+            del netcdf_line_utils
+                
 def get_points_from_dict(dataset_point_dict):
     '''
     @param dataset_point_dict: {<dataset_path>: (<coordinates>, <values>),...}

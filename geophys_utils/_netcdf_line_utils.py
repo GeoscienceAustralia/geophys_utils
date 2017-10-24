@@ -254,11 +254,12 @@ class NetCDFLineUtils(NetCDFUtils):
             _line_number, line_mask = self.get_line_masks(line_numbers=line_number).next() # Only one mask per line
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
-            line_dict = {'coordinates': self.xycoords[point_indices]}
-            for variable_name in variables:
-                line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
+            if len(point_indices):
+                line_dict = {'coordinates': self.xycoords[point_indices]}
+                for variable_name in variables:
+                    line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
         
-            yield line_number, line_dict
+                yield line_number, line_dict
             
             
             
