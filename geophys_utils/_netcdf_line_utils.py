@@ -153,6 +153,8 @@ class NetCDFLineUtils(NetCDFUtils):
         self.line_start_end[:,1] = fetch_array(index_count_variable)
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
+        self.kdtree = None
+        
     def __del__(self):
         '''
         NetCDFLineUtils Destructor
@@ -471,9 +473,12 @@ class NetCDFLineUtils(NetCDFUtils):
             print 'Finished computing partial KDTree.'
         else:
             max_distance = np.inf
-            print 'Computing Full KDTree (WARNING: May take a long time)...'
-            kdtree = cKDTree(data=self.xycoords[:])
-            print 'Finished computing Full KDTree.'
+            if not self.kdtree:
+                print 'Computing Full KDTree (WARNING: May take a long time)...'
+                self.kdtree = cKDTree(data=self.xycoords[:])
+                print 'Finished computing Full KDTree.'
+            kdtree = self.kdtree
+
             
         distances, indices = kdtree.query(x=np.array(reprojected_coords),
                                                k=points_required,
