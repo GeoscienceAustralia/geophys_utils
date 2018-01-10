@@ -484,4 +484,8 @@ class NetCDFLineUtils(NetCDFUtils):
                                                k=points_required,
                                                distance_upper_bound=max_distance)
         
-        return distances, indices
+        if max_distance == np.inf:
+            return distances, indices
+        else: # Return indices of complete coordinate array, not the spatial subset
+            return distances, np.where(spatial_mask)[0][indices]
+            
