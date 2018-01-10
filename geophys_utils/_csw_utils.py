@@ -102,7 +102,7 @@ class CSWUtils(object):
         else:
             start_date_string = '1900-01-01' # Distant past
 
-        if start_datetime:
+        if stop_datetime:
             stop_date_string = stop_datetime.date().isoformat()
         else:
             stop_date_string = '2100-01-01' # Distant future

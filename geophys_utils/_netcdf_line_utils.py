@@ -30,6 +30,7 @@ from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
+from scipy.spatial.ckdtree import cKDTree
 
 class NetCDFLineUtils(NetCDFUtils):
     '''
@@ -106,7 +107,7 @@ class NetCDFLineUtils(NetCDFUtils):
 
         # Define bounds
         self.bounds = [min_lon, min_lat, max_lon, max_lat]
-
+        
         line_dimension = self.netcdf_dataset.dimensions['line']
         self.line_count = len(line_dimension)
         
@@ -151,6 +152,8 @@ class NetCDFLineUtils(NetCDFUtils):
         self.line_start_end[:,0] = fetch_array(index_line_variable)
         self.line_start_end[:,1] = fetch_array(index_count_variable)
         self.line_start_end[:,1] += self.line_start_end[:,0]
+        
+        self.kdtree = None
         
     def __del__(self):
         '''
@@ -254,11 +257,12 @@ class NetCDFLineUtils(NetCDFUtils):
             _line_number, line_mask = self.get_line_masks(line_numbers=line_number).next() # Only one mask per line
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
-            line_dict = {'coordinates': self.xycoords[point_indices]}
-            for variable_name in variables:
-                line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
+            if len(point_indices):
+                line_dict = {'coordinates': self.xycoords[point_indices]}
+                for variable_name in variables:
+                    line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
         
-            yield line_number, line_dict
+                yield line_number, line_dict
             
             
             
@@ -435,3 +439,57 @@ class NetCDFLineUtils(NetCDFUtils):
         _utm_wkt, utm_coord_array = utm_coords(coordinate_array, wkt)
         return coords2distance(utm_coord_array)
 
+
+    def nearest_neighbours(self, coordinates, wkt=None, points_required=1, max_distance=None):
+        '''
+        Function to determine nearest neighbours using cKDTree
+        N.B: All distances are expressed in the native dataset CRS
+        
+        @param coordinates: two-element XY coordinate tuple, list or array
+        @param wkt: Well-known text of coordinate CRS - defaults to native dataset CRS
+        @param points_required: Number of points to retrieve. Default=1
+        @param max_distance: Maximum distance to search from target coordinate - 
+            STRONGLY ADVISED TO SPECIFY SENSIBLE VALUE OF max_distance TO LIMIT SEARCH AREA
+        
+        @return distances: distances from the target coordinate for each of the points_required nearest points
+        @return indices: point indices for each of the points_required nearest points
+        '''
+        if wkt:
+            reprojected_coords = transform_coords(coordinates, wkt, self.wkt)
+        else:
+            reprojected_coords = coordinates
+            
+        #TODO: Get rid of print statements
+        # Set up KDTree for nearest neighbour queries
+        if max_distance:
+            print 'Computing spatial subset mask...'
+            spatial_mask = self.get_spatial_mask([reprojected_coords[0] - max_distance,
+                                                  reprojected_coords[1] - max_distance,
+                                                  reprojected_coords[0] + max_distance,
+                                                  reprojected_coords[1] + max_distance
+                                                  ]
+                                                 )
+            if not np.any(spatial_mask):
+                print 'No points within distance {} of {}'.format(max_distance, reprojected_coords)
+                return None, None
+            print 'Computing partial KDTree with {} points...'.format(np.count_nonzero(spatial_mask))
+            kdtree = cKDTree(data=self.xycoords[spatial_mask])
+            print 'Finished computing partial KDTree.'
+        else:
+            max_distance = np.inf
+            if not self.kdtree:
+                print 'Computing Full KDTree (WARNING: May take a long time)...'
+                self.kdtree = cKDTree(data=self.xycoords[:])
+                print 'Finished computing Full KDTree.'
+            kdtree = self.kdtree
+
+            
+        distances, indices = kdtree.query(x=np.array(reprojected_coords),
+                                               k=points_required,
+                                               distance_upper_bound=max_distance)
+        
+        if max_distance == np.inf:
+            return distances, indices
+        else: # Return indices of complete coordinate array, not the spatial subset
+            return distances, np.where(spatial_mask)[0][indices]
+            
