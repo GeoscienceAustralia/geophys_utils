@@ -459,6 +459,7 @@ class NetCDFLineUtils(NetCDFUtils):
         else:
             reprojected_coords = coordinates
             
+        #TODO: Get rid of print statements
         # Set up KDTree for nearest neighbour queries
         if max_distance:
             print 'Computing spatial subset mask...'
@@ -468,6 +469,9 @@ class NetCDFLineUtils(NetCDFUtils):
                                                   reprojected_coords[1] + max_distance
                                                   ]
                                                  )
+            if not np.any(spatial_mask):
+                print 'No points within distance {} of {}'.format(max_distance, reprojected_coords)
+                return None, None
             print 'Computing partial KDTree with {} points...'.format(np.count_nonzero(spatial_mask))
             kdtree = cKDTree(data=self.xycoords[spatial_mask])
             print 'Finished computing partial KDTree.'
