@@ -473,7 +473,7 @@ class NetCDFLineUtils(NetCDFUtils):
                 print 'No points within distance {} of {}'.format(max_distance, reprojected_coords)
                 return None, None
             print 'Computing partial KDTree with {} points...'.format(np.count_nonzero(spatial_mask))
-            kdtree = cKDTree(data=self.xycoords[spatial_mask])
+            kdtree = cKDTree(data=self.xycoords[np.where(spatial_mask)[0]])
             print 'Finished computing partial KDTree.'
         else:
             max_distance = np.inf
