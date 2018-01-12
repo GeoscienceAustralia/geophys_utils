@@ -60,7 +60,7 @@ class NearestGeophysPointFinder(object):
         metadata_csv_file.close()
         
         
-    def dataset_metadata_generator(self, coordinate, max_distance=None, metadata_filter_dict={}):
+    def dataset_metadata_generator(self, coordinate_list, max_distance=None, metadata_filter_dict={}):
         '''
         Generator returning all metadata dicts near given coordinate
         '''
@@ -68,30 +68,34 @@ class NearestGeophysPointFinder(object):
         max_distance = max_distance or 0
         
         for metadata_dict in self._metadata:
-            if not (float(metadata_dict['geospatial_lon_min']) <= (coordinate[0] + max_distance)
-                and float(metadata_dict['geospatial_lat_min']) <= (coordinate[1] + max_distance)
-                and float(metadata_dict['geospatial_lon_max']) >= (coordinate[0] - max_distance)
-                and float(metadata_dict['geospatial_lat_max']) >= (coordinate[1] - max_distance)
-                ):
-                continue
-            
-            # Yield only dataset metadata matching all key=value pairs in metadata_filter_dict
-            match_found = True
-            for key, value in metadata_filter_dict.iteritems():
-                match_found = match_found and metadata_dict.get(key) == value
-                if not match_found:
-                    break
+            for coordinate in coordinate_list:
+                if not (float(metadata_dict['geospatial_lon_min']) <= (coordinate[0] + max_distance)
+                    and float(metadata_dict['geospatial_lat_min']) <= (coordinate[1] + max_distance)
+                    and float(metadata_dict['geospatial_lon_max']) >= (coordinate[0] - max_distance)
+                    and float(metadata_dict['geospatial_lat_max']) >= (coordinate[1] - max_distance)
+                    ):
+                    continue
                 
-            if match_found:
-                yield metadata_dict
+                # Yield only dataset metadata matching all key=value pairs in metadata_filter_dict
+                match_found = True
+                for key, value in metadata_filter_dict.iteritems():
+                    match_found = match_found and metadata_dict.get(key) == value
+                    if not match_found:
+                        break
+                    
+                if match_found:
+                    yield metadata_dict
+                    break # Only return one record for any number of coordinates
 
 
-    def get_nearest_point_data(self, coordinate, points_required=1, max_distance=None, metadata_filter_dict={}):
+    def get_nearest_point_data(self, coordinate_list, points_required=1, max_distance=None, metadata_filter_dict={}):
         '''
         Function returning list of nearest points closest to coordinate with attributes
         '''
-        point_info_list = []
-        for metadata_dict in self.dataset_metadata_generator(coordinate, 
+        point_result_dict = {coordinate: []
+                             for coordinate in coordinate_list
+                             }
+        for metadata_dict in self.dataset_metadata_generator(coordinate_list, 
                                                             max_distance=max_distance,
                                                             metadata_filter_dict=metadata_filter_dict
                                                             ):
@@ -107,34 +111,39 @@ class NearestGeophysPointFinder(object):
                 nc_dataset = netCDF4.Dataset(nc_path, 'r')
                 netcdf_line_utils = NetCDFLineUtils(nc_dataset)
                 
-                distances, point_indices = netcdf_line_utils.nearest_neighbours(coordinate, points_required=points_required, max_distance=max_distance)
-                #logger.debug('distances = {}'.format(distances))
-                #logger.debug('point_indices = {}'.format(point_indices))
-                
-                if point_indices is not None:
-                    # Convert scalars to lists if required
-                    if not hasattr(point_indices, '__iter__'):
-                        distances = [distances]
-                        point_indices = [point_indices]
-                        
-                    logger.info('{} points found in {}'.format(len(point_indices), nc_path))
-                    for found_index in range(len(point_indices)):
-                        point_metadata_dict = dict(metadata_dict)
-                        point_metadata_dict['distance'] = distances[found_index]
-                        point_metadata_dict['coordinate'] = netcdf_line_utils.xycoords[point_indices[found_index]]
-                        
-                        for variable_name in netcdf_line_utils.point_variables:
-                            point_metadata_dict[variable_name] = nc_dataset.variables[variable_name][point_indices[found_index]]
+                for coordinate in coordinate_list:
+                    point_result_list = point_result_dict[coordinate]
+                    distances, point_indices = netcdf_line_utils.nearest_neighbours(coordinate, points_required=points_required, max_distance=max_distance)
+                    #logger.debug('distances = {}'.format(distances))
+                    #logger.debug('point_indices = {}'.format(point_indices))
                     
-                        #logger.debug('\tpoint_metadata_dict = {}'.format(point_metadata_dict))
-                        point_info_list.append(point_metadata_dict)  
-                else:  
-                    logger.info('No points found in {}'.format(nc_path))
+                    if point_indices is not None:
+                        # Convert scalars to lists if required
+                        if not hasattr(point_indices, '__iter__'):
+                            distances = [distances]
+                            point_indices = [point_indices]
+                            
+                        logger.info('{} points near {} found in {}'.format(len(point_indices), coordinate, nc_path))
+                        for found_index in range(len(point_indices)):
+                            point_metadata_dict = dict(metadata_dict)
+                            point_metadata_dict['distance'] = distances[found_index]
+                            point_metadata_dict['coordinate'] = tuple(netcdf_line_utils.xycoords[point_indices[found_index]])
+                            
+                            for variable_name in netcdf_line_utils.point_variables:
+                                point_metadata_dict[variable_name] = nc_dataset.variables[variable_name][point_indices[found_index]]
+                        
+                            #logger.debug('\tpoint_metadata_dict = {}'.format(point_metadata_dict))
+                            point_result_list.append(point_metadata_dict)  
+                    else:  
+                        logger.info('No points near {} found in {}'.format(coordinate, nc_path))
             except Exception as e:
                 logger.error('Failed to retrieve point data from {}: {}'.format(nc_path, e.message))
                 
-                
-        return sorted(point_info_list, key=lambda d: d['distance'], reverse=False) 
+        # Sort results by ascending distance for each point
+        for coordinate in coordinate_list: 
+            point_result_dict[coordinate] = sorted(point_result_dict[coordinate], key=lambda d: d['distance'], reverse=False)       
+        
+        return point_result_dict 
     
 
 def main():
@@ -148,9 +157,9 @@ def main():
         :return: Returns a parsed version of the arguments.
         """
         parser = argparse.ArgumentParser(description='Bulk update records in eCat')
-        parser.add_argument("-c", "--coordinate",
-                            help='coordinate in dataset native CRS expressed as "<xord>,<yord>"',
-                            dest="coordinate",
+        parser.add_argument("-c", "--coordinates",
+                            help='coordinate pairs in dataset native CRS expressed as "(<xord>,<yord>)[,(<xord>,<yord>)...]"',
+                            dest="coordinates",
                             required=True)
         parser.add_argument("-p", "--points_per_dataset",
                             help="Maximum number of points to retrieve from each dataset (default is 1)",
@@ -173,6 +182,28 @@ def main():
 
         return parser.parse_args()    
     
+    def parse_coordinate_list_string(coordinate_list_string):
+        '''
+        Helper function to parse coordinate list from string of form "(<xord>,<yord>)[,(<xord>,<yord>)...]"
+        '''
+        coordinate_list = []
+        try:
+            processing_string = coordinate_list_string.strip()
+            while processing_string:
+                match = re.match('\((([\+\-.0-9]+),(\s*)([\+\-.0-9]+))\)(,(.*))*', processing_string)
+                if match:
+                    coordinate_list.append((float(match.group(2)), float(match.group(4))))
+                    if match.group(6) is not None:
+                        processing_string = match.group(6).strip()
+                    else:
+                        processing_string = None
+                    
+            assert coordinate_list
+            
+            return coordinate_list
+        except:
+            raise Exception('Invalid coordinate list string "{}"'.format(coordinate_list_string))
+    
     # Start of main function    
     # Parse the arguments passed in on the command line
     args = get_args()
@@ -183,11 +214,12 @@ def main():
     else:
         logger.setLevel(logging.INFO)
         
-    coordinate = [int(ordinate.strip()) for ordinate in args.coordinate.split(',')]
-    logger.debug('coordinate={}'.format(coordinate))
+    coordinate_list = parse_coordinate_list_string(args.coordinates)
+
+    logger.debug('coordinate_list = {}'.format(coordinate_list))
         
-    logger.debug('points_per_dataset={}'.format(args.points_per_dataset))
-    logger.debug('max_distance={}'.format(args.max_distance))
+    logger.debug('points_per_dataset = {}'.format(args.points_per_dataset))
+    logger.debug('max_distance = {}'.format(args.max_distance))
 
     # Set up modifier_args dict of key=value pairs
     metadata_filter_dict = {}
@@ -195,24 +227,25 @@ def main():
         match = re.match('^(\w+)=(.*)$', filter_arg)
         metadata_filter_dict[match.group(1)] = match.group(2)
     
-    logger.debug('metadata_filter_dict={}'.format(metadata_filter_dict))
+    logger.debug('metadata_filter_dict = {}'.format(metadata_filter_dict))
 
     ngpf = NearestGeophysPointFinder()
     #logger.debug(ngpf.__dict__)
     
-    point_list = ngpf.get_nearest_point_data(coordinate=coordinate,
+    point_result_dict = ngpf.get_nearest_point_data(coordinate_list=coordinate_list,
                                              points_required=args.points_per_dataset, 
                                              max_distance=args.max_distance,
                                              metadata_filter_dict=metadata_filter_dict
                                              )
     
-    dataset_set = set()
-    for point_dict in point_list:
-        dataset_set.add(point_dict['file_path'])
+    for coordinate, point_list in point_result_dict.iteritems():
+        dataset_set = set()
+        for point_dict in point_list:
+            dataset_set.add(point_dict['file_path'])
+            
         
-    
-    logger.info('A total of {} points were found in {} datasets'.format(len(point_list), len(dataset_set)))
-    logger.debug(pformat(point_list[0:args.points_per_dataset]))
+        logger.info('A total of {} points were found near {} in {} datasets'.format(len(point_list), coordinate, len(dataset_set)))
+        logger.debug(pformat(point_list[0:args.points_per_dataset]))
 
     
 if __name__ == '__main__':
