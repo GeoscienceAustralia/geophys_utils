@@ -31,8 +31,12 @@ from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
 import netCDF4
 import yaml
-from pprint import pprint
+from pprint import pformat
 from unidecode import unidecode
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 class CSWUtils(object):
     '''
@@ -51,14 +55,14 @@ class CSWUtils(object):
         @param timeout: Timeout in seconds. Defaults to value of self.settings['DEFAULT_TIMEOUT']
         @param settings_path: Path to settings file defaults to csw_utils_settings.yml in package directory
         '''
-        self.debug = debug
+        self._debug = None # Initialise private variable
+        self.debug = debug # Set debug property
+        
         package_dir = os.path.dirname(os.path.abspath(__file__))
         settings_path = settings_path or os.path.join(package_dir, 'csw_utils_settings.yml')
         self.settings = yaml.safe_load(open(settings_path))
         
-        if self.debug:
-            print 'Settings:'
-            pprint(self.settings)
+        logger.debug('Settings: {}'.format(pformat(self.settings)))
         
         self.csw_url_list = csw_url_list or self.settings['DEFAULT_CSW_URLS']
         if type(self.csw_url_list) == str:
@@ -75,7 +79,7 @@ class CSWUtils(object):
             try:
                 self.csw_list.append(CatalogueServiceWeb(csw_url, timeout=timeout))
             except Exception as e:
-                print 'Unable to open CSW URL %s: %s' % (csw_url, e.message)
+                logger.warning('Unable to open CSW URL %s: %s' % (csw_url, e.message))
                 
         assert self.csw_list, 'No valid CSW URLs provided'
 
@@ -161,8 +165,7 @@ class CSWUtils(object):
         
         uuid_list = []
         for csw in self.csw_list:
-            if self.debug:
-                print 'Querying %s' % csw.url
+            logger.debug('Querying %s' % csw.url)
 
             startposition = 1 # N.B: This is 1-based, not 0-based
             record_count = 0
@@ -177,12 +180,11 @@ class CSWUtils(object):
                                          maxrecords=max_query_records,
                                          startposition=startposition)
                 except Exception as e:
-                    print 'CSW Query failed: %s' % e.message
+                    logger.warning('CSW Query failed: %s' % e.message)
                     break
                 finally:
-                    if self.debug:
-                        print 'CSW request:\n%s' % csw.request
-                        print 'CSW response:\n %s' % csw.response
+                    logger.debug('CSW request:\n%s' % csw.request)
+                    logger.debug('CSW response:\n %s' % csw.response)
     
                 query_record_count = len(csw.records)
     
@@ -193,13 +195,13 @@ class CSWUtils(object):
                     #===========================================================
                     # # Ignore datasets with no distributions
                     # if not record.uris:
-                    #     #print 'No distribution(s) found for "%s"' % title
+                    #     #logger.warning('No distribution(s) found for "%s"' % title)
                     #     continue
                     #===========================================================
     
                     uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
                     
-    #                print 'bbox = %s' % record.bbox.__dict__
+    #                logger.debug('bbox = %s' % record.bbox.__dict__)
                     #pprint(record.__dict__)
                     record_dict = {'csw': csw.url,
                                    'uuid': uuid,
@@ -257,7 +259,7 @@ class CSWUtils(object):
     
                     record_count += 1
                     yield record_dict
-                    #print '%d distribution(s) found for "%s"' % (len(info_list), title)
+                    logger.debug('%d distribution(s) found for "%s"' % (len(distribution_info_list), title))
     
                     if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
                         raise Exception('Maximum number of records retrieved (%d)' % max_total_records)
@@ -268,7 +270,7 @@ class CSWUtils(object):
                 # Increment start position and repeat query
                 startposition += max_query_records
     
-        #print '%d records found.' % record_count
+        logger.debug('%d records found.' % record_count)
 
 
     def query_csw(self,
@@ -455,12 +457,11 @@ class CSWUtils(object):
                     try:
                         file_distribution['url'] = match.group(2) # Ignore any leading "file://"
                         if os.path.isfile(file_distribution['url']) and netCDF4.Dataset(file_distribution['url']): # Test for valid netCDF file
-                            #print 'file found'
+                            #logger.debug('file found')
                             distribution_dict = file_distribution
                             break
                     except:
-                        print 'Unable to open netCDF file %s' % file_distribution['url']
-                        pass
+                        logger.warning('Unable to open netCDF file %s' % file_distribution['url'])
                     
             if not distribution_dict:
                 # Check for valid OPeNDAP endpoint if no valid file found
@@ -473,12 +474,31 @@ class CSWUtils(object):
                                 distribution_dict = opendap_distribution
                                 break
                         except:
-                            print 'Unable to open OPeNDAP URL %s' % opendap_distribution['url']
-                            pass
+                            logger.warning('Unable to open OPeNDAP URL %s' % opendap_distribution['url'])
             
             if distribution_dict:
                 yield self.flatten_distribution_dict(record_dict, distribution_dict)
                 continue
+
+            
+    @property
+    def debug(self):
+        return self._debug
+    
+    @debug.setter
+    def debug(self, debug_value):
+        if self._debug != debug_value or self._debug is None:
+            self._debug = debug_value
+            
+            if self._debug:
+                logger.setLevel(logging.DEBUG)
+                logging.getLogger(self.__module__).setLevel(logging.DEBUG)
+            else:
+                logger.setLevel(logging.INFO)
+                logging.getLogger(self.__module__).setLevel(logging.INFO)
+                
+        logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
+        logging.getLogger(self.__module__).debug('Logger {} set to level {}'.format(self.__module__, logger.level))
 
 def date_string2datetime(date_string):
     '''
@@ -606,16 +626,17 @@ def main():
                                  max_total_records=args.max_results,
                                  get_layers=args.get_layers
                                  )
-    #pprint(result_dict)
-    #print '%d results found.' % len(result_dict)
     header_row_required = (cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_SHOW_HEADER_ROW'] 
                            if args.header_row is None 
                            else args.header_row)
 
     # Print results
     header_printed = False
+    distribution_count = 0
     for distribution in cswu.get_distributions(protocol_list, record_generator):
     #for distribution in cswu.get_netcdf_urls(record_generator):
+        distribution_count += 1
+        
         # Print header if required
         if header_row_required and not header_printed:
             print delimiter.join([field
@@ -630,6 +651,7 @@ def main():
                               ]
                              )
 
+    logger.debug('%d results found.' % distribution_count)
 
 if __name__ == '__main__':
     main()
