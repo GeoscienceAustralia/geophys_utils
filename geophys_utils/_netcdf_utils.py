@@ -365,6 +365,26 @@ class NetCDFUtils(object):
         finally:
             nc_output_dataset.close()
             
+            
+    @property
+    def debug(self):
+        return self._debug
+    
+    @debug.setter
+    def debug(self, debug_value):
+        if self._debug != debug_value or self._debug is None:
+            self._debug = debug_value
+            
+            if self._debug:
+                logger.setLevel(logging.DEBUG)
+                logging.getLogger(self.__module__).setLevel(logging.DEBUG)
+            else:
+                logger.setLevel(logging.INFO)
+                logging.getLogger(self.__module__).setLevel(logging.INFO)
+                
+        logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
+        logging.getLogger(self.__module__).debug('Logger {} set to level {}'.format(self.__module__, logger.level))
+
 def main():
     '''
     Main function for quick and dirty testing
@@ -408,25 +428,6 @@ def main():
              #limit_dim_size=False
              invert_y=invert_y
              )
-            
-    @property
-    def debug(self):
-        return self._debug
-    
-    @debug.setter
-    def debug(self, debug_value):
-        if self._debug != debug_value or self._debug is None:
-            self._debug = debug_value
-            
-            if self._debug:
-                logger.setLevel(logging.DEBUG)
-                logging.getLogger(self.__module__).setLevel(logging.DEBUG)
-            else:
-                logger.setLevel(logging.INFO)
-                logging.getLogger(self.__module__).setLevel(logging.INFO)
-                
-        logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
-        logging.getLogger(self.__module__).debug('Logger {} set to level {}'.format(self.__module__, logger.level))
         
 
 if __name__ == '__main__':

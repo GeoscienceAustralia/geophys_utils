@@ -12,6 +12,7 @@ import netCDF4
 import argparse
 import logging
 import re
+from datetime import datetime
 from pprint import pformat
 
 from geophys_utils import NetCDFLineUtils
@@ -60,7 +61,7 @@ class NearestGeophysPointFinder(object):
         metadata_csv_file.close()
         
         
-    def dataset_metadata_generator(self, coordinate_list, max_distance=None, metadata_filter_dict={}):
+    def dataset_metadata_generator(self, coordinate_list, max_distance=None, metadata_filter_dict={}, date_from=None):
         '''
         Generator returning all metadata dicts near given coordinate
         '''
@@ -68,36 +69,53 @@ class NearestGeophysPointFinder(object):
         max_distance = max_distance or 0
         
         for metadata_dict in self._metadata:
+            if date_from:
+                try:
+                    if date_from > datetime.strptime(metadata_dict['acquisition_start_date'], '%d/%m/%Y'):
+                        continue
+                except ValueError:
+                    logger.warning('WARNING: Unhandled date format: {}'.format(metadata_dict['acquisition_start_date']))
+                    continue 
+            
+            dataset_contains_points = False
             for coordinate in coordinate_list:
-                if not (float(metadata_dict['geospatial_lon_min']) <= (coordinate[0] + max_distance)
-                    and float(metadata_dict['geospatial_lat_min']) <= (coordinate[1] + max_distance)
-                    and float(metadata_dict['geospatial_lon_max']) >= (coordinate[0] - max_distance)
-                    and float(metadata_dict['geospatial_lat_max']) >= (coordinate[1] - max_distance)
-                    ):
-                    continue
+                point_in_dataset = (float(metadata_dict['geospatial_lon_min']) <= (coordinate[0] + max_distance)
+                                    and float(metadata_dict['geospatial_lat_min']) <= (coordinate[1] + max_distance)
+                                    and float(metadata_dict['geospatial_lon_max']) >= (coordinate[0] - max_distance)
+                                    and float(metadata_dict['geospatial_lat_max']) >= (coordinate[1] - max_distance)
+                                    )
+                dataset_contains_points = dataset_contains_points or point_in_dataset
+
+                # Stop checking as soon as we know that dataset contains at least one point
+                if dataset_contains_points:
+                    break
                 
-                # Yield only dataset metadata matching all key=value pairs in metadata_filter_dict
-                match_found = True
-                for key, value in metadata_filter_dict.iteritems():
-                    match_found = match_found and metadata_dict.get(key) == value
-                    if not match_found:
-                        break
-                    
-                if match_found:
-                    yield metadata_dict
-                    break # Only return one record for any number of coordinates
+            if not dataset_contains_points:
+                continue
+                
+            # Yield only dataset metadata matching all key=value pairs in metadata_filter_dict
+            match_found = True
+            for key, value in metadata_filter_dict.iteritems():
+                match_found = match_found and metadata_dict.get(key) == value
+                if not match_found:
+                    break
+                
+            if match_found:
+                yield metadata_dict
 
 
-    def get_nearest_point_data(self, coordinate_list, points_required=1, max_distance=None, metadata_filter_dict={}):
+    def get_nearest_point_data(self, coordinate_list, points_required=1, max_distance=None, metadata_filter_dict={}, date_from=None):
         '''
         Function returning list of nearest points closest to coordinate with attributes
         '''
+        t0 = datetime.now()
         point_result_dict = {coordinate: []
                              for coordinate in coordinate_list
                              }
         for metadata_dict in self.dataset_metadata_generator(coordinate_list, 
                                                             max_distance=max_distance,
-                                                            metadata_filter_dict=metadata_filter_dict
+                                                            metadata_filter_dict=metadata_filter_dict,
+                                                            date_from=date_from
                                                             ):
             nc_path = metadata_dict['file_path']
             
@@ -143,6 +161,7 @@ class NearestGeophysPointFinder(object):
         for coordinate in coordinate_list: 
             point_result_dict[coordinate] = sorted(point_result_dict[coordinate], key=lambda d: d['distance'], reverse=False)       
         
+        logger.debug('Elapsed time: {}'.format(datetime.now() - t0))
         return point_result_dict 
     
 
@@ -175,6 +194,10 @@ def main():
                             help="Path to CSV file containing netCDF metadata (default is {})".format(NearestGeophysPointFinder.DEFAULT_METADATA_CSV_PATH),
                             dest="metadata_path",
                             default=NearestGeophysPointFinder.DEFAULT_METADATA_CSV_PATH)
+        parser.add_argument("-f", "--date_from",
+                            help="Oldest date for survey in the form dd/mm/yyyy",
+                            dest="date_from",
+                            required=False)
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='Output debug information. Default is no debug info')
         parser.add_argument('filter_args', nargs=argparse.REMAINDER,
@@ -220,6 +243,12 @@ def main():
         
     logger.debug('points_per_dataset = {}'.format(args.points_per_dataset))
     logger.debug('max_distance = {}'.format(args.max_distance))
+    
+    date_from = None
+    if args.date_from:
+        date_from = datetime.strptime(args.date_from, '%d/%m/%Y')
+        logger.debug('date_from = {}'.format(date_from.isoformat()))
+        
 
     # Set up modifier_args dict of key=value pairs
     metadata_filter_dict = {}
@@ -235,7 +264,8 @@ def main():
     point_result_dict = ngpf.get_nearest_point_data(coordinate_list=coordinate_list,
                                              points_required=args.points_per_dataset, 
                                              max_distance=args.max_distance,
-                                             metadata_filter_dict=metadata_filter_dict
+                                             metadata_filter_dict=metadata_filter_dict,
+                                             date_from=date_from
                                              )
     
     for coordinate, point_list in point_result_dict.iteritems():
