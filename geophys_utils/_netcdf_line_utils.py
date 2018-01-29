@@ -30,13 +30,19 @@ from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
+from scipy.spatial.ckdtree import cKDTree
+import logging
 
+# Setup logging handlers if required
+logger = logging.getLogger(__name__) # Get __main__ logger
+logger.setLevel(logging.INFO) # Initial logging level for this module
+    
 class NetCDFLineUtils(NetCDFUtils):
     '''
     NetCDFLineUtils class to do various fiddly things with NetCDF geophysics line data files.
     '''
 
-    def __init__(self, netcdf_dataset):
+    def __init__(self, netcdf_dataset, debug=False):
         '''
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
@@ -63,7 +69,7 @@ class NetCDFLineUtils(NetCDFUtils):
             return cache_array
         
         # Start of init function - Call inherited constructor first
-        NetCDFUtils.__init__(self, netcdf_dataset)
+        NetCDFUtils.__init__(self, netcdf_dataset, debug)
 
         self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
                                      if 'point' in self.netcdf_dataset.variables[var_name].dimensions
@@ -106,7 +112,7 @@ class NetCDFLineUtils(NetCDFUtils):
 
         # Define bounds
         self.bounds = [min_lon, min_lat, max_lon, max_lat]
-
+        
         line_dimension = self.netcdf_dataset.dimensions['line']
         self.line_count = len(line_dimension)
         
@@ -151,6 +157,8 @@ class NetCDFLineUtils(NetCDFUtils):
         self.line_start_end[:,0] = fetch_array(index_line_variable)
         self.line_start_end[:,1] = fetch_array(index_count_variable)
         self.line_start_end[:,1] += self.line_start_end[:,0]
+        
+        self.kdtree = None
         
     def __del__(self):
         '''
@@ -210,7 +218,7 @@ class NetCDFLineUtils(NetCDFUtils):
             try:
                 line_index = int(np.where(line_number_array == line_number)[0])
             except TypeError:
-                print 'Invalid line number %d' % line_number
+                logger.warning('Invalid line number %d' % line_number)
                 continue # Should this be break?
             
             line_mask = np.zeros((self.point_count,), bool)
@@ -436,3 +444,56 @@ class NetCDFLineUtils(NetCDFUtils):
         _utm_wkt, utm_coord_array = utm_coords(coordinate_array, wkt)
         return coords2distance(utm_coord_array)
 
+
+    def nearest_neighbours(self, coordinates, wkt=None, points_required=1, max_distance=None):
+        '''
+        Function to determine nearest neighbours using cKDTree
+        N.B: All distances are expressed in the native dataset CRS
+        
+        @param coordinates: two-element XY coordinate tuple, list or array
+        @param wkt: Well-known text of coordinate CRS - defaults to native dataset CRS
+        @param points_required: Number of points to retrieve. Default=1
+        @param max_distance: Maximum distance to search from target coordinate - 
+            STRONGLY ADVISED TO SPECIFY SENSIBLE VALUE OF max_distance TO LIMIT SEARCH AREA
+        
+        @return distances: distances from the target coordinate for each of the points_required nearest points
+        @return indices: point indices for each of the points_required nearest points
+        '''
+        if wkt:
+            reprojected_coords = transform_coords(coordinates, wkt, self.wkt)
+        else:
+            reprojected_coords = coordinates
+            
+        # Set up KDTree for nearest neighbour queries
+        if max_distance:
+            logger.debug('Computing spatial subset mask...')
+            spatial_mask = self.get_spatial_mask([reprojected_coords[0] - max_distance,
+                                                  reprojected_coords[1] - max_distance,
+                                                  reprojected_coords[0] + max_distance,
+                                                  reprojected_coords[1] + max_distance
+                                                  ]
+                                                 )
+            if not np.any(spatial_mask):
+                logger.debug('No points within distance {} of {}'.format(max_distance, reprojected_coords))
+                return None, None
+            logger.debug('Indexing spatial subset with {} points into KDTree...'.format(np.count_nonzero(spatial_mask)))
+            kdtree = cKDTree(data=self.xycoords[np.where(spatial_mask)[0]])
+            logger.debug('Finished indexing spatial subset into KDTree.')
+        else:
+            max_distance = np.inf
+            if not self.kdtree:
+                logger.debug('Indexing full dataset with {} points into KDTree...'.format(self.xycoords.shape[0]))
+                self.kdtree = cKDTree(data=self.xycoords[:])
+                logger.debug('Finished indexing full dataset into KDTree.')
+            kdtree = self.kdtree
+
+            
+        distances, indices = kdtree.query(x=np.array(reprojected_coords),
+                                               k=points_required,
+                                               distance_upper_bound=max_distance)
+        
+        if max_distance == np.inf:
+            return distances, indices
+        else: # Return indices of complete coordinate array, not the spatial subset
+            return distances, np.where(spatial_mask)[0][indices]
+            

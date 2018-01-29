@@ -27,6 +27,10 @@ from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._netcdf_utils import NetCDFUtils
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 
 class NetCDFGridUtils(NetCDFUtils):
