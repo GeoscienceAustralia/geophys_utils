@@ -120,13 +120,13 @@ class GeophysPointFetcher(object):
                 netcdf_line_utils = NetCDFLineUtils(nc_dataset)
                 
                 if flight_lines_only:
-                    print 'Excluding tie-lines'
+                    print 'Excluding points in tie-lines'
                     line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
                     line_mask = np.zeros(shape=(netcdf_line_utils.point_count,), dtype=bool)
                     for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
                         line_mask = np.logical_or(line_mask, single_line_mask)
                 else:
-                    line_mask = np.ones(shape=(netcdf_line_utils.point_count,).shape, dtype=bool)
+                    line_mask = np.ones(shape=(netcdf_line_utils.point_count,), dtype=bool)
                 
                 print 'Computing spatial subset mask'
                 spatial_mask = netcdf_line_utils.get_spatial_mask(bounding_box)

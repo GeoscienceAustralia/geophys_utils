@@ -12,6 +12,7 @@ import netCDF4
 import argparse
 import logging
 import re
+import numpy as np
 from datetime import datetime
 from pprint import pformat
 
@@ -61,22 +62,20 @@ class NearestGeophysPointFinder(object):
         metadata_csv_file.close()
         
         
-    def dataset_metadata_generator(self, coordinate_list, max_distance=None, metadata_filter_dict={}, date_from=None):
+    def dataset_metadata_generator(self, 
+                                   coordinate_list, 
+                                   max_distance=None, 
+                                   keywords=[], 
+                                   metadata_filter_function=None):
         '''
         Generator returning all metadata dicts near given coordinate
         '''
+        keyword_set = set(keywords)      
+        
         #TODO: Replace this bodgy CSV-based code with a CSW catalogue based solution
         max_distance = max_distance or 0
         
         for metadata_dict in self._metadata:
-            if date_from:
-                try:
-                    if date_from > datetime.strptime(metadata_dict['acquisition_start_date'], '%d/%m/%Y'):
-                        continue
-                except ValueError:
-                    logger.warning('WARNING: Unhandled date format: {}'.format(metadata_dict['acquisition_start_date']))
-                    continue 
-            
             dataset_contains_points = False
             for coordinate in coordinate_list:
                 point_in_dataset = (float(metadata_dict['geospatial_lon_min']) <= (coordinate[0] + max_distance)
@@ -93,18 +92,25 @@ class NearestGeophysPointFinder(object):
             if not dataset_contains_points:
                 continue
                 
-            # Yield only dataset metadata matching all key=value pairs in metadata_filter_dict
-            match_found = True
-            for key, value in metadata_filter_dict.iteritems():
-                match_found = match_found and metadata_dict.get(key) == value
-                if not match_found:
-                    break
-                
-            if match_found:
+            # Exclude any datasets which do not contain all specified keywords
+            if keyword_set and not keyword_set <= set([keyword.strip() for keyword in metadata_dict['keywords'].split(',')]):
+                continue
+        
+            # Yield only dataset metadata satisfying filter function
+            if not metadata_filter_function or metadata_filter_function(metadata_dict):
                 yield metadata_dict
 
 
-    def get_nearest_point_data(self, coordinate_list, points_required=1, max_distance=None, metadata_filter_dict={}, date_from=None):
+
+    def get_nearest_point_data(self, 
+                               coordinate_list, 
+                               points_required=1, 
+                               max_distance=None, 
+                               keywords=[], 
+                               metadata_filter_function=None,
+                               variable_names=None, 
+                               flight_lines_only=True
+                               ):
         '''
         Function returning list of nearest points closest to coordinate with attributes
         '''
@@ -114,8 +120,8 @@ class NearestGeophysPointFinder(object):
                              }
         for metadata_dict in self.dataset_metadata_generator(coordinate_list, 
                                                             max_distance=max_distance,
-                                                            metadata_filter_dict=metadata_filter_dict,
-                                                            date_from=date_from
+                                                            keywords=keywords, 
+                                                            metadata_filter_function=metadata_filter_function
                                                             ):
             nc_path = metadata_dict['file_path']
             
@@ -129,13 +135,26 @@ class NearestGeophysPointFinder(object):
                 nc_dataset = netCDF4.Dataset(nc_path, 'r')
                 netcdf_line_utils = NetCDFLineUtils(nc_dataset)
                 
+                if flight_lines_only:
+                    print 'Excluding points in tie-lines'
+                    line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
+                    line_mask = np.zeros(shape=(netcdf_line_utils.point_count,), dtype=bool)
+                    for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
+                        line_mask = np.logical_or(line_mask, single_line_mask)
+                else:
+                    line_mask = None
+                
                 for coordinate in coordinate_list:
                     point_result_list = point_result_dict[coordinate]
-                    distances, point_indices = netcdf_line_utils.nearest_neighbours(coordinate, points_required=points_required, max_distance=max_distance)
+                    distances, point_indices = netcdf_line_utils.nearest_neighbours(coordinate, 
+                                                                                    points_required=points_required, 
+                                                                                    max_distance=max_distance,
+                                                                                    secondary_mask=line_mask
+                                                                                    )
                     #logger.debug('distances = {}'.format(distances))
                     #logger.debug('point_indices = {}'.format(point_indices))
                     
-                    if point_indices is not None:
+                    if len(point_indices):
                         # Convert scalars to lists if required
                         if not hasattr(point_indices, '__iter__'):
                             distances = [distances]
@@ -148,8 +167,9 @@ class NearestGeophysPointFinder(object):
                             point_metadata_dict['coordinate'] = tuple(netcdf_line_utils.xycoords[point_indices[found_index]])
                             
                             for variable_name in netcdf_line_utils.point_variables:
-                                point_metadata_dict[variable_name] = nc_dataset.variables[variable_name][point_indices[found_index]]
-                        
+                                if not variable_names or variable_name in variable_names:
+                                    point_metadata_dict[variable_name] = nc_dataset.variables[variable_name][point_indices[found_index]]
+                            
                             #logger.debug('\tpoint_metadata_dict = {}'.format(point_metadata_dict))
                             point_result_list.append(point_metadata_dict)  
                     else:  
@@ -164,6 +184,33 @@ class NearestGeophysPointFinder(object):
         logger.debug('Elapsed time: {}'.format(datetime.now() - t0))
         return point_result_dict 
     
+
+def JW_metadata_filter(metadata_dict):
+    '''
+    Example function to filter datasets based on metadata values in metadata_dict
+    This version applies John Wilford's filter conditions
+    Returns True for match, False otherwise
+    '''
+    try:
+        # Reject any datasets earlier than 1981
+        if datetime.strptime(metadata_dict['acquisition_start_date'], '%d/%m/%Y') < datetime.strptime('01/01/1981', '%d/%m/%Y'):
+            return False
+            
+        # Only accept GA/BMR/AGSO datasets between 1981 and 1992
+        if (datetime.strptime(metadata_dict['acquisition_start_date'], '%d/%m/%Y') < datetime.strptime('01/01/1992', '%d/%m/%Y')
+            and metadata_dict['client'] not in ['Geoscience Australia',
+                                                'BMR',
+                                                'AGSO',
+                                                'GA'
+                                                ]
+            ):
+                return False
+    except ValueError:
+        logger.warning('WARNING: Unhandled date format: {}'.format(metadata_dict['acquisition_start_date']))
+        return False 
+    
+    return True        
+                
 
 def main():
     '''
@@ -194,10 +241,14 @@ def main():
                             help="Path to CSV file containing netCDF metadata (default is {})".format(NearestGeophysPointFinder.DEFAULT_METADATA_CSV_PATH),
                             dest="metadata_path",
                             default=NearestGeophysPointFinder.DEFAULT_METADATA_CSV_PATH)
-        parser.add_argument("-f", "--date_from",
-                            help="Oldest date for survey in the form dd/mm/yyyy",
-                            dest="date_from",
+        parser.add_argument("-k", "--keywords",
+                            help="keywords in the form <keyword1>[,<keyword2>,...]",
+                            dest="keywords",
                             required=False)
+        parser.add_argument("-v", "--variable_names",
+                            help="variable_names in the form <variable_names1>[,<variable_names2>,...]",
+                            dest="variable_names",
+                            required=False)        
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='Output debug information. Default is no debug info')
         parser.add_argument('filter_args', nargs=argparse.REMAINDER,
@@ -244,19 +295,11 @@ def main():
     logger.debug('points_per_dataset = {}'.format(args.points_per_dataset))
     logger.debug('max_distance = {}'.format(args.max_distance))
     
-    date_from = None
-    if args.date_from:
-        date_from = datetime.strptime(args.date_from, '%d/%m/%Y')
-        logger.debug('date_from = {}'.format(date_from.isoformat()))
-        
+    keywords = [keyword.strip() for keyword in args.keywords.split(',')] if args.keywords else []
+    logger.debug('keywords = {}'.format(keywords))
 
-    # Set up modifier_args dict of key=value pairs
-    metadata_filter_dict = {}
-    for filter_arg in args.filter_args:
-        match = re.match('^(\w+)=(.*)$', filter_arg)
-        metadata_filter_dict[match.group(1)] = match.group(2)
-    
-    logger.debug('metadata_filter_dict = {}'.format(metadata_filter_dict))
+    variable_names = [variable_name.strip() for variable_name in args.variable_names.split(',')] if args.variable_names else None
+    logger.debug('variable_names = {}'.format(variable_names))
 
     ngpf = NearestGeophysPointFinder()
     #logger.debug(ngpf.__dict__)
@@ -264,11 +307,14 @@ def main():
     point_result_dict = ngpf.get_nearest_point_data(coordinate_list=coordinate_list,
                                              points_required=args.points_per_dataset, 
                                              max_distance=args.max_distance,
-                                             metadata_filter_dict=metadata_filter_dict,
-                                             date_from=date_from
+                                             keywords=keywords, 
+                                             metadata_filter_function=JW_metadata_filter,
+                                             variable_names=variable_names, 
+                                             flight_lines_only=True
                                              )
     
-    for coordinate, point_list in point_result_dict.iteritems():
+    for coordinate in sorted(point_result_dict.keys()):
+        point_list = point_result_dict[coordinate]
         dataset_set = set()
         for point_dict in point_list:
             dataset_set.add(point_dict['file_path'])

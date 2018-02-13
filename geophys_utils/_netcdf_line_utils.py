@@ -445,7 +445,11 @@ class NetCDFLineUtils(NetCDFUtils):
         return coords2distance(utm_coord_array)
 
 
-    def nearest_neighbours(self, coordinates, wkt=None, points_required=1, max_distance=None):
+    def nearest_neighbours(self, coordinates, 
+                           wkt=None, 
+                           points_required=1, 
+                           max_distance=None, 
+                           secondary_mask=None):
         '''
         Function to determine nearest neighbours using cKDTree
         N.B: All distances are expressed in the native dataset CRS
@@ -455,6 +459,7 @@ class NetCDFLineUtils(NetCDFUtils):
         @param points_required: Number of points to retrieve. Default=1
         @param max_distance: Maximum distance to search from target coordinate - 
             STRONGLY ADVISED TO SPECIFY SENSIBLE VALUE OF max_distance TO LIMIT SEARCH AREA
+        @param secondary_mask: Boolean array of same shape as point array used to filter points. None = no filter.
         
         @return distances: distances from the target coordinate for each of the points_required nearest points
         @return indices: point indices for each of the points_required nearest points
@@ -464,7 +469,11 @@ class NetCDFLineUtils(NetCDFUtils):
         else:
             reprojected_coords = coordinates
             
-        # Set up KDTree for nearest neighbour queries
+        if secondary_mask is None:
+            secondary_mask = np.ones(shape=(self.point_count,), dtype=bool)
+        else:
+            assert secondary_mask.shape == (self.point_count,)        
+
         if max_distance:
             logger.debug('Computing spatial subset mask...')
             spatial_mask = self.get_spatial_mask([reprojected_coords[0] - max_distance,
@@ -473,24 +482,32 @@ class NetCDFLineUtils(NetCDFUtils):
                                                   reprojected_coords[1] + max_distance
                                                   ]
                                                  )
-            if not np.any(spatial_mask):
+            
+            point_indices = np.where(np.logical_and(spatial_mask,
+                                                    secondary_mask
+                                                    )
+                                     )[0]
+                                     
+            if not len(point_indices):
                 logger.debug('No points within distance {} of {}'.format(max_distance, reprojected_coords))
-                return None, None
+                return [], []
+            
+            # Set up KDTree for nearest neighbour queries
             logger.debug('Indexing spatial subset with {} points into KDTree...'.format(np.count_nonzero(spatial_mask)))
-            kdtree = cKDTree(data=self.xycoords[np.where(spatial_mask)[0]])
+            kdtree = cKDTree(data=self.xycoords[point_indices])
             logger.debug('Finished indexing spatial subset into KDTree.')
         else:
             max_distance = np.inf
             if not self.kdtree:
                 logger.debug('Indexing full dataset with {} points into KDTree...'.format(self.xycoords.shape[0]))
-                self.kdtree = cKDTree(data=self.xycoords[:])
+                self.kdtree = cKDTree(data=self.xycoords[np.where(secondary_mask)[0]])
                 logger.debug('Finished indexing full dataset into KDTree.')
             kdtree = self.kdtree
 
             
         distances, indices = kdtree.query(x=np.array(reprojected_coords),
-                                               k=points_required,
-                                               distance_upper_bound=max_distance)
+                                          k=points_required,
+                                          distance_upper_bound=max_distance)
         
         if max_distance == np.inf:
             return distances, indices
