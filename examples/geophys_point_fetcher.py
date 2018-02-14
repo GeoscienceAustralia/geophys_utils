@@ -119,6 +119,11 @@ class GeophysPointFetcher(object):
                 nc_dataset = netCDF4.Dataset(nc_path, 'r')
                 netcdf_line_utils = NetCDFLineUtils(nc_dataset)
                 
+                # Skip processing this dataset if it doesn't contain any of the required variables
+                if variable_names and not (set(variable_names) & set(netcdf_line_utils.point_variables)):
+                    logger.debug('Skipping dataset containing none of the required variables')
+                    continue
+                
                 if flight_lines_only:
                     print 'Excluding points in tie-lines'
                     line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
