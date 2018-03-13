@@ -52,8 +52,8 @@ class NetCDFLineUtils(NetCDFUtils):
             Helper function to retrieve entire 1D array in pieces < self.max_bytes in size
             '''
             source_len = source_array.shape[0]
-            pieces_required = max(source_array[0].itemsize * source_len / self.max_bytes, 1)
-            max_elements = source_len / pieces_required
+            pieces_required = max(source_array[0].itemsize * source_len // self.max_bytes, 1)
+            max_elements = source_len // pieces_required
             
             cache_array = np.zeros((source_len,), dtype=source_array.dtype)
     
@@ -259,7 +259,7 @@ class NetCDFLineUtils(NetCDFUtils):
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         
         for line_number in line_numbers:
-            _line_number, line_mask = self.get_line_masks(line_numbers=line_number).next() # Only one mask per line
+            _line_number, line_mask = next(self.get_line_masks(line_numbers=line_number)) # Only one mask per line
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
             if len(point_indices):
