@@ -41,7 +41,7 @@ class TestArrayPieces(unittest.TestCase):
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array)}
 
         assert len(array_pieces_results) == 1, 'Whole array not returned for large max_bytes'
-        assert not np.any(test_array - array_pieces_results.values()[0]), 'Array contents changed'
+        assert not np.any(test_array - list(array_pieces_results.values())[0]), 'Array contents changed'
         
         print('\tTesting sixteenth arrays')
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array,
