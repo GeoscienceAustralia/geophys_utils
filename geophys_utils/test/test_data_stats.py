@@ -43,7 +43,7 @@ class TestDataStats(unittest.TestCase):
 
     
     def test_data_stats(self):
-        print 'Testing DataStats class'
+        print('Testing DataStats class')
         TestDataStats.EXPECTED_RESULT['nc_path'] = os.path.join(os.path.dirname(__file__), TestDataStats.NC_PATH)
         data_stats = DataStats(TestDataStats.EXPECTED_RESULT['nc_path'],
                                max_bytes=TestDataStats.MAX_BYTES)

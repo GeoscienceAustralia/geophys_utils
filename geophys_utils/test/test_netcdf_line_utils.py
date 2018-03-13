@@ -75,39 +75,39 @@ class TestNetCDFLineUtilsConstructor(unittest.TestCase):
     N.B: This should be run first"""
     
     def test_netcdf_line_utils_constructor(self):
-        print 'Testing NetCDFLineUtils constructor'
+        print('Testing NetCDFLineUtils constructor')
         global netcdf_line_utils
         
         if re.match('^http.*', NC_PATH):
             nc_path = NC_PATH
         else:
             nc_path = os.path.join(os.path.dirname(__file__), NC_PATH)
-        print nc_path    
+        print(nc_path)   
         nc_dataset = netCDF4.Dataset(nc_path)
         netcdf_line_utils = NetCDFLineUtils(nc_dataset)
         
-        #print netcdf_line_utils.__dict__
-        assert nc_dataset.title == NC_TITLE, 'Invalid dataset title: "%s" != "%s"' % (nc_dataset.title, NC_TITLE)
+        #print(netcdf_line_utils.__dict__)
+        assert nc_dataset.title == NC_TITLE, 'Invalid dataset title: "{}" != "{}"'.format(nc_dataset.title, NC_TITLE)
     
 class TestNetCDFLineUtilsFunctions1(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
     
     def test_get_polygon(self):
-        print 'Testing get_polygon function'
+        print('Testing get_polygon function')
         polygon = netcdf_line_utils.get_polygon()
         assert polygon is None, 'This is just plain messed up' #TODO: Find out why None is returned
 
     def test_get_spatial_mask(self):
-        print 'Testing get_spatial_mask function'
+        print('Testing get_spatial_mask function')
         spatial_mask = netcdf_line_utils.get_spatial_mask(TEST_BOUNDS)
-        #print spatial_mask
+        #print(spatial_mask)
         assert np.count_nonzero(spatial_mask) == SPATIAL_MASK_COUNT, 'Unexpected spatial mask count'
         
     def test_get_line_masks(self):
-        print 'Testing get_line_masks function'
+        print('Testing get_line_masks function')
         count = 0
         for line_number, line_mask in netcdf_line_utils.get_line_masks():
-            # print 'Line %d has %d points' % (line_number, np.count_nonzero(line_mask))
+            # print('Line {} has {} points'.format(line_number, np.count_nonzero(line_mask)))
             assert (line_number, np.count_nonzero(line_mask)) == TEST_GET_LINE_MASK_RESULTS[count], "Invalid get_line_masks result"
             count += 1
             if count >= 2:
@@ -118,14 +118,15 @@ class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
     
     def test_get_lines(self):
-        print 'Testing get_lines function'
+        print('Testing get_lines function')
         count = 0
         for line_number, line_dict in netcdf_line_utils.get_lines():
             #===================================================================
-            # print 'Line %d has %d variables with %d points' % (line_number,
+            # print('Line {} has {} variables with {} points'.format(line_number,
             #                                                    len(line_dict)-1, 
             #                                                    np.count_nonzero(line_dict['coordinates'])
             #                                                    )
+            #       )
             #===================================================================
             assert (line_number, len(line_dict)-1, np.count_nonzero(line_dict['coordinates'])) == TEST_GET_LINE_RESULTS[count], "Invalid get_lines result"
             
@@ -137,18 +138,18 @@ class TestNetCDFLineUtilsGridFunctions(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_line_utils functions"""
     
     def test_grid_points(self):
-        print 'Testing grid_points function'
+        print('Testing grid_points function')
         grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
                                                                  point_step = 100)
-        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[0], 'Invalid grid results: %s != %s' % ((crs, geotransform, grids.shape), TEST_GRID_RESULTS[0])
+        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[0], 'Invalid grid results: {} != {}'.format((crs, geotransform, grids.shape), TEST_GRID_RESULTS[0])
 
-        print 'Testing bounded grid_points function'
+        print('Testing bounded grid_points function')
         grids, crs, geotransform = netcdf_line_utils.grid_points(grid_resolution=GRID_RESOLUTION, 
                                                                  variables='mag_awags',
                                                                  native_grid_bounds=TEST_BOUNDS,
                                                                  point_step = 100)
-        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[1], 'Invalid grid results: %s != %s' % ((crs, geotransform, grids.shape), TEST_GRID_RESULTS[1])
+        assert (crs, geotransform, grids.shape) == TEST_GRID_RESULTS[1], 'Invalid grid results: {} != {}'.format((crs, geotransform, grids.shape), TEST_GRID_RESULTS[1])
 
 
 

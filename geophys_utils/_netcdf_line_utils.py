@@ -250,7 +250,7 @@ class NetCDFLineUtils(NetCDFUtils):
 
         # Allow single variable to be given as a string
         variables = variables or self.point_variables
-        single_var = (type(variables) in [str, unicode])
+        single_var = (type(variables) == str)
         if single_var:
             variables = [variables]
         
@@ -318,7 +318,7 @@ class NetCDFLineUtils(NetCDFUtils):
         variables = variables or self.point_variables
 
         # Allow single variable to be given as a string
-        single_var = (type(variables) in [str, unicode])
+        single_var = (type(variables) == str)
         if single_var:
             variables = [variables]
         

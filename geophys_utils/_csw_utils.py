@@ -32,7 +32,6 @@ from owslib.wcs import WebCoverageService
 import netCDF4
 import yaml
 from pprint import pformat
-from unidecode import unidecode
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,7 +69,7 @@ class CSWUtils(object):
             
         timeout = timeout or self.settings['DEFAULT_TIMEOUT']
         
-        for key, value in self.settings['ENVIRONMENT_VARIABLES'].iteritems():
+        for key, value in iter(self.settings['ENVIRONMENT_VARIABLES'].items()):
             if value:
                 os.environ[key] = value
 
@@ -433,7 +432,7 @@ class CSWUtils(object):
             if record_dict['distributions']:
                 for distribution_dict in record_dict['distributions']:
                     # Replace None with empty string for all values
-                    for key, value in distribution_dict.iteritems():
+                    for key, value in iter(distribution_dict.items()):
                         if value is None:
                             distribution_dict[key] = ''
                                     
@@ -639,17 +638,19 @@ def main():
         
         # Print header if required
         if header_row_required and not header_printed:
-            print delimiter.join([field
+            print(delimiter.join([field
                                   for field in (field_list or sorted(distribution.keys()))
                                   ]
                                  )
+                  )
             header_printed = True;
         
         # Decode and quote fields if required
-        print delimiter.join([quote_delimitedtext(unidecode(unicode(distribution.get(field) or '')), delimiter)
+        print(delimiter.join([quote_delimitedtext(distribution.get(field) or '', delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )
+              )
 
     logger.debug('%d results found.' % distribution_count)
 

@@ -40,7 +40,7 @@ class TestCRSUtils(unittest.TestCase):
     UTM_COORDS = (696382.5632178178, 6090881.858493158)
 
     def test_get_coordinate_transformation(self):
-        print 'Testing get_coordinate_transformation function'
+        print('Testing get_coordinate_transformation function')
         coordinate_transformation = get_coordinate_transformation(TestCRSUtils.EPSG4326_WKT, 
                                                                   TestCRSUtils.EPSG3577_WKT)
         assert coordinate_transformation is not None
@@ -56,7 +56,7 @@ class TestCRSUtils(unittest.TestCase):
         assert coordinate_transformation is None, 'Null transformation should return None'
 
     def test_get_utm_wkt(self):
-        print 'Testing get_utm_wkt function'
+        print('Testing get_utm_wkt function')
         utm_wkt = get_utm_wkt(TestCRSUtils.EPSG4326_COORDS, 
                               TestCRSUtils.EPSG4326_EPSG)
         utm_wkt = re.sub(',\s+', ',', re.sub('\s+', ' ', utm_wkt))
@@ -64,7 +64,7 @@ class TestCRSUtils(unittest.TestCase):
         assert utm_wkt == test_wkt, 'Incorrect UTM CRS: %s instead of %s' % (utm_wkt, test_wkt)
 
     def test_transform_coords(self):
-        print 'Testing transform_coords function'
+        print('Testing transform_coords function')
         utm_coords = transform_coords(TestCRSUtils.EPSG4326_COORDS, TestCRSUtils.EPSG4326_WKT, TestCRSUtils.UTM_WKT)
         assert utm_coords == TestCRSUtils.UTM_COORDS
 

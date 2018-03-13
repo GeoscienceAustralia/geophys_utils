@@ -31,8 +31,8 @@ from scipy.ndimage import sobel
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils 
 from geophys_utils._array_pieces import array_pieces 
 
-from _vincenty import vinc_dist
-from _blrb import interpolate_grid
+from geophys_utils._vincenty import vinc_dist
+from geophys_utils._blrb import interpolate_grid
     
 # Set top level standard output 
 console_handler = logging.StreamHandler(sys.stdout)
@@ -104,11 +104,12 @@ class DEMUtils(NetCDFGridUtils):
         """     
         return self.getFileSizekB(path) / 1024
     
-    def get_pixel_size(self, (x, y)):
+    def get_pixel_size(self, index_tuple):
         """
         Returns X & Y sizes in metres of specified pixel as a tuple.
         N.B: Pixel ordinates are zero-based from top left
         """
+        x, y = index_tuple
         logger.debug('(x, y) = (%f, %f)', x, y)
         
         native_spatial_reference = osr.SpatialReference()
@@ -204,12 +205,12 @@ class DEMUtils(NetCDFGridUtils):
         dzdy_array = sobel(elevation_array, axis=0)/(8. * native_pixel_y_size)
 
         if pixels_in_m():  
-            print 'Pixels are a uniform size of %f x %f metres.' % (native_pixel_x_size, native_pixel_y_size)       
+            print('Pixels are a uniform size of {} x {} metres.'.format(native_pixel_x_size, native_pixel_y_size))       
             # Pixel sizes are in metres - use scalars
             pixel_x_metres = native_pixel_x_size
             pixel_y_metres = native_pixel_y_size
         else:  
-            print 'Pixels are of varying sizes. Computing and applying pixel size arrays.'       
+            print('Pixels are of varying sizes. Computing and applying pixel size arrays.') 
             # Compute variable pixel size  
             m_array = self.get_pixel_size_grid(elevation_array, offsets)
             pixel_x_metres = m_array[:,:,0]
@@ -263,7 +264,7 @@ class DEMUtils(NetCDFGridUtils):
         for piece_array, offsets in array_pieces(self.data_variable, 
                                                  max_bytes=self.max_bytes if self.opendap else self.max_bytes/2, # Need to allow for multiple arrays in memory 
                                                  overlap=overlap):
-            print 'Processing array of shape %s at %s' % (piece_array.shape, offsets)
+            print('Processing array of shape {} at {}'.format(piece_array.shape, offsets))
             
             if type(piece_array) == numpy.ma.masked_array:
                 piece_array = piece_array.data # Convert from masked array to plain array
@@ -292,40 +293,42 @@ class DEMUtils(NetCDFGridUtils):
                            for dim_index in range(2)
                            ]
             
-            print 'Computing dzdx and dzdy arrays'
+            print('Computing dzdx and dzdy arrays')
             dzdx_array, dzdy_array = self.create_dzdxy_arrays(piece_array, offsets)
             
-            print 'Computing slope array'
+            print('Computing slope array')
             result_array = self.create_slope_array(dzdx_array, dzdy_array)
 
-            print 'Writing slope array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print('Writing slope array of shape %s at %s'.format(tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ])
                                               )
+                  )
             slope_variable[dest_slices] = result_array[source_slices]  
             slope_nc_dataset.sync()
                  
-            print 'Computing aspect array'
+            print('Computing aspect array')
             result_array = self.create_aspect_array(dzdx_array, dzdy_array)
                                   
-            print 'Writing aspect array of shape %s at %s' % (tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
+            print('Writing aspect array of shape {} at {}'.format(tuple([dest_slices[dim_index].stop - dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ]),
                                               tuple([dest_slices[dim_index].start
                                                      for dim_index in range(2)
                                                      ])
                                               )
+                  )
             aspect_variable[dest_slices] = result_array[source_slices]      
             aspect_nc_dataset.sync()   
             
         slope_nc_dataset.close() 
-        print 'Finished writing slope dataset %s' % slope_path
+        print('Finished writing slope dataset %s'.format(slope_path))
         
         aspect_nc_dataset.close()     
-        print 'Finished writing aspect dataset %s' % aspect_path
+        print('Finished writing aspect dataset %s'.format(aspect_path))
                 
 if __name__ == '__main__':
     # Define command line arguments

@@ -122,9 +122,9 @@ def main():
         piece_count += 1
         piece_bytes = data_variable.dtype.itemsize * \
             reduce(lambda x, y: x * y, piece_array.shape)
-        print 'piece_array.shape = %s, array_offset = %s, piece_bytes = %d' % (piece_array.shape, array_offset, piece_bytes)
+        print('piece_array.shape = %s, array_offset = %s, piece_bytes = %d'.format(piece_array.shape, array_offset, piece_bytes))
 
-    print 'piece_count = %s' % piece_count
+    print('piece_count = %s'.format(piece_count))
 
 if __name__ == '__main__':
     main()
