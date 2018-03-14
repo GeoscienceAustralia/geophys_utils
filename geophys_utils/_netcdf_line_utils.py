@@ -204,16 +204,16 @@ class NetCDFLineUtils(NetCDFUtils):
         line_number_array = self.line[...]
         line_start_end_array = self.line_start_end[...]
         
+        # Yield masks for all lines if not specified
+        if line_numbers is None:
+            line_numbers = line_number_array
+
         # Convert single line number to single element list
         try:
             _line_numbers_iterator = iter(line_numbers)
         except TypeError:
             line_numbers = [line_numbers]
 
-        # Yield masks for all lines if not specified
-        if line_numbers is None:
-            line_numbers = line_number_array
-            
         for line_number in line_numbers:
             try:
                 line_index = int(np.where(line_number_array == line_number)[0])
@@ -238,15 +238,15 @@ class NetCDFLineUtils(NetCDFUtils):
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
+        # Return all lines if not specified
+        if line_numbers is None:
+            line_numbers = self.line[...]
+
         # Convert single line number to single element list
         try:
             _line_numbers_iterator = iter(line_numbers)
         except TypeError:
             line_numbers = [line_numbers]
-
-        # Return all lines if not specified
-        if line_numbers is None:
-            line_numbers = self.line[...]
 
         # Allow single variable to be given as a string
         variables = variables or self.point_variables
@@ -374,7 +374,7 @@ class NetCDFLineUtils(NetCDFUtils):
                                   method=resampling_method)
 
         if single_var:
-            grids = grids.values()[0]
+            grids = list(grids.values())[0]
             
         #  crs:GeoTransform = "109.1002342895272 0.00833333 0 -9.354948067227777 0 -0.00833333 "
         geotransform = [pixel_centre_bounds[0]-grid_resolution/2.0,

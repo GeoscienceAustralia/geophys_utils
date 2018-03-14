@@ -38,7 +38,7 @@ class TestDataStats(unittest.TestCase):
                        'max': 3412.063, 
                        #'nc_path': u'C:\\Users\\u76345\\git\\geophys_utils\\geophys_utils\\test\\test_grid.nc', 
                        'x_size': 79, 
-                       'mean': -18.473817825317383, 
+                       'mean': -15.958283494050137, 
                        'nodata_value': -99999.0}
 
     
@@ -50,7 +50,9 @@ class TestDataStats(unittest.TestCase):
         for key in sorted(TestDataStats.EXPECTED_RESULT.keys()):
             try:
                 error = data_stats.value(key) - TestDataStats.EXPECTED_RESULT[key]
-                assert error <= TestDataStats.MAX_ERROR, 'Incorrect numeric value for %s' % key
+                assert error <= TestDataStats.MAX_ERROR, 'Incorrect numeric value for {}\nExpected {}, got {}.'.format(key, 
+                                                                                                                       TestDataStats.EXPECTED_RESULT[key], 
+                                                                                                                       data_stats.value(key))
             except TypeError:
                 assert data_stats.value(key) == TestDataStats.EXPECTED_RESULT[key], 'Incorrect value for %s' % key
 

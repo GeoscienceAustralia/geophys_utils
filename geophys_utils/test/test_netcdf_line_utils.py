@@ -32,7 +32,7 @@ from geophys_utils._netcdf_line_utils import NetCDFLineUtils
 netcdf_line_utils = None
 
 #NC_PATH = '/g/data2/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
-NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
+NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
 NC_TITLE = 'Marree Airborne Magnetic & Radiometric Survey, SA, 2012'
 #NC_PATH = 'test_line.nc'
 #NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
@@ -128,7 +128,8 @@ class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
             #                                                    )
             #       )
             #===================================================================
-            assert (line_number, len(line_dict)-1, np.count_nonzero(line_dict['coordinates'])) == TEST_GET_LINE_RESULTS[count], "Invalid get_lines result"
+            assert (line_number, len(line_dict)-1, np.count_nonzero(line_dict['coordinates'])) == TEST_GET_LINE_RESULTS[count], \
+            "Invalid get_lines result: Expected {}, got {}".format(TEST_GET_LINE_RESULTS[count], (line_number, len(line_dict)-1, np.count_nonzero(line_dict['coordinates'])))
             
             count += 1
             if count >= 2:
