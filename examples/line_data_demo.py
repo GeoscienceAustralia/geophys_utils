@@ -83,7 +83,7 @@ def get_netcdf_datasets(keywords,
     else:
         end_datetime = None
         
-    print 'Querying CSW'
+    print('Querying CSW')
     record_list = [record for record in cswu.query_csw(keyword_list=keywords,
                                       #anytext_list=allwords,
                                       #titleword_list=titlewords,
@@ -93,13 +93,13 @@ def get_netcdf_datasets(keywords,
                                       #max_total_records=2000
                                       )
               ]
-    print '%d matching dataset records found from CSW' % len(record_list)
+    print('{} matching dataset records found from CSW'.format(len(record_list)))
     
     netcdf_list = [distribution['url']
             for distribution in cswu.get_netcdf_urls(record_list)
             ]
 
-    print '%d NetCDF distributions found' % len(netcdf_list)
+    print('{} NetCDF distributions found'.format(len(netcdf_list)))
     
     return netcdf_list
 
@@ -119,7 +119,7 @@ def dataset_point_generator(dataset_list,
     line_dataset_count = 0
     for dataset in dataset_list:
         line_data = {}
-        print 'Reading and reprojecting points from line dataset %s' % dataset
+        print('Reading and reprojecting points from line dataset %s'.format(dataset))
         try:
             nc_dataset = Dataset(dataset)
             mag_awags_variable = nc_dataset.variables[variable_name]
@@ -129,7 +129,7 @@ def dataset_point_generator(dataset_list,
             #print netcdf_line_utils.__dict__
             
             if flight_lines_only:
-                print 'Excluding tie-lines'
+                print('Excluding tie-lines')
                 line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
                 line_mask = np.zeros(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
                 for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
@@ -137,18 +137,18 @@ def dataset_point_generator(dataset_list,
             else:
                 line_mask = np.ones(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
             
-            print 'Computing spatial mask'
+            print('Computing spatial mask')
             selection_indices = np.where(np.logical_and(netcdf_line_utils.get_spatial_mask(reprojected_bounds),
                                                         line_mask
                                                         ))[0]
-            print '%d/%d points found in bounding box' % (len(selection_indices), len(mag_awags_variable))
+            print('{}/{} points found in bounding box'.format(len(selection_indices), len(mag_awags_variable)))
             
             # Enforce min/max point counts
             if min_points and len(selection_indices) < min_points:
-                print 'Skipping dataset with < %d points' % min_points
+                print('Skipping dataset with < {} points'.format(min_points))
                 continue
             if max_points and len(selection_indices) > max_points:
-                print 'Skipping dataset with > %d points' % max_points
+                print('Skipping dataset with > {} points'.format(max_points))
                 continue
                 
             coordinates = np.array(transform_coords(netcdf_line_utils.xycoords[selection_indices],
@@ -158,16 +158,16 @@ def dataset_point_generator(dataset_list,
             
             mask=np.ma.getmask(values)
             if mask is not np.ma.nomask:
-                print 'Discarding %d invalid values' % np.count_nonzero(mask)
+                print('Discarding %d invalid values'.format(np.count_nonzero(mask)))
                 values = values[~mask].data
                 coordinates = coordinates[~mask]
-                print "%d valid points were found" % values.shape[0]
+                print("{} valid points were found".format(values.shape[0]))
             
             line_dataset_count += 1
             yield dataset, coordinates, values
     
         except Exception as e:
-            print 'Unable to read line dataset %s: %s' % (dataset, e.message)
+            print('Unable to read line dataset {}: {}'.format(dataset, e.message))
         finally:
             del netcdf_line_utils
                 
@@ -182,11 +182,11 @@ def get_points_from_dict(dataset_point_dict):
         all_coordinates += list(coordinates)
         all_values += list(values)
 
-    print "Converting lists to arrays"
+    print("Converting lists to arrays")
     all_values = np.array(all_values)
     all_coordinates = np.array(all_coordinates)
     assert all_values.shape[0] == all_coordinates.shape[0], 'Mismatched coordinate and value counts'
-    print "A total of %d points were read from %d line datasets" % (all_values.shape[0], len(dataset_point_dict))
+    print("A total of {} points were read from {} line datasets".format(all_values.shape[0], len(dataset_point_dict)))
     
     return all_coordinates, all_values
 
@@ -212,11 +212,11 @@ def get_points_from_datasets(dataset_list,
                                                  coordinate_wkt))
         all_values += list(values)
 
-    print "Converting lists to arrays"
+    print("Converting lists to arrays")
     all_values = np.array(all_values)
     all_coordinates = np.array(all_coordinates)
     assert all_values.shape[0] == all_coordinates.shape[0], 'Mismatched coordinate and value counts'
-    print "A total of %d points were read from %d line datasets" % (all_values.shape[0], len(dataset_list))
+    print("A total of {} points were read from {} line datasets".format(all_values.shape[0], len(dataset_list)))
     
     return all_coordinates, all_values
 
@@ -240,10 +240,10 @@ def grid_points(coordinates,
                    round(math.floor(grid_bounds[3] / grid_resolution - 1.0) * grid_resolution + grid_resolution, 6)
                    )
     
-    print "Reprojecting coordinates"
+    print("Reprojecting coordinates")
     grid_coordinates = np.array(transform_coords(coordinates, coordinate_wkt, grid_wkt))
 
-    print "Computing spatial mask"
+    print("Computing spatial mask")
     spatial_subset_mask = np.logical_and(np.logical_and((grid_bounds[0] <= grid_coordinates[:,0]), 
                                                         (grid_coordinates[:,0] <= grid_bounds[2])), 
                                          np.logical_and((grid_bounds[1] <= grid_coordinates[:,1]), 
@@ -251,12 +251,12 @@ def grid_points(coordinates,
                                         )    
     # Create grids of Y and X values. Note YX ordering and inverted Y for image
     # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
-    print "Generating grid coordinates"
+    print("Generating grid coordinates")
     grid_y, grid_x = np.mgrid[pixel_centre_bounds[3]:pixel_centre_bounds[1]-grid_resolution/2.0:-grid_resolution, 
                               pixel_centre_bounds[0]:pixel_centre_bounds[2]+grid_resolution/2.0:grid_resolution]
 
     # Skip points to reduce memory requirements
-    print "Generating spatial subset mask"
+    print("Generating spatial subset mask")
     point_subset_mask = np.zeros(shape=values.shape, dtype=bool)
     point_subset_mask[0:-1:point_step] = True
     point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
@@ -265,14 +265,14 @@ def grid_points(coordinates,
     grid_coordinates = grid_coordinates[point_subset_mask]
 
     # Interpolate required values to the grid - Note yx ordering for image
-    print "Interpolating %d points" % grid_coordinates.shape[0]
+    print("Interpolating {} points".format(grid_coordinates.shape[0]))
     grid_array = griddata(grid_coordinates[:,::-1],
                           values[point_subset_mask],
                           (grid_y, grid_x), 
                           method=resampling_method
                           )
 
-    print "Interpolation complete"
+    print("Interpolation complete")
     #  crs:GeoTransform = "109.1002342895272 0.00833333 0 -9.354948067227777 0 -0.00833333 "
     geotransform = [pixel_centre_bounds[0]-grid_resolution/2.0,
                     grid_resolution,
