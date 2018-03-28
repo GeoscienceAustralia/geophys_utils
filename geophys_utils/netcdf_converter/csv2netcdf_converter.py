@@ -23,7 +23,8 @@ Created on 28Mar.2018
 @author: Alex Ip
 '''
 from collections import OrderedDict
-from . import NetCDFConverter
+from . import NetCDFConverter, NetCDFVariable
+import numpy as np
 
 class CSV2NetCDFConverter(NetCDFConverter):
     '''
@@ -95,6 +96,17 @@ GEOGCS["GDA94",
     AUTHORITY["EPSG","4283"]]
 '''
             )
+        
+        yield NetCDFVariable(short_name='test_data', 
+                             data=np.random.random((self.nc_output_dataset.dimensions['lat'].size, 
+                                                    self.nc_output_dataset.dimensions['lon'].size)), 
+                             dimensions=['lat', 'lon'], 
+                             fill_value=0.0, 
+                             attributes={'units': 'random crap',
+                                         'long_name': 'random numbers between 0 and 1'
+                                         }, 
+                             dtype='float32'
+                             )
         
         return
     
