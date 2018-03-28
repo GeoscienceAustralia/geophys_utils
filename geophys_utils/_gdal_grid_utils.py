@@ -33,7 +33,7 @@ def get_gdal_wcs_dataset(wcs_url):
     temp_xml_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', clean_url) + '.xml')
     
     wcs = WebCoverageService(wcs_url, version='1.0.0')
-    variable_name = wcs.contents.keys()[0] # Only work with first variable
+    variable_name = list(wcs.contents.keys())[0] # Only work with first variable
     
     xml_string = '''<WCS_GDAL>
   <ServiceURL>%s?</ServiceURL>

@@ -62,15 +62,15 @@ def array_pieces(ndarray, max_bytes=None, overlap=0):
             chunking = (1, 1)
 
         # Disregard chunking if it's too big to be useful
-        chunking = [chunking[index] if chunking[index] < array_shape[index] / axis_divisions else 1
+        chunking = [chunking[index] if chunking[index] < array_shape[index] // axis_divisions else 1
                     for index in range(array_dimensions)]
 
         # Determine piece shape rounded down to chunk sizes
-        piece_shape = [array_shape[index] / axis_divisions / chunking[index]
+        piece_shape = [array_shape[index] // axis_divisions // chunking[index]
                        * chunking[index] for index in range(array_dimensions)]
 
         # Determine total number of pieces in each axis
-        axis_pieces = [int(math.ceil(float(array_shape[index]) / piece_shape[index]))
+        axis_pieces = [int(math.ceil(float(array_shape[index]) // piece_shape[index]))
                        for index in range(array_dimensions)]
 
         # Iterate over every piece of array
@@ -122,9 +122,9 @@ def main():
         piece_count += 1
         piece_bytes = data_variable.dtype.itemsize * \
             reduce(lambda x, y: x * y, piece_array.shape)
-        print 'piece_array.shape = %s, array_offset = %s, piece_bytes = %d' % (piece_array.shape, array_offset, piece_bytes)
+        print('piece_array.shape = %s, array_offset = %s, piece_bytes = %d'.format(piece_array.shape, array_offset, piece_bytes))
 
-    print 'piece_count = %s' % piece_count
+    print('piece_count = %s'.format(piece_count))
 
 if __name__ == '__main__':
     main()

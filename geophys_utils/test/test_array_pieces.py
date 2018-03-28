@@ -24,25 +24,26 @@ Created on 15/11/2016
 """
 import unittest
 import numpy as np
+from functools import reduce
 from geophys_utils._array_pieces import array_pieces
 
 class TestArrayPieces(unittest.TestCase):
     """Unit tests for geophys_utils._array_pieces module."""
     
     def test_array_pieces(self):
-        print 'Testing array_pieces function'
+        print('Testing array_pieces function')
         # create 100 x 100 array with unique elements
         test_array = np.reshape(np.arange(0, 10000, dtype='int16'), (100,100))
         sixteenth_bytes = test_array.dtype.itemsize * reduce(lambda x, y: x * y / 16, test_array.shape)
         overlap = 10
         
-        print'\tTesting single piece'
+        print('\tTesting single piece')
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array)}
 
         assert len(array_pieces_results) == 1, 'Whole array not returned for large max_bytes'
-        assert not np.any(test_array - array_pieces_results.values()[0]), 'Array contents changed'
+        assert not np.any(test_array - list(array_pieces_results.values())[0]), 'Array contents changed'
         
-        print'\tTesting sixteenth arrays'
+        print('\tTesting sixteenth arrays')
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array,
                                                                                                         max_bytes=sixteenth_bytes)}
         assert len(array_pieces_results) == 16, '16 arrays not returned for max_bytes=%d' % sixteenth_bytes
@@ -60,7 +61,7 @@ class TestArrayPieces(unittest.TestCase):
                             ) for dim_index in range(2)]
             assert not np.any(piece_array - test_array[slices]), 'Array contents changed for array piece at %s' % array_offset
         
-        print'\tTesting sixteenth arrays with overlap'
+        print('\tTesting sixteenth arrays with overlap')
         array_pieces_results = {array_offset: piece_array for piece_array, array_offset in array_pieces(test_array,
                                                                                                         max_bytes=sixteenth_bytes,
                                                                                                         overlap=overlap)}

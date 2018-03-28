@@ -120,10 +120,10 @@ class DataStats(object):
 
 
 def main():
-    print ','.join(DataStats.key_list)
+    print(','.join(DataStats.key_list))
     for netcdf_path in sys.argv[1:]:
         datastats = DataStats(netcdf_path)
-        print ','.join([str(datastats.value(key)) for key in DataStats.key_list])
+        print(','.join([str(datastats.value(key)) for key in DataStats.key_list]))
 
 if __name__ == '__main__':
     main()
