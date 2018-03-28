@@ -32,7 +32,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
     def __init__(self, nc_out_path, netcdf_format='NETCDF4_CLASSIC'):
         '''
         Concrete constructor for subclass CSV2NetCDFConverter
-        Needs to initialise object with everything that is required for the other abstract base methods
+        Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
         NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
@@ -46,7 +46,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
     
     def get_dimensions(self):
         '''
-        Abstract base method to return OrderedDict of <dimension_name>:<dimension_size> pairs       
+        Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs       
         '''
         dimensions = OrderedDict()
         
@@ -58,7 +58,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
     
     def variable_generator(self):
         '''
-        Abstract base generator to yield NetCDFVariable objects       
+        Concrete generator to yield NetCDFVariable objects       
         '''        
         # Example of latitude dimension variable creation
         yield self.build_dimension_variable(dimension_name='lat', 
