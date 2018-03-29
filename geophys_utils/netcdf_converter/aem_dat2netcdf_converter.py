@@ -25,41 +25,10 @@ Created on 28Mar.2018
 from collections import OrderedDict
 import numpy as np
 import re
-import osgeo
 from pprint import pprint
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-
-
-#===============================================================================
-# # Field definitions for .dat file
-# #TODO: Split this out into a config file
-# dat_field_definitions = {
-#     'point_fields': [
-#         'Running index',
-#         'Line number',
-#         'UTMX',
-#         'UTMY',
-#         'DTM',
-#         'Data Residual',
-#         'Residual of constrained parameters',
-#         'Residual of multi-layer model constraints',
-#         'Total residual',
-#         'Tx height of data',
-#         'Inverted Tx height',
-#         'Relative uncertainty of inverted Tx height',
-#         'DOI',
-#         'Number of layers'
-#         ],
-#     'layer_fields': [
-#         'Resistivities',
-#         'Relative uncertainty of resistivities',
-#         'Depths to top of layer boundaries',
-#         ]
-#     }
-#===============================================================================
-    
 
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
@@ -72,6 +41,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
         '''
+        #TODO: Make this a bit easier to work with
         def parse_dfn_file(dfn_path):
             print('Reading definitions file {}'.format(dfn_path))
             field_definitions = []
