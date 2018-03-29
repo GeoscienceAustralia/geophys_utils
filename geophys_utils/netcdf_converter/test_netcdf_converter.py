@@ -16,7 +16,7 @@
 #    limitations under the License.
 #===============================================================================
 '''
-CSV2NetCDFConverter concrete class for converting data to netCDF
+TestNetCDFConverter concrete class for converting data to netCDF
 
 Created on 28Mar.2018
 
@@ -26,19 +26,17 @@ from collections import OrderedDict
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 import numpy as np
 
-class CSV2NetCDFConverter(NetCDFConverter):
+class TestNetCDFConverter(NetCDFConverter):
     '''
-    CSV2NetCDFConverter concrete class for converting CSV data to netCDF
+    TestNetCDFConverter concrete class for converting CSV data to netCDF
     '''
-    def __init__(self, nc_out_path, csv_path, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, nc_out_path, netcdf_format='NETCDF4_CLASSIC'):
         '''
-        Concrete constructor for subclass CSV2NetCDFConverter
+        Concrete constructor for subclass TestNetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
         '''
         NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
-        
-        self.csv_path = csv_path
         
     
     def get_global_attributes(self):
@@ -64,7 +62,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
         Concrete generator to yield NetCDFVariable objects       
         '''        
         # Example of latitude dimension variable creation
-        yield self.build_dimension_variable(dimension_name='lat', 
+        yield self.build_dim_index_variable(dimension_name='lat', 
                                             min_value=-22.9247209891964, 
                                             max_value=-20.5641209891964, 
                                             long_name='latitude', 
@@ -74,7 +72,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
                                             )
          
         # Example of longitude dimension variable creation
-        yield self.build_dimension_variable(dimension_name='lon', 
+        yield self.build_dim_index_variable(dimension_name='lon', 
                                             min_value=121.122089060582, 
                                             max_value=123.001689060582, 
                                             long_name='longitude', 
@@ -114,8 +112,8 @@ GEOGCS["GDA94",
     
 def main():
     nc_out_path = 'C:\\Temp\\test.nc'
-    c2n = CSV2NetCDFConverter(nc_out_path)
-    c2n.convert2netcdf()
+    tnc = TestNetCDFConverter(nc_out_path)
+    tnc.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
 
 if __name__ == '__main__':

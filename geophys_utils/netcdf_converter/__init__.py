@@ -45,7 +45,7 @@ class NetCDFVariable(object):
         self.dimensions = dimensions # List of <dimension_name> strings for array, or None or empty list for scalar
         self.fill_value = fill_value # Fill value for no-data array values
         self.attributes = attributes # dict of variable attribute <key>:<value> pairs 
-        self.dtype = dtype or data.dtype if (type(data) == np.ndarray) else 'float64'
+        self.dtype = dtype or (data.dtype if (type(data) == np.ndarray) else 'float64')
         #TODO: Implement something better for determining the type of scalars
                 
         
@@ -129,7 +129,7 @@ class NetCDFConverter(object):
         '''        
         #=======================================================================
         # # Example of latitude dimension variable creation
-        # yield self.build_dimension_variable(dimension_name='lat', 
+        # yield self.build_dim_index_variable(dimension_name='lat', 
         #                                     min_value=-22.9247209891964, 
         #                                     max_value=-20.5641209891964, 
         #                                     long_name='latitude', 
@@ -139,7 +139,7 @@ class NetCDFConverter(object):
         #                                     )
         # 
         # # Example of longitude dimension variable creation
-        # yield self.build_dimension_variable(dimension_name='lon', 
+        # yield self.build_dim_index_variable(dimension_name='lon', 
         #                                     min_value=121.122089060582, 
         #                                     max_value=123.001689060582, 
         #                                     long_name='longitude', 
@@ -168,7 +168,7 @@ class NetCDFConverter(object):
 #===============================================================================
         return
     
-    def build_dimension_variable(self, 
+    def build_dim_index_variable(self, 
                                  dimension_name, 
                                  min_value, 
                                  max_value, 
@@ -178,7 +178,7 @@ class NetCDFConverter(object):
                                  descending=False
                                  ):
         '''
-        Concrete method to build dimension variable
+        Concrete method to build dimension index variable
         N.B: Need to have dimension defined prior to calling this
         
         @param dimension_name: Name of dimension 
@@ -301,7 +301,7 @@ class NetCDFConverter(object):
                               dimensions=[], # Scalar
                               fill_value=None, 
                               attributes=crs_attributes,
-                              dtype='i1' # Byte datatype
+                              dtype='int8' # Byte datatype
                               )    
 
     def convert2netcdf(self):
