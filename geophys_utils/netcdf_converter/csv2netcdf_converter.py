@@ -23,7 +23,7 @@ Created on 28Mar.2018
 @author: Alex Ip
 '''
 from collections import OrderedDict
-from geophys_utils.netcdf_converter.csv2netcdf_converter import CSV2NetCDFConverter
+from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 import numpy as np
 
 class CSV2NetCDFConverter(NetCDFConverter):
@@ -111,9 +111,10 @@ GEOGCS["GDA94",
         return
     
 def main():
-    nc_out_path = 'C:\\Temp\\test1.nc'
+    nc_out_path = 'C:\\Temp\\test.nc'
     c2n = CSV2NetCDFConverter(nc_out_path)
     c2n.convert2netcdf()
+    print('Finished writing netCDF file {}'.format(nc_out_path))
 
 if __name__ == '__main__':
     main()
