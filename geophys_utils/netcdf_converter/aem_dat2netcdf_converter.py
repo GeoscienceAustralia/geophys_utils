@@ -41,7 +41,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
         '''
-        #TODO: Make this a bit easier to work with
+        #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
             print('Reading definitions file {}'.format(dfn_path))
             field_definitions = []
@@ -49,7 +49,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             dfn_file = open(dfn_path, 'r')
             for line in dfn_file:
-                # generate nested lists split by ";", ":" then ","
+                # generate nested lists split by ";", ":", "," then "="
                 split_lists = [[[[equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
                     for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]
                     ]
@@ -68,7 +68,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                         
                         short_name = split_lists[1][0][0][0]
                         
-                        #fmt = split_lists[1][1][0][0]
+                        fmt = split_lists[1][1][0][0]
                         
                         if len(split_lists[1]) > 2:
                             if len(split_lists[1][2]) == 1: # Only short_name, format and long_name defined
@@ -82,7 +82,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                 long_name = split_lists[1][2][0][0]
                                 
                         field_dict = {'short_name': short_name,
-                                      #'format': fmt,
+                                      'format': fmt,
                                       'long_name': long_name,
                                       }
                         if units:
@@ -142,31 +142,51 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                for field_def in self.field_definitions 
                                                                if field_def['short_name'] == 'nlayers'][0]
                                                                )
-        #print(self.layer_count_index)     
-
+        #print(self.layer_count_index)   
+          
+        self.fields_per_layer = len(self.field_definitions) - self.layer_count_index - 1
+        
         print('Reading data file {}'.format(aem_dat_path))
         self.aem_dat_path = aem_dat_path
         aem_dat_file = open(aem_dat_path, 'r')
          
+        # Convert entire numeric file into a single array of float32 datatype
+        # This is done to permit efficient column-wise data access but it will fail for any
+        # invalid floating point values in data file
         row_list = []
+        self.field_count = 0
+        
         for line in aem_dat_file:
             line = line.strip()
             if not line: # Skip empty lines
                 continue
             row = re.sub('\s+', ',', line).split(',')
             #print(row)
+            
+            if self.field_count:
+                assert self.field_count == len(row), 'Inconsistent field count. Expected {}, found {}.'.format(self.field_count, 
+                                                                                                               len(row)
+                                                                                                               )
+            else: # First row
+                self.field_count = len(row)
+            
             row_list.append(row)
             
         aem_dat_file.close()
          
         #pprint(row_list)
-        self.raw_data_array = np.array(row_list, dtype='float32')
+        self.raw_data_array = np.array(row_list, dtype='float32') # Convert to numpy array
         print('{} points found'.format(self.raw_data_array.shape[0]))
         
-        self.layer_count = int(self.raw_data_array[0, self.layer_count_index])
+        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) # Only check first row for layer count value
         print('{} layers found'.format(self.layer_count))
         
-        assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsisten layer count(s) found'
+        assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.layer_count_index + 1)
+        
+        # Check field count
+        expected_field_count = self.layer_count_index + self.layer_count * self.fields_per_layer + 1
+        assert self.field_count == expected_field_count, 'Invalid field count. Expected {}, found {}'.format(expected_field_count,
+                                                                                                             self.field_count)
     
     def get_global_attributes(self):
         '''
@@ -190,7 +210,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         Concrete generator to yield NetCDFVariable objects       
         '''        
-        # Create crs variable
+        # Create crs variable (points)
         yield self.build_crs_variable(self.crs)
         
         # Create 1D variables
@@ -207,6 +227,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             if units:
                 field_attributes['units'] = units
                 
+            fmt = self.field_definitions[field_index].get('format')
+            if fmt[0] =='I': # Integer field
+                #TODO: see if we can reduce the size of the integer datatype
+                dtype = 'int32' 
+            else:
+                dtype='float32'
+                
             print('\tWriting 1D variable {}'.format(short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
@@ -214,14 +241,12 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['points'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype='float32'
+                                 dtype=dtype
                                  )
         
         
-        # Create 2D variables
-        fields_per_layer = len(self.field_definitions) - self.layer_count_index - 1
-        
-        for layer_field_index in range(fields_per_layer):
+        # Create 2D variables (points x layers)
+        for layer_field_index in range(self.fields_per_layer):
             field_definition_index = self.layer_count_index + 1 + layer_field_index
 
             field_start_index = self.layer_count_index + 1 + (layer_field_index * self.layer_count)
@@ -240,12 +265,19 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             if units:
                 field_attributes['units'] = units
                  
+            fmt = self.field_definitions[field_index].get('format')
+            if fmt[0] =='I': # Integer field
+                #TODO: see if we can reduce the size of the integer datatype
+                dtype = 'int32' 
+            else:
+                dtype='float32'
+                
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_start_index:field_end_index], 
                                  dimensions=['points', 'layers'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype='float32'
+                                 dtype=dtype
                                  )
         
         return
