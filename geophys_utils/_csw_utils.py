@@ -33,10 +33,20 @@ import netCDF4
 import yaml
 from pprint import pformat
 import logging
+import sys
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
+if not logger.handlers:
+    # Set handler for root logger to standard output
+    console_handler = logging.StreamHandler(sys.stdout)
+    #console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(message)s')
+    console_handler.setFormatter(console_formatter)
+    logger.addHandler(console_handler)
+        
 class CSWUtils(object):
     '''
     CSW query utilities
@@ -78,7 +88,7 @@ class CSWUtils(object):
             try:
                 self.csw_list.append(CatalogueServiceWeb(csw_url, timeout=timeout))
             except Exception as e:
-                logger.warning('Unable to open CSW URL %s: %s' % (csw_url, e.message))
+                logger.warning('Unable to open CSW URL {}: {}'.format(csw_url, e))
                 
         assert self.csw_list, 'No valid CSW URLs provided'
 
@@ -164,7 +174,7 @@ class CSWUtils(object):
         
         uuid_list = []
         for csw in self.csw_list:
-            logger.debug('Querying %s' % csw.url)
+            logger.debug('Querying {}'.format(csw.url))
 
             startposition = 1 # N.B: This is 1-based, not 0-based
             record_count = 0
@@ -178,12 +188,13 @@ class CSWUtils(object):
                                          #outputschema="http://www.opengis.net/cat/csw/2.0.2",
                                          maxrecords=max_query_records,
                                          startposition=startposition)
+                    print('CSW request:\n{}'.format(csw.request))
                 except Exception as e:
-                    logger.warning('CSW Query failed: %s' % e.message)
+                    logger.warning('CSW Query failed: {}'.format(e))
                     break
                 finally:
-                    logger.debug('CSW request:\n%s' % csw.request)
-                    logger.debug('CSW response:\n %s' % csw.response)
+                    logger.debug('CSW request:\n{}'.format(csw.request))
+                    logger.debug('CSW response:\n {}'.format(csw.response))
     
                 query_record_count = len(csw.records)
     
@@ -194,13 +205,13 @@ class CSWUtils(object):
                     #===========================================================
                     # # Ignore datasets with no distributions
                     # if not record.uris:
-                    #     #logger.warning('No distribution(s) found for "%s"' % title)
+                    #     #logger.warning('No distribution(s) found for "{}"'.format(title)
                     #     continue
                     #===========================================================
     
                     uuid_list.append(uuid) # Remember UUID to avoid returning duplicates
                     
-    #                logger.debug('bbox = %s' % record.bbox.__dict__)
+    #                logger.debug('bbox = {}'.format(record.bbox.__dict__)
                     #pprint(record.__dict__)
                     record_dict = {'csw': csw.url,
                                    'uuid': uuid,
@@ -258,10 +269,10 @@ class CSWUtils(object):
     
                     record_count += 1
                     yield record_dict
-                    logger.debug('%d distribution(s) found for "%s"' % (len(distribution_info_list), title))
+                    logger.debug('{} distribution(s) found for "{}"'.format(len(distribution_info_list), title))
     
                     if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
-                        raise Exception('Maximum number of records retrieved (%d)' % max_total_records)
+                        raise Exception('Maximum number of records retrieved ({})'.format(max_total_records))
         
                 if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
                     break
@@ -269,7 +280,7 @@ class CSWUtils(object):
                 # Increment start position and repeat query
                 startposition += max_query_records
     
-        logger.debug('%d records found.' % record_count)
+        logger.debug('{} records found.'.format(record_count))
 
 
     def query_csw(self,
@@ -460,7 +471,7 @@ class CSWUtils(object):
                             distribution_dict = file_distribution
                             break
                     except:
-                        logger.warning('Unable to open netCDF file %s' % file_distribution['url'])
+                        logger.warning('Unable to open netCDF file {}'.format(file_distribution['url']))
                     
             if not distribution_dict:
                 # Check for valid OPeNDAP endpoint if no valid file found
@@ -473,7 +484,7 @@ class CSWUtils(object):
                                 distribution_dict = opendap_distribution
                                 break
                         except:
-                            logger.warning('Unable to open OPeNDAP URL %s' % opendap_distribution['url'])
+                            logger.warning('Unable to open OPeNDAP URL {}'.format(opendap_distribution['url']))
             
             if distribution_dict:
                 yield self.flatten_distribution_dict(record_dict, distribution_dict)
@@ -507,7 +518,7 @@ def date_string2datetime(date_string):
     @return datetime object
     '''
     #?
-    DATE_FORMAT_LIST = ['%Y%m%d', '%Y-%m-%d', '%d/%m/%y', '%d/%m/%Y']
+    DATE_FORMAT_LIST = ['%Y%m{}', '%Y-%m-{}', '{}/%m/%y', '{}/%m/%Y']
     #If there is a date_string (start date or end date from argparse) then for each format type
     # in the DATE FORMAT LIST try to use the datetime.strptime method.
     #datetime.strptime() returns a datetime variable from the input parsed into the correct format.
@@ -652,7 +663,7 @@ def main():
                              )
               )
 
-    logger.debug('%d results found.' % distribution_count)
+    logger.debug('{} results found.'.format(distribution_count))
 
 if __name__ == '__main__':
     main()
