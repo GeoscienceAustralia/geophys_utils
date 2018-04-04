@@ -168,6 +168,21 @@ class NetCDFConverter(object):
 #===============================================================================
         return
     
+    
+    def preprocess_netcdf(self):
+        '''
+        Function to perform any pre-processing on netCDF file before dimensions and variables
+        have been created. May be overridden in subclass.
+        '''
+        return
+    
+    def postprocess_netcdf(self):
+        '''
+        Function to perform any post-processing on netCDF file after dimensions and variables
+        have been created. May be overridden in subclass.
+        '''
+        return
+    
     def build_dim_index_variable(self, 
                                  dimension_name, 
                                  min_value, 
@@ -308,6 +323,8 @@ class NetCDFConverter(object):
         '''
         Concrete method to output netCDF
         '''
+        self.preprocess_netcdf()
+        
         # Create dimensions in netCDF output file
         for dimension_name, dimension_size in iter(self.get_dimensions().items()):
             self.nc_output_dataset.createDimension(dimname=dimension_name, size=dimension_size)
@@ -319,5 +336,7 @@ class NetCDFConverter(object):
         # Set global attributes in netCDF output file
         for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
             setattr(self.nc_output_dataset, attribute_name, attribute_value)
+            
+        self.postprocess_netcdf()
             
             

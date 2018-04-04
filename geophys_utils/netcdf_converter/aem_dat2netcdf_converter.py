@@ -187,7 +187,24 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         expected_field_count = self.layer_count_index + self.layer_count * self.fields_per_layer + 1
         assert self.field_count == expected_field_count, 'Invalid field count. Expected {}, found {}'.format(expected_field_count,
                                                                                                              self.field_count)
-    
+        # Process lines as a special case
+        try:
+            line_field_index = [field_index
+                                for field_index in range(len(self.field_definitions))
+                                if self.field_definitions[field_index]['short_name'] == 'line'
+                                ]
+            line_data = self.raw_data_array[:,line_field_index]
+            
+            self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, return_index=True, return_inverse=False, return_counts=True)
+            print('{} lines found'.format(len(self.lines)))
+            #print(self.lines, self.line_start_indices, self.line_point_counts)
+        except:
+            print('No lines found')
+            self.lines = None
+            self.line_start_indices = None
+            self.line_point_counts = None       
+            
+               
     def get_global_attributes(self):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs       
@@ -203,13 +220,49 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # Example lat/lon dimensions
         dimensions['points'] = self.raw_data_array.shape[0]
         dimensions['layers'] = self.layer_count
+        dimensions['lines'] = len(self.lines)
               
         return dimensions
     
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects       
-        '''        
+        '''  
+        def line_variable_generator():
+            '''
+            Helper function to output flight line variables - only called once
+            '''
+            assert self.lines is not None, 'flight Line parameters not defined'
+            
+            print('\tWriting flight line indexing variables')
+            
+            print('\t\tWriting flight line number')
+            yield NetCDFVariable(short_name='lines', 
+                                 data=self.lines, 
+                                 dimensions=['lines'], 
+                                 fill_value=-1, 
+                                 attributes={'long_name': 'flight line number'}, 
+                                 dtype='int32'
+                                 )
+                        
+            print('\t\tWriting index of first point in flight line')
+            yield NetCDFVariable(short_name='line_start_indices', 
+                                 data=self.line_start_indices, 
+                                 dimensions=['lines'], 
+                                 fill_value=-1, 
+                                 attributes={'long_name': 'index of first point in flight line'}, 
+                                 dtype='int32'
+                                 )
+                        
+            print('\t\tWriting point count for flight line')
+            yield NetCDFVariable(short_name='line_point_counts', 
+                                 data=self.line_point_counts, 
+                                 dimensions=['lines'], 
+                                 fill_value=-1, 
+                                 attributes={'long_name': 'point count for flight line'}, 
+                                 dtype='int32'
+                                 )
+              
         # Create crs variable (points)
         yield self.build_crs_variable(self.crs)
         
@@ -218,6 +271,12 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             field_attributes = {}
             
             short_name = self.field_definitions[field_index]['short_name']
+            
+            if short_name == 'line': # Special case for line variable
+                for line_variable in line_variable_generator():
+                    yield line_variable
+                    
+                continue
             
             long_name = self.field_definitions[field_index].get('long_name')
             if long_name:
@@ -232,7 +291,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 #TODO: see if we can reduce the size of the integer datatype
                 dtype = 'int32' 
             else:
-                dtype='float32'
+                dtype ='float32'
                 
             print('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
