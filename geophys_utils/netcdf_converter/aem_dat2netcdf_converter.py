@@ -215,9 +215,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         
         # Create 1D variables
         for field_index in range(self.layer_count_index):
-            short_name = self.field_definitions[field_index]['short_name']
-            
             field_attributes = {}
+            
+            short_name = self.field_definitions[field_index]['short_name']
             
             long_name = self.field_definitions[field_index].get('long_name')
             if long_name:
@@ -234,7 +234,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype='float32'
                 
-            print('\tWriting 1D variable {}'.format(short_name))
+            print('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_index], 
@@ -252,8 +252,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             field_start_index = self.layer_count_index + 1 + (layer_field_index * self.layer_count)
             field_end_index = self.layer_count_index + 1 + ((layer_field_index + 1) * self.layer_count)
             
+            field_attributes = {}
+            
             short_name = self.field_definitions[field_definition_index]['short_name']
-            print('\tWriting 2D variable {}'.format(short_name))
             
             #print(layer_field_index, field_definition_index, field_start_index, field_end_index)
             
@@ -272,6 +273,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype='float32'
                 
+            print('\tWriting 2D {} variable {}'.format(dtype, short_name))
+
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_start_index:field_end_index], 
                                  dimensions=['points', 'layers'], 
@@ -283,8 +286,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         return
     
 def main():
-    dat_in_path = 'C:\\Users\\u76345\\Downloads\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
-    dfn_in_path = 'C:\\Users\\u76345\\Downloads\\Groundwater Data\\nbc_20160421.dfn'
+    dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+    dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
     nc_out_path = 'C:\\Temp\\dat_test.nc'
     d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path)
     d2n.convert2netcdf()
