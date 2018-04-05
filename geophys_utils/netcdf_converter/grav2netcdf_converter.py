@@ -26,36 +26,39 @@ from collections import OrderedDict
 # from geophys_utils.netcdf_converter.csv2netcdf_converter import CSV2NetCDFConverter
 import numpy as np
 import cx_Oracle
-from geophys_utils.netcdf_converter import sql_statements_dict, NetCDFVariable
+from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 import sys
+import re
+import netCDF4
 
 
-
-
-class Grav2NetCDFConverter(sql_statements_dict):
+class Grav2NetCDFConverter(NetCDFConverter):
     '''
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
 
-    def __init__(self, nc_out_path, survey_id_list, cursor, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4_CLASSIC'):
         '''
         Concrete constructor for subclass CSV2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
-        sql_statements_dict.__init__(self, nc_out_path, netcdf_format)
+        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
 
+        self.variables_cursor = con.cursor()
+        self.attributes_cursor = con.cursor()
 
+        self.survey_id = survey_id
         #sql_statements_dict = {
             #"read_grav": "select Surveyid, Grav from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = %s" % survey_id}
         self.variable_grav_list = []
-        count = 1
-        for survey_id in survey_id_list:
-
-            #while count < 20:
-                self.variable_grav_list = self.read_variable_data(survey_id, 'grav', cursor)
-                print self.variable_grav_list
-                nc_fid = self.variable_generator()
+        self.variable_dlat_list= []
+        self.variable_dlong_list= []
+        self.variable_grav_list = self.read_variable_data('grav')
+        self.variable_grav_list = self.read_variable_data('dlat')
+        self.variable_grav_list = self.read_variable_data('dlong')
+        print(self.variable_grav_list)
+        nc_fid = self.variable_generator()
                 #print nc_fid
                 # for netcdf_file in self.variable_generator():
                 #     print netcdf_file.next()
@@ -79,17 +82,19 @@ class Grav2NetCDFConverter(sql_statements_dict):
             #yield variable_grav_list  # and all other variables and atributes for that netcdf file/survey
             # get all the info here and yield it - call it
 
-    def read_variable_data(self, survey_id, column_name, cursor):
+    def read_variable_data(self, column_name):
 
-        sql_statement = "select Surveyid, Grav from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = %s" % survey_id
-        print sql_statement
-        variable_grav_list = []
-        cursor.execute(sql_statement)
-        for i in cursor:
-            variable_grav_list.append(i)
-            print i
-        return variable_grav_list
+        sql_statement = "select Surveyid, {} from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {}".format(self.survey_id, column_name)
+        print(sql_statement)
+        variable_list = []
+        self.variables_cursor.execute(sql_statement)
+        for i in self.variables_cursor:
+            if not "None": # found nulls for gravity in 197301
+                variable_list.append(i[1])
+            else:
+                pass
 
+        return variable_list
 
 
     def get_global_attributes(self):
@@ -97,7 +102,17 @@ class Grav2NetCDFConverter(sql_statements_dict):
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
         # insert survey wide metadata
-        return {'title': 'test dataset'}
+        attributes_dict = {"GNDELEVACC" : None,
+                           "GNDELEVDATUM" : None}
+        for key, return_value in attributes_dict.items():
+            sql = "select Surveyid, {} from gravity.GRAVSURVEYS where GRAVSURVEYS.Surveyid = {}".format(key, self.survey_id)
+
+            self.attributes_cursor.execute(sql)
+            for s in self.attributes_cursor:
+                attributes_dict["GNDELEVACC"] = s[1]
+
+        return {"GNDELEVACC" : attributes_dict["GNDELEVACC"]}
+        #return {'title': 'test dataset'}
 
     def get_dimensions(self):
         '''
@@ -113,7 +128,9 @@ class Grav2NetCDFConverter(sql_statements_dict):
         Concrete generator to yield NetCDFVariable objects
         '''
         variable_grav_np = np.array(self.variable_grav_list)
-        print variable_grav_np.shape
+        variable_dlong_np = np.array(self.variable_dlong_list)
+        variable_dlat_np = np.array(self.variable_dlat_list)
+        print(variable_grav_np.shape)
         yield NetCDFVariable(short_name='grav',
                              data=variable_grav_np,
                              dimensions=['point'],
@@ -122,7 +139,20 @@ class Grav2NetCDFConverter(sql_statements_dict):
                              dtype='int32'
                              )
 
-
+        yield NetCDFVariable(short_name='dlong',
+                             data=variable_dlong_np,
+                             dimensions=['point'],
+                             fill_value=-1,
+                             attributes={'long_name': 'longitude'},
+                             dtype='int32'
+                             )
+        yield NetCDFVariable(short_name='dlat',
+                             data=variable_dlat_np,
+                             dimensions=['point'],
+                             fill_value=-1,
+                             attributes={'long_name': 'latitude'},
+                             dtype='int32'
+                             )
 
         # Example of crs variable creation for GDA94
         yield self.build_crs_variable('''\
@@ -160,32 +190,41 @@ def main():
     u_id = sys.argv[2]
     oracle_database = sys.argv[3]
     pw = sys.argv[4]
-    print pw
-    print nc_out_path
-    print u_id
-    print oracle_database
-
     con = cx_Oracle.connect(u_id, pw, oracle_database)
 
-
-
-    cursor = con.cursor()
+    survey_cursor = con.cursor()
 
     # get the list of surveyids
     sql_get_surveyids = "select Surveyid from gravity.GRAVSURVEYS"
-    cursor.execute(sql_get_surveyids)
+    survey_cursor.execute(sql_get_surveyids)
     survey_id_list = []
-    for sur in cursor:
-        survey_id_list.append(sur)
-        print sur
+    for sur in survey_cursor:
 
+        tidy_sur = re.search('\d+', sur[0]).group()
+
+        survey_id_list.append(tidy_sur)
+
+    count =1
     for survey in survey_id_list:
-        g2n = Grav2NetCDFConverter(nc_out_path + survey, survey, cursor)
-        g2n.convert2netcdf()
-        try:
-            print g2n
-        except:
-            print "nope
+        while count < 6: #limit the number of surveys for testing purposes
+
+
+            g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + ".nc", survey, con)
+            g2n.convert2netcdf()
+            print('Finished writing netCDF file {}'.format(nc_out_path))
+
+            print('Dimensions:')
+            print(g2n.nc_output_dataset.dimensions)
+            print('Variables:')
+            print(g2n.nc_output_dataset.variables)
+
+            try:
+                print(g2n)
+            except:
+                print("nope")
+            count = count + 1
+
+
 
 if __name__ == '__main__':
     main()
