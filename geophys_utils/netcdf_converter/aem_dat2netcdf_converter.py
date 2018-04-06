@@ -37,7 +37,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
     AEMDAT2NetCDFConverter concrete class for converting AEM DAT data to netCDF
     '''
-    def __init__(self, nc_out_path, aem_dat_path, dfn_path, netcdf_format='NETCDF4_CLASSIC', chunk_size=None):
+    def __init__(self, 
+                 nc_out_path, 
+                 aem_dat_path, 
+                 dfn_path, 
+                 netcdf_format='NETCDF4_CLASSIC', 
+                 default_chunk_size=None, 
+                 default_variable_parameters=None
+                 ):
         '''
         Concrete constructor for subclass AEMDAT2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
@@ -46,7 +53,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         @param aem_dat_path: Path to .dat AEM data source file on filesystem
         @param dfn_path: Path to .dfn definition file on filesystem
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
-        @param chunk_size: single default chunk size for all dimensions
+        @param default_chunk_size: single default chunk size for all dimensions
+        @param default_variable_parameters: dict containing default parameters for netCDF variable creation
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -141,7 +149,12 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             return field_definitions, crs
             
         # Start of __init__() definition
-        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+        NetCDFConverter.__init__(self, 
+                                 nc_out_path, 
+                                 netcdf_format, 
+                                 default_chunk_size=default_chunk_size, 
+                                 default_variable_parameters=default_variable_parameters
+                                 )
         
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
@@ -287,7 +300,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'flight line number'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
                         
             print('\t\tWriting index of first point in flight line')
@@ -296,7 +311,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'zero based index of the first sample in the line'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
                         
             print('\t\tWriting point count for flight line')
@@ -305,7 +322,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'number of samples in the line'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
               
         # Create crs variable (points)
@@ -345,7 +364,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['point'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype=dtype
+                                 dtype=dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
         
         
@@ -384,7 +405,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['point', 'layers'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype=dtype
+                                 dtype=dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
         
         return
@@ -393,7 +416,7 @@ def main():
     dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
     dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
     nc_out_path = 'C:\\Temp\\dat_test.nc'
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path)
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
     d2n.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
     
