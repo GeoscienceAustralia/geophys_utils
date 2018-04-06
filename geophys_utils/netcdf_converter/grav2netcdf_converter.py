@@ -43,7 +43,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
-        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+
 
         self.variables_cursor = con.cursor()
         self.attributes_cursor = con.cursor()
@@ -52,48 +52,34 @@ class Grav2NetCDFConverter(NetCDFConverter):
         #sql_statements_dict = {
             #"read_grav": "select Surveyid, Grav from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = %s" % survey_id}
         self.variable_grav_list = []
-        self.variable_dlat_list= []
-        self.variable_dlong_list= []
         self.variable_grav_list = self.read_variable_data('grav')
-        self.variable_grav_list = self.read_variable_data('dlat')
-        self.variable_grav_list = self.read_variable_data('dlong')
-        print(self.variable_grav_list)
-        nc_fid = self.variable_generator()
-                #print nc_fid
-                # for netcdf_file in self.variable_generator():
-                #     print netcdf_file.next()
-                #count = count + 1
+        self.variable_dlat_list = self.read_variable_data('dlat')
+        self.variable_dlong_list = self.read_variable_data('dlong')
+
+        #self.variable_generator()
+        #self.nc_output_dataset = self.nc_output_dataset
 
 
 
+        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
 
-            #
-            # print "------------------------------------"
-            # print survey_id
-            # print "------------------------------------"
-            #
-            # # variable_grav = np.array()
-            # variable_grav_list = []
-            # self.cursor.execute(sql_statements_dict['get_grav'])
-            #
-            # for i in self.cursor:
-            #     variable_grav_list.append(i)
-            #     print i
-            #yield variable_grav_list  # and all other variables and atributes for that netcdf file/survey
-            # get all the info here and yield it - call it
+
 
     def read_variable_data(self, column_name):
 
-        sql_statement = "select Surveyid, {} from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {}".format(self.survey_id, column_name)
+        #sql_statement = "select obsno, Surveyid, grav, dlat, dlong from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {1}".format(column_name, '197320')
+
+        sql_statement = "select {0} from gravity.OBSERVATIONS " \
+                        "where surveyid = {1} " \
+                        "and dlong is not null " \
+                        "and dlat is not null and" \
+                        " status = 'O' order by obsno".format(column_name, '197320')
+
         print(sql_statement)
         variable_list = []
         self.variables_cursor.execute(sql_statement)
         for i in self.variables_cursor:
-            if not "None": # found nulls for gravity in 197301
-                variable_list.append(i[1])
-            else:
-                pass
-
+            variable_list.append(i[0]) # getting the first index is required. Otherwise wach point is within its own tuple.
         return variable_list
 
 
@@ -111,7 +97,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             for s in self.attributes_cursor:
                 attributes_dict["GNDELEVACC"] = s[1]
 
-        return {"GNDELEVACC" : attributes_dict["GNDELEVACC"]}
+        #return {"GNDELEVACC" : attributes_dict["GNDELEVACC"]}
+        return {"GNDELEVACC": '5'}
         #return {'title': 'test dataset'}
 
     def get_dimensions(self):
@@ -120,39 +107,49 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         dimensions = OrderedDict()
         dimensions['point'] = len(self.variable_grav_list)  # number of points per survey
-
+        print(len(self.variable_grav_list))
         return dimensions
 
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects
         '''
-        variable_grav_np = np.array(self.variable_grav_list)
-        variable_dlong_np = np.array(self.variable_dlong_list)
-        variable_dlat_np = np.array(self.variable_dlat_list)
+        print(self.variable_grav_list)
+        variable_grav_np = np.array(self.variable_grav_list, dtype='float32')
+        print('shape')
+        print(variable_grav_np.flags)
         print(variable_grav_np.shape)
+        print(variable_grav_np)
+        for i in variable_grav_np:
+            print(i)
+        variable_dlong_np = np.array(self.variable_dlong_list, dtype='float32')
+        variable_dlat_np = np.array(self.variable_dlat_list, dtype='float32')
+
+        print("grav data")
+
+
         yield NetCDFVariable(short_name='grav',
-                             data=variable_grav_np,
-                             dimensions=['point'],
-                             fill_value=-1,
-                             attributes={'long_name': 'gravity'},
-                             dtype='int32'
-                             )
+                                 data=variable_grav_np,
+                                 dimensions=['point'],
+                                 fill_value=-1,
+                                 attributes={'long_name': 'gravity'},
+                                 dtype='int32'
+                                 )
 
         yield NetCDFVariable(short_name='dlong',
-                             data=variable_dlong_np,
-                             dimensions=['point'],
-                             fill_value=-1,
-                             attributes={'long_name': 'longitude'},
-                             dtype='int32'
-                             )
+                                 data=variable_dlong_np,
+                                 dimensions=['point'],
+                                 fill_value=-1,
+                                 attributes={'long_name': 'longitude'},
+                                 dtype='int32'
+                                 )
         yield NetCDFVariable(short_name='dlat',
-                             data=variable_dlat_np,
-                             dimensions=['point'],
-                             fill_value=-1,
-                             attributes={'long_name': 'latitude'},
-                             dtype='int32'
-                             )
+                                 data=variable_dlat_np,
+                                 dimensions=['point'],
+                                 fill_value=-1,
+                                 attributes={'long_name': 'latitude'},
+                                 dtype='int32'
+                                 )
 
         # Example of crs variable creation for GDA94
         yield self.build_crs_variable('''\
