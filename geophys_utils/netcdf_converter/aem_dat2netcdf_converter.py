@@ -28,10 +28,16 @@ import re
 import os
 from datetime import datetime
 from pprint import pprint
+import yaml
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
+try:
+    settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+    #pprint(settings)
+except:
+    settings = {}
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -160,6 +166,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.dfn_path = dfn_path
         
         self.field_definitions, self.crs = parse_dfn_file(dfn_path)
+        
+        # Read overriding field definition values from settings
+        if settings.get('field_definitions'):
+            for field_definition in self.field_definitions:
+                overriding_field_definition = settings['field_definitions'].get(field_definition['short_name'])
+                if overriding_field_definition:
+                    field_definition.update(overriding_field_definition)
         
         self.layer_count_index = self.field_definitions.index([field_def 
                                                                for field_def in self.field_definitions 

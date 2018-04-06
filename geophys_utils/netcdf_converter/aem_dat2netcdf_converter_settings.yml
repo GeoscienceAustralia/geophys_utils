@@ -1,0 +1,24 @@
+field_definitions: # Overrides for short_name, long_name & units keyed by original field name.
+  DOI: {short_name: depth_of_investigation, units: m}
+  DataResidual: {long_name: Data residual, short_name: data_residual}
+  Residual2: {long_name: Data residual 2, short_name: data_residual2}
+  Residual3: {long_name: Data residual 3, short_name: data_residual3}
+  StdDev_TxHeightInverted: {long_name: Uncertainty of the inverted height
+      of the TXRX frame, short_name: stddev_tx_height_inverted, units: m}
+  TotalResidual: {long_name: Total Residual, short_name: total_residual}
+  TxHeightInverted: {long_name: Inverted height of the TXRX frame, short_name: tx_height_inverted,
+    units: m}
+  TxHeightMeasured: {long_name: Measured height of the TXRX frame, short_name: tx_height_measured,
+    units: m}
+  depth_top: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m}
+  easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
+  elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
+    units: m}
+  line: {long_name: Line number, short_name: line}
+  nlayers: {long_name: Number of layers, short_name: nlayers}
+  northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
+  resistivity: {long_name: Layer resistivity, short_name: resistivity,
+    units: ohm.m}
+  resistivity_uncertainty: {long_name: Uncertainty of the layer resistivity,
+    short_name: resistivity_uncertainty}
+  sequence: {long_name: Inversion sequence number, short_name: sequence}
