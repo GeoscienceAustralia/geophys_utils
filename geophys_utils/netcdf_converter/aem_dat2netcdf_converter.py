@@ -25,6 +25,8 @@ Created on 28Mar.2018
 from collections import OrderedDict
 import numpy as np
 import re
+import os
+from datetime import datetime
 from pprint import pprint
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
@@ -33,7 +35,7 @@ from geophys_utils import get_spatial_ref_from_wkt
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
-    AEMDAT2NetCDFConverter concrete class for converting AEMDAT data to netCDF
+    AEMDAT2NetCDFConverter concrete class for converting AEM DAT data to netCDF
     '''
     def __init__(self, nc_out_path, aem_dat_path, dfn_path, netcdf_format='NETCDF4_CLASSIC'):
         '''
@@ -130,11 +132,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             dfn_file.close()
             
             
-            #pprint(field_definitions)
+            pprint(field_definitions)
             return field_definitions, crs
             
         # Start of __init__() definition
         NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+        
+        self.aem_dat_path = aem_dat_path
+        self.dfn_path = dfn_path
         
         self.field_definitions, self.crs = parse_dfn_file(dfn_path)
         
@@ -147,7 +152,6 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.fields_per_layer = len(self.field_definitions) - self.layer_count_index - 1
         
         print('Reading data file {}'.format(aem_dat_path))
-        self.aem_dat_path = aem_dat_path
         aem_dat_file = open(aem_dat_path, 'r')
          
         # Convert entire numeric file into a single array of float32 datatype
@@ -189,13 +193,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                              self.field_count)
         # Process lines as a special case
         try:
-            line_field_index = [field_index
-                                for field_index in range(len(self.field_definitions))
-                                if self.field_definitions[field_index]['short_name'] == 'line'
-                                ]
-            line_data = self.raw_data_array[:,line_field_index]
+            line_data = self.get_data('line')
             
-            self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, return_index=True, return_inverse=False, return_counts=True)
+            self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, 
+                                                                                    return_index=True, 
+                                                                                    return_inverse=False, 
+                                                                                    return_counts=True
+                                                                                    )
             print('{} lines found'.format(len(self.lines)))
             #print(self.lines, self.line_start_indices, self.line_point_counts)
         except:
@@ -205,11 +209,47 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             self.line_point_counts = None       
             
                
+    def get_data(self, short_name):
+        '''
+        Helper function to return 1D array corresponding to short_name
+        '''
+        try:
+            field_index = self.field_definitions.index([field_def 
+                                                        for field_def in self.field_definitions 
+                                                        if field_def['short_name'] == short_name][0]
+                                                        )
+            return self.raw_data_array[:,field_index]
+        except:
+            return None        
+        
     def get_global_attributes(self):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs       
         '''
-        return {'title': 'test AEM .dat dataset'}
+        metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
+                'Conventions': "CF-1.6,ACDD-1.3",
+                'featureType': "trajectory",
+                'keywords': "geophysics, airborne, AEM, conductivity",
+                'geospatial_east_min': np.min(self.get_data('easting')),
+                'geospatial_east_max': np.max(self.get_data('easting')),
+                'geospatial_east_units': "m",
+                'geospatial_east_resolution': "point",
+                'geospatial_north_min': np.min(self.get_data('northing')),
+                'geospatial_north_max': np.max(self.get_data('northing')),
+                'geospatial_north_units': "m",
+                'geospatial_north_resolution': "point",
+                'geospatial_vertical_min': np.min(self.get_data('elevation')),
+                'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
+                'geospatial_vertical_units': "m",
+                'geospatial_vertical_resolution': "point",
+                'geospatial_vertical_positive': "up",
+                'history': 'Converted from .dat file {} using defintions file {}'.format(self.aem_dat_path,
+                                                                                         self.dfn_path),
+                'date_created': datetime.now().isoformat()
+                }
+
+        return metadata_dict
+    
     
     def get_dimensions(self):
         '''
@@ -218,9 +258,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         dimensions = OrderedDict()
         
         # Example lat/lon dimensions
-        dimensions['points'] = self.raw_data_array.shape[0]
-        dimensions['layers'] = self.layer_count
-        dimensions['lines'] = len(self.lines)
+        dimensions['point'] = self.raw_data_array.shape[0]
+        dimensions['layers'] = self.layer_count #TODO: Make singular/plural consistent
+        dimensions['line'] = len(self.lines)
               
         return dimensions
     
@@ -230,7 +270,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''  
         def line_variable_generator():
             '''
-            Helper function to output flight line variables - only called once
+            Helper generator to yield flight line variables - only called once
             '''
             assert self.lines is not None, 'flight Line parameters not defined'
             
@@ -239,27 +279,27 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             print('\t\tWriting flight line number')
             yield NetCDFVariable(short_name='lines', 
                                  data=self.lines, 
-                                 dimensions=['lines'], 
+                                 dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'flight line number'}, 
                                  dtype='int32'
                                  )
                         
             print('\t\tWriting index of first point in flight line')
-            yield NetCDFVariable(short_name='line_start_indices', 
+            yield NetCDFVariable(short_name='index_line', 
                                  data=self.line_start_indices, 
-                                 dimensions=['lines'], 
+                                 dimensions=['line'], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'index of first point in flight line'}, 
+                                 attributes={'long_name': 'zero based index of the first sample in the line'}, 
                                  dtype='int32'
                                  )
                         
             print('\t\tWriting point count for flight line')
-            yield NetCDFVariable(short_name='line_point_counts', 
+            yield NetCDFVariable(short_name='index_count', 
                                  data=self.line_point_counts, 
-                                 dimensions=['lines'], 
+                                 dimensions=['line'], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'point count for flight line'}, 
+                                 attributes={'long_name': 'number of samples in the line'}, 
                                  dtype='int32'
                                  )
               
@@ -297,7 +337,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_index], 
-                                 dimensions=['points'], 
+                                 dimensions=['point'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
                                  dtype=dtype
@@ -336,7 +376,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_start_index:field_end_index], 
-                                 dimensions=['points', 'layers'], 
+                                 dimensions=['point', 'layers'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
                                  dtype=dtype
@@ -352,6 +392,8 @@ def main():
     d2n.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
     
+    print('Global attributes:')
+    pprint(d2n.nc_output_dataset.__dict__)
     print('Dimensions:')
     pprint(d2n.nc_output_dataset.dimensions)
     print('Variables:')
