@@ -35,6 +35,13 @@ class NetCDFVariable(object):
     '''
     Class to manage netCDF variable contents
     '''
+    DEFAULT_VARIABLE_PARAMETERS = {'complevel': 4, 
+                           'zlib': True, 
+                           'fletcher32': True,
+                           'shuffle': True,
+                           'endian': 'little',
+                           }
+    
     def __init__(self, short_name, data, dimensions, fill_value, attributes, dtype=None):
         '''
         Constructor for class NetCDFVariable to manage netCDF variable contents
@@ -49,10 +56,12 @@ class NetCDFVariable(object):
         #TODO: Implement something better for determining the type of scalars
                 
         
-    def create_var_in_dataset(self, nc_output_dataset):
+    def create_var_in_dataset(self, nc_output_dataset, chunk_size=None):
         '''
         Function to create netCDF variable in specified dataset
         '''
+        variable_parameters = NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
+        
         # If not a scalar, check array shape against specified dimensions in netCDF dataset
         if self.dimensions:
             assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified'
@@ -61,11 +70,21 @@ class NetCDFVariable(object):
                                              for dimension_name in self.dimensions
                                              ]), 'Invalid array shape for specified dimension(s)'
                                              
-        #TODO: Implement chunking
+            if chunk_size:
+                variable_parameters['chunksizes'] = [min(nc_output_dataset.dimensions[dimension_name].size,
+                                                         chunk_size
+                                                         )
+                                                    for dimension_name in self.dimensions
+                                                    ]
+                
+            if self.fill_value is not None:
+                variable_parameters['fill_value'] = self.fill_value
+                
+                                             
         output_variable = nc_output_dataset.createVariable(self.short_name,
                                                            self.dtype,
                                                            self.dimensions,
-                                                           fill_value=self.fill_value
+                                                           **variable_parameters
                                                            )
         # Set data values
         output_variable[:] = self.data
@@ -78,14 +97,22 @@ class NetCDFConverter(object):
     '''
     NetCDFConverter abstract base class for converting data to netCDF
     '''
+    # Define single default chunk size for all dimensions
+    DEFAULT_CHUNK_SIZE = 1024
+    
     @abc.abstractmethod
-    def __init__(self, nc_out_path, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, nc_out_path, netcdf_format='NETCDF4_CLASSIC', chunk_size=None):
         '''
         Abstract base constructor for abstract base class NetCDFConverter
         Needs to initialise object with everything that is required for the other abstract base methods
         N.B: Make sure this base class constructor is called from the subclass constructor
+        @param nc_out_path: Path to output netCDF file on filesystem
+        @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
+        @param chunk_size: single default chunk size for all dimensions
         '''
         self.nc_out_path = nc_out_path
+        
+        self.chunk_size = chunk_size or NetCDFConverter.DEFAULT_CHUNK_SIZE
         
         # Create netCDF output file
         self.nc_output_dataset = netCDF4.Dataset(nc_out_path, 
@@ -331,7 +358,7 @@ class NetCDFConverter(object):
             
         # Create variables in netCDF output file
         for nc_variable in self.variable_generator():
-            nc_variable.create_var_in_dataset(self.nc_output_dataset)
+            nc_variable.create_var_in_dataset(self.nc_output_dataset, chunk_size=self.chunk_size)
             
         # Set global attributes in netCDF output file
         for attribute_name, attribute_value in iter(self.get_global_attributes().items()):

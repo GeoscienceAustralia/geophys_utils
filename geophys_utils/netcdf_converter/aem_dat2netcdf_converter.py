@@ -37,11 +37,16 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
     AEMDAT2NetCDFConverter concrete class for converting AEM DAT data to netCDF
     '''
-    def __init__(self, nc_out_path, aem_dat_path, dfn_path, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, nc_out_path, aem_dat_path, dfn_path, netcdf_format='NETCDF4_CLASSIC', chunk_size=None):
         '''
         Concrete constructor for subclass AEMDAT2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
+        @param nc_out_path: Path to output netCDF file on filesystem
+        @param aem_dat_path: Path to .dat AEM data source file on filesystem
+        @param dfn_path: Path to .dfn definition file on filesystem
+        @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
+        @param chunk_size: single default chunk size for all dimensions
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -312,7 +317,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             short_name = self.field_definitions[field_index]['short_name']
             
-            if short_name == 'line': # Special case for line variable
+            if short_name == 'line': # Special case for "line" variable
                 for line_variable in line_variable_generator():
                     yield line_variable
                     
