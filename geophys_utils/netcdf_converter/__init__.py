@@ -40,11 +40,11 @@ class NetCDFVariable(object):
     
     # Define default variable parameters
     DEFAULT_VARIABLE_PARAMETERS = {'complevel': 4, 
-                           'zlib': True, 
-                           'fletcher32': True,
-                           'shuffle': True,
-                           'endian': 'little',
-                           }
+                                   'zlib': True, 
+                                   'fletcher32': True,
+                                   'shuffle': True,
+                                   'endian': 'little',
+                                   }
     
     def __init__(self, 
                  short_name, 

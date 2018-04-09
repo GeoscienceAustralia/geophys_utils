@@ -37,7 +37,9 @@ try:
     settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
     #pprint(settings)
 except:
-    settings = {}
+    settings = {'keywords': 'geophysics, airborne, AEM, conductivity'} # Default keywords if not defined in settings
+    
+pprint(settings)
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -60,7 +62,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         @param dfn_path: Path to .dfn definition file on filesystem
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
         @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
-        @param default_variable_parameters: dict containing default parameters for netCDF variable creation
+        @param default_variable_parameters: Optional dict containing default parameters for netCDF variable creation
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -188,6 +190,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # Convert entire numeric file into a single array of float32 datatype
         # This is done to permit efficient column-wise data access but it will fail for any
         # invalid floating point values in data file
+        #TODO: Use field widths from definition file
         row_list = []
         self.field_count = 0
         
@@ -210,12 +213,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         aem_dat_file.close()
          
         #pprint(row_list)
-        self.raw_data_array = np.array(row_list, dtype='float32') # Convert to numpy array
+        self.raw_data_array = np.array(row_list, dtype='float32') # Convert list of lists to numpy array
         print('{} points found'.format(self.raw_data_array.shape[0]))
         
-        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) # Only check first row for layer count value
+        # Only check first row for layer count value
+        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) 
         print('{} layers found'.format(self.layer_count))
         
+        # Check layer_count for consistency across rows
         assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.layer_count_index + 1)
         
         # Check field count
@@ -258,26 +263,26 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs       
         '''
         metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
-                'Conventions': "CF-1.6,ACDD-1.3",
-                'featureType': "trajectory",
-                'keywords': "geophysics, airborne, AEM, conductivity",
-                'geospatial_east_min': np.min(self.get_data('easting')),
-                'geospatial_east_max': np.max(self.get_data('easting')),
-                'geospatial_east_units': "m",
-                'geospatial_east_resolution': "point",
-                'geospatial_north_min': np.min(self.get_data('northing')),
-                'geospatial_north_max': np.max(self.get_data('northing')),
-                'geospatial_north_units': "m",
-                'geospatial_north_resolution': "point",
-                'geospatial_vertical_min': np.min(self.get_data('elevation')),
-                'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
-                'geospatial_vertical_units': "m",
-                'geospatial_vertical_resolution': "point",
-                'geospatial_vertical_positive': "up",
-                'history': 'Converted from .dat file {} using defintions file {}'.format(self.aem_dat_path,
-                                                                                         self.dfn_path),
-                'date_created': datetime.now().isoformat()
-                }
+            'Conventions': "CF-1.6,ACDD-1.3",
+            'featureType': "trajectory",
+            'keywords': settings['keywords'],
+            'geospatial_east_min': np.min(self.get_data('easting')),
+            'geospatial_east_max': np.max(self.get_data('easting')),
+            'geospatial_east_units': "m",
+            'geospatial_east_resolution': "point",
+            'geospatial_north_min': np.min(self.get_data('northing')),
+            'geospatial_north_max': np.max(self.get_data('northing')),
+            'geospatial_north_units': "m",
+            'geospatial_north_resolution': "point",
+            'geospatial_vertical_min': np.min(self.get_data('elevation')),
+            'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_units': "m",
+            'geospatial_vertical_resolution': "point",
+            'geospatial_vertical_positive': "up",
+            'history': 'Converted from .dat file {} using definitions file {}'.format(self.aem_dat_path,
+                                                                                     self.dfn_path),
+            'date_created': datetime.now().isoformat()
+            }
 
         return metadata_dict
     
@@ -429,7 +434,7 @@ def main():
     dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
     dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
     nc_out_path = 'C:\\Temp\\dat_test.nc'
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=0)
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
     d2n.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
     
