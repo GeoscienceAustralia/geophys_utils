@@ -28,20 +28,41 @@ import re
 import os
 from datetime import datetime
 from pprint import pprint
+import yaml
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
+try:
+    settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+    #pprint(settings)
+except:
+    settings = {'keywords': 'geophysics, airborne, AEM, conductivity'} # Default keywords if not defined in settings
+    
+pprint(settings)
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
     AEMDAT2NetCDFConverter concrete class for converting AEM DAT data to netCDF
     '''
-    def __init__(self, nc_out_path, aem_dat_path, dfn_path, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, 
+                 nc_out_path, 
+                 aem_dat_path, 
+                 dfn_path, 
+                 netcdf_format='NETCDF4_CLASSIC', 
+                 default_chunk_size=None, 
+                 default_variable_parameters=None
+                 ):
         '''
         Concrete constructor for subclass AEMDAT2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
+        @param nc_out_path: Path to output netCDF file on filesystem
+        @param aem_dat_path: Path to .dat AEM data source file on filesystem
+        @param dfn_path: Path to .dfn definition file on filesystem
+        @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
+        @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
+        @param default_variable_parameters: Optional dict containing default parameters for netCDF variable creation
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -136,12 +157,24 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             return field_definitions, crs
             
         # Start of __init__() definition
-        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+        NetCDFConverter.__init__(self, 
+                                 nc_out_path, 
+                                 netcdf_format, 
+                                 default_chunk_size=default_chunk_size, 
+                                 default_variable_parameters=default_variable_parameters
+                                 )
         
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
         
         self.field_definitions, self.crs = parse_dfn_file(dfn_path)
+        
+        # Read overriding field definition values from settings
+        if settings.get('field_definitions'):
+            for field_definition in self.field_definitions:
+                overriding_field_definition = settings['field_definitions'].get(field_definition['short_name'])
+                if overriding_field_definition:
+                    field_definition.update(overriding_field_definition)
         
         self.layer_count_index = self.field_definitions.index([field_def 
                                                                for field_def in self.field_definitions 
@@ -157,6 +190,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # Convert entire numeric file into a single array of float32 datatype
         # This is done to permit efficient column-wise data access but it will fail for any
         # invalid floating point values in data file
+        #TODO: Use field widths from definition file
         row_list = []
         self.field_count = 0
         
@@ -179,12 +213,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         aem_dat_file.close()
          
         #pprint(row_list)
-        self.raw_data_array = np.array(row_list, dtype='float32') # Convert to numpy array
+        self.raw_data_array = np.array(row_list, dtype='float32') # Convert list of lists to numpy array
         print('{} points found'.format(self.raw_data_array.shape[0]))
         
-        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) # Only check first row for layer count value
+        # Only check first row for layer count value
+        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) 
         print('{} layers found'.format(self.layer_count))
         
+        # Check layer_count for consistency across rows
         assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.layer_count_index + 1)
         
         # Check field count
@@ -227,26 +263,26 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs       
         '''
         metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
-                'Conventions': "CF-1.6,ACDD-1.3",
-                'featureType': "trajectory",
-                'keywords': "geophysics, airborne, AEM, conductivity",
-                'geospatial_east_min': np.min(self.get_data('easting')),
-                'geospatial_east_max': np.max(self.get_data('easting')),
-                'geospatial_east_units': "m",
-                'geospatial_east_resolution': "point",
-                'geospatial_north_min': np.min(self.get_data('northing')),
-                'geospatial_north_max': np.max(self.get_data('northing')),
-                'geospatial_north_units': "m",
-                'geospatial_north_resolution': "point",
-                'geospatial_vertical_min': np.min(self.get_data('elevation')),
-                'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
-                'geospatial_vertical_units': "m",
-                'geospatial_vertical_resolution': "point",
-                'geospatial_vertical_positive': "up",
-                'history': 'Converted from .dat file {} using defintions file {}'.format(self.aem_dat_path,
-                                                                                         self.dfn_path),
-                'date_created': datetime.now().isoformat()
-                }
+            'Conventions': "CF-1.6,ACDD-1.3",
+            'featureType': "trajectory",
+            'keywords': settings['keywords'],
+            'geospatial_east_min': np.min(self.get_data('easting')),
+            'geospatial_east_max': np.max(self.get_data('easting')),
+            'geospatial_east_units': "m",
+            'geospatial_east_resolution': "point",
+            'geospatial_north_min': np.min(self.get_data('northing')),
+            'geospatial_north_max': np.max(self.get_data('northing')),
+            'geospatial_north_units': "m",
+            'geospatial_north_resolution': "point",
+            'geospatial_vertical_min': np.min(self.get_data('elevation')),
+            'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_units': "m",
+            'geospatial_vertical_resolution': "point",
+            'geospatial_vertical_positive': "up",
+            'history': 'Converted from .dat file {} using definitions file {}'.format(self.aem_dat_path,
+                                                                                     self.dfn_path),
+            'date_created': datetime.now().isoformat()
+            }
 
         return metadata_dict
     
@@ -282,7 +318,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'flight line number'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
                         
             print('\t\tWriting index of first point in flight line')
@@ -291,7 +329,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'zero based index of the first sample in the line'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
                         
             print('\t\tWriting point count for flight line')
@@ -300,7 +340,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['line'], 
                                  fill_value=-1, 
                                  attributes={'long_name': 'number of samples in the line'}, 
-                                 dtype='int32'
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
               
         # Create crs variable (points)
@@ -312,7 +354,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             short_name = self.field_definitions[field_index]['short_name']
             
-            if short_name == 'line': # Special case for line variable
+            if short_name == 'line': # Special case for "line" variable
                 for line_variable in line_variable_generator():
                     yield line_variable
                     
@@ -340,7 +382,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['point'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype=dtype
+                                 dtype=dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
         
         
@@ -379,7 +423,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  dimensions=['point', 'layers'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
-                                 dtype=dtype
+                                 dtype=dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
                                  )
         
         return
@@ -388,7 +434,7 @@ def main():
     dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
     dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
     nc_out_path = 'C:\\Temp\\dat_test.nc'
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path)
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
     d2n.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
     
