@@ -170,7 +170,10 @@ class NetCDFConverter(object):
         '''
         Concrete destructor for abstract base class NetCDFConverter
         '''
-        self.nc_output_dataset.close()
+        try:
+            self.nc_output_dataset.close()
+        except:
+            pass
         
     @abc.abstractmethod
     def get_global_attributes(self):
