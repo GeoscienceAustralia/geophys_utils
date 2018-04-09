@@ -36,13 +36,13 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 
 try:
     settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
 except:
-    settings = {'keywords': 'geophysics, airborne, AEM, conductivity'} # Default keywords if not defined in settings
+    settings = {}
     
 logger.debug('settings: {}'.format(pformat(settings)))
 
@@ -234,7 +234,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                              self.field_count)
         # Process lines as a special case
         try:
-            line_data = self.get_data('line')
+            line_data = self.get_1d_data('line')
             
             self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, 
                                                                                     return_index=True, 
@@ -250,9 +250,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             self.line_point_counts = None       
             
                
-    def get_data(self, short_name):
+    def get_1d_data(self, short_name):
         '''
-        Helper function to return 1D array corresponding to short_name
+        Helper function to return 1D array corresponding to short_name from self.raw_data_array
         '''
         try:
             field_index = self.field_definitions.index([field_def 
@@ -270,17 +270,16 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
-            'keywords': settings['keywords'],
-            'geospatial_east_min': np.min(self.get_data('easting')),
-            'geospatial_east_max': np.max(self.get_data('easting')),
+            'geospatial_east_min': np.min(self.get_1d_data('easting')),
+            'geospatial_east_max': np.max(self.get_1d_data('easting')),
             'geospatial_east_units': "m",
             'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.get_data('northing')),
-            'geospatial_north_max': np.max(self.get_data('northing')),
+            'geospatial_north_min': np.min(self.get_1d_data('northing')),
+            'geospatial_north_max': np.max(self.get_1d_data('northing')),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            'geospatial_vertical_min': np.min(self.get_data('elevation')),
-            'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_min': np.min(self.get_1d_data('elevation')),
+            'geospatial_vertical_max': np.max(self.get_1d_data('elevation')), # Should this be min(elevation-DOI)?
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
@@ -288,6 +287,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                      self.dfn_path),
             'date_created': datetime.now().isoformat()
             }
+        
+        if settings.get('keywords'):
+            metadata_dict['keywords'] = settings['keywords']
 
         return metadata_dict
     
