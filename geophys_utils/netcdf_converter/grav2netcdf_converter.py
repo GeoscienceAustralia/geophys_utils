@@ -37,6 +37,18 @@ class Grav2NetCDFConverter(NetCDFConverter):
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
 
+    field_defs = [
+        {'short_name' : 'grav',
+         'long_name' : 'gravity',
+         'column_name' : 'grav',
+         'dtype' : 'float32',
+         'units': 'um/s^2' #TODO: Confirm units in DB
+
+        }
+    ]
+
+
+
     def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4_CLASSIC'):
         '''
         Concrete constructor for subclass CSV2NetCDFConverter
@@ -45,41 +57,32 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
 
-        self.variables_cursor = con.cursor()
-        self.attributes_cursor = con.cursor()
-
+        self.cursor = con.cursor()
         self.survey_id = survey_id
-        #sql_statements_dict = {
-            #"read_grav": "select Surveyid, Grav from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = %s" % survey_id}
-        self.variable_grav_list = self.read_variable_data('grav')
-        self.variable_dlat_list = self.read_variable_data('dlat')
-        self.variable_dlong_list = self.read_variable_data('dlong')
-
-        #self.variable_generator()
-        #self.nc_output_dataset = self.nc_output_dataset
+        print(self.__dict__)
 
 
 
-    def read_variable_data(self, column_name):
-
-        #sql_statement = "select obsno, Surveyid, grav, dlat, dlong from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {1}".format(column_name, '197320')
-
-        sql_statement = "select {0} from gravity.OBSERVATIONS " \
-                        "where surveyid = {1} " \
-                        "and dlong is not null " \
-                        "and dlat is not null " \
-                        "and status = 'O'" \
-                        "order by obsno".format(column_name, self.survey_id)
-
-        print(sql_statement)
-        variable_list = []
-        self.variables_cursor.execute(sql_statement)
-        for i in self.variables_cursor:
-            variable_list.append(i[0]) # getting the first index is required. Otherwise wach point is within its own tuple.
-        print("variable_list read from oracle")
-        print(variable_list)
-        variable_grav_np = np.array(variable_list, dtype='float32')
-        return variable_grav_np
+    # def read_variable_data(self, column_name):
+    #
+    #     #sql_statement = "select obsno, Surveyid, grav, dlat, dlong from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {1}".format(column_name, '197320')
+    #
+    #     sql_statement = "select {0} from gravity.OBSERVATIONS " \
+    #                     "where surveyid = {1} " \
+    #                     "and dlong is not null " \
+    #                     "and dlat is not null " \
+    #                     "and status = 'O'" \
+    #                     "order by obsno".format(column_name, self.survey_id)
+    #
+    #     print(sql_statement)
+    #     variable_list = []
+    #     self.variables_cursor.execute(sql_statement)
+    #     for i in self.variables_cursor:
+    #         variable_list.append(i[0]) # getting the first index is required. Otherwise wach point is within its own tuple.
+    #     print("variable_list read from oracle")
+    #     print(variable_list)
+    #     variable_grav_np = np.array(variable_list, dtype='float32')
+    #     return variable_grav_np
 
     def get_global_attributes(self):
         '''
@@ -88,12 +91,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # insert survey wide metadata
         attributes_dict = {"GNDELEVACC" : None,
                            "GNDELEVDATUM" : None}
-        for key, return_value in attributes_dict.items():
-            sql = "select Surveyid, {} from gravity.GRAVSURVEYS where GRAVSURVEYS.Surveyid = {}".format(key, self.survey_id)
-
-            self.attributes_cursor.execute(sql)
-            for s in self.attributes_cursor:
-                attributes_dict["GNDELEVACC"] = s[1]
+        #for key, return_value in attributes_dict.items():
+            #sql = "select Surveyid, {} from gravity.GRAVSURVEYS where GRAVSURVEYS.Surveyid = {}".format(key, self.survey_id)
+            #
+            # self.attributes_cursor.execute(sql)
+            # for s in self.attributes_cursor:
+            #     attributes_dict["GNDELEVACC"] = s[1]
 
         #return {"GNDELEVACC" : attributes_dict["GNDELEVACC"]}
         #return {"GNDELEVACC": '5'}
@@ -103,9 +106,21 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs
         '''
+        sql_statement = """select count(*) from gravity.OBSERVATIONS 
+where surveyid = '{}'
+and dlong is not null
+and dlat is not null
+and status = 'O'
+""".format(self.survey_id)
+
+        print(sql_statement)
+        self.cursor.execute(sql_statement)
+        point_count = int(next(self.cursor)[0])
+
+
         dimensions = OrderedDict()
-        #dimensions['point'] = len(self.variable_grav_list)  # number of points per survey
-        dimensions['point'] = 887
+        dimensions['point'] = point_count  # number of points per survey
+        #dimensions['point'] = 1143
         print(dimensions)
         return dimensions
 
@@ -113,58 +128,52 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         Concrete generator to yield NetCDFVariable objects
         '''
-        print(self.variable_grav_list)
+        def get_data(field_def):
+            sql_statement = """select {} from gravity.OBSERVATIONS
+            where surveyid = '{}'
+            and dlong is not null
+            and dlat is not null
+            and status = 'O'
+            order by obsno
+            """.format(field_def['column_name'], self.survey_id)
 
-        print('shape')
-        print(self.variable_grav_list.flags)
-        print(self.variable_grav_list.shape)
-        print(self.variable_grav_list)
-        for i in self.variable_grav_list:
-            print(i)
-        variable_dlong_np = np.array(self.variable_dlong_list, dtype='float32')
-        variable_dlat_np = np.array(self.variable_dlat_list, dtype='float32')
+            print(sql_statement)
+            variable_list = []
+            self.cursor.execute(sql_statement)
+            for i in self.cursor:
+                variable_list.append(
+                    i[0])  # getting the first index is required. Otherwise wach point is within its own tuple.
+            print("variable_list read from oracle")
+            print(variable_list)
+            return np.array(variable_list, dtype=field_def['dtype'])
 
-        print("grav data")
-
-
-        yield NetCDFVariable(short_name='grav',
-                                 data=self.variable_grav_list,
-                                 dimensions=['point'],
-                                 fill_value=-1,
-                                 attributes={'long_name': 'gravity'},
-                                 dtype='float32'
-                                 )
-
-        yield NetCDFVariable(short_name='dlong',
-                                 data=variable_dlong_np,
-                                 dimensions=['point'],
-                                 fill_value=-1,
-                                 attributes={'long_name': 'longitude'},
-                                 dtype='float32'
-                                 )
-        yield NetCDFVariable(short_name='dlat',
-                                 data=variable_dlat_np,
-                                 dimensions=['point'],
-                                 fill_value=-1,
-                                 attributes={'long_name': 'latitude'},
-                                 dtype='float32'
-                                 )
-
-        # Example of crs variable creation for GDA94
+        # crs variable creation for GDA94
         yield self.build_crs_variable('''\
-GEOGCS["GDA94",
-    DATUM["Geocentric_Datum_of_Australia_1994",
-        SPHEROID["GRS 1980",6378137,298.257222101,
-            AUTHORITY["EPSG","7019"]],
-        TOWGS84[0,0,0,0,0,0,0],
-        AUTHORITY["EPSG","6283"]],
-    PRIMEM["Greenwich",0,
-        AUTHORITY["EPSG","8901"]],
-    UNIT["degree",0.0174532925199433,
-        AUTHORITY["EPSG","9122"]],
-    AUTHORITY["EPSG","4283"]]
-'''
-                                      )
+        GEOGCS["GDA94",
+            DATUM["Geocentric_Datum_of_Australia_1994",
+                SPHEROID["GRS 1980",6378137,298.257222101,
+                    AUTHORITY["EPSG","7019"]],
+                TOWGS84[0,0,0,0,0,0,0],
+                AUTHORITY["EPSG","6283"]],
+            PRIMEM["Greenwich",0,
+                AUTHORITY["EPSG","8901"]],
+            UNIT["degree",0.0174532925199433,
+                AUTHORITY["EPSG","9122"]],
+            AUTHORITY["EPSG","4283"]]
+        '''
+                                          )
+
+        for field_def in Grav2NetCDFConverter.field_defs:
+           yield NetCDFVariable(short_name=field_def['short_name'],
+                                 data=get_data(field_def),
+                                 dimensions=['point'],
+                                 fill_value=-1,
+                                 attributes={'long_name': field_def['long_name'],
+                                             'units': field_def['units']
+                                             },
+                                 )
+
+
 
         # yield NetCDFVariable(short_name='test_data',
         #                      data=np.random.random((self.nc_output_dataset.dimensions['lat'].size,
@@ -192,27 +201,27 @@ def main():
     #sql_get_surveyids = "select Surveyid from gravity.GRAVSURVEYS"
     # get the list of surveyids
 
-    sql_get_surveyids = "select Surveyid from gravity.GRAVSURVEYS gs " \
-                        "where exists (select * from gravity.OBSERVATIONS go " \
-                        "where go.surveyid = gs.surveyid " \
-                        "and dlong is not null " \
-                        "and dlat is not null" \
-                        ")" \
-                        "order by gs.SURVEYID"
+    sql_get_surveyids = """select Surveyid from gravity.GRAVSURVEYS gs
+                        where exists (select * from gravity.OBSERVATIONS go
+                        where go.surveyid = gs.surveyid
+                        and dlong is not null
+                        and dlat is not null
+                        and go.status = 'O'
+                        )
+                        order by gs.SURVEYID"""
 
     survey_cursor.execute(sql_get_surveyids)
     survey_id_list = []
-    for sur in survey_cursor:
-        print(sur)
-        tidy_sur = re.search('\d+', sur[0]).group()
+    for survey_row in survey_cursor:
+        tidy_sur = re.search('\d+', survey_row[0]).group()
         survey_id_list.append(tidy_sur)
         #(tidy_sur)
 
     count =1
     print(survey_id_list)
-    print(len(survey_id_list))
+    print('Survey count =',len(survey_id_list))
     for survey in survey_id_list:
-
+        print(survey)
         g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
         #print('netcdf dict')
         #print(g2n.nc_output_dataset.__dict__)
@@ -224,7 +233,7 @@ def main():
         print(g2n.nc_output_dataset.dimensions)
         print('Variables:')
         print(g2n.nc_output_dataset.variables)
-        g2n.nc_output_dataset.close()
+        del g2n
 
                 #count = count + 1
 
