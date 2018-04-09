@@ -52,30 +52,38 @@ class NetCDFVariable(object):
                  fill_value, 
                  attributes, 
                  dtype=None,
-                 chunk_size=None,
+                 chunk_size=None, # None means take default, zero means not chunked
                  variable_parameters=None
                  ): 
         '''
         Constructor for class NetCDFVariable to manage netCDF variable contents
         @param variable_parameters: dict containing parameters for netCDF variable creation
         @param dtype: Optional datatype to override data
-        @param chunk_size: single default chunk size for all dimensions. None means not chunked
+        @param chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
+            Note that custom chunk sizes per dimension can be specified using chunksizes value in variable_parameters
         '''
         self.short_name = short_name # String used for variable name
         self.data = data # Numpy array
         self.dimensions = dimensions # List of <dimension_name> strings for array, or None or empty list for scalar
         self.attributes = attributes # dict of variable attribute <key>:<value> pairs 
-        self.dtype = dtype or (data.dtype if (type(data) == np.ndarray) else 'float64')
-        #TODO: Implement something better for determining the type of scalars
         self.variable_parameters = dict(variable_parameters or NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS)
+        
+        # chunk_size = None means take default, zero means not chunked
+        self.chunk_size = chunk_size
+        if self.chunk_size is None:
+            self.chunk_size = NetCDFVariable.DEFAULT_CHUNK_SIZE
+
+        #TODO: Implement something better for determining the type of scalars
+        self.dtype = dtype or (data.dtype if (type(data) == np.ndarray) else 'float64')
+        
         if self.dimensions:
             # Set fill value parameter if not already defined
             if fill_value is not None and not self.variable_parameters.get('fill_value'):
                 self.variable_parameters['fill_value'] = fill_value
                 
             # Set up simple chunking if no 'chunksizes' parameter already defined
-            if chunk_size and not self.variable_parameters.get('chunksizes'):
-                self.variable_parameters['chunksizes'] = [chunk_size
+            if self.chunk_size and not self.variable_parameters.get('chunksizes'):
+                self.variable_parameters['chunksizes'] = [self.chunk_size
                                                      for _dimension_name in self.dimensions
                                                      ]
                 
@@ -129,7 +137,7 @@ class NetCDFConverter(object):
     def __init__(self, 
                  nc_out_path, 
                  netcdf_format='NETCDF4_CLASSIC', 
-                 default_chunk_size=None, 
+                 default_chunk_size=None, # None means take default, zero means not chunked.
                  default_variable_parameters=None
                  ):
         '''
@@ -138,7 +146,7 @@ class NetCDFConverter(object):
         N.B: Make sure this base class constructor is called from the subclass constructor
         @param nc_out_path: Path to output netCDF file on filesystem
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
-        @param default_chunk_size: single default chunk size for all dimensions
+        @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
         @param default_variable_parameters: dict containing default parameters for netCDF variable creation
         '''
         self.nc_out_path = nc_out_path

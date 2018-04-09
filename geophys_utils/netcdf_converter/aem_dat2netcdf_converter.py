@@ -59,7 +59,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         @param aem_dat_path: Path to .dat AEM data source file on filesystem
         @param dfn_path: Path to .dfn definition file on filesystem
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
-        @param default_chunk_size: single default chunk size for all dimensions
+        @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
         @param default_variable_parameters: dict containing default parameters for netCDF variable creation
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
@@ -429,7 +429,7 @@ def main():
     dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
     dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
     nc_out_path = 'C:\\Temp\\dat_test.nc'
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=0)
     d2n.convert2netcdf()
     print('Finished writing netCDF file {}'.format(nc_out_path))
     
