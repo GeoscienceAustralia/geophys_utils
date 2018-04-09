@@ -48,7 +48,8 @@ class NetCDFVariable(object):
     
     def __init__(self, 
                  short_name, 
-                 data, dimensions, 
+                 data, 
+                 dimensions, 
                  fill_value, 
                  attributes, 
                  dtype=None,
@@ -100,9 +101,13 @@ class NetCDFVariable(object):
         if self.dimensions:
             assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified'
 
-            assert self.data.shape == tuple([nc_output_dataset.dimensions[dimension_name].size
-                                             for dimension_name in self.dimensions
-                                             ]), 'Invalid array shape for specified dimension(s)'
+            expected_shape = tuple([nc_output_dataset.dimensions[dimension_name].size
+                                    for dimension_name in self.dimensions
+                                    ])
+            
+            assert self.data.shape == expected_shape, 'Invalid array shape for specified dimension(s). Expected {}, got {}.'.format(expected_shape,
+                                                                                                                                    self.data.shape
+                                                                                                                                    )
                                              
             # Ensure that chunk sizes do not exceed array dimensions
             if variable_parameters.get('chunksizes'):
