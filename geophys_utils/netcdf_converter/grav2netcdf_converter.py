@@ -29,7 +29,9 @@ import cx_Oracle
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 import sys
 import re
+from datetime import datetime
 import netCDF4
+from pprint import pprint
 
 
 class Grav2NetCDFConverter(NetCDFConverter):
@@ -39,12 +41,35 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
     field_defs = [
         {'short_name' : 'grav',
-         'long_name' : 'gravity',
+         'long_name' : 'ground gravity',
          'column_name' : 'grav',
          'dtype' : 'float32',
          'units': 'um/s^2' #TODO: Confirm units in DB
-
-        }
+        },
+        {'short_name': 'latitude',
+         'long_name': 'latitude',
+         'column_name': 'dlat',
+         'dtype': 'float32',
+         'units': 'degrees North'
+         },
+        {'short_name': 'longitude',
+         'long_name': 'longitude',
+         'column_name': 'dlong',
+         'dtype': 'float32',
+         'units': 'degrees East'
+         },
+        {'short_name': 'gndelev',
+         'long_name': 'Ground Elevation',
+         'column_name': 'GNDELEV',
+         'dtype': 'float32',
+         'units': 'metres'
+         },
+        {'short_name': 'meterhgt',
+         'long_name': 'Meter Height',
+         'column_name': 'METERHGT',
+         'dtype': 'float32',
+         'units': 'metres'
+         }
     ]
 
 
@@ -55,52 +80,90 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
+
+        def get_survey_metadata(survey_id):
+            sql_statement = '''select * from gravity.GRAVSURVEYS gs
+                         inner join a.surveys using(eno)
+                         where gs.surveyid = '201760'
+                         and exists (select * from gravity.OBSERVATIONS go
+                         where go.surveyid = gs.surveyid
+                         and dlong is not null
+                         and dlat is not null
+                         and go.status = 'O'
+                         and geodetic_datum = 'GDA94'
+                         )'''.format(survey_id)
+            query_result = self.cursor.execute(sql_statement)
+            field_names = [field_desc[0] for field_desc in query_result.description]
+            survey_row = next(query_result)
+            return dict(zip(field_names, survey_row
+                            # [str(field) if field else ''
+                            #  for field in survey_row
+                            #  ]
+                            )
+                        )
+
+        def get_survey_metadata_in_obs_table(survey_id):
+
+            columns_to_add = {'LOCCACCUOM' : None }
+            for key, value in iter(columns_to_add.items()):
+                sql_statement = '''select {0} from gravity.OBSERVATIONS go
+                                     where gravity.GRAVSURVEYS.surveyid = {1}
+                                     and go.dlong is not null
+                                     and go.dlat is not null
+                                     and go.status = 'O'
+                                     )'''.format(key, survey_id)
+                query_result = self.cursor.execute(sql_statement)
+                value = next(query_result)
+
+            return columns_to_add
+
+
+
+
+
         NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
 
         self.cursor = con.cursor()
         self.survey_id = survey_id
-        print(self.__dict__)
+
+        self.survey_metadata = get_survey_metadata(survey_id)
 
 
 
-    # def read_variable_data(self, column_name):
-    #
-    #     #sql_statement = "select obsno, Surveyid, grav, dlat, dlong from gravity.OBSERVATIONS WHERE OBSERVATIONS.Surveyid = {1}".format(column_name, '197320')
-    #
-    #     sql_statement = "select {0} from gravity.OBSERVATIONS " \
-    #                     "where surveyid = {1} " \
-    #                     "and dlong is not null " \
-    #                     "and dlat is not null " \
-    #                     "and status = 'O'" \
-    #                     "order by obsno".format(column_name, self.survey_id)
-    #
-    #     print(sql_statement)
-    #     variable_list = []
-    #     self.variables_cursor.execute(sql_statement)
-    #     for i in self.variables_cursor:
-    #         variable_list.append(i[0]) # getting the first index is required. Otherwise wach point is within its own tuple.
-    #     print("variable_list read from oracle")
-    #     print(variable_list)
-    #     variable_grav_np = np.array(variable_list, dtype='float32')
-    #     return variable_grav_np
 
     def get_global_attributes(self):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
-        # insert survey wide metadata
-        attributes_dict = {"GNDELEVACC" : None,
-                           "GNDELEVDATUM" : None}
-        #for key, return_value in attributes_dict.items():
-            #sql = "select Surveyid, {} from gravity.GRAVSURVEYS where GRAVSURVEYS.Surveyid = {}".format(key, self.survey_id)
-            #
-            # self.attributes_cursor.execute(sql)
-            # for s in self.attributes_cursor:
-            #     attributes_dict["GNDELEVACC"] = s[1]
 
-        #return {"GNDELEVACC" : attributes_dict["GNDELEVACC"]}
-        #return {"GNDELEVACC": '5'}
-        return {'title': 'test dataset'}
+        # insert survey wide metadata
+        metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
+            'Conventions': "CF-1.6,ACDD-1.3",
+            'Gravity_Accuracy' : self.survey_metadata['GRAVACC'], #example of how to add oracle fields to global attributes
+
+            'featureType': "trajectory",
+            'keywords': 'blah',
+            'geospatial_east_min': np.min(self.nc_output_dataset.variables['longitude']),
+            'geospatial_east_max': np.max(self.nc_output_dataset.variables['longitude']),
+            'geospatial_east_units': "m",
+            'geospatial_east_resolution': "point",
+            'geospatial_north_min': np.min(self.nc_output_dataset.variables['latitude']),
+            'geospatial_north_max': np.min(self.nc_output_dataset.variables['latitude']),
+            'geospatial_north_units': "m",
+            'geospatial_north_resolution': "point",
+            'geospatial_vertical_min': np.min(self.nc_output_dataset.variables[('gndelev')]), # should say if I use gndelev or meter height
+            'geospatial_vertical_max': np.max(self.nc_output_dataset.variables[('gndelev')]), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_units': "m",
+            'geospatial_vertical_resolution': "point",
+            'geospatial_vertical_positive': "up",
+           # 'history': 'Converted from .dat file {} using definitions file {}'.format(self.aem_dat_path,
+                                                                                  #   self.dfn_path),
+            'date_created': datetime.now().isoformat()
+            }
+
+        return metadata_dict
+
+
 
     def get_dimensions(self):
         '''
@@ -111,6 +174,7 @@ where surveyid = '{}'
 and dlong is not null
 and dlat is not null
 and status = 'O'
+and geodetic_datum = 'GDA94'
 """.format(self.survey_id)
 
         print(sql_statement)
@@ -134,6 +198,7 @@ and status = 'O'
             and dlong is not null
             and dlat is not null
             and status = 'O'
+            and geodetic_datum = 'GDA94'
             order by obsno
             """.format(field_def['column_name'], self.survey_id)
 
@@ -162,6 +227,21 @@ and status = 'O'
             AUTHORITY["EPSG","4283"]]
         '''
                                           )
+        gravity_metadata = {key: value.isoformat()
+                            if type(value) == datetime
+                            else value
+                            for key, value in iter(self.survey_metadata.items())
+                            if value is not None
+                            }
+        pprint(gravity_metadata)
+        yield NetCDFVariable(short_name='ga_gravity_metadata',
+                              data=0,
+                              dimensions=[],  # Scalar
+                              fill_value=None,
+                              attributes=gravity_metadata,
+                              dtype='int8'  # Byte datatype
+                              )
+
 
         for field_def in Grav2NetCDFConverter.field_defs:
            yield NetCDFVariable(short_name=field_def['short_name'],
@@ -207,6 +287,7 @@ def main():
                         and dlong is not null
                         and dlat is not null
                         and go.status = 'O'
+                        and geodetic_datum = 'GDA94' # check the geo datum filter with Phill
                         )
                         order by gs.SURVEYID"""
 
@@ -229,11 +310,14 @@ def main():
         g2n.convert2netcdf()
         print('Finished writing netCDF file {}'.format(nc_out_path))
 
+        print('Global attributes:')
+        pprint(g2n.nc_output_dataset.__dict__)
         print('Dimensions:')
         print(g2n.nc_output_dataset.dimensions)
         print('Variables:')
         print(g2n.nc_output_dataset.variables)
         del g2n
+        break
 
                 #count = count + 1
 
