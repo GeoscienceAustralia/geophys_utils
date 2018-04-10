@@ -40,6 +40,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
     '''
 
     field_defs = [
+        {'short_name': 'obsno',
+         'long_name': 'observation number',
+         'column_name': 'obsno',
+         'dtype': 'int8',
+
+         },
         {'short_name' : 'grav',
          'long_name' : 'ground gravity',
          'column_name' : 'grav',
@@ -66,9 +72,20 @@ class Grav2NetCDFConverter(NetCDFConverter):
          },
         {'short_name': 'meterhgt',
          'long_name': 'Meter Height',
-         'column_name': 'METERHGT',
+         'column_name': 'meterhgt',
          'dtype': 'float32',
          'units': 'metres'
+         },
+        {'short_name': 'gridflag',
+         'long_name': """Gridding Flag: Flag to note whether data is included in gravity
+                        grids produced by GA.
+                        Flag = 1 indicated that the data was used in producing GA
+                        grids, such as the National Gravity Grids.
+                        Flag = 0: the data was not used in GA produced grids. This is
+                        usually because the data is less accurate. The data is included
+                        as it may still provide useful information.""",
+         'column_name': 'gridflag',
+         'dtype': 'int8',
          }
     ]
 
@@ -89,7 +106,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
                          where go.surveyid = gs.surveyid
                          and dlong is not null
                          and dlat is not null
-                         and go.status = 'O'
+                         and status = 'A'
+                         and access_code = 'O'
                          and geodetic_datum = 'GDA94'
                          )'''.format(survey_id)
             query_result = self.cursor.execute(sql_statement)
@@ -110,7 +128,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                      where gravity.GRAVSURVEYS.surveyid = {1}
                                      and go.dlong is not null
                                      and go.dlat is not null
-                                     and go.status = 'O'
+                                     and status = 'A'
+                                     and access_code = 'O'
+                                     and geodetic_datum = 'GDA94'
                                      )'''.format(key, survey_id)
                 query_result = self.cursor.execute(sql_statement)
                 value = next(query_result)
@@ -173,7 +193,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
 where surveyid = '{}'
 and dlong is not null
 and dlat is not null
-and status = 'O'
+and status = 'A'
+and access_code = 'O'
 and geodetic_datum = 'GDA94'
 """.format(self.survey_id)
 
@@ -197,7 +218,8 @@ and geodetic_datum = 'GDA94'
             where surveyid = '{}'
             and dlong is not null
             and dlat is not null
-            and status = 'O'
+            and status = 'A'
+            and access_code = 'O'
             and geodetic_datum = 'GDA94'
             order by obsno
             """.format(field_def['column_name'], self.survey_id)
@@ -244,13 +266,22 @@ and geodetic_datum = 'GDA94'
 
 
         for field_def in Grav2NetCDFConverter.field_defs:
-           yield NetCDFVariable(short_name=field_def['short_name'],
+
+            list_of_possible_value = ['long_name', 'units']
+            attributes_dict = {}
+            for a in list_of_possible_value:
+                if field_def.get(a):
+                    attributes_dict[a] = field_def[a]
+                else:
+                    pass
+
+
+            yield NetCDFVariable(short_name=field_def['short_name'],
                                  data=get_data(field_def),
                                  dimensions=['point'],
                                  fill_value=-1,
-                                 attributes={'long_name': field_def['long_name'],
-                                             'units': field_def['units']
-                                             },
+                                 attributes=attributes_dict
+
                                  )
 
 
@@ -286,8 +317,9 @@ def main():
                         where go.surveyid = gs.surveyid
                         and dlong is not null
                         and dlat is not null
-                        and go.status = 'O'
-                        and geodetic_datum = 'GDA94' # check the geo datum filter with Phill
+                        and status = 'A'
+                        and access_code = 'O'
+                        and geodetic_datum = 'GDA94'
                         )
                         order by gs.SURVEYID"""
 
