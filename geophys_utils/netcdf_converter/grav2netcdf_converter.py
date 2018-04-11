@@ -86,6 +86,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         as it may still provide useful information.""",
          'column_name': 'gridflag',
          'dtype': 'int8',
+         },
+        {'short_name': 'reliability',
+         'long_name': 'Estimation of Station Reliability',
+         'column_name': 'reliab',
+         'dtype': 'int8',
          }
     ]
 
@@ -121,7 +126,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         )
 
         def get_survey_metadata_in_obs_table(survey_id):
-
             columns_to_add = {'LOCCACCUOM' : None }
             for key, value in iter(columns_to_add.items()):
                 sql_statement = '''select {0} from gravity.OBSERVATIONS go
@@ -134,8 +138,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                      )'''.format(key, survey_id)
                 query_result = self.cursor.execute(sql_statement)
                 value = next(query_result)
-
-            return columns_to_add
+            return value
 
 
 
@@ -195,7 +198,7 @@ and dlong is not null
 and dlat is not null
 and status = 'A'
 and access_code = 'O'
-and geodetic_datum = 'GDA94'
+and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
 """.format(self.survey_id)
 
         print(sql_statement)
@@ -220,7 +223,7 @@ and geodetic_datum = 'GDA94'
             and dlat is not null
             and status = 'A'
             and access_code = 'O'
-            and geodetic_datum = 'GDA94'
+and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
             order by obsno
             """.format(field_def['column_name'], self.survey_id)
 
@@ -229,7 +232,7 @@ and geodetic_datum = 'GDA94'
             self.cursor.execute(sql_statement)
             for i in self.cursor:
                 variable_list.append(
-                    i[0])  # getting the first index is required. Otherwise wach point is within its own tuple.
+                    i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
             print("variable_list read from oracle")
             print(variable_list)
             return np.array(variable_list, dtype=field_def['dtype'])
