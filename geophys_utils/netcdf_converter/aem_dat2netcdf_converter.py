@@ -26,20 +26,25 @@ from collections import OrderedDict
 import numpy as np
 import re
 import os
+import sys
 from datetime import datetime
-from pprint import pprint
+from pprint import pformat
 import yaml
+import logging
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Initial logging level for this module
+
+
 try:
     settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-    #pprint(settings)
 except:
-    settings = {'keywords': 'geophysics, airborne, AEM, conductivity'} # Default keywords if not defined in settings
+    settings = {}
     
-pprint(settings)
+logger.debug('settings: {}'.format(pformat(settings)))
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -66,7 +71,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
-            print('Reading definitions file {}'.format(dfn_path))
+            logger.info('Reading definitions file {}'.format(dfn_path))
             field_definitions = []
             crs=None
             
@@ -80,7 +85,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                         ]
                             for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]
                             ] 
-                #pprint(split_lists) 
+                #logger.debug('split_lists: {}'.format(pformat(split_lists))) 
                 
                 try:
                     rt = split_lists[0][0][1][1] # RecordType?
@@ -114,7 +119,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                         field_definitions.append(field_dict)
                         
                     elif rt == 'PROJ':
-                        #pprint(split_lists[1])
+                        #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
                         
                         #TODO: Parse projection
                         if (split_lists[1][0][0][0] == 'PROJNAME' 
@@ -153,7 +158,6 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             dfn_file.close()
             
             
-            pprint(field_definitions)
             return field_definitions, crs
             
         # Start of __init__() definition
@@ -176,15 +180,16 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 if overriding_field_definition:
                     field_definition.update(overriding_field_definition)
         
+        logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
         self.layer_count_index = self.field_definitions.index([field_def 
                                                                for field_def in self.field_definitions 
                                                                if field_def['short_name'] == 'nlayers'][0]
                                                                )
-        #print(self.layer_count_index)   
+        logger.debug('self.layer_count_index: {}'.format(self.layer_count_index))
           
         self.fields_per_layer = len(self.field_definitions) - self.layer_count_index - 1
         
-        print('Reading data file {}'.format(aem_dat_path))
+        logger.info('Reading data file {}'.format(aem_dat_path))
         aem_dat_file = open(aem_dat_path, 'r')
          
         # Convert entire numeric file into a single array of float32 datatype
@@ -199,7 +204,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             if not line: # Skip empty lines
                 continue
             row = re.sub('\s+', ',', line).split(',')
-            #print(row)
+            #logger.debug('row: {}'.format(row))
             
             if self.field_count:
                 assert self.field_count == len(row), 'Inconsistent field count. Expected {}, found {}.'.format(self.field_count, 
@@ -212,13 +217,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
         aem_dat_file.close()
          
-        #pprint(row_list)
+        #logger.debug('row_list: {}'.format(row_list))
         self.raw_data_array = np.array(row_list, dtype='float32') # Convert list of lists to numpy array
-        print('{} points found'.format(self.raw_data_array.shape[0]))
+        logger.info('{} points found'.format(self.raw_data_array.shape[0]))
         
         # Only check first row for layer count value
         self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) 
-        print('{} layers found'.format(self.layer_count))
+        logger.info('{} layers found'.format(self.layer_count))
         
         # Check layer_count for consistency across rows
         assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.layer_count_index + 1)
@@ -229,25 +234,25 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                              self.field_count)
         # Process lines as a special case
         try:
-            line_data = self.get_data('line')
+            line_data = self.get_1d_data('line')
             
             self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, 
                                                                                     return_index=True, 
                                                                                     return_inverse=False, 
                                                                                     return_counts=True
                                                                                     )
-            print('{} lines found'.format(len(self.lines)))
-            #print(self.lines, self.line_start_indices, self.line_point_counts)
+            logger.info('{} lines found'.format(len(self.lines)))
+            #logger.debug('self.lines: {}, self.line_start_indices: {}, self.line_point_counts: {}'.format(self.lines, self.line_start_indices, self.line_point_counts))
         except:
-            print('No lines found')
+            logger.info('No lines found')
             self.lines = None
             self.line_start_indices = None
             self.line_point_counts = None       
             
                
-    def get_data(self, short_name):
+    def get_1d_data(self, short_name):
         '''
-        Helper function to return 1D array corresponding to short_name
+        Helper function to return 1D array corresponding to short_name from self.raw_data_array
         '''
         try:
             field_index = self.field_definitions.index([field_def 
@@ -265,17 +270,16 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
-            'keywords': settings['keywords'],
-            'geospatial_east_min': np.min(self.get_data('easting')),
-            'geospatial_east_max': np.max(self.get_data('easting')),
+            'geospatial_east_min': np.min(self.get_1d_data('easting')),
+            'geospatial_east_max': np.max(self.get_1d_data('easting')),
             'geospatial_east_units': "m",
             'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.get_data('northing')),
-            'geospatial_north_max': np.max(self.get_data('northing')),
+            'geospatial_north_min': np.min(self.get_1d_data('northing')),
+            'geospatial_north_max': np.max(self.get_1d_data('northing')),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            'geospatial_vertical_min': np.min(self.get_data('elevation')),
-            'geospatial_vertical_max': np.max(self.get_data('elevation')), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_min': np.min(self.get_1d_data('elevation')),
+            'geospatial_vertical_max': np.max(self.get_1d_data('elevation')), # Should this be min(elevation-DOI)?
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
@@ -283,6 +287,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                      self.dfn_path),
             'date_created': datetime.now().isoformat()
             }
+        
+        if settings.get('keywords'):
+            metadata_dict['keywords'] = settings['keywords']
 
         return metadata_dict
     
@@ -310,9 +317,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             '''
             assert self.lines is not None, 'flight Line parameters not defined'
             
-            print('\tWriting flight line indexing variables')
+            logger.info('\tWriting flight line indexing variables')
             
-            print('\t\tWriting flight line number')
+            logger.info('\t\tWriting flight line number')
             yield NetCDFVariable(short_name='lines', 
                                  data=self.lines, 
                                  dimensions=['line'], 
@@ -323,7 +330,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            print('\t\tWriting index of first point in flight line')
+            logger.info('\t\tWriting index of first point in flight line')
             yield NetCDFVariable(short_name='index_line', 
                                  data=self.line_start_indices, 
                                  dimensions=['line'], 
@@ -334,7 +341,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            print('\t\tWriting point count for flight line')
+            logger.info('\t\tWriting point count for flight line')
             yield NetCDFVariable(short_name='index_count', 
                                  data=self.line_point_counts, 
                                  dimensions=['line'], 
@@ -375,7 +382,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype ='float32'
                 
-            print('\tWriting 1D {} variable {}'.format(dtype, short_name))
+            logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_index], 
@@ -399,7 +406,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             short_name = self.field_definitions[field_definition_index]['short_name']
             
-            #print(layer_field_index, field_definition_index, field_start_index, field_end_index)
+            logger.debug('layer_field_index: {}, field_definition_index: {}, field_start_index: {}, field_end_index: {}'.format(layer_field_index, field_definition_index, field_start_index, field_end_index))
             
             long_name = self.field_definitions[field_definition_index].get('long_name')
             if long_name:
@@ -416,7 +423,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype='float32'
                 
-            print('\tWriting 2D {} variable {}'.format(dtype, short_name))
+            logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_start_index:field_end_index], 
@@ -436,14 +443,25 @@ def main():
     nc_out_path = 'C:\\Temp\\dat_test.nc'
     d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
     d2n.convert2netcdf()
-    print('Finished writing netCDF file {}'.format(nc_out_path))
+    logger.info('Finished writing netCDF file {}'.format(nc_out_path))
     
-    print('Global attributes:')
-    pprint(d2n.nc_output_dataset.__dict__)
-    print('Dimensions:')
-    pprint(d2n.nc_output_dataset.dimensions)
-    print('Variables:')
-    pprint(d2n.nc_output_dataset.variables)
+    logger.debug('Global attributes:')
+    logger.debug(pformat(d2n.nc_output_dataset.__dict__))
+    logger.debug('Dimensions:')
+    logger.debug(pformat(d2n.nc_output_dataset.dimensions))
+    logger.debug('Variables:')
+    logger.debug(pformat(d2n.nc_output_dataset.variables))
 
 if __name__ == '__main__':
+    # Setup logging handlers if required
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for logger {}'.format(logger.name))
+
     main()

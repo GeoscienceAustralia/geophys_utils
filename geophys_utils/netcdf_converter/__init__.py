@@ -23,11 +23,15 @@ Created on 28Mar.2018
 @author: Alex Ip
 '''
 import abc
-import logging
 import netCDF4
 import numpy as np
 import osgeo
 from collections import OrderedDict
+import logging
+from pprint import pformat
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 from geophys_utils import get_spatial_ref_from_wkt
 
@@ -170,7 +174,10 @@ class NetCDFConverter(object):
         '''
         Concrete destructor for abstract base class NetCDFConverter
         '''
-        self.nc_output_dataset.close()
+        try:
+            self.nc_output_dataset.close()
+        except:
+            pass
         
     @abc.abstractmethod
     def get_global_attributes(self):
@@ -383,6 +390,8 @@ class NetCDFConverter(object):
         if grid_dimensions:
             crs_attributes['GeoTransform'] = ' '.join([str(value) for value in get_geotransform(grid_dimensions)]) 
 
+        logger.debug('crs_attributes: {}'.format(pformat(crs_attributes)))
+        
         return NetCDFVariable(short_name=crs_variable_name, 
                               data=0, 
                               dimensions=[], # Scalar
