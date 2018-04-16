@@ -36,15 +36,8 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Logging level for this module
 
-
-try:
-    settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-except:
-    settings = {}
-    
-logger.debug('settings: {}'.format(pformat(settings)))
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -56,7 +49,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                  dfn_path, 
                  netcdf_format='NETCDF4_CLASSIC', 
                  default_chunk_size=None, 
-                 default_variable_parameters=None
+                 default_variable_parameters=None,
+                 settings_path=None
                  ):
         '''
         Concrete constructor for subclass AEMDAT2NetCDFConverter
@@ -68,6 +62,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
         @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
         @param default_variable_parameters: Optional dict containing default parameters for netCDF variable creation
+        @param settings_path: Optional path for settings YAML file
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -161,6 +156,15 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             return field_definitions, crs
             
         # Start of __init__() definition
+        self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
+        
+        try:
+            self.settings = yaml.safe_load(open(self.settings_path))
+        except:
+            self.settings = {}
+            
+        logger.debug('self.settings: {}'.format(pformat(self.settings)))
+
         NetCDFConverter.__init__(self, 
                                  nc_out_path, 
                                  netcdf_format, 
@@ -174,13 +178,15 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.field_definitions, self.crs = parse_dfn_file(dfn_path)
         
         # Read overriding field definition values from settings
-        if settings.get('field_definitions'):
+        if self.settings.get('field_definitions'):
             for field_definition in self.field_definitions:
-                overriding_field_definition = settings['field_definitions'].get(field_definition['short_name'])
+                overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
                 if overriding_field_definition:
                     field_definition.update(overriding_field_definition)
         
         logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+        
+        # Determine index of 'nlayers' field definition. Field definitions after this will be 2D
         self.layer_count_index = self.field_definitions.index([field_def 
                                                                for field_def in self.field_definitions 
                                                                if field_def['short_name'] == 'nlayers'][0]
@@ -255,11 +261,31 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Helper function to return 1D array corresponding to short_name from self.raw_data_array
         '''
         try:
-            field_index = self.field_definitions.index([field_def 
+            field_definition_index = self.field_definitions.index([field_def 
                                                         for field_def in self.field_definitions 
                                                         if field_def['short_name'] == short_name][0]
                                                         )
-            return self.raw_data_array[:,field_index]
+            return self.raw_data_array[:,field_definition_index]
+        except:
+            return None        
+        
+    def get_2d_data(self, short_name):
+        '''
+        Helper function to return 2D array corresponding to short_name from self.raw_data_array
+        '''
+        try:
+            field_definition_index = self.field_definitions.index([field_def 
+                                                        for field_def in self.field_definitions 
+                                                        if field_def['short_name'] == short_name][0]
+                                                        )
+            
+            layer_field_index = field_definition_index - self.layer_count_index - 1
+
+            field_start_index = self.layer_count_index + 1 + (layer_field_index * self.layer_count)
+            field_end_index = self.layer_count_index + 1 + ((layer_field_index + 1) * self.layer_count)
+            
+
+            return self.raw_data_array[:,field_start_index:field_end_index]
         except:
             return None        
         
@@ -288,8 +314,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             'date_created': datetime.now().isoformat()
             }
         
-        if settings.get('keywords'):
-            metadata_dict['keywords'] = settings['keywords']
+        if self.settings.get('keywords'):
+            metadata_dict['keywords'] = self.settings['keywords']
 
         return metadata_dict
     
@@ -423,10 +449,33 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype='float32'
                 
+            # Convert resistivity to conductivity
+            if short_name == 'resistivity':
+                short_name = 'conductivity'
+                field_attributes = {'long_name': 'Layer conductivity', 'units': 'S/m'}
+                data_array =  1.0 / self.raw_data_array[:,field_start_index:field_end_index]
+            elif short_name == 'resistivity_uncertainty':
+                # Convert resistivity_uncertainty to absolute_conductivity_uncertainty
+                #TODO: Check whether resistivity_uncertainty is a proportion or a percentage - the latter is assumed
+                # Search for "reciprocal" in http://ipl.physics.harvard.edu/wp-uploads/2013/03/PS3_Error_Propagation_sp13.pdf
+                short_name = 'conductivity_uncertainty'
+                field_attributes = {'long_name': 'Absolute uncertainty of layer conductivity', 'units': 'S/m'}
+                data_array =  self.raw_data_array[:,field_start_index:field_end_index] / self.get_2d_data('resistivity')
+
+                logger.debug('\nresistivity_uncertainty: {}'.format(self.get_2d_data('resistivity_uncertainty')))
+                logger.debug('\nresistivity: {}'.format(self.get_2d_data('resistivity')))
+                logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_2d_data('resistivity') 
+                                                                           * self.get_2d_data('resistivity_uncertainty')
+                                                                           / 100))
+                logger.debug('\nconductivity: {}'.format(0.01 / self.get_2d_data('resistivity')))
+                logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+            else:
+                data_array = self.raw_data_array[:,field_start_index:field_end_index]
+                    
             logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
 
             yield NetCDFVariable(short_name=short_name, 
-                                 data=self.raw_data_array[:,field_start_index:field_end_index], 
+                                 data=data_array, 
                                  dimensions=['point', 'layers'], 
                                  fill_value=None, 
                                  attributes=field_attributes, 
@@ -438,17 +487,27 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         return
     
 def main():
-    assert 3 <= len(sys.argv) <= 4, 'Invalid number of arguments.\n\
-Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>]'.format(sys.argv[0])
-    dat_in_path = sys.argv[1] #'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
-    dfn_in_path = sys.argv[2] #'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
-    if len(sys.argv) == 4:
-        nc_out_path = sys.argv[3] #'C:\\Temp\\dat_test.nc'
+    assert 3 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
+Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])
+    dat_in_path = sys.argv[1] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+    dfn_in_path = sys.argv[2] # 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
+
+    if len(sys.argv) >= 4:
+        nc_out_path = sys.argv[3] # 'C:\\Temp\\dat_test.nc'
     else:
         nc_out_path = os.path.splitext(dat_in_path)[0] + '.nc'
         
+    if len(sys.argv) == 5:
+        settings_path = sys.argv[4] # 'C:\\Temp\\dat_test.nc'
+    else:
+        settings_path = None
         
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
+        
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, 
+                                 dat_in_path, 
+                                 dfn_in_path, 
+                                 default_chunk_size=1024, 
+                                 settings_path=settings_path)
     d2n.convert2netcdf()
     logger.info('Finished writing netCDF file {}'.format(nc_out_path))
     

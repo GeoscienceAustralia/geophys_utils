@@ -19,6 +19,8 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   resistivity: {long_name: Layer resistivity, short_name: resistivity,
     units: ohm.m}
+  conductivity: {long_name: Layer conductivity, short_name: conductivity,
+    units: S/m}
   resistivity_uncertainty: {long_name: Uncertainty of the layer resistivity,
     short_name: resistivity_uncertainty}
   sequence: {long_name: Inversion sequence number, short_name: sequence}
