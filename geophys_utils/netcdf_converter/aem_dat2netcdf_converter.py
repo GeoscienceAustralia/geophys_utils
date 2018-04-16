@@ -438,9 +438,16 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         return
     
 def main():
-    dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
-    dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
-    nc_out_path = 'C:\\Temp\\dat_test.nc'
+    assert 3 <= len(sys.argv) <= 4, 'Invalid number of arguments.\n\
+Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>]'.format(sys.argv[0])
+    dat_in_path = sys.argv[1] #'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+    dfn_in_path = sys.argv[2] #'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
+    if len(sys.argv) == 4:
+        nc_out_path = sys.argv[3] #'C:\\Temp\\dat_test.nc'
+    else:
+        nc_out_path = os.path.splitext(dat_in_path)[0] + '.nc'
+        
+        
     d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
     d2n.convert2netcdf()
     logger.info('Finished writing netCDF file {}'.format(nc_out_path))
