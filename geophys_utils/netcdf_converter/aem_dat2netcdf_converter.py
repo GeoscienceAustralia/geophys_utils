@@ -36,7 +36,7 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Logging level for this module
+logger.setLevel(logging.DEBUG) # Logging level for this module
 
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
@@ -408,18 +408,27 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype ='float32'
                 
+            fill_value=None
+                
             logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
                                  data=self.raw_data_array[:,field_index], 
                                  dimensions=['point'], 
-                                 fill_value=None, 
+                                 fill_value=fill_value, 
                                  attributes=field_attributes, 
                                  dtype=dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
         
+        # Create bad_data_mask array from depth of investigation
+        top_depth = self.get_2d_data('layer_top_depth')
+        depth_of_investigation = self.get_1d_data('depth_of_investigation')
+        bad_data_mask = top_depth > np.repeat(depth_of_investigation[:, np.newaxis], 
+                                            top_depth.shape[1], 
+                                            axis=1)
+        logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
         
         # Create 2D variables (points x layers)
         for layer_field_index in range(self.fields_per_layer):
@@ -454,30 +463,34 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 short_name = 'conductivity'
                 field_attributes = {'long_name': 'Layer conductivity', 'units': 'S/m'}
                 data_array =  1.0 / self.raw_data_array[:,field_start_index:field_end_index]
+                fill_value = 0
+                data_array[bad_data_mask] = fill_value
+                logger.debug('\nconductivity: {}'.format(data_array))
             elif short_name == 'resistivity_uncertainty':
                 # Convert resistivity_uncertainty to absolute_conductivity_uncertainty
-                #TODO: Check whether resistivity_uncertainty is a proportion or a percentage - the latter is assumed
+                #TODO: Check whether resistivity_uncertainty is a proportion or a percentage - the former is assumed
                 # Search for "reciprocal" in http://ipl.physics.harvard.edu/wp-uploads/2013/03/PS3_Error_Propagation_sp13.pdf
                 short_name = 'conductivity_uncertainty'
                 field_attributes = {'long_name': 'Absolute uncertainty of layer conductivity', 'units': 'S/m'}
                 data_array =  self.raw_data_array[:,field_start_index:field_end_index] / self.get_2d_data('resistivity')
+                fill_value = 0
+                data_array[bad_data_mask] = fill_value
 
                 logger.debug('\nresistivity_uncertainty: {}'.format(self.get_2d_data('resistivity_uncertainty')))
                 logger.debug('\nresistivity: {}'.format(self.get_2d_data('resistivity')))
                 logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_2d_data('resistivity') 
-                                                                           * self.get_2d_data('resistivity_uncertainty')
-                                                                           / 100))
-                logger.debug('\nconductivity: {}'.format(0.01 / self.get_2d_data('resistivity')))
+                                                                           * self.get_2d_data('resistivity_uncertainty')))
                 logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
             else:
                 data_array = self.raw_data_array[:,field_start_index:field_end_index]
+                fill_value = None
                     
             logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
 
             yield NetCDFVariable(short_name=short_name, 
                                  data=data_array, 
                                  dimensions=['point', 'layers'], 
-                                 fill_value=None, 
+                                 fill_value=fill_value, 
                                  attributes=field_attributes, 
                                  dtype=dtype,
                                  chunk_size=self.default_chunk_size,
