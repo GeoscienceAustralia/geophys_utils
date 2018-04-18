@@ -44,7 +44,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'long_name': 'observation number',
          'column_name': 'obsno',
          'dtype': 'int8',
-
          },
         {'short_name' : 'grav',
          'long_name' : 'ground gravity',
@@ -52,17 +51,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'dtype' : 'float32',
          'units': 'um/s^2' #TODO: Confirm units in DB
         },
-        {'short_name': 'latitude',
+        {'short_name': 'lat',
          'long_name': 'latitude',
          'column_name': 'dlat',
-         'dtype': 'float32',
-         'units': 'degrees North'
+         'dtype': 'float',
+         'units': 'degrees_north'
          },
-        {'short_name': 'longitude',
+        {'short_name': 'long',
          'long_name': 'longitude',
          'column_name': 'dlong',
-         'dtype': 'float32',
-         'units': 'degrees East'
+         'dtype': 'float',
+         'units': 'degrees_east'
          },
         {'short_name': 'gndelev',
          'long_name': 'Ground Elevation',
@@ -125,17 +124,21 @@ class Grav2NetCDFConverter(NetCDFConverter):
                             )
                         )
 
+
         def get_survey_metadata_in_obs_table(survey_id):
             columns_to_add = {'LOCCACCUOM' : None }
             for key, value in iter(columns_to_add.items()):
-                sql_statement = '''select {0} from gravity.OBSERVATIONS go
-                                     where gravity.GRAVSURVEYS.surveyid = {1}
-                                     and go.dlong is not null
-                                     and go.dlat is not null
-                                     and status = 'A'
-                                     and access_code = 'O'
-                                     and geodetic_datum = 'GDA94'
-                                     )'''.format(key, survey_id)
+                # sql_statement = '''select {0} from gravity.OBSERVATIONS go
+                #                      where gravity.GRAVSURVEYS.surveyid = {1}
+                #                      and go.dlong is not null
+                #                      and go.dlat is not null
+                #                      and status = 'A'
+                #                      and access_code = 'O'
+                #                      and geodetic_datum = 'GDA94'
+                #                      )'''.format(key, survey_id)
+
+
+
                 query_result = self.cursor.execute(sql_statement)
                 value = next(query_result)
             return value
@@ -158,7 +161,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
-
+        print("LAT")
+        print(self.nc_output_dataset.variables['lat'])
+        print("LONG")
+        print(self.nc_output_dataset.variables['long'])
         # insert survey wide metadata
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
             'Conventions': "CF-1.6,ACDD-1.3",
@@ -166,12 +172,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
             'featureType': "trajectory",
             'keywords': 'blah',
-            'geospatial_east_min': np.min(self.nc_output_dataset.variables['longitude']),
-            'geospatial_east_max': np.max(self.nc_output_dataset.variables['longitude']),
+            'geospatial_east_min': np.min(self.nc_output_dataset.variables['long']),
+            'geospatial_east_max': np.max(self.nc_output_dataset.variables['long']),
             'geospatial_east_units': "m",
             'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.nc_output_dataset.variables['latitude']),
-            'geospatial_north_max': np.min(self.nc_output_dataset.variables['latitude']),
+            'geospatial_north_min': np.min(self.nc_output_dataset.variables['lat']),
+            'geospatial_north_max': np.max(self.nc_output_dataset.variables['lat']),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
             'geospatial_vertical_min': np.min(self.nc_output_dataset.variables[('gndelev')]), # should say if I use gndelev or meter height
@@ -192,14 +198,39 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs
         '''
-        sql_statement = """select count(*) from gravity.OBSERVATIONS 
-where surveyid = '{}'
-and dlong is not null
-and dlat is not null
-and status = 'A'
-and access_code = 'O'
-and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
-""".format(self.survey_id)
+#         sql_statement = """select count(*) from gravity.OBSERVATIONS
+# where surveyid = '{}'
+# and dlong is not null
+# and dlat is not null
+# and status = 'A'
+# and access_code = 'O'
+# and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
+# """.format(self.survey_id)
+        sql_statement = '''
+                       select count(*) from gravity.OBSERVATIONS o1
+                       left join gravity.OBSERVATIONS o2
+                       on 
+                           o1.surveyid = o2.surveyid
+                           and (o1.entrydate > o2.entrydate
+                           OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+                           and o1.geodetic_datum = o2.geodetic_datum
+                           and o1.dlat = o2.dlat
+                           and o1.dlong = o2.dlong
+                           and o1.access_code = o2.access_code
+                           and o1.status = o2.status
+                       where 
+                           o1.surveyid = {}
+                           and o1.status = 'A'
+                           and o1.access_code = 'O'
+                           and o2.obsno is null
+                           and o1.grav is not null
+                           and o1.gndelev is not null
+                           and o1.meterhgt is not null
+                           and o1.nvalue is not null
+                           and o1.ellipsoidhgt is not null
+                           and o1.ellipsoidmeterhgt is not null
+                           and o1.eno in (select
+                       eno from a.surveys where countryid is null or countryid = 'AUS')'''.format(self.survey_id)
 
         print(sql_statement)
         self.cursor.execute(sql_statement)
@@ -217,24 +248,51 @@ and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
         Concrete generator to yield NetCDFVariable objects
         '''
         def get_data(field_def):
-            sql_statement = """select {} from gravity.OBSERVATIONS
-            where surveyid = '{}'
-            and dlong is not null
-            and dlat is not null
-            and status = 'A'
-            and access_code = 'O'
-and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
-            order by obsno
-            """.format(field_def['column_name'], self.survey_id)
+#             sql_statement = """select {} from gravity.OBSERVATIONS
+#             where surveyid = '{}'
+#             and dlong is not null
+#             and dlat is not null
+#             and status = 'A'
+#             and access_code = 'O'
+# and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
+#             order by obsno
+#             """.format(field_def['column_name'], self.survey_id)
 
-            print(sql_statement)
+            sql_statement = '''
+                           select o1.{0} from gravity.OBSERVATIONS o1
+                           left join gravity.OBSERVATIONS o2
+                           on 
+                               o1.surveyid = o2.surveyid
+                               and (o1.entrydate > o2.entrydate
+                               OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+                               and o1.geodetic_datum = o2.geodetic_datum
+                               and o1.dlat = o2.dlat
+                               and o1.dlong = o2.dlong
+                               and o1.access_code = o2.access_code
+                               and o1.status = o2.status
+                           where 
+                               o1.surveyid = {1}
+                               and o1.status = 'A'
+                               and o1.access_code = 'O'
+                               and o2.obsno is null
+                               and o1.grav is not null
+                               and o1.gndelev is not null
+                               and o1.meterhgt is not null
+                               and o1.nvalue is not null
+                               and o1.ellipsoidhgt is not null
+                               and o1.ellipsoidmeterhgt is not null
+                               and o1.eno in (select
+                           eno from a.surveys where countryid is null or countryid = 'AUS')'''\
+                .format(field_def['column_name'], self.survey_id)
+
+            #print(sql_statement)
             variable_list = []
             self.cursor.execute(sql_statement)
             for i in self.cursor:
                 variable_list.append(
                     i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
-            print("variable_list read from oracle")
-            print(variable_list)
+            #print("variable_list read from oracle")
+            #print(variable_list)
             return np.array(variable_list, dtype=field_def['dtype'])
 
         # crs variable creation for GDA94
@@ -258,7 +316,7 @@ and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
                             for key, value in iter(self.survey_metadata.items())
                             if value is not None
                             }
-        pprint(gravity_metadata)
+        #pprint(gravity_metadata)
         yield NetCDFVariable(short_name='ga_gravity_metadata',
                               data=0,
                               dimensions=[],  # Scalar
@@ -310,7 +368,7 @@ def main():
     oracle_database = sys.argv[3]
     pw = sys.argv[4]
     con = cx_Oracle.connect(u_id, pw, oracle_database)
-
+    print("HEELO")
     survey_cursor = con.cursor()
     #sql_get_surveyids = "select Surveyid from gravity.GRAVSURVEYS"
     # get the list of surveyids
@@ -328,10 +386,12 @@ def main():
 
     survey_cursor.execute(sql_get_surveyids)
     survey_id_list = []
+    print("HERE?")
     for survey_row in survey_cursor:
         tidy_sur = re.search('\d+', survey_row[0]).group()
         survey_id_list.append(tidy_sur)
-        #(tidy_sur)
+        print("TIDY")
+        print(tidy_sur)
 
     count =1
     print(survey_id_list)
