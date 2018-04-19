@@ -105,15 +105,45 @@ class Grav2NetCDFConverter(NetCDFConverter):
         def get_survey_metadata(survey_id):
             sql_statement = '''select * from gravity.GRAVSURVEYS gs
                          inner join a.surveys using(eno)
-                         where gs.surveyid = '201760'
-                         and exists (select * from gravity.OBSERVATIONS go
-                         where go.surveyid = gs.surveyid
-                         and dlong is not null
-                         and dlat is not null
-                         and status = 'A'
-                         and access_code = 'O'
-                         and geodetic_datum = 'GDA94'
-                         )'''.format(survey_id)
+                         where gs.surveyid = {0}
+                         and exists 
+            (select o1.* from gravity.OBSERVATIONS o1
+            left join gravity.OBSERVATIONS o2
+            on o1.surveyid = o2.surveyid
+            and (o1.entrydate > o2.entrydate
+            OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+            and o1.geodetic_datum = o2.geodetic_datum
+            and o1.dlat = o2.dlat
+            and o1.dlong = o2.dlong
+            and o1.access_code = o2.access_code
+            and o1.status = o2.status
+        where
+        o1.surveyid = {0}
+        and o1.status = 'A'
+        and o1.access_code = 'O'
+        and o2.obsno is null
+        and o1.grav is not null
+        and o1.gndelev is not null
+        and o1.meterhgt is not null
+        and o1.nvalue is not null
+        and o1.ellipsoidhgt is not null
+        and o1.ellipsoidmeterhgt is not null
+        and o1.eno in (select eno from a.surveys 
+        where countryid is null or countryid = 'AUS'))'''.format(self.survey_id)
+
+            # sql_statement = '''select * from gravity.GRAVSURVEYS gs
+            #              inner join a.surveys using(eno)
+            #              where gs.surveyid = {}
+            #              and exists
+            #              (select * from gravity.OBSERVATIONS go
+            #              where go.surveyid = gs.surveyid
+            #              and dlong is not null
+            #              and dlat is not null
+            #              and status = 'A'
+            #              and access_code = 'O'
+            #              and geodetic_datum = 'GDA94'
+            #              )'''.format(survey_id)
+
             query_result = self.cursor.execute(sql_statement)
             field_names = [field_desc[0] for field_desc in query_result.description]
             survey_row = next(query_result)
@@ -291,8 +321,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
             for i in self.cursor:
                 variable_list.append(
                     i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
-            #print("variable_list read from oracle")
-            #print(variable_list)
+            print("variable_list read from oracle")
+            print(variable_list)
+            new = np.array(variable_list, dtype=field_def['dtype'])
+            print(np.max(new))
             return np.array(variable_list, dtype=field_def['dtype'])
 
         # crs variable creation for GDA94
