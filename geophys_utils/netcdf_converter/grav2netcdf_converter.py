@@ -104,8 +104,22 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'dtype': 'float32',
          'units': '' #TODO error unit
          },
-        
-
+        {'short_name': 'Tcmeth',
+         'long_name': 'TC Method',
+         'database_field_name': 'TCMETH',
+         'dtype': 'S4'
+         },
+        {'short_name': 'Tcdensity',
+         'long_name': 'TC Density',
+         'database_field_name': 'TCDENSITY',
+         'dtype': 'float32',
+         'units': ''  # TODO error unit
+         },
+        {'short_name': 'Tcunits',
+         'long_name': 'TC Units',
+         'database_field_name': 'TCUNITS',
+         'dtype': 'S2'
+         }, # there are 3 cases where the survey is one measurement or null
 
         {'short_name': 'Gridflag',
          'long_name': 'Grid Flag',
@@ -163,6 +177,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             V Various, conglomeration of a number of surveys with varying spacing, observation dates, and/or station types
             ? Unknown. Further checking is required"""},
 
+
+        # Location variables
         {'short_name': 'Locacc',
          'long_name': 'Location Accuracy',
          'database_field_name': 'LOCACC',
@@ -171,8 +187,28 @@ class Grav2NetCDFConverter(NetCDFConverter):
         {'short_name': 'Locmeth',
          'long_name': 'Location Method',
          'database_field_name': 'LOCMETH',
-         'dtype': 'S4'
+         'dtype': 'S4',
+         'comments':
+            """
+            COM Combination of two or more methods. See survey notes.
+            DIG Positions digitised from base maps derived from air photo station plots.
+            EST Positions estimated from maps without fixed scale or roughly plotted locations.
+            FOS First order geodetic positioning.
+            GPH Positions recorded from a hand held GPS receiver.
+            GPS Post processed or real time dual frequency GPS recording.
+            MAN Manually scaled from base maps. Stations plotted by geographical features or air photos.
+            PHT Scaled from Photograph
+            SAT Based on Satellite readings or Google Earth
+            SCA Scaled to 1/10th of a minute from maps
+            SUR Positions determined by optical surveying methods or measured on surveyed points.
+            """
          },
+        {'short_name': 'Locaccmethod',
+         'long_name': 'Location Accuracy Method',
+         'database_field_name': 'LOCACCMETHOD',
+         'dtype': 'int8'
+         }, # 5 cases on point variation in a survey
+
         {'short_name': 'Gndelev',
          'long_name': 'Ground Elevation',
          'database_field_name': 'gndelev',
@@ -477,6 +513,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
                             #if value in Grav2NetCDFConverter.gravity_metadata_list
 
                             }
+
+        # add loccaccuom
+
         #pprint(gravity_metadata)
         yield NetCDFVariable(short_name='ga_gravity_metadata',
                               data=0,
@@ -567,7 +606,7 @@ def main():
         print('Variables:')
         print(g2n.nc_output_dataset.variables)
         print(g2n.nc_output_dataset.file_format)
-        print(g2n.nc_output_dataset.variables["Locmeth"][:])
+        print(g2n.nc_output_dataset.variables["Tcunits"][:])
         del g2n
         break
 
