@@ -57,24 +57,31 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'dtype': 'float',
          'units': 'degrees_east'
          },
-        {'short_name': 'Grav',
-         'long_name': 'Ground Gravity',
-         'database_field_name': 'grav',
-         'dtype': 'float32',
-         'units': 'um/s^2'  # TODO: Confirm units in DB
+        {'short_name': 'Gravacc',
+         'long_name': 'Gravity Accuracy',
+         'database_field_name': 'GRAVACC',
+         'dtype': 'int8'
          },
-        {'short_name': 'Gndelev',
-         'long_name': 'Ground Elevation',
-         'database_field_name': 'gndelev',
-         'dtype': 'float32',
-         'units': 'm'
+        {'short_name': 'Gravmeth',
+         'long_name': 'Gravity Method',
+         'database_field_name': 'GRAVMETH',
+         'dtype': 'S4'
+         },
+        {'short_name': 'Instid',# changed meter height to instrument height - Meter hiegh in metres was confusing.
+         'long_name': 'Instrument ID',
+         'database_field_name': 'METERID',
+         'dtype': 'S4'
          },
         {'short_name': 'Insthgt',
-         'long_name': 'Instrument Height', # changed meter height to instrument height - Meter hiegh in metres was confusing.
-         'database_field_name': 'meterhgt',
-         'table_name': '',
+         'long_name': 'Instrument Height',
+         'database_field_name': 'METERHGT',
          'dtype': 'float32',
          'units': 'm'
+         },
+        {'short_name': 'Insthgterr',
+         'long_name': 'Instrument Height Error',
+         'database_field_name': 'METERHGTERR',
+         'dtype': 'int8'
          },
         {'short_name': 'Gridflag',
          'long_name': 'Grid Flag',
@@ -105,6 +112,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
             9 Data measured numerous times with absolute, geodetic or first order precision."""
          },
 
+        {'short_name': 'Stationname',
+         'long_name': 'Station Name',
+         'database_field_name': 'STATIONNAME',
+         'dtype': 'S4'
+         },
 
         {'short_name': 'stattype',
          'long_name': 'Station Type',
@@ -130,14 +142,35 @@ class Grav2NetCDFConverter(NetCDFConverter):
         {'short_name': 'Locacc',
          'long_name': 'Location Accuracy',
          'database_field_name': 'LOCACC',
-         'dtype': 'int8',
-         'units': 'degrees'},
+         'dtype': 'int8'
+         },
+        {'short_name': 'Locmeth',
+         'long_name': 'Location Method',
+         'database_field_name': 'LOCMETH',
+         'dtype': 'S4'
+         },
+        {'short_name': 'Gndelev',
+         'long_name': 'Ground Elevation',
+         'database_field_name': 'gndelev',
+         'dtype': 'float32',
+         'units': 'm'
+         },
+        {'short_name': 'Gndelevacc',
+         'long_name': 'Ground Level Accuracy',
+         'database_field_name': 'GNDELEVACC',
+         'dtype': 'int8'
+         },
+        {'short_name': 'Gndelevmeth',
+         'long_name': 'Ground Level Method',
+         'database_field_name': 'GNDELEVMETH',
+         'dtype': 'S4'
+         },
+        {'short_name': 'Gndelevtype', # This is per survey
+         'long_name': 'Ground Level Type',
+         'database_field_name': 'GNDELEVTYPE',
+         'dtype': 'S4'
+         }
 
-        {'short_name': 'Stationname',
-         'long_name': 'Station Name',
-         'database_field_name': 'STATIONNAME',
-         'dtype': 'S4',
-         'units': 'degrees'},
 
     ]
 
@@ -510,7 +543,7 @@ def main():
         print('Variables:')
         print(g2n.nc_output_dataset.variables)
         print(g2n.nc_output_dataset.file_format)
-        print(g2n.nc_output_dataset.variables["Stationname"][:])
+        print(g2n.nc_output_dataset.variables["Locmeth"][:])
         del g2n
         break
 
