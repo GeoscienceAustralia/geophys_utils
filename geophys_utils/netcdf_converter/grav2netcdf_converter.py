@@ -67,6 +67,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'database_field_name': 'GRAVMETH',
          'dtype': 'S4'
          },
+
+        # Instrument variables
         {'short_name': 'Instid',# changed meter height to instrument height - Meter hiegh in metres was confusing.
          'long_name': 'Instrument ID',
          'database_field_name': 'METERID',
@@ -83,9 +85,31 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'database_field_name': 'METERHGTERR',
          'dtype': 'int8'
          },
+        {'short_name': 'Insthgtmeth',
+         'long_name': 'Instrument Height Method',
+         'database_field_name': 'METERHGTMETH',
+         'dtype': 'S4'
+         },
+
+        # Terrain Correction Variables
+        {'short_name': 'Tc',
+         'long_name': 'Terrain Correction',
+         'database_field_name': 'TC',
+         'dtype': 'float32',
+         'units': '' #TODO error unit
+         },
+        {'short_name': 'Tcerr',
+         'long_name': 'TC Error',
+         'database_field_name': 'TCERR',
+         'dtype': 'float32',
+         'units': '' #TODO error unit
+         },
+        
+
+
         {'short_name': 'Gridflag',
          'long_name': 'Grid Flag',
-         'database_field_name': 'gridflag',
+         'database_field_name': 'GRIDFLAG',
          'dtype': 'int8',
          'comment':
              """
