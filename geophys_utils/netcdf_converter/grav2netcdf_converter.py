@@ -45,12 +45,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'database_field_name': 'obsno',
          'dtype': 'int8',
          },
-        {'short_name' : 'Grav',
-         'long_name' : 'Ground Gravity',
-         'database_field_name' : 'grav',
-         'dtype' : 'float32',
-         'units': 'um/s^2' #TODO: Confirm units in DB
-        },
         {'short_name': 'Lat',
          'long_name': 'Latitude',
          'database_field_name': 'dlat',
@@ -62,6 +56,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
          'database_field_name': 'dlong',
          'dtype': 'float',
          'units': 'degrees_east'
+         },
+        {'short_name': 'Grav',
+         'long_name': 'Ground Gravity',
+         'database_field_name': 'grav',
+         'dtype': 'float32',
+         'units': 'um/s^2'  # TODO: Confirm units in DB
          },
         {'short_name': 'Gndelev',
          'long_name': 'Ground Elevation',
@@ -127,11 +127,18 @@ class Grav2NetCDFConverter(NetCDFConverter):
             V Various, conglomeration of a number of surveys with varying spacing, observation dates, and/or station types
             ? Unknown. Further checking is required"""},
 
-        # {'short_name': 'Locacc',
-        #  'long_name': 'Location Accuracy',
-        #  'database_field_name': 'LOCACC',
-        #  'dtype': 'char',
-        #  'units': 'degrees'}
+        {'short_name': 'Locacc',
+         'long_name': 'Location Accuracy',
+         'database_field_name': 'LOCACC',
+         'dtype': 'int8',
+         'units': 'degrees'},
+
+        {'short_name': 'Stationname',
+         'long_name': 'Station Name',
+         'database_field_name': 'STATIONNAME',
+         'dtype': 'S4',
+         'units': 'degrees'},
+
     ]
 
     gravity_metadata_list = [
@@ -147,7 +154,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         #survey 'LAYOUT',
     ]
 
-    def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4_CLASSIC'):
+    def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4'):
         '''
         Concrete constructor for subclass CSV2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
@@ -436,7 +443,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             yield NetCDFVariable(short_name=field_def['short_name'],
                                  data=get_data(field_def),
                                  dimensions=['point'],
-                                 fill_value=-1,
+                                 fill_value=None,
                                  attributes=attributes_dict
                                  )
 
@@ -503,7 +510,7 @@ def main():
         print('Variables:')
         print(g2n.nc_output_dataset.variables)
         print(g2n.nc_output_dataset.file_format)
-        print(g2n.nc_output_dataset.variables["stattype"][:])
+        print(g2n.nc_output_dataset.variables["Stationname"][:])
         del g2n
         break
 
