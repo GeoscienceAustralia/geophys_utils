@@ -32,6 +32,10 @@ import re
 from datetime import datetime
 import netCDF4
 from pprint import pprint
+import yaml
+import os
+
+
 
 
 class Grav2NetCDFConverter(NetCDFConverter):
@@ -39,200 +43,22 @@ class Grav2NetCDFConverter(NetCDFConverter):
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
 
-    field_names = [
-        {'short_name': 'Obsno',
-         'long_name': 'Observation Number',
-         'database_field_name': 'obsno',
-         'dtype': 'int8',
-         },
-        {'short_name': 'Lat',
-         'long_name': 'Latitude',
-         'database_field_name': 'dlat',
-         'dtype': 'float',
-         'units': 'degrees_north'
-         },
-        {'short_name': 'Long',
-         'long_name': 'Longitude',
-         'database_field_name': 'dlong',
-         'dtype': 'float',
-         'units': 'degrees_east'
-         },
-        {'short_name': 'Gravacc',
-         'long_name': 'Gravity Accuracy',
-         'database_field_name': 'GRAVACC',
-         'dtype': 'int8'
-         },
-        {'short_name': 'Gravmeth',
-         'long_name': 'Gravity Method',
-         'database_field_name': 'GRAVMETH',
-         'dtype': 'S4'
-         },
+    def get_accuracy_method_keys_and_values(self, table):
+        print("GET ACC  METH")
+        sql_statement = 'select * from gravity.{}'.format(table)
+        query_result = self.cursor.execute(sql_statement)
+        print(query_result)
+        accuracy_method_keys_and_values_dict = {}
+        for s in query_result:
+            accuracy_method_keys_and_values_dict[s[0]] = s[1]
 
-        # Instrument variables
-        {'short_name': 'Instid',# changed meter height to instrument height - Meter hiegh in metres was confusing.
-         'long_name': 'Instrument ID',
-         'database_field_name': 'METERID',
-         'dtype': 'S4'
-         },
-        {'short_name': 'Insthgt',
-         'long_name': 'Instrument Height',
-         'database_field_name': 'METERHGT',
-         'dtype': 'float32',
-         'units': 'm'
-         },
-        {'short_name': 'Insthgterr',
-         'long_name': 'Instrument Height Error',
-         'database_field_name': 'METERHGTERR',
-         'dtype': 'int8'
-         },
-        {'short_name': 'Insthgtmeth',
-         'long_name': 'Instrument Height Method',
-         'database_field_name': 'METERHGTMETH',
-         'dtype': 'S4'
-         },
-
-        # Terrain Correction Variables
-        {'short_name': 'Tc',
-         'long_name': 'Terrain Correction',
-         'database_field_name': 'TC',
-         'dtype': 'float32',
-         'units': '' #TODO error unit
-         },
-        {'short_name': 'Tcerr',
-         'long_name': 'TC Error',
-         'database_field_name': 'TCERR',
-         'dtype': 'float32',
-         'units': '' #TODO error unit
-         },
-        {'short_name': 'Tcmeth',
-         'long_name': 'TC Method',
-         'database_field_name': 'TCMETH',
-         'dtype': 'S4'
-         },
-        {'short_name': 'Tcdensity',
-         'long_name': 'TC Density',
-         'database_field_name': 'TCDENSITY',
-         'dtype': 'float32',
-         'units': ''  # TODO error unit
-         },
-        {'short_name': 'Tcunits',
-         'long_name': 'TC Units',
-         'database_field_name': 'TCUNITS',
-         'dtype': 'S2'
-         }, # there are 3 cases where the survey is one measurement or null
-
-        {'short_name': 'Gridflag',
-         'long_name': 'Grid Flag',
-         'database_field_name': 'GRIDFLAG',
-         'dtype': 'int8',
-         'comment':
-             """
-            Gridding Flag: Flag to note whether data is included in gravity grids produced by GA.
-            Flag = 1 indicated that the data was used in producing GA grids, such as the National Gravity Grids.
-            Flag = 0: the data was not used in GA produced grids. This is usually because the data is less accurate.
-            The data is included as it may still provide useful information.""",
-         },
-
-        {'short_name': 'Reliab',
-         'long_name': 'Estimation of Station Reliability',
-         'database_field_name': 'reliab',
-         'dtype': 'int8',
-         'comment': """
-            0 Unreliable data which should not be used pending remedial action.
-            1 Insufficient information to accurately classify but still regarded as reliable data.
-            2 Poorly controlled data which should be used cautiously.
-            3 Data with weak gravity, position and elevation control.
-            4 Data with moderate gravity, position and elevation control.
-            5 Documented gravity ties, levelled elevations and accurately scaled positions.
-            6 A point occupied once with well-defined position and elevation.
-            7 Multiple occupations at a point with well-defined position and elevation.
-            8 Multiple measurements at a point with accurate position and elevation.
-            9 Data measured numerous times with absolute, geodetic or first order precision."""
-         },
-
-        {'short_name': 'Stationname',
-         'long_name': 'Station Name',
-         'database_field_name': 'STATIONNAME',
-         'dtype': 'S4'
-         },
-
-        {'short_name': 'stattype',
-         'long_name': 'Station Type',
-         'database_field_name': 'stationtype',
-         'dtype': 'S1',
-         'comment': """
-            A Absolute measurement.
-            B Base station - usually a Fundamental Gravity Network station.
-            C Control station tied to a B station or a cell centre in a survey.
-            D Detailed (spacing < 1km) survey or traverse station with optical levelling or GPS. Tie point or doubly read station in a survey.
-            E Elevation control point for a survey.
-            F Fill-in, grid, or semi-detailed survey with spacing > 1 and < 4km.
-            G Ground transport survey (4-6km).
-            H Helicopter transport survey (4-6km).
-            I Intermediate survey (7-9km).
-            J Spacing averaged out between and along traverses
-            M Marine transport survey.
-            Q A repeat station used for survey quality control.
-            R Regional selection from various surveys, not regularly used now
-            V Various, conglomeration of a number of surveys with varying spacing, observation dates, and/or station types
-            ? Unknown. Further checking is required"""},
+        print(accuracy_method_keys_and_values_dict)
+        return accuracy_method_keys_and_values_dict
+        # return dict(zip(field_names, survey_row)
 
 
-        # Location variables
-        {'short_name': 'Locacc',
-         'long_name': 'Location Accuracy',
-         'database_field_name': 'LOCACC',
-         'dtype': 'int8'
-         },
-        {'short_name': 'Locmeth',
-         'long_name': 'Location Method',
-         'database_field_name': 'LOCMETH',
-         'dtype': 'S4',
-         'comments':
-            """
-            COM Combination of two or more methods. See survey notes.
-            DIG Positions digitised from base maps derived from air photo station plots.
-            EST Positions estimated from maps without fixed scale or roughly plotted locations.
-            FOS First order geodetic positioning.
-            GPH Positions recorded from a hand held GPS receiver.
-            GPS Post processed or real time dual frequency GPS recording.
-            MAN Manually scaled from base maps. Stations plotted by geographical features or air photos.
-            PHT Scaled from Photograph
-            SAT Based on Satellite readings or Google Earth
-            SCA Scaled to 1/10th of a minute from maps
-            SUR Positions determined by optical surveying methods or measured on surveyed points.
-            """
-         },
-        {'short_name': 'Locaccmethod',
-         'long_name': 'Location Accuracy Method',
-         'database_field_name': 'LOCACCMETHOD',
-         'dtype': 'int8'
-         }, # 5 cases on point variation in a survey
-
-        {'short_name': 'Gndelev',
-         'long_name': 'Ground Elevation',
-         'database_field_name': 'gndelev',
-         'dtype': 'float32',
-         'units': 'm'
-         },
-        {'short_name': 'Gndelevacc',
-         'long_name': 'Ground Level Accuracy',
-         'database_field_name': 'GNDELEVACC',
-         'dtype': 'int8'
-         },
-        {'short_name': 'Gndelevmeth',
-         'long_name': 'Ground Level Method',
-         'database_field_name': 'GNDELEVMETH',
-         'dtype': 'S4'
-         },
-        {'short_name': 'Gndelevtype', # This is per survey
-         'long_name': 'Ground Level Type',
-         'database_field_name': 'GNDELEVTYPE',
-         'dtype': 'S4'
-         }
 
 
-    ]
 
     gravity_metadata_list = [
         'SURVEYID',
@@ -253,6 +79,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
+
+
+
 
         def get_survey_metadata(survey_id):
             sql_statement = '''
@@ -329,10 +158,15 @@ class Grav2NetCDFConverter(NetCDFConverter):
         self.survey_id = survey_id
         self.survey_metadata = get_survey_metadata(survey_id)
 
+
+
+
+
     def get_global_attributes(self):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
+
         print("LAT")
         print(self.nc_output_dataset.variables['Lat'])
         print("LONG")
@@ -515,6 +349,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
                             }
 
         # add loccaccuom
+        # GNDELEVACCUOM
+        # METERHGTUNITS
+        # GNDELEVACCUOM
+        # METERHGTERRUOM
+        # GRAVACCUOM - one survey is all null
+        # TCERRMETHOD some are all nulls
+        # ELLIPSOIDHGTUNITS - always m
+        # ELLIPSOIDHGTMETH
+        #
+        #
+        #
 
         #pprint(gravity_metadata)
         yield NetCDFVariable(short_name='ga_gravity_metadata',
@@ -596,6 +441,7 @@ def main():
     for survey in survey_id_list:
         print(survey)
         g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
+        g2n.get_accuracy_method_keys_and_values('ACCURACYMETHOD')
         g2n.convert2netcdf()
         print('Finished writing netCDF file {}'.format(nc_out_path))
 
@@ -607,9 +453,19 @@ def main():
         print(g2n.nc_output_dataset.variables)
         print(g2n.nc_output_dataset.file_format)
         print(g2n.nc_output_dataset.variables["Tcunits"][:])
+        #g2n.nc_output_dataset.get_accuracy_method_keys_and_values()
         del g2n
         break
 
 
 if __name__ == '__main__':
+    print("HERE")
+    try:
+        #settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+        print(os.path.splitext(__file__)[0] + '_settings.yml')
+        settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+        print(settings)
+    except:
+        print("boourns")
+        settings = {}
     main()
