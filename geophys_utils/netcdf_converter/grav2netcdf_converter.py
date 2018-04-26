@@ -36,12 +36,21 @@ import yaml
 import os
 
 
-
-
 class Grav2NetCDFConverter(NetCDFConverter):
     '''
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
+
+
+    print("HERE")
+    try:
+        #settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+        print(os.path.splitext(__file__)[0] + '_settings.yml')
+        settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
+        print(settings)
+    except:
+        print("boourns")
+        settings = {}
 
     def get_accuracy_method_keys_and_values(self, table):
         print("GET ACC  METH")
@@ -55,10 +64,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         print(accuracy_method_keys_and_values_dict)
         return accuracy_method_keys_and_values_dict
         # return dict(zip(field_names, survey_row)
-
-
-
-
 
     gravity_metadata_list = [
         'SURVEYID',
@@ -80,6 +85,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
         N.B: Make sure this base class constructor is called from the subclass constructor
         '''
 
+        print('HERE')
+        print(type(Grav2NetCDFConverter.settings))
+        print("settings")
+        print(Grav2NetCDFConverter.settings['field_names'])
+        for key, value in Grav2NetCDFConverter.settings['field_names'].items():
+
+                print(key)
+                print(type(key))
+                print(value)
+                print(type(value))
+#                print(value['Lat'])
 
 
 
@@ -157,9 +173,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         self.cursor = con.cursor()
         self.survey_id = survey_id
         self.survey_metadata = get_survey_metadata(survey_id)
-
-
-
 
 
     def get_global_attributes(self):
@@ -291,7 +304,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                            eno from a.surveys where countryid is null or countryid = 'AUS')'''\
                 .format(field_def['database_field_name'], self.survey_id)
 
-            #print(sql_statement)
+            # print(sql_statement)
             variable_list = []
             self.cursor.execute(sql_statement)
             for i in self.cursor:
@@ -316,8 +329,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
             #
             #
             #     return np.array(str_out2, dtype='S1')
-
-
 
             return np.array(variable_list, dtype=field_def['dtype'])
             # brah = np.char.array(variable_list, unicode=True)
@@ -369,20 +380,31 @@ class Grav2NetCDFConverter(NetCDFConverter):
                               attributes=gravity_metadata,
                               dtype='int8'  # Byte datatype
                               )
+        list_of_possible_value = ['long_name', 'units', 'dtype', 'comment']
 
+        for key, value in Grav2NetCDFConverter.settings['field_names'].items():
 
-        for field_def in Grav2NetCDFConverter.field_names:
-            list_of_possible_value = ['long_name', 'units', 'dtype', 'comment']
             attributes_dict = {}
             for a in list_of_possible_value:
-                if field_def.get(a):
-                    attributes_dict[a] = field_def[a]
+                print('attribute_dict')
+                print(attributes_dict)
+                if value.get(a):
+                    attributes_dict[a] = value[a]
                 else:
                     pass
 
+        # for field_def in Grav2NetCDFConverter.field_names:
+        #     list_of_possible_value = ['long_name', 'units', 'dtype', 'comment']
+        #     attributes_dict = {}
+        #     for a in list_of_possible_value:
+        #         if field_def.get(a):
+        #             attributes_dict[a] = field_def[a]
+        #         else:
+        #             pass
 
-            yield NetCDFVariable(short_name=field_def['short_name'],
-                                 data=get_data(field_def),
+
+                yield NetCDFVariable(short_name=value['short_name'],
+                                 data=get_data(value),
                                  dimensions=['point'],
                                  fill_value=None,
                                  attributes=attributes_dict
@@ -459,13 +481,5 @@ def main():
 
 
 if __name__ == '__main__':
-    print("HERE")
-    try:
-        #settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        print(os.path.splitext(__file__)[0] + '_settings.yml')
-        settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        print(settings)
-    except:
-        print("boourns")
-        settings = {}
+
     main()
