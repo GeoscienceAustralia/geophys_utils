@@ -34,6 +34,20 @@ import netCDF4
 from pprint import pprint
 import yaml
 import os
+import logging
+
+# # Create the Logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+# Create the console handler and set logging level
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+# Create a formatter for log messages
+logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Add the Formatter to the Handler
+console_handler.setFormatter(logger_formatter)
+# Add the Handler to the Logger
+logger.addHandler(console_handler)
 
 
 class Grav2NetCDFConverter(NetCDFConverter):
@@ -42,9 +56,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
     '''
 
 
-    print("HERE")
+
     try:
-        #settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
         print(os.path.splitext(__file__)[0] + '_settings.yml')
         settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
         print('settings' + str(settings))
@@ -53,14 +66,16 @@ class Grav2NetCDFConverter(NetCDFConverter):
         settings = {}
 
     def get_accuracy_method_keys_and_values(self, table_name: str):
+        """
+        Retrieves information from a specified table, converts into a dictionary, and returns as a string
+        """
 
         sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
-        print(query_result)
         accuracy_method_keys_and_values_dict = {}
         for s in query_result:
+            # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
             accuracy_method_keys_and_values_dict[s[0]] = s[1]
-
         # return as string. Python dict not accepted.
         return str(accuracy_method_keys_and_values_dict)
 
@@ -349,19 +364,22 @@ class Grav2NetCDFConverter(NetCDFConverter):
             print("field_attributes: " + str(field_value))
             attributes_dict = {}
 
-            for a in list_of_possible_value:
-                print("a: " + str(a))
+            for value in list_of_possible_value:
+                print("value: " + str(value))
                 print('attribute_dict: ' + str(attributes_dict))
 
-                if field_value.get(a):
-                    if a == 'key_value_table':
-                        print("this one??????" + str(a))
-                        print(self.get_accuracy_method_keys_and_values(field_value.get(a)))
-                        attributes_dict['comments'] = self.get_accuracy_method_keys_and_values(field_value.get(a))
-                    print("field_attributes found")
-                    print("field_attributes[a]: " + field_value[a])
-                    attributes_dict[a] = field_value[a]
+                if field_value.get(value):
+                    if value == 'key_value_table':
+                        print("this one??????" + str(value))
+                        print(self.get_accuracy_method_keys_and_values(field_value.get(value)))
+                        attributes_dict['comments'] = self.get_accuracy_method_keys_and_values(field_value.get(value))
 
+                    print("field_attributes found")
+                    print("field_attributes[value]: " + field_value[value])
+                    if value == 'key_value_table':
+                        pass
+                    else:
+                        attributes_dict[value] = field_value[value]
                 else:
                     print('not in list')
 
@@ -411,6 +429,9 @@ def main():
                         )
                         order by gs.SURVEYID"""
 
+    #sql_get_surveyids = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
+
+    #print(sql_get_surveyids)
     survey_cursor.execute(sql_get_surveyids)
     survey_id_list = []
 
