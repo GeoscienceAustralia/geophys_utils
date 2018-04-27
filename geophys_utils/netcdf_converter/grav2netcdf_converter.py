@@ -47,23 +47,23 @@ class Grav2NetCDFConverter(NetCDFConverter):
         #settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
         print(os.path.splitext(__file__)[0] + '_settings.yml')
         settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        print(settings)
+        print('settings' + str(settings))
     except:
         print("boourns")
         settings = {}
 
-    def get_accuracy_method_keys_and_values(self, table):
-        print("GET ACC  METH")
-        sql_statement = 'select * from gravity.{}'.format(table)
+    def get_accuracy_method_keys_and_values(self, table_name: str):
+
+        sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
         print(query_result)
         accuracy_method_keys_and_values_dict = {}
         for s in query_result:
             accuracy_method_keys_and_values_dict[s[0]] = s[1]
 
-        print(accuracy_method_keys_and_values_dict)
-        return accuracy_method_keys_and_values_dict
-        # return dict(zip(field_names, survey_row)
+        # return as string. Python dict not accepted.
+        return str(accuracy_method_keys_and_values_dict)
+
 
     gravity_metadata_list = [
         'SURVEYID',
@@ -198,8 +198,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'geospatial_north_max': np.max(self.nc_output_dataset.variables['Lat']),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            'geospatial_vertical_min': np.min(self.nc_output_dataset.variables[('Gndelev')]), # should say if I use gndelev or meter height
-            'geospatial_vertical_max': np.max(self.nc_output_dataset.variables[('Gndelev')]), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_min': np.min(self.nc_output_dataset.variables[('Gndelev')]), # TODO say if I use gndelev or meter height
+            'geospatial_vertical_max': np.max(self.nc_output_dataset.variables[('Gndelev')]), # TODO this be min(elevation-DOI)?
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
@@ -216,14 +216,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs
         '''
-#         sql_statement = """select count(*) from gravity.OBSERVATIONS
-# where surveyid = '{}'
-# and dlong is not null
-# and dlat is not null
-# and status = 'A'
-# and access_code = 'O'
-# and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
-# """.format(self.survey_id)
 
         sql_statement = '''
                        select count(*) from gravity.OBSERVATIONS o1
@@ -251,31 +243,20 @@ class Grav2NetCDFConverter(NetCDFConverter):
                            and o1.eno in (select
                        eno from a.surveys where countryid is null or countryid = 'AUS')'''.format(self.survey_id)
 
-        print(sql_statement)
         self.cursor.execute(sql_statement)
         point_count = int(next(self.cursor)[0])
-
 
         dimensions = OrderedDict()
         dimensions['point'] = point_count  # number of points per survey
         #dimensions['point'] = 1143
-        print(dimensions)
+
         return dimensions
 
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects
         '''
-        def get_data(field_def):
-#             sql_statement = """select {} from gravity.OBSERVATIONS
-#             where surveyid = '{}'
-#             and dlong is not null
-#             and dlat is not null
-#             and status = 'A'
-#             and access_code = 'O'
-# and geodetic_datum = 'GDA94' or geodetic_datum = 'WGS84'
-#             order by obsno
-#             """.format(field_def['column_name'], self.survey_id)
+        def get_data(field_name_dict):
 
             sql_statement = '''
                            select o1.{0} from gravity.OBSERVATIONS o1
@@ -302,7 +283,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                and o1.ellipsoidmeterhgt is not null
                                and o1.eno in (select
                            eno from a.surveys where countryid is null or countryid = 'AUS')'''\
-                .format(field_def['database_field_name'], self.survey_id)
+                .format(field_name_dict['database_field_name'], self.survey_id)
 
             # print(sql_statement)
             variable_list = []
@@ -310,31 +291,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
             for i in self.cursor:
                 variable_list.append(
                     i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+            return np.array(variable_list, dtype=field_name_dict['dtype'])
 
-            # # if the field contains characters it must be handled differently
-            # if field_def['dtype'] is "char":
-            #     print(field_def['dtype'])
-            #     #return variable_list
-            #     print('variable lsit')
-            #     print(variable_list)
-            #     str_out = netCDF4.stringtochar(np.array(variable_list, 'S1'))
-            #     str_out2 = str_out.flatten('F')
-            #     print('str_out2 lsit')
-            #     print(str_out2)
-            #     print(str_out2.shape)
-            #     #b = np.array([list(word) for word in variable_list])
-            #
-            #     print(str_out.shape)
-            #     #return np.array(str_out, dtype=str_out.dtype.str)
-            #
-            #
-            #     return np.array(str_out2, dtype='S1')
 
-            return np.array(variable_list, dtype=field_def['dtype'])
-            # brah = np.char.array(variable_list, unicode=True)
-            # print(brah)
-            # print("ES")
-            # return np.char.array(variable_list, unicode=True)
         # crs variable creation for GDA94
         yield self.build_crs_variable('''\
         GEOGCS["GDA94",
@@ -380,37 +339,41 @@ class Grav2NetCDFConverter(NetCDFConverter):
                               attributes=gravity_metadata,
                               dtype='int8'  # Byte datatype
                               )
-        list_of_possible_value = ['long_name', 'units', 'dtype', 'comment']
 
-        for key, value in Grav2NetCDFConverter.settings['field_names'].items():
+        # these are the values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
+        list_of_possible_value = ['long_name', 'units', 'dtype', 'key_value_table']
 
+        for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
+            print('-----------------')
+            print("field: " + str(field_name))
+            print("field_attributes: " + str(field_value))
             attributes_dict = {}
+
             for a in list_of_possible_value:
-                print('attribute_dict')
-                print(attributes_dict)
-                if value.get(a):
-                    attributes_dict[a] = value[a]
+                print("a: " + str(a))
+                print('attribute_dict: ' + str(attributes_dict))
+
+                if field_value.get(a):
+                    if a == 'key_value_table':
+                        print("this one??????" + str(a))
+                        print(self.get_accuracy_method_keys_and_values(field_value.get(a)))
+                        attributes_dict['comments'] = self.get_accuracy_method_keys_and_values(field_value.get(a))
+                    print("field_attributes found")
+                    print("field_attributes[a]: " + field_value[a])
+                    attributes_dict[a] = field_value[a]
+
                 else:
-                    pass
+                    print('not in list')
 
-        # for field_def in Grav2NetCDFConverter.field_names:
-        #     list_of_possible_value = ['long_name', 'units', 'dtype', 'comment']
-        #     attributes_dict = {}
-        #     for a in list_of_possible_value:
-        #         if field_def.get(a):
-        #             attributes_dict[a] = field_def[a]
-        #         else:
-        #             pass
+            print('attributes_dict' + str(attributes_dict))
 
 
-                yield NetCDFVariable(short_name=value['short_name'],
-                                 data=get_data(value),
+            yield NetCDFVariable(short_name=field_value['short_name'],
+                                 data=get_data(field_value),
                                  dimensions=['point'],
                                  fill_value=None,
                                  attributes=attributes_dict
                                  )
-
-
 
         # yield NetCDFVariable(short_name='test_data',
         #                      data=np.random.random((self.nc_output_dataset.dimensions['lat'].size,
