@@ -2,16 +2,20 @@ field_names :
   Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int8'}
   Lat: {'short_name': 'Lat', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float', 'units': 'degrees_north'}
   Long: {'short_name': 'Long', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float', 'units': 'degrees_east'}
-  Gravacc: {'short_name': 'Gravacc', 'long_name': 'Gravity Accuracy', 'database_field_name': 'GRAVACC', 'dtype': 'int8'}
+  Gravacc: {'short_name': 'Gravacc', 'long_name': 'Gravity Accuracy', 'database_field_name': 'GRAVACC', 'dtype': 'int8', 'units': 'um'} #um may be null for some surveys...
   Gravaccmeth: {'short_name': 'Gravaccmeth', 'long_name': 'Gravity Accuracy Method', 'database_field_name': 'GRAVACCMETHOD', 'dtype': 'int8'}
   Gravmeth: {'short_name': 'Gravmeth', 'long_name': 'Gravity Method', 'database_field_name': 'GRAVMETH', 'dtype': 'S4'}
   Instid: {'short_name': 'Instid',  'long_name': 'Instrument ID', 'database_field_name': 'METERID', 'dtype': 'S4'} # changed meter height to instrument height - Meter hiegh in metres was confusing.
   Insthgt: {'short_name': 'Insthgt', 'long_name': 'Instrument Height', 'database_field_name': 'METERHGT', 'dtype': 'float32', 'units': 'm'}
   Insthgterr: {'short_name': 'Insthgterr', 'long_name': 'Instrument Height Error', 'database_field_name': 'METERHGTERR', 'dtype': 'int8'}
   Insthgtmeth: {'short_name': 'Insthgtmeth', 'long_name': 'Instrument Height Method', 'database_field_name': 'METERHGTMETH', 'dtype': 'S4', 'key_value_table': 'GNDELEVMETHODS'}
-  Ellipsoidhgt: {'short_name': 'Ellipsoidhgt', 'long_name': 'Ellipsoid Height', 'database_field_name': 'ELLIPSOIDHGT', 'dtype': 'float32'}
+  Ellipsoidhgt: {'short_name': 'Ellipsoidhgt', 'long_name': 'Ellipsoid Height', 'database_field_name': 'ELLIPSOIDHGT', 'dtype': 'float32', 'units': 'm'}
   Ellipsoidhgtacc: {'short_name': 'Ellipsoidhgtacc', 'long_name': 'Ellipsoid Height Accuracy', 'database_field_name': 'ELLIPSOIDHGTACC', 'dtype': 'float32'}  # plus 20 surveys with point variation
-  Ellipsoidhgtaccmethod: {'short_name': 'Ellipsoidhgtaccmethod', 'long_name': 'Ellipsoid Height Accuracy Method', 'database_field_name': 'ELLIPSOIDHGTACCMETHOD', 'dtype': 'int8'} # 11 surveys with point variation#            {'short_name': 'Tc',
+  Ellipsoidhgtaccmethod: {'short_name': 'Ellipsoidhgtaccmethod', 'long_name': 'Ellipsoid Height Accuracy Method', 'database_field_name': 'ELLIPSOIDHGTACCMETHOD', 'dtype': 'int8'} # 11 surveys with point variation#
+  Ellipsoidmeterhgt: {'short_name': 'Ellipsoidmeterhgt', 'long_name': 'Ellipsoid Meter Height', 'database_field_name': 'ELLIPSOIDMETERHGT', 'dtype': 'float32', 'units': 'm' } #TODO change to insturment height?
+  Ellipsoidmeterhgtmeth: {'short_name': 'Ellipsoidmeterhgtmeth', 'long_name': 'Ellipsoid Meter Height Method', 'database_field_name': 'ELLIPSOIDMETERHGTMETH', 'dtype': 'S4', 'key_value_table': 'GNDELEVMETHODS'}
+  Ellipsoidmeterhgterrmethod: {'short_name': 'Ellipsoidmeterhgterr', 'long_name': 'Ellipsoid Meter Height Error', 'database_field_name': 'ELLIPSOIDMETERHGTERR', 'dtype': 'float32', 'unit': 'm'}
+  Ellipsoidmeterhgterrmethod: {'short_name': 'Ellipsoidmeterhgterrmethod', 'long_name': 'Ellipsoid Meter Height Error Method', 'database_field_name': 'ELLIPSOIDMETERHGTERRMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
   Tc: {'short_name': 'Tc', 'long_name': 'Terrain Correction', 'database_field_name': 'TC', 'dtype': 'float32', 'units': ''}  # TODO error unit
   Tcmeth: {'short_name': 'Tcmeth', 'long_name': 'TC Method', 'database_field_name': 'TCMETH', 'dtype': 'S4'}
   Tcdensity: {'short_name': 'Tcdensity', 'long_name': 'TC Density', 'database_field_name': 'TCDENSITY', 'dtype': 'float32', 'units': ''}  # TODO error unit
@@ -30,4 +34,5 @@ field_names :
   Gndelevaccmeth: {'short_name': 'Gndelevaccmeth', 'long_name': 'Ground Level Accuracy Method', 'database_field_name': 'GNDELEVACCMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
   Gndelevmeth: {'short_name': 'Gndelevmeth', 'long_name': 'Ground Level Method', 'database_field_name': 'GNDELEVMETH', 'dtype': 'S4'}
   Gndelevtype: {'short_name': 'Gndelevtype', 'long_name': 'Ground Level Type', 'database_field_name': 'GNDELEVTYPE', 'dtype': 'S4'} # per survey
-
+  Gndelevdatum: {'short_name': 'Gndelevdatum', 'long_name': 'Ground Level Datum', 'database_field_name': 'GNDELEVDATUM', 'dtype': 'S4', 'key_value_table': 'GNDELEVDATUMS'}
+  Nvalue: {'short_name': 'Nvalue', 'long_name': 'Geoidal-Ellipsiodal Seperation Value', 'database_field_name': 'NVALUE', 'dtype': 'float32'}
