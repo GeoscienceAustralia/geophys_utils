@@ -30,8 +30,6 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 import sys
 import re
 from datetime import datetime
-import netCDF4
-from pprint import pprint
 import yaml
 import os
 import logging
@@ -120,11 +118,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
     ]
 
     try:
-        print(os.path.splitext(__file__)[0] + '_settings.yml')
+        logger.debug(os.path.splitext(__file__)[0] + '_settings.yml')
         settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        print('settings' + str(settings))
+        logger.debug('settings' + str(settings))
     except:
-        print("boourns")
+        logger.debug("Yaml load fail")
         settings = {}
 
     def get_keys_and_values(self, table_name: str):
@@ -150,16 +148,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
         e.g. 'SUR': 'Positions determined by optical surveying methods or measured on surveyed points.'
         """
         sql_statement = "select {0} from gravity.{1} where {2} = '{3}'".format(value_column, table_name, key_column, key)
-        print(sql_statement)
         query_result = self.cursor.execute(sql_statement)
         cleaned_target_value = str(next(query_result))
         list_of_characters_to_remove = ["\(", "\)", "\'", "\,"]
-
         for character in list_of_characters_to_remove:
             cleaned_target_value = re.sub(character, '', cleaned_target_value)
-        print(cleaned_target_value)
         return cleaned_target_value
-
 
     def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4'):
         '''
@@ -219,21 +213,21 @@ class Grav2NetCDFConverter(NetCDFConverter):
         return dict(zip(field_names, survey_row))
 
 
-    def get_survey_metadata_in_obs_table(self):
-        columns_to_add = {'LOCCACCUOM' : None }
-        for key, value in iter(columns_to_add.items()):
-            # sql_statement = '''select {0} from gravity.OBSERVATIONS go
-            #                      where gravity.GRAVSURVEYS.surveyid = {1}
-            #                      and go.dlong is not null
-            #                      and go.dlat is not null
-            #                      and status = 'A'
-            #                      and access_code = 'O'
-            #                      and geodetic_datum = 'GDA94'
-            #                      )'''.format(key, survey_id)
-
-            query_result = self.cursor.execute(sql_statement)
-            value = next(query_result)
-        return value
+    # def get_survey_metadata_in_obs_table(self):
+    #     columns_to_add = {'LOCCACCUOM' : None }
+    #     for key, value in iter(columns_to_add.items()):
+    #         # sql_statement = '''select {0} from gravity.OBSERVATIONS go
+    #         #                      where gravity.GRAVSURVEYS.surveyid = {1}
+    #         #                      and go.dlong is not null
+    #         #                      and go.dlat is not null
+    #         #                      and status = 'A'
+    #         #                      and access_code = 'O'
+    #         #                      and geodetic_datum = 'GDA94'
+    #         #                      )'''.format(key, survey_id)
+    #
+    #         query_result = self.cursor.execute(sql_statement)
+    #         value = next(query_result)
+    #     return value
 
 
     def get_global_attributes(self):
@@ -372,19 +366,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
             return np.array(variable_list, dtype=field_name_dict['dtype'])
 
         def get_field_description(target_field):
-            print(target_field)
             sql_statement = """
                 SELECT COMMENTS 
                 FROM ALL_COL_COMMENTS   
-                WHERE 
-                  TABLE_NAME = 'OBSERVATIONS' 
-                  AND COLUMN_NAME = '{}'""".format(target_field.upper())
-            print(sql_statement)
+                WHERE TABLE_NAME = 'OBSERVATIONS' 
+                AND COLUMN_NAME = '{}'""".format(target_field.upper())
             self.cursor.execute(sql_statement)
             comment = str(next(self.cursor)[0])
-            print("LIKE HERE BROO")
-            print(comment)
             return comment
+
+
+        # Begin yielding NetCDFVariables
 
         # crs variable creation for GDA94
         yield self.build_crs_variable('''\
@@ -427,24 +419,18 @@ class Grav2NetCDFConverter(NetCDFConverter):
                               dtype='int8'  # Byte datatype
                               )
 
-
-
-
         # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
         # key_value_table is later converted to comments.
         list_of_possible_value = ['long_name', 'units', 'dtype', 'key_value_table']
 
         for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
-            print('-----------------')
-            print("field: " + str(field_name))
-            print("field_attributes: " + str(field_value))
-            attributes_dict = {}
-            print(type(field_name))
-            attributes_dict['description'] = get_field_description(field_value['database_field_name'])
+            logger.debug('-----------------')
+            logger.debug("Field Names: " + str(field_name))
+            logger.debug("Field Values: " + str(field_value))
+            attributes_dict = {'description': get_field_description(field_value['database_field_name'])}
 
             for value in list_of_possible_value:
-                print("value: " + str(value))
-                print('attribute_dict: ' + str(attributes_dict))
+                logger.debug("Value in list_of_possible_value: " + str(value))
 
                 if field_value.get(value):
                     if value == 'key_value_table':
@@ -455,7 +441,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         attributes_dict[value] = field_value[value]
                 else:
                     logger.debug(str(field_name) + ' is not set as an accepted attribute.')
-            print('attributes_dict' + str(attributes_dict))
+                    logger.debug('attributes_dict' + str(attributes_dict))
+            logger.debug('attributes_dict' + str(attributes_dict))
 
             yield NetCDFVariable(short_name=field_value['short_name'],
                                  data=get_data(field_value),
@@ -497,19 +484,20 @@ def main():
         tidy_sur = re.search('\d+', survey_row[0]).group()
         survey_id_list.append(tidy_sur)
 
-    logger.debug('Survey count =',len(survey_id_list))
+    logger.debug('Survey count =', len(survey_id_list))
     logger.debug(survey_id_list)
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
-        print(survey)
+        logger.debug("Prcessing for survey: " + str(survey))
         g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
-        g2n.get_keys_and_values('ACCURACYMETHOD')
         g2n.convert2netcdf()
-        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
 
+        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
         logger.info('Global attributes:')
-        logger.info(g2n.nc_output_dataset.__dict__)
+        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+            logger.info(str(key) + ": " + str(value))
+        #logger.info(g2n.nc_output_dataset.__dict__)
         logger.info('Dimensions:')
         logger.info(g2n.nc_output_dataset.dimensions)
         logger.info('Variables:')
