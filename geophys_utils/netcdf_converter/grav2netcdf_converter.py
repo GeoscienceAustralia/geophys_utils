@@ -55,6 +55,70 @@ class Grav2NetCDFConverter(NetCDFConverter):
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
 
+    gravity_metadata_list = [
+        # 'ENO',
+        'SURVEYID',
+        'SURVEYNAME',
+        'COUNTRYID',
+        'STATEGROUP',
+        'STATIONS',
+        # 'GRAVACC', - variable
+        ['GRAVDATUM', 'GRAVDATUMS'],  # TODO always 'B'? Australian Absulte Gravity Datum 2007 (AAGD07)
+        # 'GNDELEVACC', - variable
+        # 'GNDELEVMETH', - variable
+        # 'GNDELEVDATUM', - variable - 6 outlyers
+        # 'RELIAB', variable - 5 outlyers
+        'LAYOUT',  # fuller descriptions of this are somewhere.
+        # 'ACCESS_CODE', filtered
+        # 'ENTRYDATE',
+        # 'ENTEREDBY',
+        # 'LASTUPDATE',
+        # 'UPDATEDBY',
+        # 'GRAVACCUNITS', #always um. put in grav acc var attribute - may be null sometimes
+        # 'GRAVACCMETHOD', variable
+        'GNDELEVACCUNITS',  # always m maybe some as null
+        # 'GNDELEVACCMETHOD', as variable
+        'ELLIPSOIDHGTDATUM',  # always - always GRS80
+        'ELLIPSOIDHGTMETH',
+        # 'ELLIPSOIDHGTACC', # as variable
+        # 'ELLIPSOIDHGTACCMETHOD',# as variable
+        'ELLIPSOIDHGTACCUOM',
+        'SURVEYTYPE',
+        # 'DATATYPES',
+        # 'UNO',
+        'OPERATOR',
+        'CONTRACTOR',
+        'PROCESSOR',
+        'CLIENT',  # nulls
+        'OWNER',  # nulls
+        'LEGISLATION',  # nulls
+        # 'STATE',
+        'PROJ_LEADER',  # nulls
+        'ON_OFF',
+        'STARTDATE',
+        'ENDDATE',
+        'VESSEL_TYPE',  # nulls
+        'VESSEL',  # nulls
+        'SPACEMIN',  # can add uom which is metres
+        'SPACEMAX',
+        # 'LOCMETHOD', - variable
+        'ACCURACY',  # ???
+        # 'GEODETIC_DATUM',
+        'PROJECTION',  # nulls
+        # 'QA_CODE',
+        'RELEASEDATE',  # not needed but open for discussion
+        'COMMENTS',  # not needed but open for discussion
+        # 'DATA_ACTIVITY_CODE',
+        # 'NLAT', already in global attributes
+        # 'SLAT', already in global attributes
+        # 'ELONG', already in global attributes
+        # 'WLONG', already in global attributes
+        # 'ANO',
+        # 'QABY',
+        # 'QADATE',
+        # 'CONFID_UNTIL',
+    ]
+
     try:
         print(os.path.splitext(__file__)[0] + '_settings.yml')
         settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
@@ -177,11 +241,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
 
-        print("LAT")
-        print(self.nc_output_dataset.variables['Lat'])
-        print("LONG")
-        print(self.nc_output_dataset.variables['Long'])
-        # insert survey wide metadata
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
             'Conventions': "CF-1.6,ACDD-1.3",
             'Gravity_Accuracy' : self.survey_metadata['GRAVACC'], #example of how to add oracle fields to global attributes
@@ -243,14 +302,36 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         dimensions = OrderedDict()
         dimensions['point'] = point_count  # number of points per survey
-        #dimensions['point'] = 1143
 
         return dimensions
+
+
 
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects
         '''
+
+        def generate_ga_metadata_dict():
+            gravity_metadata = {}
+            for key, value in iter(self.survey_metadata.items()):
+                for metadata_attribute in Grav2NetCDFConverter.gravity_metadata_list:
+                    if value is not None:
+                        if key == metadata_attribute:
+                            if type(value) == datetime:
+                                gravity_metadata[key] = value.isoformat()
+                            else:
+                                gravity_metadata[key] = value
+                    if isinstance(metadata_attribute, list):
+                        if key == metadata_attribute[0]:
+                            # get_value_for_key(value_column: str, table_name: str, key_column: str,  key: str)
+                            gravity_metadata[key] = str(self.get_value_for_key('DESCRIPTION', metadata_attribute[1], key, value))
+            logger.debug("GA gravity metadata")
+            logger.debug(gravity_metadata)
+
+            return gravity_metadata
+
+
         def get_data(field_name_dict):
 
             sql_statement = '''
@@ -290,6 +371,21 @@ class Grav2NetCDFConverter(NetCDFConverter):
             # return as numpy array, with dtype specified in yaml file.
             return np.array(variable_list, dtype=field_name_dict['dtype'])
 
+        def get_field_description(target_field):
+            print(target_field)
+            sql_statement = """
+                SELECT COMMENTS 
+                FROM ALL_COL_COMMENTS   
+                WHERE 
+                  TABLE_NAME = 'OBSERVATIONS' 
+                  AND COLUMN_NAME = '{}'""".format(target_field.upper())
+            print(sql_statement)
+            self.cursor.execute(sql_statement)
+            comment = str(next(self.cursor)[0])
+            print("LIKE HERE BROO")
+            print(comment)
+            return comment
+
         # crs variable creation for GDA94
         yield self.build_crs_variable('''\
         GEOGCS["GDA94",
@@ -306,94 +402,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
                                           )
 
-        gravity_metadata_list = [
-            #'ENO',
-            'SURVEYID',
-            'SURVEYNAME',
-            'COUNTRYID',
-            'STATEGROUP',
-            'STATIONS',
-            #'GRAVACC', - variable
-            ['GRAVDATUM', 'GRAVDATUMS'], #TODO always 'B'? Australian Absulte Gravity Datum 2007 (AAGD07)
-            #'GNDELEVACC', - variable
-            #'GNDELEVMETH', - variable
-            #'GNDELEVDATUM', - variable - 6 outlyers
-            #'RELIAB', variable - 5 outlyers
-            'LAYOUT', # fuller descriptions of this are somewhere.
-            #'ACCESS_CODE', filtered
-           #'ENTRYDATE',
-            #'ENTEREDBY',
-            #'LASTUPDATE',
-            #'UPDATEDBY',
-            #'GRAVACCUNITS', #always um. put in grav acc var attribute - may be null sometimes
-            #'GRAVACCMETHOD', variable
-            'GNDELEVACCUNITS',# always m maybe some as null
-           # 'GNDELEVACCMETHOD', as variable
-            'ELLIPSOIDHGTDATUM', #always - always GRS80
-            'ELLIPSOIDHGTMETH',
-            #'ELLIPSOIDHGTACC', # as variable
-            #'ELLIPSOIDHGTACCMETHOD',# as variable
-            'ELLIPSOIDHGTACCUOM',
-            'SURVEYTYPE',
-            #'DATATYPES',
-            #'UNO',
-            'OPERATOR',
-            'CONTRACTOR',
-            'PROCESSOR',
-            'CLIENT', # nulls
-            'OWNER', # nulls
-            'LEGISLATION', # nulls
-            #'STATE',
-            'PROJ_LEADER', #nulls
-            'ON_OFF',
-            'STARTDATE',
-            'ENDDATE',
-            'VESSEL_TYPE', # nulls
-            'VESSEL', # nulls
-            'SPACEMIN', # can add uom which is metres
-            'SPACEMAX',
-            #'LOCMETHOD', - variable
-            'ACCURACY', #???
-            #'GEODETIC_DATUM',
-            'PROJECTION', # nulls
-            #'QA_CODE',
-            'RELEASEDATE', # not needed but open for discussion
-            'COMMENTS', # not needed but open for discussion
-            #'DATA_ACTIVITY_CODE',
-            #'NLAT', already in global attributes
-            #'SLAT', already in global attributes
-            #'ELONG', already in global attributes
-            #'WLONG', already in global attributes
-            #'ANO',
-            #'QABY',
-            #'QADATE',
-            #'CONFID_UNTIL',
-        ]
-        """
-        (self, value_column: str, table_name: str, key_column: str,  key: str):
-        sql_statement = 'select {0} from gravity.{1} where {2} = {3}'.format(value_column, table_name, key_column, key)
-        """#self.get_value_for_key('description', value[1], value[0], 'B')
-        print(self.get_value_for_key('description', 'GRAVDATUMS', 'gravdatum', 'B'))
-        gravity_metadata = {}
-        for key, value in iter(self.survey_metadata.items()):
-            for metadata_attribute in gravity_metadata_list:
-                if value is not None:
-                    print(key,value)
-                    if key == metadata_attribute:
-
-                        if type(value) == datetime:
-                            gravity_metadata[key] = value.isoformat()
-                        else:
-                            gravity_metadata[key] = value
-                if isinstance(metadata_attribute, list):
-                    if key == metadata_attribute[0]:
-                        print("DOES THIS WORK")
-                        print(metadata_attribute)
-                        gravity_metadata[key] = str(self.get_value_for_key('description', 'GRAVDATUMS', 'gravdatum', 'B'))
-        print("GRAV META")
-        print(gravity_metadata)
 
 
+        # survey level attributes
         # add loccaccuom
         # GNDELEVACCUOM
         # METERHGTUNITS
@@ -405,17 +416,19 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # ELLIPSOIDHGTMETH
         # ELLIPSOIDHGTDATUM - always GRS80
 
-        #ELLIPSOIDMETERHGTUNITS is always m - added as units attribute for ellipsoide meter hgt
+        # ELLIPSOIDMETERHGTUNITS is always m - added as units attribute for ellipsoide meter hgt
         # ELLIPSOIDHGTACCUOM is always m
 
-        #pprint(gravity_metadata)
         yield NetCDFVariable(short_name='ga_gravity_metadata',
                               data=0,
                               dimensions=[],  # Scalar
                               fill_value=None,
-                              attributes=gravity_metadata,
+                              attributes=generate_ga_metadata_dict(),
                               dtype='int8'  # Byte datatype
                               )
+
+
+
 
         # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
         # key_value_table is later converted to comments.
@@ -426,6 +439,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             print("field: " + str(field_name))
             print("field_attributes: " + str(field_value))
             attributes_dict = {}
+            print(type(field_name))
+            attributes_dict['description'] = get_field_description(field_value['database_field_name'])
 
             for value in list_of_possible_value:
                 print("value: " + str(value))
@@ -433,20 +448,13 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
                 if field_value.get(value):
                     if value == 'key_value_table':
-                        #logger.debug(self.get_accuracy_method_keys_and_values(field_value.get(value)))
-                        #print("this one??????" + str(value))
-                        #print(self.get_accuracy_method_keys_and_values(field_value.get(value)))
                         attributes_dict['comments'] = self.get_keys_and_values(field_value.get(value))
-
-                    print("field_attributes found")
-                    print("field_attributes[value]: " + field_value[value])
                     if value == 'key_value_table':
                         pass
                     else:
                         attributes_dict[value] = field_value[value]
                 else:
-                    print('not in list')
-
+                    logger.debug(str(field_name) + ' is not set as an accepted attribute.')
             print('attributes_dict' + str(attributes_dict))
 
             yield NetCDFVariable(short_name=field_value['short_name'],
@@ -455,7 +463,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                  fill_value=None,
                                  attributes=attributes_dict
                                  )
-
 
 def main():
     # get user input and connect to oracle
@@ -490,24 +497,24 @@ def main():
         tidy_sur = re.search('\d+', survey_row[0]).group()
         survey_id_list.append(tidy_sur)
 
+    logger.debug('Survey count =',len(survey_id_list))
+    logger.debug(survey_id_list)
 
-    #print(survey_id_list)
-    print('Survey count =',len(survey_id_list))
-    # Loop throught he survey lists to make a netcdf file based off each one.
+    # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
         print(survey)
         g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
         g2n.get_keys_and_values('ACCURACYMETHOD')
         g2n.convert2netcdf()
-        print('Finished writing netCDF file {}'.format(nc_out_path))
+        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
 
-        print('Global attributes:')
-        pprint(g2n.nc_output_dataset.__dict__)
-        print('Dimensions:')
-        print(g2n.nc_output_dataset.dimensions)
-        print('Variables:')
-        print(g2n.nc_output_dataset.variables)
-        print(g2n.nc_output_dataset.file_format)
+        logger.info('Global attributes:')
+        logger.info(g2n.nc_output_dataset.__dict__)
+        logger.info('Dimensions:')
+        logger.info(g2n.nc_output_dataset.dimensions)
+        logger.info('Variables:')
+        logger.info(g2n.nc_output_dataset.variables)
+        logger.info(g2n.nc_output_dataset.file_format)
 
         del g2n
         break
