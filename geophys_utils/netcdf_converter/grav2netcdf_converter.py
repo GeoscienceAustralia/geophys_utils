@@ -63,7 +63,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         print("boourns")
         settings = {}
 
-    def get_accuracy_method_keys_and_values(self, table_name: str):
+    def get_keys_and_values(self, table_name: str):
         """
         Retrieves all data from a specified table, converts into a dictionary, and returns as a string. Used for tables
         with the key and value information such as accuray or methodology.
@@ -79,7 +79,22 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # returns as string. Python dict not accepted.
         return str(accuracy_method_keys_and_values_dict)
 
+    def get_value_for_key(self, value_column: str, table_name: str, key_column: str,  key: str):
+        """
+        Retrieves all data from a specified table, converts into a dictionary, and returns as a string. Used for tables
+        with the key and value information such as accuray or methodology.
+        e.g. 'SUR': 'Positions determined by optical surveying methods or measured on surveyed points.'
+        """
+        sql_statement = "select {0} from gravity.{1} where {2} = '{3}'".format(value_column, table_name, key_column, key)
+        print(sql_statement)
+        query_result = self.cursor.execute(sql_statement)
+        cleaned_target_value = str(next(query_result))
+        list_of_characters_to_remove = ["\(", "\)", "\'", "\,"]
 
+        for character in list_of_characters_to_remove:
+            cleaned_target_value = re.sub(character, '', cleaned_target_value)
+        print(cleaned_target_value)
+        return cleaned_target_value
 
 
     def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4'):
@@ -98,7 +113,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
     def get_survey_metadata(self):
         """
-        Retrieve all data from the gravsurveys and joined a.surveys tables for the curretn surveyid in the loop.
+        Retrieve all data from the gravsurveys and joined a.surveys tables for the current surveyid in the loop.
         Uses same filters as other sql queries.
 
         :return:
@@ -275,7 +290,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
             # return as numpy array, with dtype specified in yaml file.
             return np.array(variable_list, dtype=field_name_dict['dtype'])
 
-
         # crs variable creation for GDA94
         yield self.build_crs_variable('''\
         GEOGCS["GDA94",
@@ -295,21 +309,23 @@ class Grav2NetCDFConverter(NetCDFConverter):
         gravity_metadata_list = [
             #'ENO',
             'SURVEYID',
+            'SURVEYNAME',
+            'COUNTRYID',
             'STATEGROUP',
             'STATIONS',
-            'GRAVACC',
-            #'GRAVDATUM',
+            #'GRAVACC', - variable
+            ['GRAVDATUM', 'GRAVDATUMS'], #TODO always 'B'? Australian Absulte Gravity Datum 2007 (AAGD07)
             #'GNDELEVACC', - variable
             #'GNDELEVMETH', - variable
             #'GNDELEVDATUM', - variable - 6 outlyers
             #'RELIAB', variable - 5 outlyers
-            #'LAYOUT', ? Check
+            'LAYOUT', # fuller descriptions of this are somewhere.
             #'ACCESS_CODE', filtered
            #'ENTRYDATE',
             #'ENTEREDBY',
             #'LASTUPDATE',
             #'UPDATEDBY',
-            'GRAVACCUNITS', #always um. put in grav acc var attribute - may be null sometimes
+            #'GRAVACCUNITS', #always um. put in grav acc var attribute - may be null sometimes
             #'GRAVACCMETHOD', variable
             'GNDELEVACCUNITS',# always m maybe some as null
            # 'GNDELEVACCMETHOD', as variable
@@ -318,33 +334,31 @@ class Grav2NetCDFConverter(NetCDFConverter):
             #'ELLIPSOIDHGTACC', # as variable
             #'ELLIPSOIDHGTACCMETHOD',# as variable
             'ELLIPSOIDHGTACCUOM',
-            'SURVEYNAME',
             'SURVEYTYPE',
             #'DATATYPES',
             #'UNO',
             'OPERATOR',
             'CONTRACTOR',
             'PROCESSOR',
-            'CLIENT',
-            'OWNER',
-            'LEGISLATION',
-            'COUNTRYID',
-            'STATE',
-            'PROJ_LEADER',
+            'CLIENT', # nulls
+            'OWNER', # nulls
+            'LEGISLATION', # nulls
+            #'STATE',
+            'PROJ_LEADER', #nulls
             'ON_OFF',
             'STARTDATE',
             'ENDDATE',
-            'VESSEL_TYPE',
-            'VESSEL',
-            'SPACEMIN',
+            'VESSEL_TYPE', # nulls
+            'VESSEL', # nulls
+            'SPACEMIN', # can add uom which is metres
             'SPACEMAX',
-            'LOCMETHOD',
-            'ACCURACY',
-            'GEODETIC_DATUM',
-            'PROJECTION',
-            'QA_CODE',
-            'RELEASEDATE',
-            'COMMENTS',
+            #'LOCMETHOD', - variable
+            'ACCURACY', #???
+            #'GEODETIC_DATUM',
+            'PROJECTION', # nulls
+            #'QA_CODE',
+            'RELEASEDATE', # not needed but open for discussion
+            'COMMENTS', # not needed but open for discussion
             #'DATA_ACTIVITY_CODE',
             #'NLAT', already in global attributes
             #'SLAT', already in global attributes
@@ -355,34 +369,30 @@ class Grav2NetCDFConverter(NetCDFConverter):
             #'QADATE',
             #'CONFID_UNTIL',
         ]
-
+        """
+        (self, value_column: str, table_name: str, key_column: str,  key: str):
+        sql_statement = 'select {0} from gravity.{1} where {2} = {3}'.format(value_column, table_name, key_column, key)
+        """#self.get_value_for_key('description', value[1], value[0], 'B')
+        print(self.get_value_for_key('description', 'GRAVDATUMS', 'gravdatum', 'B'))
         gravity_metadata = {}
-        print("here yo")
         for key, value in iter(self.survey_metadata.items()):
-
-            print("'" + str(key) + "',")
             for metadata_attribute in gravity_metadata_list:
-
                 if value is not None:
+                    print(key,value)
                     if key == metadata_attribute:
+
                         if type(value) == datetime:
                             gravity_metadata[key] = value.isoformat()
                         else:
                             gravity_metadata[key] = value
+                if isinstance(metadata_attribute, list):
+                    if key == metadata_attribute[0]:
+                        print("DOES THIS WORK")
+                        print(metadata_attribute)
+                        gravity_metadata[key] = str(self.get_value_for_key('description', 'GRAVDATUMS', 'gravdatum', 'B'))
         print("GRAV META")
         print(gravity_metadata)
 
-
-        # gravity_metadata = {key: value.isoformat()
-        #
-        #                     if type(value) == datetime
-        #                     else value
-        #                     for key, value in iter(self.survey_metadata.items())
-        #
-        #
-        #                     if value is not None
-        #
-        #                     }
 
         # add loccaccuom
         # GNDELEVACCUOM
@@ -426,7 +436,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         #logger.debug(self.get_accuracy_method_keys_and_values(field_value.get(value)))
                         #print("this one??????" + str(value))
                         #print(self.get_accuracy_method_keys_and_values(field_value.get(value)))
-                        attributes_dict['comments'] = self.get_accuracy_method_keys_and_values(field_value.get(value))
+                        attributes_dict['comments'] = self.get_keys_and_values(field_value.get(value))
 
                     print("field_attributes found")
                     print("field_attributes[value]: " + field_value[value])
@@ -487,7 +497,7 @@ def main():
     for survey in survey_id_list:
         print(survey)
         g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
-        g2n.get_accuracy_method_keys_and_values('ACCURACYMETHOD')
+        g2n.get_keys_and_values('ACCURACYMETHOD')
         g2n.convert2netcdf()
         print('Finished writing netCDF file {}'.format(nc_out_path))
 
