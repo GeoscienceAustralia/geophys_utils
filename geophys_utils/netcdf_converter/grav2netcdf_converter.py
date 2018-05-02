@@ -253,8 +253,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
-           # 'history': 'Converted from .dat file {} using definitions file {}'.format(self.aem_dat_path,
-                                                                                  #   self.dfn_path),
+           # 'history': 'Pulled from database at Geoscience Australia'
             'date_created': datetime.now().isoformat()
             }
 
@@ -327,6 +326,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
 
         def get_data(field_name_dict):
+            print("HERE")
+            print("HERE")
+            print(field_name_dict)
 
             sql_statement = '''
                            select o1.{0} from gravity.OBSERVATIONS o1
@@ -358,12 +360,23 @@ class Grav2NetCDFConverter(NetCDFConverter):
             # call the sql query and assign results into a python list
             variable_list = []
             self.cursor.execute(sql_statement)
-            for i in self.cursor:
-                variable_list.append(
-                    i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
 
-            # return as numpy array, with dtype specified in yaml file.
-            return np.array(variable_list, dtype=field_name_dict['dtype'])
+            for i in self.cursor:
+                only_nulls = True
+                if re.search('None', str(i)):
+                #if i is not None:
+                    pass
+                else:
+                    only_nulls = False
+                variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+
+            if only_nulls is True:
+                logger.debug(str(field_name_dict) + " has null value for survey " + str(self.survey_id))
+                #return None
+                return np.array(variable_list, dtype=field_name_dict['dtype'])
+            else:
+                # return as numpy array, with dtype specified in yaml file.
+                return np.array(variable_list, dtype=field_name_dict['dtype'])
 
         def get_field_description(target_field):
             sql_statement = """
@@ -444,13 +457,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     logger.debug('attributes_dict' + str(attributes_dict))
             logger.debug('attributes_dict' + str(attributes_dict))
 
-            yield NetCDFVariable(short_name=field_value['short_name'],
-                                 data=get_data(field_value),
-                                 dimensions=['point'],
-                                 fill_value=None,
-                                 attributes=attributes_dict
-                                 )
+            variable_data = get_data(field_value)
+            if variable_data is not None:
 
+                yield NetCDFVariable(short_name=field_value['short_name'],
+                                     data=variable_data,
+                                     dimensions=['point'],
+                                     fill_value=None,
+                                     attributes=attributes_dict
+                                     )
+            else:
+                pass
 def main():
     # get user input and connect to oracle
     assert len(sys.argv) >= 4, '....'
@@ -489,23 +506,27 @@ def main():
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
-        logger.debug("Prcessing for survey: " + str(survey))
-        g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
-        g2n.convert2netcdf()
+        if survey == '197309':
+            logger.debug("Processing for survey: " + str(survey))
+            g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
+            g2n.convert2netcdf()
 
-        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-        logger.info('Global attributes:')
-        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
-            logger.info(str(key) + ": " + str(value))
-        #logger.info(g2n.nc_output_dataset.__dict__)
-        logger.info('Dimensions:')
-        logger.info(g2n.nc_output_dataset.dimensions)
-        logger.info('Variables:')
-        logger.info(g2n.nc_output_dataset.variables)
-        logger.info(g2n.nc_output_dataset.file_format)
+            logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+            logger.info('Global attributes:')
+            for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+                logger.info(str(key) + ": " + str(value))
+            #logger.info(g2n.nc_output_dataset.__dict__)
+            logger.info('Dimensions:')
+            logger.info(g2n.nc_output_dataset.dimensions)
+            logger.info('Variables:')
+            logger.info(g2n.nc_output_dataset.variables)
+            logger.info(g2n.nc_output_dataset.file_format)
+            for data in g2n.nc_output_dataset.variables['Tcerruom']:
+                print(data)
+            #print(g2n.nc_output_dataset.variables['Nvalue'])
 
-        del g2n
-        break
+            del g2n
+            break
 
 if __name__ == '__main__':
     main()
