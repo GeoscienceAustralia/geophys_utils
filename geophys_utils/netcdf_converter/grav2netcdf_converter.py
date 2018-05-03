@@ -139,7 +139,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             accuracy_method_keys_and_values_dict[s[0]] = s[1]
 
         # returns as string. Python dict not accepted.
-        return str(accuracy_method_keys_and_values_dict)
+        return accuracy_method_keys_and_values_dict
 
     def get_value_for_key(self, value_column: str, table_name: str, key_column: str,  key: str):
         """
@@ -326,8 +326,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
 
         def get_data(field_name_dict):
-            print("HERE")
-            print("HERE")
+
             print(field_name_dict)
 
             sql_statement = '''
@@ -369,6 +368,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 else:
                     only_nulls = False
                 variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+            #if field_name_dict['dtype'] == 'S4':
+
+            # for key, items in iter(variable_list).items():
+            #     if re.search('[A-Z]', key):
+            #         print(key)
 
             if only_nulls is True:
                 logger.debug(str(field_name_dict) + " has null value for survey " + str(self.survey_id))
@@ -377,6 +381,61 @@ class Grav2NetCDFConverter(NetCDFConverter):
             else:
                 # return as numpy array, with dtype specified in yaml file.
                 return np.array(variable_list, dtype=field_name_dict['dtype'])
+
+
+
+        def get_data2(field_name_dict):
+
+            print(field_name_dict)
+
+            sql_statement = '''
+                           select o1.{0} from gravity.OBSERVATIONS o1
+                           left join gravity.OBSERVATIONS o2
+                           on 
+                               o1.surveyid = o2.surveyid
+                               and (o1.entrydate > o2.entrydate
+                               OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+                               and o1.geodetic_datum = o2.geodetic_datum
+                               and o1.dlat = o2.dlat
+                               and o1.dlong = o2.dlong
+                               and o1.access_code = o2.access_code
+                               and o1.status = o2.status
+                           where 
+                               o1.surveyid = {1}
+                               and o1.status = 'A'
+                               and o1.access_code = 'O'
+                               and o2.obsno is null
+                               and o1.grav is not null
+                               and o1.gndelev is not null
+                               and o1.meterhgt is not null
+                               and o1.nvalue is not null
+                               and o1.ellipsoidhgt is not null
+                               and o1.ellipsoidmeterhgt is not null
+                               and o1.eno in (select
+                           eno from a.surveys where countryid is null or countryid = 'AUS')''' \
+                .format(field_name_dict['database_field_name'], self.survey_id)
+
+            # call the sql query and assign results into a python list
+            variable_list = []
+            self.cursor.execute(sql_statement)
+            for i in self.cursor:
+                variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+            return variable_list
+
+        def Convert_list_to_mapped_values(list_to_edit, mapping_dict):
+
+            transformed_list = []
+
+            for l in list_to_edit:
+                logger.debug("value: " + str(l))
+                for key5, value5, in mapping_dict.items():
+                    if l == key5:
+                        print(mapping_dict.get(key5))
+                        transformed_list.append(mapping_dict.get(key5))
+                    else:
+                        pass
+            print('transformed_list')
+            return transformed_list
 
         def get_field_description(target_field):
             sql_statement = """
@@ -388,6 +447,40 @@ class Grav2NetCDFConverter(NetCDFConverter):
             comment = str(next(self.cursor)[0])
             return comment
 
+        def handle_key_value_cases(field_value, value):
+            key_values_tables_dict = self.get_keys_and_values(field_value.get(value))
+            print("DICT")
+            print(key_values_tables_dict)
+            print(type(key_values_tables_dict))
+
+            key_list = []
+            # get the keys into a list
+
+            for key, value2 in key_values_tables_dict.items():
+                # if re.search('[A-Z]', key):
+                print(key, value2)
+                key_list.append(key)
+
+            # convert the key list to a np array
+            lookup_array = np.array(key_list)
+            print("lookup array")
+            print(lookup_array)
+            value_array = get_data2(field_value)
+
+            # create the mapping dict/lookup table to convert variables with strings as keys.
+            mapping_dict = {}
+            for this in key_list:
+                mapping_dict[this] = key_list.index(this)
+
+            transformed_list = Convert_list_to_mapped_values(value_array, mapping_dict)
+            # ummm
+
+
+            if attributes_dict['dtype'] == 'S4':
+                pass
+                # print(attributes_dict['comments'])
+
+            return transformed_list
 
         # Begin yielding NetCDFVariables
 
@@ -445,29 +538,32 @@ class Grav2NetCDFConverter(NetCDFConverter):
             for value in list_of_possible_value:
                 logger.debug("Value in list_of_possible_value: " + str(value))
 
+                # if the field value is in the list of accepted values then add to attributes dict
                 if field_value.get(value):
+                    # handle the key_value_table madness
                     if value == 'key_value_table':
-                        attributes_dict['comments'] = self.get_keys_and_values(field_value.get(value))
-                    if value == 'key_value_table':
-                        pass
+                        transformed_list = handle_key_value_cases(field_value, value)
+                        attributes_dict['comments'] = str(self.get_keys_and_values(field_value.get(value)))
+                    # otherwise it's easy
                     else:
                         attributes_dict[value] = field_value[value]
                 else:
                     logger.debug(str(field_name) + ' is not set as an accepted attribute.')
                     logger.debug('attributes_dict' + str(attributes_dict))
             logger.debug('attributes_dict' + str(attributes_dict))
-
+            #print('attributes_dict' + str(attributes_dict))
             variable_data = get_data(field_value)
-            if variable_data is not None:
+
+            if variable_data is not None or transformed_list is not None:
 
                 yield NetCDFVariable(short_name=field_value['short_name'],
-                                     data=variable_data,
+                                     data=variable_data if variable_data is not None else transformed_list,
                                      dimensions=['point'],
                                      fill_value=None,
                                      attributes=attributes_dict
                                      )
-            else:
-                pass
+
+
 def main():
     # get user input and connect to oracle
     assert len(sys.argv) >= 4, '....'
@@ -510,7 +606,6 @@ def main():
             logger.debug("Processing for survey: " + str(survey))
             g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
             g2n.convert2netcdf()
-
             logger.info('Finished writing netCDF file {}'.format(nc_out_path))
             logger.info('Global attributes:')
             for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
@@ -521,7 +616,7 @@ def main():
             logger.info('Variables:')
             logger.info(g2n.nc_output_dataset.variables)
             logger.info(g2n.nc_output_dataset.file_format)
-            for data in g2n.nc_output_dataset.variables['Tcerruom']:
+            for data in g2n.nc_output_dataset.variables['Gndelevaccmeth']:
                 print(data)
             #print(g2n.nc_output_dataset.variables['Nvalue'])
 
