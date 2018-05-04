@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 # Create the console handler and set logging level
 console_handler = logging.StreamHandler()
-console_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 # Create a formatter for log messages
 logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 # Add the Formatter to the Handler
@@ -279,6 +279,54 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
             return gravity_metadata
 
+        def wrangle_data_and_attributes_to_be_netcdfified(field_name, field_value):
+            logger.debug('-----------------')
+            logger.debug("Field Names: " + str(field_name))
+            logger.debug("Field Values: " + str(field_value))
+            attributes_dict = {'description': get_field_description(field_value['database_field_name'])}
+            converted_data_list = []
+            for value in list_of_possible_value:
+                logger.debug("Value in list_of_possible_value: " + str(value))
+
+                # if the field value is in the list of accepted values then add to attributes dict
+                if field_value.get(value):
+                    logger.debug("Processing: " + str(value))
+                    # handle the key_value_table madness.
+                    # some key values are already int8 and don't need to be converted. Thus a flag is included in the
+                    # field_names
+                    if value == 'convert_keys_and_data_to_int8':
+                        print('convert VALUE FOUNT')
+                        # get the transformed data if the data is in string form
+                        converted_data_list, converted_key_value_dict = handle_key_value_cases(field_value)
+                        converted_data_list = np.array(converted_data_list, dtype='int8')
+                        attributes_dict['comments'] = str(converted_key_value_dict)
+
+                    if value == 'key_value_table':
+                        attributes_dict['comments'] = str(
+                            self.get_keys_and_values_table(field_value.get('key_value_table')))
+                    # otherwise it's easy
+                    else:
+                        attributes_dict[value] = field_value[value]
+                else:
+                    logger.debug(str(field_name) + ' is not set as an accepted attribute.')
+                    logger.debug('attributes_dict' + str(attributes_dict))
+            logger.debug('attributes_dict' + str(attributes_dict))
+            # print('attributes_dict' + str(attributes_dict))
+            data_list = np.array(get_data(field_value), dtype=field_value['dtype'])
+            print(field_name)
+            print('transformed_list')
+            print(converted_data_list)
+            print(type(converted_data_list))
+            print('variable_data')
+            print(data_list)
+            print(type(data_list))
+            # if variable_data is not None or transformed_list is not None:
+
+            if len(converted_data_list) > 0:
+                return converted_data_list, attributes_dict
+            else:
+                return data_list, attributes_dict
+
         def get_data(field_name_dict):
             """
 
@@ -324,12 +372,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
             comment = str(next(self.cursor)[0])
             return comment
 
-        def handle_key_value_cases(field_value, value):
-            print('field v')
-            print(field_value)
-            print(value)
+
+
+        def handle_key_value_cases(field_value):
             key_values_tables_dict = self.get_keys_and_values_table(field_value.get('key_value_table'))
-            print("DICT")
+
             print(key_values_tables_dict)
             print(type(key_values_tables_dict))
 
@@ -341,45 +388,32 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 print(key, value2)
                 key_list.append(key)
 
-            # convert the key list to a np array
-            lookup_array = np.array(key_list)
-            print("lookup_array")
-            print(lookup_array)
-            value_array = get_data(field_value)
-
             # create the mapping dict/lookup table to convert variables with strings as keys.
             mapping_dict = {}
             for this in key_list:
                 mapping_dict[this] = key_list.index(this)
 
+            # get the data
+            value_array = get_data(field_value)
+            # transform the data
             transformed_list = convert_list_to_mapped_values(value_array, mapping_dict)
 
-            # i need to convert the key_value_talbe. turn the keys of field_value.get('key_value_table') into a list and chuck these through the thing
-            print(str(self.get_keys_and_values_table(field_value.get('key_value_table'))))
-            converted_list_of_keys = convert_list_to_mapped_values(self.get_keys_and_values_table(field_value.get('key_value_table')), mapping_dict)
-            print('CONVERTED')
-            print(converted_list_of_keys)
-            new_dict = key_values_tables_dict
-            converted_dict = {}
-
             # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
-            # the existing value of the talbe_key_dict in a new dict
-            for keys, values in new_dict.items():
+            # the existing value of the table_key_dict in a new dict
+            converted_dict = {}
+            for keys, values in key_values_tables_dict.items():
                 for map_key, map_value in mapping_dict.items():
                     print('map_key: ', map_key)
                     print('map_value: ', map_value)
                     if keys == map_key:
-                        print("new_dict[keys]: " + str(new_dict[keys]))
-                        converted_dict[map_value] = new_dict[keys]
+                        print("new_dict[keys]: " + str(key_values_tables_dict[keys]))
+                        converted_dict[map_value] = key_values_tables_dict[keys]
                     else:
                         pass
             print('NEW_DICTT')
             print(converted_dict)
 
-            attributes_dict['comments'] = str(self.get_keys_and_values_table(field_value.get('key_value_table')))
-            # ummm
-
-            return transformed_list
+            return transformed_list, converted_dict
 
         # Begin yielding NetCDFVariables
 
@@ -424,72 +458,25 @@ class Grav2NetCDFConverter(NetCDFConverter):
                               dtype='int8'  # Byte datatype
                               )
 
+
         # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
         # key_value_table is later converted to comments.
-        list_of_possible_value = ['long_name', 'units', 'dtype', 'key_value_table', 'convert_keys_to_int8', 'database_field_name']
+        list_of_possible_value = ['long_name', 'units', 'dtype', 'key_value_table', 'convert_keys_and_data_to_int8',
+                                  'database_field_name']
 
         for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
-            logger.debug('-----------------')
-            logger.debug("Field Names: " + str(field_name))
-            logger.debug("Field Values: " + str(field_value))
-            attributes_dict = {'description': get_field_description(field_value['database_field_name'])}
-            transformed_list = []
-            for value in list_of_possible_value:
-                logger.debug("Value in list_of_possible_value: " + str(value))
+            data, attributes = wrangle_data_and_attributes_to_be_netcdfified(field_name, field_value)
 
-                # if the field value is in the list of accepted values then add to attributes dict
-                if field_value.get(value):
-                    print(value)
-                    # handle the key_value_table madness
-                    # some key values are already ints and don't need to be converted
-                    if value == 'convert_keys_to_int8':
-                        print('convert VALUE FOUNT')
-                        # get the transformed data if the data is in string form
-                        transformed_list = np.array(handle_key_value_cases(field_value, value), dtype='int8')
+            yield NetCDFVariable(short_name=field_value['short_name'],
+                                data=data,
+                                dimensions=['point'],
+                                fill_value=None,
+                                attributes=attributes
+                                )
 
-                    if value == 'key_value_table':
-                        print('key_value_table VALUE FOUNT')
-                        print(field_value.get(value))
-                        attributes_dict['comments'] = str(self.get_keys_and_values_table(field_value.get('key_value_table')))
-                    # otherwise it's easy
-                    else:
-                        attributes_dict[value] = field_value[value]
-
-
-
-
-                else:
-                    logger.debug(str(field_name) + ' is not set as an accepted attribute.')
-                    logger.debug('attributes_dict' + str(attributes_dict))
-            logger.debug('attributes_dict' + str(attributes_dict))
-            #print('attributes_dict' + str(attributes_dict))
-            variable_data = np.array(get_data(field_value), dtype=field_value['dtype'])
-            print(field_name)
-            print('transformed_list')
-            print(transformed_list)
-            print(type(transformed_list))
-            print('variable_data')
-            print(variable_data)
-            print(type(variable_data))
-           # if variable_data is not None or transformed_list is not None:
-
-            if len(transformed_list) > 0:
-                print('NOT FALSE')
-                yield NetCDFVariable(short_name=field_value['short_name'],
-                                     data=transformed_list,
-                                     dimensions=['point'],
-                                     fill_value=None,
-                                     attributes=attributes_dict
-                                     )
-            else:
-                yield NetCDFVariable(short_name=field_value['short_name'],
-                                     data=variable_data,
-                                     dimensions=['point'],
-                                     fill_value=None,
-                                     attributes=attributes_dict
-                                     )
 
 def main():
+
     # get user input and connect to oracle
     assert len(sys.argv) >= 4, '....'
     nc_out_path = sys.argv[1]
@@ -513,7 +500,6 @@ def main():
         survey_id_list.append(tidy_sur)
 
     logger.debug('Survey count =', len(survey_id_list))
-    logger.debug(survey_id_list)
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
