@@ -30,7 +30,7 @@ field_names :
   Locmeth: {'short_name': 'Locmeth', 'long_name': 'Location Method', 'database_field_name': 'LOCMETH', 'dtype': 'S4', 'key_value_table': 'LOCMETHODS'}
   Locaccmethod: {'short_name': 'Locaccmethod', 'long_name': 'Location Accuracy Method', 'database_field_name': 'LOCACCMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
   Gndelev: {'short_name': 'Gndelev', 'long_name': 'Ground Elevation', 'database_field_name': 'gndelev', 'dtype': 'float32', 'units': 'm'}
-  Gndelevacc: {'short_name': 'Gndelevacc', 'long_name': 'Ground Level Accuracy', 'database_field_name': 'GNDELEVACC', 'dtype': 'int8'}
+  Gndelevacc: {'short_name': 'Gndelevacc', 'long_name': 'Ground Level Accuracy', 'database_field_name': 'GNDELEVACC', 'dtype': 'int8', 'units': 'm'}
   Gndelevaccmeth: {'short_name': 'Gndelevaccmeth', 'long_name': 'Ground Level Accuracy Method', 'database_field_name': 'GNDELEVACCMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
   Gndelevmeth: {'short_name': 'Gndelevmeth', 'long_name': 'Ground Level Method', 'database_field_name': 'GNDELEVMETH', 'dtype': 'S4'}
   Gndelevtype: {'short_name': 'Gndelevtype', 'long_name': 'Ground Level Type', 'database_field_name': 'GNDELEVTYPE', 'dtype': 'S4'} # per survey

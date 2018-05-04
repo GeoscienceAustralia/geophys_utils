@@ -20,10 +20,11 @@ CSV2NetCDFConverter concrete class for converting data to netCDF
 
 Created on 28Mar.2018
 
-@author: Alex Ip
+@author: Andrew Turner
 '''
+#TODO update creationg date
+
 from collections import OrderedDict
-# from geophys_utils.netcdf_converter.csv2netcdf_converter import CSV2NetCDFConverter
 import numpy as np
 import cx_Oracle
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
@@ -155,7 +156,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             cleaned_target_value = re.sub(character, '', cleaned_target_value)
         return cleaned_target_value
 
-    def __init__(self, nc_out_path, survey_id, con, netcdf_format='NETCDF4'):
+    def __init__(self, nc_out_path, survey_id, con, sql_strings_dict_from_yaml, netcdf_format='NETCDF4'):
         '''
         Concrete constructor for subclass CSV2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
@@ -166,8 +167,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         self.cursor = con.cursor()
         self.survey_id = survey_id
-        self.survey_metadata = self.get_survey_metadata()
+        self.sql_strings_dict_from_yaml = sql_strings_dict_from_yaml
 
+        self.survey_metadata = self.get_survey_metadata()
 
     def get_survey_metadata(self):
         """
@@ -176,37 +178,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         :return:
         """
-        # TODO are the filters needed? It will pass this survey id if no observation data is used later on?
-        sql_statement = '''
-        select * from gravity.GRAVSURVEYS gs
-            inner join a.surveys using(eno)
-            where gs.surveyid = {0}
-            and exists 
-                (select o1.* from gravity.OBSERVATIONS o1
-                left join gravity.OBSERVATIONS o2
-                on o1.surveyid = o2.surveyid
-                and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
-                and o1.geodetic_datum = o2.geodetic_datum
-                and o1.dlat = o2.dlat
-                and o1.dlong = o2.dlong
-                and o1.access_code = o2.access_code
-                and o1.status = o2.status
-                    where
-                    o1.surveyid = {0}
-                    and o1.status = 'A'
-                    and o1.access_code = 'O'
-                    and o1.dlat is not null
-                    and o1.dlong is not null
-                    and o1.grav is not null
-                    and o1.gndelev is not null
-                    and o1.meterhgt is not null
-                    and o1.nvalue is not null
-                    and o1.ellipsoidhgt is not null
-                    and o1.ellipsoidmeterhgt is not null
-                    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
-                    and o2.obsno is null)'''.format(self.survey_id)
+        # TODO are the filters needed in the sql? It will pass this survey id if no observation data is used later on?
 
-        query_result = self.cursor.execute(sql_statement)
+        print(self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id))
+        formatted_sql = self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id)
+        query_result = self.cursor.execute(formatted_sql)
+
         field_names = [field_desc[0] for field_desc in query_result.description]
         survey_row = next(query_result)
 
@@ -264,33 +241,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs
         '''
 
-        sql_statement = '''
-                       select count(*) from gravity.OBSERVATIONS o1
-                       left join gravity.OBSERVATIONS o2
-                       on 
-                           o1.surveyid = o2.surveyid
-                           and (o1.entrydate > o2.entrydate
-                           OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
-                           and o1.geodetic_datum = o2.geodetic_datum
-                           and o1.dlat = o2.dlat
-                           and o1.dlong = o2.dlong
-                           and o1.access_code = o2.access_code
-                           and o1.status = o2.status
-                       where 
-                           o1.surveyid = {}
-                           and o1.status = 'A'
-                           and o1.access_code = 'O'
-                           and o2.obsno is null
-                           and o1.grav is not null
-                           and o1.gndelev is not null
-                           and o1.meterhgt is not null
-                           and o1.nvalue is not null
-                           and o1.ellipsoidhgt is not null
-                           and o1.ellipsoidmeterhgt is not null
-                           and o1.eno in (select
-                       eno from a.surveys where countryid is null or countryid = 'AUS')'''.format(self.survey_id)
-
-        self.cursor.execute(sql_statement)
+        formatted_sql = self.sql_strings_dict_from_yaml['get_dimensions'].format(self.survey_id)
+        print(formatted_sql)
+        self.cursor.execute(formatted_sql)
         point_count = int(next(self.cursor)[0])
 
         dimensions = OrderedDict()
@@ -303,6 +256,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects
+
         '''
 
         def generate_ga_metadata_dict():
@@ -324,105 +278,29 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
             return gravity_metadata
 
-
         def get_data(field_name_dict):
+            """
 
-            print(field_name_dict)
-
-            sql_statement = '''
-                           select o1.{0} from gravity.OBSERVATIONS o1
-                           left join gravity.OBSERVATIONS o2
-                           on 
-                               o1.surveyid = o2.surveyid
-                               and (o1.entrydate > o2.entrydate
-                               OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
-                               and o1.geodetic_datum = o2.geodetic_datum
-                               and o1.dlat = o2.dlat
-                               and o1.dlong = o2.dlong
-                               and o1.access_code = o2.access_code
-                               and o1.status = o2.status
-                           where 
-                               o1.surveyid = {1}
-                               and o1.status = 'A'
-                               and o1.access_code = 'O'
-                               and o2.obsno is null
-                               and o1.grav is not null
-                               and o1.gndelev is not null
-                               and o1.meterhgt is not null
-                               and o1.nvalue is not null
-                               and o1.ellipsoidhgt is not null
-                               and o1.ellipsoidmeterhgt is not null
-                               and o1.eno in (select
-                           eno from a.surveys where countryid is null or countryid = 'AUS')'''\
-                .format(field_name_dict['database_field_name'], self.survey_id)
+            :param field_name_dict:
+            :return:
+            """
 
             # call the sql query and assign results into a python list
+            formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field_name_dict['database_field_name'], self.survey_id)
+            self.cursor.execute(formatted_sql)
+
             variable_list = []
-            self.cursor.execute(sql_statement)
-
-            for i in self.cursor:
-                only_nulls = True
-                if re.search('None', str(i)):
-                #if i is not None:
-                    pass
-                else:
-                    only_nulls = False
-                variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
-            #if field_name_dict['dtype'] == 'S4':
-
-            # for key, items in iter(variable_list).items():
-            #     if re.search('[A-Z]', key):
-            #         print(key)
-
-            if only_nulls is True:
-                logger.debug(str(field_name_dict) + " has null value for survey " + str(self.survey_id))
-                #return None
-                return np.array(variable_list, dtype=field_name_dict['dtype'])
-            else:
-                # return as numpy array, with dtype specified in yaml file.
-                return np.array(variable_list, dtype=field_name_dict['dtype'])
-
-
-
-        def get_data2(field_name_dict):
-
-            print(field_name_dict)
-
-            sql_statement = '''
-                           select o1.{0} from gravity.OBSERVATIONS o1
-                           left join gravity.OBSERVATIONS o2
-                           on 
-                               o1.surveyid = o2.surveyid
-                               and (o1.entrydate > o2.entrydate
-                               OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
-                               and o1.geodetic_datum = o2.geodetic_datum
-                               and o1.dlat = o2.dlat
-                               and o1.dlong = o2.dlong
-                               and o1.access_code = o2.access_code
-                               and o1.status = o2.status
-                           where 
-                               o1.surveyid = {1}
-                               and o1.status = 'A'
-                               and o1.access_code = 'O'
-                               and o2.obsno is null
-                               and o1.grav is not null
-                               and o1.gndelev is not null
-                               and o1.meterhgt is not null
-                               and o1.nvalue is not null
-                               and o1.ellipsoidhgt is not null
-                               and o1.ellipsoidmeterhgt is not null
-                               and o1.eno in (select
-                           eno from a.surveys where countryid is null or countryid = 'AUS')''' \
-                .format(field_name_dict['database_field_name'], self.survey_id)
-
-            # call the sql query and assign results into a python list
-            variable_list = []
-            self.cursor.execute(sql_statement)
             for i in self.cursor:
                 variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+
             return variable_list
 
-        def Convert_list_to_mapped_values(list_to_edit, mapping_dict):
+
+                # return as numpy array, with dtype specified in yaml file.
+                #return np.array(variable_list, dtype=field_name_dict['dtype'])
+
+
+        def convert_list_to_mapped_values(list_to_edit, mapping_dict):
 
             transformed_list = []
 
@@ -465,14 +343,14 @@ class Grav2NetCDFConverter(NetCDFConverter):
             lookup_array = np.array(key_list)
             print("lookup array")
             print(lookup_array)
-            value_array = get_data2(field_value)
+            value_array = get_data(field_value)
 
             # create the mapping dict/lookup table to convert variables with strings as keys.
             mapping_dict = {}
             for this in key_list:
                 mapping_dict[this] = key_list.index(this)
 
-            transformed_list = Convert_list_to_mapped_values(value_array, mapping_dict)
+            transformed_list = convert_list_to_mapped_values(value_array, mapping_dict)
             # ummm
 
 
@@ -542,6 +420,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 if field_value.get(value):
                     # handle the key_value_table madness
                     if value == 'key_value_table':
+                        # get the transformed data if the data is in string form
                         transformed_list = handle_key_value_cases(field_value, value)
                         attributes_dict['comments'] = str(self.get_keys_and_values(field_value.get(value)))
                     # otherwise it's easy
@@ -552,7 +431,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     logger.debug('attributes_dict' + str(attributes_dict))
             logger.debug('attributes_dict' + str(attributes_dict))
             #print('attributes_dict' + str(attributes_dict))
-            variable_data = get_data(field_value)
+            variable_data = np.array(get_data(field_value), dtype=field_value['dtype'])
 
             if variable_data is not None or transformed_list is not None:
 
@@ -574,22 +453,12 @@ def main():
     con = cx_Oracle.connect(u_id, pw, oracle_database)
     survey_cursor = con.cursor()
 
-    # get a list of all survey ids
-    sql_get_surveyids = """select Surveyid from gravity.GRAVSURVEYS gs
-                        where exists (select * from gravity.OBSERVATIONS go
-                        where go.surveyid = gs.surveyid
-                        and dlong is not null
-                        and dlat is not null
-                        and status = 'A'
-                        and access_code = 'O'
-                        and geodetic_datum = 'GDA94'
-                        )
-                        order by gs.SURVEYID"""
-
-    #sql_get_surveyids = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
-
-    #print(sql_get_surveyids)
-    survey_cursor.execute(sql_get_surveyids)
+    # get sql strings from yaml file
+    yaml_sql_settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
+    sql_strings_dict = yaml_sql_settings['sql_strings_dict']
+    print(sql_strings_dict)
+    # execute sql to return surveys to convert to netcdf
+    survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
     survey_id_list = []
 
     # tidy the survey id strings
@@ -604,7 +473,7 @@ def main():
     for survey in survey_id_list:
         if survey == '197309':
             logger.debug("Processing for survey: " + str(survey))
-            g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con)
+            g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con, sql_strings_dict)
             g2n.convert2netcdf()
             logger.info('Finished writing netCDF file {}'.format(nc_out_path))
             logger.info('Global attributes:')
