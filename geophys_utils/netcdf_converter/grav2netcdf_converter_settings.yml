@@ -1,38 +1,39 @@
 field_names :
-  Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int8'}
-  Lat: {'short_name': 'Lat', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float', 'units': 'degrees_north'}
-  Long: {'short_name': 'Long', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float', 'units': 'degrees_east'}
-  Gravacc: {'short_name': 'Gravacc', 'long_name': 'Gravity Accuracy', 'database_field_name': 'GRAVACC', 'dtype': 'int8', 'units': 'um'} #um may be null for some surveys...
-  Gravaccmeth: {'short_name': 'Gravaccmeth', 'long_name': 'Gravity Accuracy Method', 'database_field_name': 'GRAVACCMETHOD', 'dtype': 'int8'}
-  Gravmeth: {'short_name': 'Gravmeth', 'long_name': 'Gravity Method', 'database_field_name': 'GRAVMETH', 'dtype': 'S4'}
-  Instid: {'short_name': 'Instid',  'long_name': 'Instrument ID', 'database_field_name': 'METERID', 'dtype': 'S4'} # changed meter height to instrument height - Meter hiegh in metres was confusing.
-  Insthgt: {'short_name': 'Insthgt', 'long_name': 'Instrument Height', 'database_field_name': 'METERHGT', 'dtype': 'float32', 'units': 'm'}
-  Insthgterr: {'short_name': 'Insthgterr', 'long_name': 'Instrument Height Error', 'database_field_name': 'METERHGTERR', 'dtype': 'int8'}
-  Insthgtmeth: {'short_name': 'Insthgtmeth', 'long_name': 'Instrument Height Method', 'database_field_name': 'METERHGTMETH', 'dtype': 'S4', 'key_value_table': 'GNDELEVMETHODS'}
-  Ellipsoidhgt: {'short_name': 'Ellipsoidhgt', 'long_name': 'Ellipsoid Height', 'database_field_name': 'ELLIPSOIDHGT', 'dtype': 'float32', 'units': 'm'}
-  Ellipsoidhgtacc: {'short_name': 'Ellipsoidhgtacc', 'long_name': 'Ellipsoid Height Accuracy', 'database_field_name': 'ELLIPSOIDHGTACC', 'dtype': 'float32'}  # plus 20 surveys with point variation
-  Ellipsoidhgtaccmethod: {'short_name': 'Ellipsoidhgtaccmethod', 'long_name': 'Ellipsoid Height Accuracy Method', 'database_field_name': 'ELLIPSOIDHGTACCMETHOD', 'dtype': 'int8'} # 11 surveys with point variation#
-  Ellipsoidmeterhgt: {'short_name': 'Ellipsoidmeterhgt', 'long_name': 'Ellipsoid Meter Height', 'database_field_name': 'ELLIPSOIDMETERHGT', 'dtype': 'float32', 'units': 'm' } #TODO change to insturment height?
-  Ellipsoidmeterhgtmeth: {'short_name': 'Ellipsoidmeterhgtmeth', 'long_name': 'Ellipsoid Meter Height Method', 'database_field_name': 'ELLIPSOIDMETERHGTMETH', 'dtype': 'S4', 'key_value_table': 'GNDELEVMETHODS'}
-  Ellipsoidmeterhgterrmethod: {'short_name': 'Ellipsoidmeterhgterr', 'long_name': 'Ellipsoid Meter Height Error', 'database_field_name': 'ELLIPSOIDMETERHGTERR', 'dtype': 'float32', 'unit': 'm'}
-  Ellipsoidmeterhgterrmethod: {'short_name': 'Ellipsoidmeterhgterrmethod', 'long_name': 'Ellipsoid Meter Height Error Method', 'database_field_name': 'ELLIPSOIDMETERHGTERRMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
-  Tc: {'short_name': 'Tc', 'long_name': 'Terrain Correction', 'database_field_name': 'TC', 'dtype': 'float32', 'units': ''}  # TODO error unit
-  Tcmeth: {'short_name': 'Tcmeth', 'long_name': 'TC Method', 'database_field_name': 'TCMETH', 'dtype': 'S4'}
-  Tcdensity: {'short_name': 'Tcdensity', 'long_name': 'TC Density', 'database_field_name': 'TCDENSITY', 'dtype': 'float32', 'units': ''}  # TODO error unit
-  Tcunits: {'short_name': 'Tcunits', 'long_name': 'TC Units', 'database_field_name': 'TCUNITS', 'dtype': 'S2'} # there are 3 cases where the survey is one measurement or null
-  Tcerr: {'short_name': 'Tcerr', 'long_name': 'TC Error', 'database_field_name': 'TCERR', 'dtype': 'float32', 'units': ''}  # TODO error unit
-  Tcerruom: {'short_name': 'Tcerruom', 'long_name': 'TC Error Units of Measure', 'database_field_name': 'TCERRUOM', 'dtype': 'S2'} # there are 4 cases where the survey is one measurement or null TODO this should be made an attribute. All other UOMs are Remove nulls
-  Gridflag:  {'short_name': 'Gridflag', 'long_name': 'Grid Flag', 'database_field_name': 'GRIDFLAG', 'dtype': 'int8', 'key_value_table': 'GRIDFLAGS' }
-  Reliab: {'short_name': 'Reliab', 'long_name': 'Estimation of Station Reliability', 'database_field_name': 'reliab', 'dtype': 'int8', 'key_value_table': 'RELIABILITY'}
-  Stationname: {'short_name': 'Stationname', 'long_name': 'Station Name', 'database_field_name': 'STATIONNAME', 'dtype': 'S4'}
-  Stattype: {'short_name': 'Stattype', 'long_name': 'Station Type', 'database_field_name': 'STATIONTYPE', 'dtype': 'S1', 'key_value_table': 'STATIONTYPES'}
-  Locacc: {'short_name': 'Locacc', 'long_name': 'Location Accuracy', 'database_field_name': 'LOCACC', 'dtype': 'int8'}
-  Locmeth: {'short_name': 'Locmeth', 'long_name': 'Location Method', 'database_field_name': 'LOCMETH', 'dtype': 'S4', 'key_value_table': 'LOCMETHODS'}
-  Locaccmethod: {'short_name': 'Locaccmethod', 'long_name': 'Location Accuracy Method', 'database_field_name': 'LOCACCMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
-  Gndelev: {'short_name': 'Gndelev', 'long_name': 'Ground Elevation', 'database_field_name': 'gndelev', 'dtype': 'float32', 'units': 'm'}
-  Gndelevacc: {'short_name': 'Gndelevacc', 'long_name': 'Ground Level Accuracy', 'database_field_name': 'GNDELEVACC', 'dtype': 'int8', 'units': 'm'}
-  Gndelevaccmeth: {'short_name': 'Gndelevaccmeth', 'long_name': 'Ground Level Accuracy Method', 'database_field_name': 'GNDELEVACCMETHOD', 'dtype': 'int8', 'key_value_table': 'ACCURACYMETHOD'}
-  Gndelevmeth: {'short_name': 'Gndelevmeth', 'long_name': 'Ground Level Method', 'database_field_name': 'GNDELEVMETH', 'dtype': 'S4'}
-  Gndelevtype: {'short_name': 'Gndelevtype', 'long_name': 'Ground Level Type', 'database_field_name': 'GNDELEVTYPE', 'dtype': 'S4'} # per survey
-  Gndelevdatum: {'short_name': 'Gndelevdatum', 'long_name': 'Ground Level Datum', 'database_field_name': 'GNDELEVDATUM', 'dtype': 'S4', 'key_value_table': 'GNDELEVDATUMS'}
-  Nvalue: {'short_name': 'Nvalue', 'long_name': 'Geoidal-Ellipsiodal Seperation Value', 'database_field_name': 'NVALUE', 'dtype': 'float32'}
+  Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int32', 'fill_value': '9'}
+  Lat: {'short_name': 'Lat', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float32', 'units': 'degrees_north', 'fill_value': '-999999.99'}
+  Long: {'short_name': 'Long', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float32', 'units': 'degrees_east', 'fill_value': '-999999.99'}
+  Grav: {'short_name': 'Grav', 'long_name': 'Gravity', 'database_field_name': 'GRAV', 'dtype': 'float32', 'units': '', 'fill_value': '-999999.99'}
+  Gravmeth: {'short_name': 'Gravmeth', 'long_name': 'Gravity Method', 'database_field_name': 'GRAVMETH', 'dtype': 'int8', 'lookup_table': 'GRAVMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Gravacc: {'short_name': 'Gravacc', 'long_name': 'Gravity Accuracy', 'database_field_name': 'GRAVACC', 'dtype': 'int8', 'units': 'um', 'fill_value': '-99999'} #um may be null for some surveys...
+  Gravaccmeth: {'short_name': 'Gravaccmeth', 'long_name': 'Gravity Accuracy Method', 'database_field_name': 'GRAVACCMETHOD', 'dtype': 'int8', 'fill_value': '-99999'} #TODO
+  Instid: {'short_name': 'Instid',  'long_name': 'Instrument ID', 'database_field_name': 'METERID', 'dtype': 'S4', 'fill_value': 'null'} # changed meter height to instrument height - Meter hiegh in metres was confusing.
+  Insthgt: {'short_name': 'Insthgt', 'long_name': 'Instrument Height', 'database_field_name': 'METERHGT', 'dtype': 'float32', 'units': 'm', 'fill_value': '-999999.99'}
+  Insthgterr: {'short_name': 'Insthgterr', 'long_name': 'Instrument Height Error', 'database_field_name': 'METERHGTERR', 'dtype': 'int8', 'fill_value': '-99999'}
+  Insthgtmeth: {'short_name': 'Insthgtmeth', 'long_name': 'Instrument Height Method', 'database_field_name': 'METERHGTMETH', 'dtype': 'int8', 'lookup_table': 'GNDELEVMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Ellipsoidhgt: {'short_name': 'Ellipsoidhgt', 'long_name': 'Ellipsoid Height', 'database_field_name': 'ELLIPSOIDHGT', 'dtype': 'float32', 'units': 'm', 'fill_value': '-999999.99'}
+  Ellipsoidhgtacc: {'short_name': 'Ellipsoidhgtacc', 'long_name': 'Ellipsoid Height Accuracy', 'database_field_name': 'ELLIPSOIDHGTACC', 'dtype': 'float32', 'fill_value': '-999999.99'}  # plus 20 surveys with point variation
+  Ellipsoidhgtaccmethod: {'short_name': 'Ellipsoidhgtaccmethod', 'long_name': 'Ellipsoid Height Accuracy Method', 'database_field_name': 'ELLIPSOIDHGTACCMETHOD', 'dtype': 'int8', 'fill_value': '-99999'} # 11 surveys with point variation#
+  Ellipsoidmeterhgt: {'short_name': 'Ellipsoidmeterhgt', 'long_name': 'Ellipsoid Meter Height', 'database_field_name': 'ELLIPSOIDMETERHGT', 'dtype': 'float32', 'units': 'm', 'fill_value': '-999999.99'} #TODO change to insturment height?
+  Ellipsoidmeterhgtmeth: {'short_name': 'Ellipsoidmeterhgtmeth', 'long_name': 'Ellipsoid Meter Height Method', 'database_field_name': 'ELLIPSOIDMETERHGTMETH', 'dtype': 'int8', 'lookup_table': 'GNDELEVMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Ellipsoidmeterhgterr: {'short_name': 'Ellipsoidmeterhgterr', 'long_name': 'Ellipsoid Meter Height Error', 'database_field_name': 'ELLIPSOIDMETERHGTERR', 'dtype': 'float32', 'unit': 'm', 'fill_value': '-999999.99'}
+  Ellipsoidmeterhgterrmethod: {'short_name': 'Ellipsoidmeterhgterrmethod', 'long_name': 'Ellipsoid Meter Height Error Method', 'database_field_name': 'ELLIPSOIDMETERHGTERRMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value': '-99999'}
+  Tc: {'short_name': 'Tc', 'long_name': 'Terrain Correction', 'database_field_name': 'TC', 'dtype': 'float32', 'units': '', 'fill_value': '-999999.99'}  # TODO error unit
+  Tcmeth: {'short_name': 'Tcmeth', 'long_name': 'TC Method', 'database_field_name': 'TCMETH', 'dtype': 'int8', 'lookup_table': 'TCMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value':  '-99999'}
+  Tcdensity: {'short_name': 'Tcdensity', 'long_name': 'TC Density', 'database_field_name': 'TCDENSITY', 'dtype': 'float32', 'units': '', 'fill_value': '-999999.99'}  # TODO error unit
+  Tcunits: {'short_name': 'Tcunits', 'long_name': 'TC Units', 'database_field_name': 'TCUNITS', 'dtype': 'S2', 'fill_value': 'N'} # there are 3 cases where the survey contains um and nulls. 196610, 197390, 196611
+  Tcerr: {'short_name': 'Tcerr', 'long_name': 'TC Error', 'database_field_name': 'TCERR', 'dtype': 'float32', 'units': '', 'fill_value': '-999999.99'}  # TODO error unit
+  Tcerruom: {'short_name': 'Tcerruom', 'long_name': 'TC Error Units of Measure', 'database_field_name': 'TCERRUOM', 'dtype': 'S2', 'fill_value': 'N'} # there are 4 cases where the survey is one measurement or null TODO this should be made an attribute. All other UOMs are Remove nulls. surveys with this issue are 196610, 197390, 196704, 196611
+  Gridflag:  {'short_name': 'Gridflag', 'long_name': 'Grid Flag', 'database_field_name': 'GRIDFLAG', 'dtype': 'int8', 'lookup_table': 'GRIDFLAGS', 'fill_value': '-99999'}
+  Reliab: {'short_name': 'Reliab', 'long_name': 'Estimation of Station Reliability', 'database_field_name': 'reliab', 'dtype': 'int8', 'lookup_table': 'RELIABILITY', 'fill_value': '-99999'}
+  Stationname: {'short_name': 'Stationname', 'long_name': 'Station Name', 'database_field_name': 'STATIONNAME', 'dtype': 'S4', 'fill_value': 'null'}
+  Stattype: {'short_name': 'Stattype', 'long_name': 'Station Type', 'database_field_name': 'STATIONTYPE', 'dtype': 'int8', 'lookup_table': 'STATIONTYPES', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Locacc: {'short_name': 'Locacc', 'long_name': 'Location Accuracy', 'database_field_name': 'LOCACC', 'dtype': 'int8', 'fill_value': '-99999'}
+  Locmeth: {'short_name': 'Locmeth', 'long_name': 'Location Method', 'database_field_name': 'LOCMETH', 'dtype': 'int8', lookup_table: 'LOCMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Locaccmethod: {'short_name': 'Locaccmethod', 'long_name': 'Location Accuracy Method', 'database_field_name': 'LOCACCMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value':'-999999.99'}
+  Gndelev: {'short_name': 'Gndelev', 'long_name': 'Ground Elevation', 'database_field_name': 'gndelev', 'dtype': 'float32', 'units': 'm', 'fill_value': '-999999.99'}
+  Gndelevacc: {'short_name': 'Gndelevacc', 'long_name': 'Ground Level Accuracy', 'database_field_name': 'GNDELEVACC', 'dtype': 'int8', 'units': 'm', 'fill_value': '-99999'}
+  Gndelevaccmeth: {'short_name': 'Gndelevaccmeth', 'long_name': 'Ground Level Accuracy Method', 'database_field_name': 'GNDELEVACCMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value': '-99999'}
+  Gndelevmeth: {'short_name': 'Gndelevmeth', 'long_name': 'Ground Level Method', 'database_field_name': 'GNDELEVMETH', 'dtype': 'int8', 'lookup_table': 'GNDELEVMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Gndelevtype: {'short_name': 'Gndelevtype', 'long_name': 'Ground Level Type', 'database_field_name': 'GNDELEVTYPE', 'dtype': 'int8', 'lookup_table':'GNDELEVTYPES', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'} # per survey
+  Gndelevdatum: {'short_name': 'Gndelevdatum', 'long_name': 'Ground Level Datum', 'database_field_name': 'GNDELEVDATUM', 'dtype': 'int8', 'lookup_table': 'GNDELEVDATUMS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
+  Nvalue: {'short_name': 'Nvalue', 'long_name': 'Geoidal-Ellipsiodal Seperation Value', 'database_field_name': 'NVALUE', 'dtype': 'float32', 'fill_value': '-999999.99'}
