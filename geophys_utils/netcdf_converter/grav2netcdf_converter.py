@@ -316,8 +316,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
             """
 
             """
-            print(field_name)
-            print(field_value)
             # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
             # lookup_table is later converted to comments.
             list_of_possible_value = ['long_name', 'units', 'dtype', 'database_field_name', 'lookup_table',
@@ -326,19 +324,14 @@ class Grav2NetCDFConverter(NetCDFConverter):
             logger.debug('-----------------')
             logger.debug("Field Name: " + str(field_name))
             logger.debug("Field Values: " + str(field_value))
-            #attributes_dict = {'description': get_field_description(field_value['database_field_name'])}
             converted_data_array = []
             attributes_dict = {}
-
-
-
 
             for value in list_of_possible_value:
                 logger.debug("Value in list_of_possible_value: " + str(value))
 
                 # if the field value is in the list of accepted values then add to attributes dict
                 if field_value.get(value):
-
                     logger.debug("Processing: " + str(value))
                     try:
                         assert field_value.get('lookup_table')
@@ -371,28 +364,15 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     logger.debug(str(value) + ' is not set as an accepted attribute.')
 
             logger.debug('attributes_dict' + str(attributes_dict))
-            # print('attributes_dict' + str(attributes_dict))
-
-
-
 
             # if the data array was converted, return it and the attribute dict.
             if len(converted_data_array) > 0:
-                  return converted_data_array, attributes_dict
+                return converted_data_array, attributes_dict
+
             # else get the non converted data and return it in an numpy array and the and the attribute dict too
             else:
-
-                #np.min(self.nc_output_dataset.variables['Long']),
-                    data_array = np.array(get_data(field_value), dtype=field_value['dtype'])
-                #data_array = np.array(get_data(field_value, 10000), dtype=field_value['dtype'])
-                # if field_value['dtype'] == 'int8':
-                #     data_array_min = np.min(data_array)
-                #     print("MIN")
-                #     print(data_array_min)
-                #     data_array_max = np.max(data_array)
-                #     print("MAX")
-                    print("DATA_ARRAY: " + str(data_array))
-                    return data_array, attributes_dict
+                data_array = np.array(get_data(field_value), dtype=field_value['dtype'])
+                return data_array, attributes_dict
 
         def get_data(field_name_dict):
             """
@@ -400,28 +380,16 @@ class Grav2NetCDFConverter(NetCDFConverter):
             :param field_name_dict:
             :return:
             """
-            fill_value = field_name_dict['fill_value']
-
             # call the sql query and assign results into a python list
             formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field_name_dict['database_field_name'],
-                                                                               self.survey_id)
+                                                                               field_name_dict['fill_value'], self.survey_id)
             self.cursor.execute(formatted_sql)
-            print("NULLS SEARCHING")
             variable_list = []
             for i in self.cursor:
-                print("i:" + str(i[0]))
-                #if the variable has a null value, then swap in the fill_value in its place.
-                #The fill_value will be recognised by netcdf and masked out.
-                print(type(i))
-                if i[0] == None:
-                    variable_list.append(field_value['fill_value'])
-                else:
-                    variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
-                # variable_list.append(
-                # i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
+                variable_list.append(i[0]) # getting the first index is required. Otherwise each point is within its own tuple.
+
             return variable_list
-                # return as numpy array, with dtype specified in yaml file.
-                #return np.array(variable_list, dtype=field_name_dict['dtype'])
+
 
 
         def convert_list_to_mapped_values(list_to_edit, mapping_dict):
@@ -433,25 +401,24 @@ class Grav2NetCDFConverter(NetCDFConverter):
             transformed_list = []
 
             for l in list_to_edit:
-
                 for key5, value5, in mapping_dict.items():
                     if l == key5:
-
                         transformed_list.append(mapping_dict.get(key5))
                     else:
                         pass
-
             return transformed_list
 
         def get_field_description(target_field):
-            sql_statement = """
-                SELECT COMMENTS 
-                FROM ALL_COL_COMMENTS   
-                WHERE TABLE_NAME = 'OBSERVATIONS' 
-                AND COLUMN_NAME = '{}'""".format(target_field.upper())
+            # sql_statement = """
+            #     SELECT COMMENTS
+            #     FROM ALL_COL_COMMENTS
+            #     WHERE TABLE_NAME = 'OBSERVATIONS'
+            #     AND COLUMN_NAME = '{}'""".format(target_field.upper())
+
+            sql_statement = self.sql_strings_dict_from_yaml['get_field_description'].format(target_field.upper())
             self.cursor.execute(sql_statement)
-            comment = str(next(self.cursor)[0])
-            return comment
+            field_description = str(next(self.cursor)[0])
+            return field_description
 
         # Begin yielding NetCDFVariables
 
@@ -471,46 +438,37 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
                                           )
 
-
-
         yield NetCDFVariable(short_name='ga_gravity_metadata',
-                              data=0,
-                              dimensions=[],  # Scalar
-                              fill_value=None,
-                              attributes=generate_ga_metadata_dict(),
-                              dtype='int8'  # Byte datatype
-                              )
-
-
+                             data=0,
+                             dimensions=[],  # Scalar
+                             fill_value=None,
+                             attributes=generate_ga_metadata_dict(),
+                             dtype='int8'  # Byte datatype
+                             )
 
         for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
-            print("MA DOG: " + str(field_name) + str(field_value))
+            # convert strings to int or floats for int8 and float32 to get the required data type for the fill value
             if field_value['dtype'] == 'int8':
-                field_value['new'] = int(field_value['fill_value'])
-                print("YO YO MUTHA D(*FD")
-                print(field_value['new'])
-            if field_value['dtype'] == 'int32':
-                    print("YO YO MUTHA D(*FD")
-                    field_value['new'] = int(field_value['fill_value'])
-                    print("PO" + str(field_value['fill_value']))
-                    print(field_value['new'])
-            if field_value['dtype'] == 'float32':
-                field_value['new'] = float(field_value['fill_value'])
-            if field_value['dtype'] == 'S2':
-                field_value['new'] = field_value['fill_value']
-            if field_value['dtype'] == 'S4':
-                field_value['new'] = field_value['fill_value']
-
+                fill_value = int(field_value['fill_value'])
+            elif field_value['dtype'] == 'float32':
+                fill_value = float(field_value['fill_value'])
+            else:
+                fill_value = field_value['fill_value']
 
             data, attributes = wrangle_data_and_attributes_to_be_netcdfified(field_name, field_value)
 
-            yield NetCDFVariable(short_name=field_value['short_name'],
-                                data=data,
-                                dimensions=['point'],
-                                fill_value= field_value['new'],
-                                attributes=attributes
-                                )
+            # test fill_values are not in dataset
+            if field_value['dtype'] == 'int8' or field_value['dtype'] == 'float32':
+                assert fill_value < np.min(data) or fill_value > np.max(data)
+            else:
+                assert [i is not fill_value for i in data]
 
+            yield NetCDFVariable(short_name=field_value['short_name'],
+                                 data=data,
+                                 dimensions=['point'],
+                                 fill_value=fill_value,
+                                 attributes=attributes
+                                 )
 
 def main():
 

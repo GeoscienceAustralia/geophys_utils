@@ -1,0 +1,63 @@
+gravity_metadata_list:
+  #- 'ENO',
+  - 'SURVEYID'
+  - 'SURVEYNAME'
+  - 'COUNTRYID'
+  - 'STATEGROUP'
+  - 'STATIONS'
+  #- 'GRAVACC' - variable
+  - ['GRAVDATUM', 'GRAVDATUMS'] #TODO always 'B'? Australian Absolute Gravity Datum 2007 (AAGD07)
+  #- 'GNDELEVACC' - variable
+  #- 'GNDELEVMETH' - variable
+  #- 'GNDELEVDATUM' - variable - 6 outlyers
+  #- RELIAB' variable - 5 outlyers
+  - 'LAYOUT' # fuller descriptions of this are somewhere.
+  #- 'ACCESS_CODE' filtered
+  #- 'ENTRYDATE'
+  #- 'ENTEREDBY'
+  #- 'LASTUPDATE'
+  #- 'UPDATEDBY'
+  #- 'GRAVACCUNITS' #always um. put in grav acc var attribute - may be null sometimes
+  #- 'GRAVACCMETHOD' variable
+  - 'GNDELEVACCUNITS' # always m maybe some as null
+  #- 'GNDELEVACCMETHOD' as variable
+  - 'ELLIPSOIDHGTDATUM' #always - always GRS80
+            'ELLIPSOIDHGTMETH',
+            #'ELLIPSOIDHGTACC', # as variable
+            #'ELLIPSOIDHGTACCMETHOD',# as variable
+            'ELLIPSOIDHGTACCUOM',
+            'SURVEYTYPE',
+            #'DATATYPES',
+            #'UNO',
+            'OPERATOR',
+            'CONTRACTOR',
+            'PROCESSOR',
+            'CLIENT', # nulls
+            'OWNER', # nulls
+            'LEGISLATION', # nulls
+            #'STATE',
+            'PROJ_LEADER', #nulls
+            'ON_OFF',
+            'STARTDATE',
+            'ENDDATE',
+            'VESSEL_TYPE', # nulls
+            'VESSEL', # nulls
+            'SPACEMIN', # can add uom which is metres
+            'SPACEMAX',
+            #'LOCMETHOD', - variable
+            'ACCURACY', #???
+            #'GEODETIC_DATUM',
+            'PROJECTION', # nulls
+            #'QA_CODE',
+            'RELEASEDATE', # not needed but open for discussion
+            'COMMENTS', # not needed but open for discussion
+            #'DATA_ACTIVITY_CODE',
+            #'NLAT', already in global attributes
+            #'SLAT', already in global attributes
+            #'ELONG', already in global attributes
+            #'WLONG', already in global attributes
+            #'ANO',
+            #'QABY',
+            #'QADATE',
+            #'CONFID_UNTIL',
+  ]
