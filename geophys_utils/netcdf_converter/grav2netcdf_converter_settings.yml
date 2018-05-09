@@ -29,7 +29,7 @@ field_names :
   Stattype: {'short_name': 'Stattype', 'long_name': 'Station Type', 'database_field_name': 'STATIONTYPE', 'dtype': 'int8', 'lookup_table': 'STATIONTYPES', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
   Locacc: {'short_name': 'Locacc', 'long_name': 'Location Accuracy', 'database_field_name': 'LOCACC', 'dtype': 'int8', 'fill_value': '-99999'}
   Locmeth: {'short_name': 'Locmeth', 'long_name': 'Location Method', 'database_field_name': 'LOCMETH', 'dtype': 'int8', lookup_table: 'LOCMETHODS', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99999'}
-  Locaccmethod: {'short_name': 'Locaccmethod', 'long_name': 'Location Accuracy Method', 'database_field_name': 'LOCACCMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value':'-999999.99'}
+  Locaccmethod: {'short_name': 'Locaccmethod', 'long_name': 'Location Accuracy Method', 'database_field_name': 'LOCACCMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value':'-999999'}
   Gndelev: {'short_name': 'Gndelev', 'long_name': 'Ground Elevation', 'database_field_name': 'gndelev', 'dtype': 'float32', 'units': 'm', 'fill_value': '-999999.99'}
   Gndelevacc: {'short_name': 'Gndelevacc', 'long_name': 'Ground Level Accuracy', 'database_field_name': 'GNDELEVACC', 'dtype': 'int8', 'units': 'm', 'fill_value': '-99999'}
   Gndelevaccmeth: {'short_name': 'Gndelevaccmeth', 'long_name': 'Ground Level Accuracy Method', 'database_field_name': 'GNDELEVACCMETHOD', 'dtype': 'int8', 'lookup_table': 'ACCURACYMETHOD', 'fill_value': '-99999'}

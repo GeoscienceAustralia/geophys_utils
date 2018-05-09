@@ -391,7 +391,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 #     print(data_array_min)
                 #     data_array_max = np.max(data_array)
                 #     print("MAX")
-
+                    print("DATA_ARRAY: " + str(data_array))
                     return data_array, attributes_dict
 
         def get_data(field_name_dict):
@@ -409,11 +409,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
             print("NULLS SEARCHING")
             variable_list = []
             for i in self.cursor:
-                print("i" + str(i))
+                print("i:" + str(i[0]))
                 #if the variable has a null value, then swap in the fill_value in its place.
                 #The fill_value will be recognised by netcdf and masked out.
-                if i == "(None,)":
-                    variable_list.append(fill_value)
+                print(type(i))
+                if i[0] == None:
+                    variable_list.append(field_value['fill_value'])
                 else:
                     variable_list.append(i[0])  # getting the first index is required. Otherwise each point is within its own tuple.
                 # variable_list.append(
@@ -495,6 +496,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     print(field_value['new'])
             if field_value['dtype'] == 'float32':
                 field_value['new'] = float(field_value['fill_value'])
+            if field_value['dtype'] == 'S2':
+                field_value['new'] = field_value['fill_value']
+            if field_value['dtype'] == 'S4':
+                field_value['new'] = field_value['fill_value']
 
 
             data, attributes = wrangle_data_and_attributes_to_be_netcdfified(field_name, field_value)
@@ -553,7 +558,7 @@ def main():
             print(g2n.nc_output_dataset.variables)
             for data in g2n.nc_output_dataset.variables['Locmeth']:
                 print(data)
-            for data in g2n.nc_output_dataset.variables['Stattype']:
+            for data in g2n.nc_output_dataset.variables['Tcerr']:
                 print(data)
             print(g2n.nc_output_dataset.variables['Nvalue'])
 
