@@ -43,7 +43,7 @@ sql_strings_dict:
     and o2.obsno is null)
   get_data:
     >
-    select o1.{0} from gravity.OBSERVATIONS o1
+    select NVL(o1.{0}, {1}) from gravity.OBSERVATIONS o1
     left join gravity.OBSERVATIONS o2
       on
       o1.surveyid = o2.surveyid
@@ -54,7 +54,7 @@ sql_strings_dict:
       and o1.access_code = o2.access_code
       and o1.status = o2.status
         where
-        o1.surveyid = {1}
+        o1.surveyid = {2}
         and o1.status = 'A'
         and o1.access_code = 'O'
         and o1.grav is not null

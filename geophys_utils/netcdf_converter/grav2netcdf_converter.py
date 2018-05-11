@@ -62,7 +62,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         'STATEGROUP',
         'STATIONS',
         # 'GRAVACC', - variable
-        ['GRAVDATUM', 'GRAVDATUMS'],  # TODO always 'B'? Australian Absulte Gravity Datum 2007 (AAGD07)
+        ['GRAVDATUM', 'GRAVDATUMS'],  # TODO always 'B'? Australian Absolute Gravity Datum 2007 (AAGD07)
         # 'GNDELEVACC', - variable
         # 'GNDELEVMETH', - variable
         # 'GNDELEVDATUM', - variable - 6 outlyers
@@ -73,9 +73,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'ENTEREDBY',
         # 'LASTUPDATE',
         # 'UPDATEDBY',
-        # 'GRAVACCUNITS', #always um. put in grav acc var attribute - may be null sometimes
+        # 'GRAVACCUNITS', #always um. In grav acc var attribute - may be null sometimes
         # 'GRAVACCMETHOD', variable
-        'GNDELEVACCUNITS',  # always m maybe some as null
+        #'GNDELEVACCUNITS',  # always m maybe some as null. In gravlevacc var attribut
         # 'GNDELEVACCMETHOD', as variable
         'ELLIPSOIDHGTDATUM',  # always - always GRS80
         'ELLIPSOIDHGTMETH',
@@ -132,9 +132,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         with the key and value information such as accuray or methodology.
         e.g. 'SUR': 'Positions determined by optical surveying methods or measured on surveyed points.'
         """
-        print("TABLE_NAME: " + str(table_name))
         sql_statement = 'select * from gravity.{}'.format(table_name)
-        print(sql_statement)
         query_result = self.cursor.execute(sql_statement)
         accuracy_method_keys_and_values_dict = {}
         for s in query_result:
@@ -182,7 +180,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         """
         # TODO are the filters needed in the sql? It will pass this survey id if no observation data is used later on?
 
-        print(self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id))
         formatted_sql = self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
 
@@ -191,22 +188,21 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         return dict(zip(field_names, survey_row))
 
+    def get_survey_wide_value_from_obs_table(self):
 
     # def get_survey_metadata_in_obs_table(self):
     #     columns_to_add = {'LOCCACCUOM' : None }
     #     for key, value in iter(columns_to_add.items()):
-    #         # sql_statement = '''select {0} from gravity.OBSERVATIONS go
-    #         #                      where gravity.GRAVSURVEYS.surveyid = {1}
-    #         #                      and go.dlong is not null
-    #         #                      and go.dlat is not null
-    #         #                      and status = 'A'
-    #         #                      and access_code = 'O'
-    #         #                      and geodetic_datum = 'GDA94'
-    #         #                      )'''.format(key, survey_id)
-    #
-    #         query_result = self.cursor.execute(sql_statement)
-    #         value = next(query_result)
-    #     return value
+        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format("TCDEM", "null", self.survey_id)
+        print(formatted_sql)
+        query_result = self.cursor.execute(formatted_sql)
+        value = next(query_result)
+        for t in query_result:
+            print(value)
+            print(t)
+            assert t == value or t is "null"
+        print("VALUEE " + str(value))
+        return value
 
 
     def get_global_attributes(self):
@@ -244,12 +240,18 @@ class Grav2NetCDFConverter(NetCDFConverter):
         '''
 
         formatted_sql = self.sql_strings_dict_from_yaml['get_dimensions'].format(self.survey_id)
-        print(formatted_sql)
         self.cursor.execute(formatted_sql)
         point_count = int(next(self.cursor)[0])
 
         dimensions = OrderedDict()
         dimensions['point'] = point_count  # number of points per survey
+
+        print("GRIDFLAGS")
+        gridflags_dict = self.get_keys_and_values_table("GRIDFLAGS")
+        print(len(gridflags_dict))
+        for key, value in iter(gridflags_dict.items()):
+            print(key, value)
+        dimensions['gridflags_key_values'] = len(gridflags_dict)
 
         return dimensions
 
@@ -307,8 +309,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 for map_key, map_value in mapping_dict.items():
                     if keys == map_key:
                         converted_dict[map_value] = key_values_tables_dict[keys]
-            print('NEW_DICTT')
-            print(converted_dict)
 
             return transformed_list, converted_dict
 
@@ -318,8 +318,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             """
             # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
             # lookup_table is later converted to comments.
-            list_of_possible_value = ['long_name', 'units', 'dtype', 'database_field_name', 'lookup_table',
-                                      'convert_keys_and_data_to_int8']
+            list_of_possible_value = ['long_name', 'units', 'dtype', 'lookup_table',
+                                      'convert_keys_and_data_to_int8', 'dem'] #database_field_name
 
             logger.debug('-----------------')
             logger.debug("Field Name: " + str(field_name))
@@ -355,7 +355,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         # this replaces ['comments'] values set in the previous if statement.
                         attributes_dict['comments'] = str(converted_key_value_dict)
                         converted_data_array = np.array(converted_data_list, field_value['dtype'])
-
+                    # for the one case where a column in the observation table (tcdem) needs to be added as the
+                    # attribute of varaible in the netcdf file.
+                    if value == 'dem':
+                        attributes_dict[value] = self.get_survey_wide_value_from_obs_table()
                     # for all other values, simply add them to attributes_dict
                     else:
                         attributes_dict[value] = field_value[value]
@@ -463,6 +466,15 @@ class Grav2NetCDFConverter(NetCDFConverter):
             else:
                 assert [i is not fill_value for i in data]
 
+            # if field_value['short_name'] == 'Gridflag':
+            #     yield NetCDFVariable(short_name=field_value['short_name'],
+            #                          data=data,
+            #                          dimensions=(['point'], ['Gridflags_key_values']),
+            #                          fill_value=fill_value,
+            #                          attributes=attributes
+            #                          )
+
+
             yield NetCDFVariable(short_name=field_value['short_name'],
                                  data=data,
                                  dimensions=['point'],
@@ -484,7 +496,6 @@ def main():
     # get sql strings from yaml file
     yaml_sql_settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
     sql_strings_dict = yaml_sql_settings['sql_strings_dict']
-    #print(sql_strings_dict)
     # execute sql to return surveys to convert to netcdf
     survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
     survey_id_list = []
@@ -498,7 +509,7 @@ def main():
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
-        if survey == '197309':
+        #if survey == '197309':
             logger.debug("Processing for survey: " + str(survey))
             g2n = Grav2NetCDFConverter(nc_out_path + str(survey) + '.nc', survey, con, sql_strings_dict)
             g2n.convert2netcdf()
@@ -514,11 +525,10 @@ def main():
             #logger.info(g2n.nc_output_dataset.file_format)
             #print(g2n.nc_output_dataset.variables[''])
             print(g2n.nc_output_dataset.variables)
-            for data in g2n.nc_output_dataset.variables['Locmeth']:
-                print(data)
-            for data in g2n.nc_output_dataset.variables['Tcerr']:
-                print(data)
-            print(g2n.nc_output_dataset.variables['Nvalue'])
+
+            # for data in g2n.nc_output_dataset.variables['Tcerr']:
+            #     print(data)
+
 
             del g2n
             break
