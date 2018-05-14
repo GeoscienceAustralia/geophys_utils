@@ -246,16 +246,16 @@ class Grav2NetCDFConverter(NetCDFConverter):
         dimensions = OrderedDict()
         dimensions['point'] = point_count  # number of points per survey
 
-        print("GRIDFLAGS")
-        gridflags_dict = self.get_keys_and_values_table("GRIDFLAGS")
-        print(len(gridflags_dict))
-        for key, value in iter(gridflags_dict.items()):
-            print(key, value)
-        dimensions['gridflags_key_values'] = len(gridflags_dict)
-
+        for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
+            if field_value.get('lookup_table'):
+                gridflags_dict = self.get_keys_and_values_table(field_value['lookup_table'])
+                new_dimension_name = str(field_value.get('short_name')) + " lookup table"
+                dimensions[new_dimension_name] = len(gridflags_dict)
+                print(dimensions[new_dimension_name])
+            else:
+                pass
+        print(dimensions['point'])
         return dimensions
-
-
 
     def variable_generator(self):
         '''
@@ -318,8 +318,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             """
             # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
             # lookup_table is later converted to comments.
-            list_of_possible_value = ['long_name', 'units', 'dtype', 'lookup_table',
-                                      'convert_keys_and_data_to_int8', 'dem'] #database_field_name
+            list_of_possible_value = ['long_name', 'units', 'dtype', 'lookup_table', 'dem'] #database_field_name
 
             logger.debug('-----------------')
             logger.debug("Field Name: " + str(field_name))
@@ -341,34 +340,40 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     # some key values are already int8 and don't need to be converted. Thus a flag is included in the
                     # field_names
                     if value == 'lookup_table':
-                        logger.debug('lookup_table is populated for value: ' + str(value))
-                        attributes_dict['comments'] = str(lookup_table_dict)
-
-                    if value == 'convert_keys_and_data_to_int8':
-                        logger.debug('convert_keys_and_data_to_int8 is TRUE for value: ' + str(value))
-                        # get the transformed data if the data is in string form
-                        assert lookup_table_dict
-                        logger.debug('converting ' + str(value) + 'string keys to int8....')
+                        logger.debug('converting ' + str(value) + 'string keys to int8 with 0 as 1st index')
                         converted_data_list, converted_key_value_dict = handle_key_value_cases(field_value,
                                                                                                lookup_table_dict)
+                        # logger.debug('lookup_table is populated for value: ' + str(value))
+                        # attributes_dict['comments'] = str(lookup_table_dict)
+
+                    # if value == 'convert_keys_and_data_to_int8':
+                    #     logger.debug('convert_keys_and_data_to_int8 is TRUE for value: ' + str(value))
+                    #     # get the transformed data if the data is in string form
+                    #     assert lookup_table_dict
+                    #     logger.debug('converting ' + str(value) + 'string keys to int8 with 0 as 1st index')
+                    #     converted_data_list, converted_key_value_dict = handle_key_value_cases(field_value,
+                    #                                                                            lookup_table_dict)
                         logger.debug('adding converted lookup table as variable attribute...')
                         # this replaces ['comments'] values set in the previous if statement.
-                        attributes_dict['comments'] = str(converted_key_value_dict)
+                        #attributes_dict['comments'] = str(converted_key_value_dict)
                         converted_data_array = np.array(converted_data_list, field_value['dtype'])
+
                     # for the one case where a column in the observation table (tcdem) needs to be added as the
                     # attribute of varaible in the netcdf file.
                     if value == 'dem':
                         attributes_dict[value] = self.get_survey_wide_value_from_obs_table()
+
                     # for all other values, simply add them to attributes_dict
                     else:
                         attributes_dict[value] = field_value[value]
+
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not set as an accepted attribute.')
 
             logger.debug('attributes_dict' + str(attributes_dict))
 
-            # if the data array was converted, return it and the attribute dict.
+            # if the data array contained a lookup and was converted, return it and the attribute dict.
             if len(converted_data_array) > 0:
                 return converted_data_array, attributes_dict
 
@@ -376,6 +381,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             else:
                 data_array = np.array(get_data(field_value), dtype=field_value['dtype'])
                 return data_array, attributes_dict
+
 
         def get_data(field_name_dict):
             """
@@ -461,19 +467,42 @@ class Grav2NetCDFConverter(NetCDFConverter):
             data, attributes = wrangle_data_and_attributes_to_be_netcdfified(field_name, field_value)
 
             # test fill_values are not in dataset
-            if field_value['dtype'] == 'int8' or field_value['dtype'] == 'float32':
-                assert fill_value < np.min(data) or fill_value > np.max(data)
-            else:
-                assert [i is not fill_value for i in data]
+            # if field_value['dtype'] == 'int8' or field_value['dtype'] == 'float32':
+            #     assert fill_value < np.min(data) or fill_value > np.max(data)
+            # else:
+            #     assert [i is not fill_value for i in data]
 
-            # if field_value['short_name'] == 'Gridflag':
-            #     yield NetCDFVariable(short_name=field_value['short_name'],
-            #                          data=data,
-            #                          dimensions=(['point'], ['Gridflags_key_values']),
-            #                          fill_value=fill_value,
-            #                          attributes=attributes
-            #                          )
+            if field_value.get('lookup_table'):
+            #if field_value['short_name'] == 'Gridflag':
+                print("GET SHAPE")
+                print(data)
+                print(np.shape(data))
 
+                # get the vlaues from the lookup table dict and convert into a np.array
+                grid_value_list = []
+                gridflags_dict = self.get_keys_and_values_table(field_value['lookup_table'])
+                print(len(gridflags_dict))
+                for key, value in iter(gridflags_dict.items()):
+                    print(key, value)
+                    #grid_value_list.append(data)
+                    grid_value_list.append(value)
+                gridflag_lookup_array = np.array(grid_value_list, dtype="U79")
+                #assert gridflag_lookup_array.dtype is "<U79"
+                attributes['dtype'] = "U79"
+                print("DTYPEEE" + str(gridflag_lookup_array.dtype))
+                print("ATTRIBUTES" + str(attributes))
+                dim_name = str(field_value.get('short_name')) + " lookup table"
+
+                attributes.pop('lookup_table', None)
+
+
+
+                yield NetCDFVariable(short_name=dim_name,
+                                     data=gridflag_lookup_array,
+                                     dimensions=[dim_name],
+                                     fill_value=fill_value,
+                                     attributes=attributes
+                                     )
 
             yield NetCDFVariable(short_name=field_value['short_name'],
                                  data=data,
@@ -481,6 +510,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                  fill_value=fill_value,
                                  attributes=attributes
                                  )
+
 
 def main():
 
@@ -526,8 +556,8 @@ def main():
             #print(g2n.nc_output_dataset.variables[''])
             print(g2n.nc_output_dataset.variables)
 
-            # for data in g2n.nc_output_dataset.variables['Tcerr']:
-            #     print(data)
+            for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
+                print(data)
 
 
             del g2n
