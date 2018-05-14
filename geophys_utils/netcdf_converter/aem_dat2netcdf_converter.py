@@ -36,15 +36,8 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.DEBUG) # Logging level for this module
 
-
-try:
-    settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-except:
-    settings = {}
-    
-logger.debug('settings: {}'.format(pformat(settings)))
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -56,7 +49,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                  dfn_path, 
                  netcdf_format='NETCDF4_CLASSIC', 
                  default_chunk_size=None, 
-                 default_variable_parameters=None
+                 default_variable_parameters=None,
+                 settings_path=None
                  ):
         '''
         Concrete constructor for subclass AEMDAT2NetCDFConverter
@@ -68,6 +62,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
         @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
         @param default_variable_parameters: Optional dict containing default parameters for netCDF variable creation
+        @param settings_path: Optional path for settings YAML file
         '''
         #TODO: Make this a bit easier to work with - it's a bit opaque at the moment
         def parse_dfn_file(dfn_path):
@@ -161,6 +156,15 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             return field_definitions, crs
             
         # Start of __init__() definition
+        self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
+        
+        try:
+            self.settings = yaml.safe_load(open(self.settings_path))
+        except:
+            self.settings = {}
+            
+        logger.debug('self.settings: {}'.format(pformat(self.settings)))
+
         NetCDFConverter.__init__(self, 
                                  nc_out_path, 
                                  netcdf_format, 
@@ -174,20 +178,36 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.field_definitions, self.crs = parse_dfn_file(dfn_path)
         
         # Read overriding field definition values from settings
-        if settings.get('field_definitions'):
+        if self.settings.get('field_definitions'):
             for field_definition in self.field_definitions:
-                overriding_field_definition = settings['field_definitions'].get(field_definition['short_name'])
+                overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
                 if overriding_field_definition:
                     field_definition.update(overriding_field_definition)
         
         logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
-        self.layer_count_index = self.field_definitions.index([field_def 
-                                                               for field_def in self.field_definitions 
-                                                               if field_def['short_name'] == 'nlayers'][0]
-                                                               )
-        logger.debug('self.layer_count_index: {}'.format(self.layer_count_index))
+        
+        #=======================================================================
+        # # Determine index of 'nlayers' field definition. Field definitions after this will be 2D
+        # self.max_dimension_field_index = self.field_definitions.index([field_def 
+        #                                                        for field_def in self.field_definitions 
+        #                                                        if field_def['short_name'] == 'layers'][0]
+        #                                                        )
+        # logger.debug('self.max_dimension_field_index: {}'.format(self.max_dimension_field_index))
+        #=======================================================================
+        
+        self.dimension_field_definitions = {}
+        for field_definition_index in range(len(self.field_definitions)):
+            if self.field_definitions[field_definition_index]['short_name'] in self.settings['dimension_fields']:
+                dimension_field_definition = dict(self.field_definitions[field_definition_index])
+                
+                self.dimension_field_definitions[field_definition_index] = dimension_field_definition
           
-        self.fields_per_layer = len(self.field_definitions) - self.layer_count_index - 1
+        logger.debug('self.dimension_field_definitions: {}'.format(pformat(self.dimension_field_definitions)))
+
+        self.min_dimension_field_index = min(self.dimension_field_definitions.keys())
+        self.max_dimension_field_index = max(self.dimension_field_definitions.keys())
+        self.fields_per_dimension = len(self.field_definitions) - self.max_dimension_field_index - 1
+        logger.debug('self.fields_per_dimension: {}'.format(self.fields_per_dimension))
         
         logger.info('Reading data file {}'.format(aem_dat_path))
         aem_dat_file = open(aem_dat_path, 'r')
@@ -221,17 +241,24 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.raw_data_array = np.array(row_list, dtype='float32') # Convert list of lists to numpy array
         logger.info('{} points found'.format(self.raw_data_array.shape[0]))
         
-        # Only check first row for layer count value
-        self.layer_count = int(self.raw_data_array[0, self.layer_count_index]) 
-        logger.info('{} layers found'.format(self.layer_count))
+        # Only check first row for secondary dimension sizes
+        for dimension_field_index in self.dimension_field_definitions.keys():
+            dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
+            dimension_name = dimension_field_definition['short_name']
+            dimension_size = int(self.raw_data_array[0, dimension_field_index])
+            dimension_field_definition['dimension_size'] = dimension_size 
+            logger.info('secondary dimension "{}" is of size {}'.format(dimension_name, dimension_size))
         
         # Check layer_count for consistency across rows
-        assert not np.any(self.raw_data_array[:,self.layer_count_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.layer_count_index + 1)
+        #TODO: Implement this check for multiple dimensions
+        #assert not np.any(self.raw_data_array[:,self.max_dimension_field_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.max_dimension_field_index + 1)
         
         # Check field count
-        expected_field_count = self.layer_count_index + self.layer_count * self.fields_per_layer + 1
-        assert self.field_count == expected_field_count, 'Invalid field count. Expected {}, found {}'.format(expected_field_count,
-                                                                                                             self.field_count)
+        #TODO: Implement this check for multiple dimensions
+        #expected_field_count = self.max_dimension_field_index + self.layer_count * self.fields_per_dimension + 1
+        #assert self.field_count == expected_field_count, 'Invalid field count. Expected {}, found {}'.format(expected_field_count,
+        #                                                                                                     self.field_count)
+        
         # Process lines as a special case
         try:
             line_data = self.get_1d_data('line')
@@ -255,12 +282,56 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         Helper function to return 1D array corresponding to short_name from self.raw_data_array
         '''
         try:
-            field_index = self.field_definitions.index([field_def 
+            field_definition_index = self.field_definitions.index([field_def 
                                                         for field_def in self.field_definitions 
                                                         if field_def['short_name'] == short_name][0]
                                                         )
-            return self.raw_data_array[:,field_index]
+            return self.raw_data_array[:,field_definition_index]
         except:
+            return None        
+        
+    def get_2d_data(self, short_name, dimension_name):
+        '''
+        Helper function to return 2D array corresponding to short_name from self.raw_data_array
+        '''
+        if True:#try:
+            logger.debug('short_name: {}, dimension_name: {}'.format(short_name, dimension_name))
+            field_definition_index = self.field_definitions.index([field_def 
+                                                        for field_def in self.field_definitions 
+                                                        if field_def['short_name'] == short_name][0]
+                                                        )
+            
+            assert field_definition_index > self.max_dimension_field_index, 'Invalid 2D field name {}'.format(short_name)
+            
+            dimension_offset = field_definition_index - self.max_dimension_field_index - 1
+            
+            dimension_found = False
+            field_count = 0
+            field_offset = 0
+            for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
+                logger.debug('dimension_field_index={}, self.dimension_field_definitions[dimension_field_index]={}'.format(dimension_field_index, self.dimension_field_definitions[dimension_field_index]))
+                dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
+                dimension_size = dimension_field_definition['dimension_size']
+                
+                field_count += dimension_size
+                
+                if dimension_name == dimension_field_definition['short_name']:
+                    dimension_found = True
+                    break
+                    
+                field_offset += dimension_size
+                    
+            assert dimension_found, 'Dimension {} not found'.format(dimension_name)
+
+            logger.debug('dimension_offset: {}, field_count: {}, field_offset: {}'.format(dimension_offset, field_count, field_offset))
+
+            field_start_index = self.max_dimension_field_index + (dimension_offset * field_count) + field_offset + 1
+            field_end_index = field_start_index + dimension_size
+            
+            logger.debug('field_start_index: {}, field_end_index: {}'.format(field_start_index, field_end_index))
+
+            return self.raw_data_array[:,field_start_index:field_end_index]
+        else:#except:
             return None        
         
     def get_global_attributes(self):
@@ -288,8 +359,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             'date_created': datetime.now().isoformat()
             }
         
-        if settings.get('keywords'):
-            metadata_dict['keywords'] = settings['keywords']
+        if self.settings.get('keywords'):
+            metadata_dict['keywords'] = self.settings['keywords']
 
         return metadata_dict
     
@@ -302,7 +373,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         
         # Example lat/lon dimensions
         dimensions['point'] = self.raw_data_array.shape[0]
-        dimensions['layers'] = self.layer_count #TODO: Make singular/plural consistent
+        
+        for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
+            dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
+            dimension_name = dimension_field_definition['short_name']
+            dimension_size = dimension_field_definition['dimension_size']
+            dimensions[dimension_name] = dimension_size 
+            
         dimensions['line'] = len(self.lines)
               
         return dimensions
@@ -356,10 +433,10 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         yield self.build_crs_variable(self.crs)
         
         # Create 1D variables
-        for field_index in range(self.layer_count_index):
+        for field_1d_index in range(min(self.dimension_field_definitions.keys())):
             field_attributes = {}
             
-            short_name = self.field_definitions[field_index]['short_name']
+            short_name = self.field_definitions[field_1d_index]['short_name']
             
             if short_name == 'line': # Special case for "line" variable
                 for line_variable in line_variable_generator():
@@ -367,81 +444,150 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                     
                 continue
             
-            long_name = self.field_definitions[field_index].get('long_name')
+            long_name = self.field_definitions[field_1d_index].get('long_name')
             if long_name:
                 field_attributes['long_name'] = long_name
                 
-            units = self.field_definitions[field_index].get('units')
+            units = self.field_definitions[field_1d_index].get('units')
             if units:
                 field_attributes['units'] = units
                 
-            fmt = self.field_definitions[field_index].get('format')
+            fmt = self.field_definitions[field_1d_index].get('format')
             if fmt[0] =='I': # Integer field
                 #TODO: see if we can reduce the size of the integer datatype
                 dtype = 'int32' 
             else:
                 dtype ='float32'
                 
+            fill_value=None
+                
             logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
-                                 data=self.raw_data_array[:,field_index], 
+                                 data=self.raw_data_array[:,field_1d_index], 
                                  dimensions=['point'], 
-                                 fill_value=None, 
+                                 fill_value=fill_value, 
                                  attributes=field_attributes, 
                                  dtype=dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
         
+        #=======================================================================
+        # # Create bad_data_mask array from depth of investigation
+        # top_depth = self.get_2d_data('layer_top_depth')
+        # depth_of_investigation = self.get_1d_data('depth_of_investigation')
+        # bad_data_mask = top_depth > np.repeat(depth_of_investigation[:, np.newaxis], 
+        #                                     top_depth.shape[1], 
+        #                                     axis=1)
+        # logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
+        #=======================================================================
         
-        # Create 2D variables (points x layers)
-        for layer_field_index in range(self.fields_per_layer):
-            field_definition_index = self.layer_count_index + 1 + layer_field_index
+        # Create 2D variables (points x <secondary dimension>)
+        for field_2d_index in range(self.fields_per_dimension):
+            field_definition_index = self.max_dimension_field_index + 1 + field_2d_index
+            
+            for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
+                dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
+                dimension_name = dimension_field_definition['short_name']
+                dimension_long_name = dimension_field_definition['long_name']
+                dimension_size = dimension_field_definition['dimension_size']
 
-            field_start_index = self.layer_count_index + 1 + (layer_field_index * self.layer_count)
-            field_end_index = self.layer_count_index + 1 + ((layer_field_index + 1) * self.layer_count)
-            
-            field_attributes = {}
-            
-            short_name = self.field_definitions[field_definition_index]['short_name']
-            
-            logger.debug('layer_field_index: {}, field_definition_index: {}, field_start_index: {}, field_end_index: {}'.format(layer_field_index, field_definition_index, field_start_index, field_end_index))
-            
-            long_name = self.field_definitions[field_definition_index].get('long_name')
-            if long_name:
-                field_attributes['long_name'] = long_name
-                 
-            units = self.field_definitions[field_definition_index].get('units')
-            if units:
-                field_attributes['units'] = units
-                 
-            fmt = self.field_definitions[field_index].get('format')
-            if fmt[0] =='I': # Integer field
-                #TODO: see if we can reduce the size of the integer datatype
-                dtype = 'int32' 
-            else:
-                dtype='float32'
+                field_attributes = {}
                 
-            logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
-
-            yield NetCDFVariable(short_name=short_name, 
-                                 data=self.raw_data_array[:,field_start_index:field_end_index], 
-                                 dimensions=['point', 'layers'], 
-                                 fill_value=None, 
-                                 attributes=field_attributes, 
-                                 dtype=dtype,
-                                 chunk_size=self.default_chunk_size,
-                                 variable_parameters=self.default_variable_parameters
-                                 )
-        
+                short_name = self.field_definitions[field_definition_index]['short_name']
+                
+                logger.debug('field_2d_index: {}, field_definition_index: {}, dimension_field_index: {}'.format(field_2d_index, field_definition_index, dimension_field_index))
+                
+                long_name = self.field_definitions[field_definition_index].get('long_name')
+                if long_name:
+                    field_attributes['long_name'] = long_name + ' for ' + dimension_long_name
+                     
+                units = self.field_definitions[field_definition_index].get('units')
+                if units:
+                    field_attributes['units'] = units
+                     
+                fmt = self.field_definitions[field_definition_index].get('format')
+                if fmt[0] =='I': # Integer field
+                    #TODO: see if we can reduce the size of the integer datatype
+                    dtype = 'int32' 
+                else:
+                    dtype='float32'
+                logger.debug('fmt={}, dtype={}'.format(fmt, dtype))
+                    
+                # Convert resistivity to conductivity
+                if short_name == 'resistivity':
+                    short_name = 'conductivity'
+                    field_attributes = {'long_name': 'Layer conductivity', 'units': 'S/m'}
+                    data_array =  1.0 / self.get_2d_data('resistivity', dimension_name)
+                    fill_value = 0
+                    #===========================================================
+                    # data_array[bad_data_mask] = fill_value
+                    #===========================================================
+                    logger.debug('\nconductivity: {}'.format(data_array))
+                elif short_name == 'resistivity_uncertainty':
+                    # Convert resistivity_uncertainty to absolute_conductivity_uncertainty
+                    #TODO: Check whether resistivity_uncertainty is a proportion or a percentage - the former is assumed
+                    # Search for "reciprocal" in http://ipl.physics.harvard.edu/wp-uploads/2013/03/PS3_Error_Propagation_sp13.pdf
+                    short_name = 'conductivity_uncertainty'
+                    field_attributes = {'long_name': 'Absolute uncertainty of layer conductivity', 'units': 'S/m'}
+                    data_array =  self.get_2d_data('resistivity_uncertainty', dimension_name) / self.get_2d_data('resistivity', dimension_name)
+                    fill_value = 0
+                    #===========================================================
+                    # data_array[bad_data_mask] = fill_value
+                    #===========================================================
+    
+                    logger.debug('\nresistivity_uncertainty: {}'.format(self.get_2d_data('resistivity_uncertainty', dimension_name)))
+                    logger.debug('\nresistivity: {}'.format(self.get_2d_data('resistivity', dimension_name)))
+                    logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_2d_data('resistivity', dimension_name) 
+                                                                               * self.get_2d_data('resistivity_uncertainty', dimension_name)))
+                    logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+                else:
+                    # Don't mess with values
+                    data_array = self.get_2d_data(short_name, dimension_name)
+                    fill_value = None
+                    
+                # Create composite variable names reflecting dimensionality
+                short_name += '_' + dimension_name
+                if long_name:
+                    long_name += ' for ' + dimension_long_name                
+                        
+                logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
+    
+                yield NetCDFVariable(short_name=short_name, 
+                                     data=data_array, 
+                                     dimensions=['point', dimension_name], 
+                                     fill_value=fill_value, 
+                                     attributes=field_attributes, 
+                                     dtype=dtype,
+                                     chunk_size=self.default_chunk_size,
+                                     variable_parameters=self.default_variable_parameters
+                                     )
+            
         return
     
 def main():
-    dat_in_path = 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
-    dfn_in_path = 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
-    nc_out_path = 'C:\\Temp\\dat_test.nc'
-    d2n = AEMDAT2NetCDFConverter(nc_out_path, dat_in_path, dfn_in_path, default_chunk_size=1024)
+    assert 3 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
+Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])
+    dat_in_path = sys.argv[1] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+    dfn_in_path = sys.argv[2] # 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
+
+    if len(sys.argv) >= 4:
+        nc_out_path = sys.argv[3] # 'C:\\Temp\\dat_test.nc'
+    else:
+        nc_out_path = os.path.splitext(dat_in_path)[0] + '.nc'
+        
+    if len(sys.argv) == 5:
+        settings_path = sys.argv[4] # 'C:\\Temp\\dat_test.nc'
+    else:
+        settings_path = None
+        
+        
+    d2n = AEMDAT2NetCDFConverter(nc_out_path, 
+                                 dat_in_path, 
+                                 dfn_in_path, 
+                                 default_chunk_size=1024, 
+                                 settings_path=settings_path)
     d2n.convert2netcdf()
     logger.info('Finished writing netCDF file {}'.format(nc_out_path))
     
@@ -450,7 +596,10 @@ def main():
     logger.debug('Dimensions:')
     logger.debug(pformat(d2n.nc_output_dataset.dimensions))
     logger.debug('Variables:')
-    logger.debug(pformat(d2n.nc_output_dataset.variables))
+    for variable_name in d2n.nc_output_dataset.variables.keys():
+        variable = d2n.nc_output_dataset.variables[variable_name]
+        logger.debug(pformat(variable))
+        print(variable[:])
 
 if __name__ == '__main__':
     # Setup logging handlers if required

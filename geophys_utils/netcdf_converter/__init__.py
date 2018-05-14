@@ -103,7 +103,8 @@ class NetCDFVariable(object):
         
         # If not a scalar, check array shape against specified dimensions in netCDF dataset
         if self.dimensions:
-            assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified'
+            assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified: {} not in {}.'.format(self.dimensions, 
+                                                                                                                                                  nc_output_dataset.dimensions.keys())
 
             expected_shape = tuple([nc_output_dataset.dimensions[dimension_name].size
                                     for dimension_name in self.dimensions
