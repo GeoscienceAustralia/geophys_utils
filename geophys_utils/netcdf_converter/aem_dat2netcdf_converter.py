@@ -547,8 +547,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                     data_array = self.get_2d_data(short_name, dimension_name)
                     fill_value = None
                     
-                # Create composite variable names reflecting dimensionality
-                short_name += '_' + dimension_name
+                # Create composite variable names reflecting dimensionality, e.g. conductivity_x_layers
+                short_name += '_x_' + dimension_name
                 if long_name:
                     long_name += ' for ' + dimension_long_name                
                         
