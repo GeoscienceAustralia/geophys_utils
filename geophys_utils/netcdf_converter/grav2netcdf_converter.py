@@ -55,12 +55,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
     '''
 
     gravity_metadata_list = [
-        # 'ENO',
+        # 'ENO', not needed
         'SURVEYID',
         'SURVEYNAME',
         'COUNTRYID',
         'STATEGROUP',
-        'STATIONS',
+        'STATIONS', #number of stations?
         # 'GRAVACC', - variable
         #'GRAVDATUM' as variable attribute
         # 'GNDELEVACC', - variable
@@ -69,10 +69,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'RELIAB', variable - 5 outliers
         'LAYOUT',
         # 'ACCESS_CODE', filtered
-        # 'ENTRYDATE',
-        # 'ENTEREDBY',
-        # 'LASTUPDATE',
-        # 'UPDATEDBY',
+        # 'ENTRYDATE', not needed
+        # 'ENTEREDBY', not needed
+        # 'LASTUPDATE', not needed
+        # 'UPDATEDBY', not needed
         # 'GRAVACCUNITS', #always um. In grav acc var attribute - may be null sometimes
         # 'GRAVACCMETHOD', variable
         # 'GNDELEVACCUNITS',  # always m maybe some as null. In gravlevacc var attribut
@@ -81,10 +81,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'ELLIPSOIDHGTMETH', methods deemed not required for analysis
         # 'ELLIPSOIDHGTACC', # as variable
         # 'ELLIPSOIDHGTACCMETHOD',# methods deemed not required for analysis
-        # 'ELLIPSOIDHGTACCUOM',
+        # 'ELLIPSOIDHGTACCUOM', # as variable attribute
         'SURVEYTYPE',
-        # 'DATATYPES',
-        # 'UNO',
+        # 'DATATYPES', not needed
+        # 'UNO', not needed
         'OPERATOR',
         'CONTRACTOR',
         'PROCESSOR',
@@ -93,7 +93,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         'LEGISLATION',  # nulls
         # 'STATE',
         'PROJ_LEADER',  # nulls
-        'ON_OFF',
+        'ON_OFF', #?
         'STARTDATE',
         'ENDDATE',
         'VESSEL_TYPE',  # nulls
@@ -103,8 +103,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'LOCMETHOD', - variable
         'ACCURACY',  # ???
         #'GEODETIC_DATUM',
-        'PROJECTION',  # shouldn't matter?
-        # 'QA_CODE',
+        'PROJECTION',
+        # 'QA_CODE', not needed
         #'RELEASEDATE',  # not needed but open for discussion
         #'COMMENTS',  # not needed but open for discussion
         # 'DATA_ACTIVITY_CODE',
@@ -112,10 +112,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'SLAT', already in global attributes
         # 'ELONG', already in global attributes
         # 'WLONG', already in global attributes
-        # 'ANO',
-        # 'QABY',
-        # 'QADATE',
-        # 'CONFID_UNTIL',
+        # 'ANO', not needed
+        # 'QABY', not needed
+        # 'QADATE', not needed
+        # 'CONFID_UNTIL', not needed
     ]
 
     try:
@@ -177,6 +177,17 @@ class Grav2NetCDFConverter(NetCDFConverter):
         self.sql_strings_dict_from_yaml = sql_strings_dict_from_yaml
 
         self.survey_metadata = self.get_survey_metadata()
+        print('GAMETADATA')
+        print(self.survey_metadata)
+        self.survey_name = self.survey_metadata.get('SURVEYNAME')
+        self.state_group = self.survey_metadata.get('STATEGROUP')
+        self.country = self.survey_metadata.get('COUNTRYID')
+        self.start_date = self.survey_metadata.get('STARTDATE')
+        self.end_date = self.survey_metadata.get('ENDDATE')
+        print(self.survey_name)
+        print(self.state_group)
+        print(self.state_group)
+
 
     def get_survey_metadata(self):
         """
@@ -200,9 +211,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
         formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field, "null", self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
         value = next(query_result)
-        for t in query_result:
+        for result in query_result:
             print(value)
-            assert t == value or t is "null"
+            assert result == value or result is "null"
         return value
 
 
@@ -211,11 +222,15 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
 
+        # ga_metadata = generate_ga_metadata_dict()
+        # print('GAMETADATA')
+        # print(ga_metadata)
+
+
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
             'Conventions': "CF-1.6,ACDD-1.3",
-            #'Gravity_Accuracy' : self.survey_metadata['GRAVACC'], #example of how to add oracle fields to global attributes
-            'featureType': "trajectory",
-            'keywords': 'blah',
+            'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
+                        ' geophysics, geoscientificInformation'.format(self.survey_id, self.country, self.state_group),
             'geospatial_east_min': np.min(self.nc_output_dataset.variables['Long']),
             'geospatial_east_max': np.max(self.nc_output_dataset.variables['Long']),
             'geospatial_east_units': "m",
@@ -224,13 +239,14 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'geospatial_north_max': np.max(self.nc_output_dataset.variables['Lat']),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            'geospatial_vertical_min': np.min(self.nc_output_dataset.variables[('Gndelev')]), # TODO say if I use gndelev or meter height
-            'geospatial_vertical_max': np.max(self.nc_output_dataset.variables[('Gndelev')]), # TODO this be min(elevation-DOI)?
-            'geospatial_vertical_units': "m",
-            'geospatial_vertical_resolution': "point",
-            'geospatial_vertical_positive': "up",
             'history': "Pulled from point gravity database at Geoscience Australia",
-            'abstract': '',
+            'abstract': 'This gravity survey, {0}, {1} located in {2} measures the slight variations in'
+                        ' the earth’s gravity based on the underlying structure or geology'.format(self.survey_id,
+                                                                                    self.survey_name, self.state_group),
+            # 'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
+            # 'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
+            # 'survey_start_date': str(self.start_date),
+            # 'survey_end_date': str(self.end_date),
             'date_created': datetime.now().isoformat()
             }
 
@@ -294,11 +310,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
                             else:
                                 gravity_metadata[key] = value
 
-                    # if isinstance(metadata_attribute, list):
-                    #     if key == metadata_attribute[0]:
-                    #         # get_value_for_key(value_column: str, table_name: str, key_column: str,  key: str)
-                    #         gravity_metadata[key] = str(self.get_value_for_key('DESCRIPTION', metadata_attribute[1], key, value))
-
+                                # if isinstance(metadata_attribute, list):
+                                #     if key == metadata_attribute[0]:
+                                #         # get_value_for_key(value_column: str, table_name: str, key_column: str,  key: str)
+                                #         gravity_metadata[key] = str(self.get_value_for_key('DESCRIPTION', metadata_attribute[1], key, value))
 
             logger.debug("GA gravity metadata")
             logger.debug(gravity_metadata)
@@ -466,6 +481,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # ---------------------------------------------------------------------------
         # non acc convention survey level metadata grouped into one variable
         # ---------------------------------------------------------------------------
+
+
         yield NetCDFVariable(short_name='ga_gravity_metadata',
                              data=0,
                              dimensions=[],  # Scalar
@@ -473,6 +490,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                              attributes=generate_ga_metadata_dict(),
                              dtype='int8'  # Byte datatype
                              )
+
 
         # ---------------------------------------------------------------------------
         # The point dimension variables and their assocciated lookup table variables
@@ -533,6 +551,8 @@ def main():
     yaml_sql_settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
     sql_strings_dict = yaml_sql_settings['sql_strings_dict']
     # execute sql to return surveys to convert to netcdf
+    print(sql_strings_dict)
+
     survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
     survey_id_list = []
 
