@@ -35,6 +35,7 @@ import yaml
 import os
 import logging
 
+
 # # Create the Logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -94,16 +95,16 @@ class Grav2NetCDFConverter(NetCDFConverter):
         # 'STATE',
         'PROJ_LEADER',  # nulls
         'ON_OFF', #?
-        'STARTDATE',
-        'ENDDATE',
+        #'STARTDATE', moved to global attributes for enhanced searching
+        #'ENDDATE', moved to global attributes for enhanced searching
         'VESSEL_TYPE',  # nulls
         'VESSEL',  # nulls
         'SPACEMIN',  # can add uom which is metres
         'SPACEMAX',
-        # 'LOCMETHOD', - variable
-        'ACCURACY',  # ???
+        # 'LOCMETHOD', -not needed
+        #'ACCURACY',  as point variable
         #'GEODETIC_DATUM',
-        'PROJECTION',
+        #'PROJECTION', # the data is given in the netcdf as gda94 unprojected. The values in the projection are Ellispoids
         # 'QA_CODE', not needed
         #'RELEASEDATE',  # not needed but open for discussion
         #'COMMENTS',  # not needed but open for discussion
@@ -121,7 +122,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
     try:
         logger.debug(os.path.splitext(__file__)[0] + '_settings.yml')
         settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        logger.debug('settings' + str(settings))
+        logger.debug('Settings' + str(settings))
     except:
         logger.debug("Yaml load fail")
         settings = {}
@@ -177,17 +178,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
         self.sql_strings_dict_from_yaml = sql_strings_dict_from_yaml
 
         self.survey_metadata = self.get_survey_metadata()
-        print('GAMETADATA')
-        print(self.survey_metadata)
-        self.survey_name = self.survey_metadata.get('SURVEYNAME')
-        self.state_group = self.survey_metadata.get('STATEGROUP')
-        self.country = self.survey_metadata.get('COUNTRYID')
-        self.start_date = self.survey_metadata.get('STARTDATE')
-        self.end_date = self.survey_metadata.get('ENDDATE')
-        print(self.survey_name)
-        print(self.state_group)
-        print(self.state_group)
-
 
     def get_survey_metadata(self):
         """
@@ -200,53 +190,60 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         formatted_sql = self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
-
+        print(formatted_sql)
+        print(query_result)
         field_names = [field_desc[0] for field_desc in query_result.description]
         survey_row = next(query_result)
 
         return dict(zip(field_names, survey_row))
 
     def get_survey_wide_value_from_obs_table(self, field):
-
+        """
+        Helper function to retrieve a survey wide value from the observations table. The returning value is tested
+        to be the only possible value (or null) within that survey.
+        :param field: The target column int he observations table.
+        :return: The first value of the specified field of the observations table.
+        """
         formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field, "null", self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
         value = next(query_result)
-        for result in query_result:
-            print(value)
-            assert result == value or result is "null"
-        return value
 
+        for result in query_result:
+            assert result == value or result[0] is None
+        return value
 
     def get_global_attributes(self):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
 
-        # ga_metadata = generate_ga_metadata_dict()
-        # print('GAMETADATA')
-        # print(ga_metadata)
-
+        abstract = unidecode.unidecode("This gravity survey, {0}, {1} located in {2} measures the slight variations in the earth's "
+        "gravity based on the underlying structure or geology".format(self.survey_id,
+                                                                      self.survey_metadata['SURVEYNAME'],
+                                                                      self.survey_metadata['STATEGROUP']))
+        print("IS THIS DOING ANYTHING?")
+        print(abstract)
+        asci_encoded = abstract.encode('ascii', 'ignore')
+        print(asci_encoded)
 
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
-                        ' geophysics, geoscientificInformation'.format(self.survey_id, self.country, self.state_group),
+                        ' geophysics, geoscientificInformation'.format(self.survey_id, self.survey_metadata['COUNTRYID'], self.survey_metadata['STATEGROUP']),
             'geospatial_east_min': np.min(self.nc_output_dataset.variables['Long']),
             'geospatial_east_max': np.max(self.nc_output_dataset.variables['Long']),
-            'geospatial_east_units': "m",
+            'geospatial_east_units': "degrees_east",
             'geospatial_east_resolution': "point",
             'geospatial_north_min': np.min(self.nc_output_dataset.variables['Lat']),
             'geospatial_north_max': np.max(self.nc_output_dataset.variables['Lat']),
-            'geospatial_north_units': "m",
+            'geospatial_north_units': "degrees_north",
             'geospatial_north_resolution': "point",
             'history': "Pulled from point gravity database at Geoscience Australia",
-            'abstract': 'This gravity survey, {0}, {1} located in {2} measures the slight variations in'
-                        ' the earth’s gravity based on the underlying structure or geology'.format(self.survey_id,
-                                                                                    self.survey_name, self.state_group),
-            # 'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
-            # 'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
-            # 'survey_start_date': str(self.start_date),
-            # 'survey_end_date': str(self.end_date),
+            'abstract': asci_encoded,
+            'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
+            'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
+            'survey_start_date': str(self.survey_metadata.get('STARTDATE')),
+            'survey_end_date': str(self.survey_metadata.get('ENDDATE')),
             'date_created': datetime.now().isoformat()
             }
 
@@ -267,12 +264,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
         for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
             if field_value.get('lookup_table'):
                 lookup_dict = self.get_keys_and_values_table(field_value['lookup_table'])
-                new_dimension_name = str(field_value.get('short_name')) + " lookup table"
+                new_dimension_name = str(field_value.get('short_name')) + "_lookup_table"
                 dimensions[new_dimension_name] = len(lookup_dict)
-                print(dimensions[new_dimension_name])
+               # print(dimensions[new_dimension_name])
             else:
                 pass
-        print(dimensions['point'])
+       # print(dimensions['point'])
         return dimensions
 
     def variable_generator(self):
@@ -419,11 +416,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
                     # some key values are already int8 and don't need to be converted. Thus a flag is included in the
                     # field_names
                     if value == 'lookup_table':
-                        logger.debug('converting ' + str(value) + 'string keys to int8 with 0 as 1st index')
+                        logger.debug('Converting ' + str(value) + 'string keys to int8 with 0 as 1st index')
                         converted_data_list, converted_key_value_dict = handle_key_value_cases(field_value,
                                                     self.get_keys_and_values_table(field_value.get('lookup_table')))
 
-                        logger.debug('adding converted lookup table as variable attribute...')
+                        logger.debug('Adding converted lookup table as variable attribute...')
                         # this replaces ['comments'] values set in the previous if statement.
                         # attributes_dict['comments'] = str(converted_key_value_dict)
                         converted_data_array = np.array(converted_data_list, field_value['dtype'])
@@ -438,6 +435,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
                         # while TCDEM and ELLIPSOIDHGTDATUM do not
                         else:
                             attributes_dict[value] = self.get_survey_wide_value_from_obs_table(field_value.get(value))
+                            # if None is returned then remove the attribute
+                            if attributes_dict[value][0] is None:
+                               attributes_dict.pop(value)
+                            else:
+                                pass
 
                     # for all other values, simply add them to attributes_dict
                     else:
@@ -447,7 +449,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
 
-            logger.debug('attributes_dict' + str(attributes_dict))
+            logger.debug('Attributes_dict' + str(attributes_dict))
 
             # if the data array contained a lookup and was converted, return it and the attribute dict.
             if len(converted_data_array) > 0:
@@ -515,11 +517,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 for key, value in iter(lookup_table_dict.items()):
                     grid_value_list.append(value)
                 lookup_table_array = np.array(grid_value_list)
-                print(lookup_table_array)
                 attributes.pop('dtype', None)
                 attributes.pop('lookup_table', None)
 
-                dim_name = str(field_value.get('short_name')) + " lookup table"
+                dim_name = str(field_value.get('short_name')) + "_lookup_table"
 
                 yield NetCDFVariable(short_name=dim_name,
                                      data=lookup_table_array,
@@ -551,7 +552,6 @@ def main():
     yaml_sql_settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
     sql_strings_dict = yaml_sql_settings['sql_strings_dict']
     # execute sql to return surveys to convert to netcdf
-    print(sql_strings_dict)
 
     survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
     survey_id_list = []
@@ -561,35 +561,39 @@ def main():
         tidy_sur = re.search('\d+', survey_row[0]).group()
         survey_id_list.append(tidy_sur)
 
-    logger.debug('Survey count =', str(len(survey_id_list)))
+    #logger.debug('Survey count =', str(len(survey_id_list)))
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
-        logger.debug("Processing for survey: " + str(survey))
-        g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
-        g2n.convert2netcdf()
-        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-        logger.info('-------------------------------------------------------------------')
-        logger.info('Global attributes:')
-        logger.info('-------------------------------------------------------------------')
-        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
-            logger.info(str(key) + ": " + str(value))
-        logger.info('-------------------------------------------------------------------')
-        logger.info('Dimensions:')
-        logger.info('-------------------------------------------------------------------')
-        logger.info(g2n.nc_output_dataset.dimensions)
-        logger.info('-------------------------------------------------------------------')
-        logger.info('Variables:')
-        logger.info('-------------------------------------------------------------------')
-        logger.info(g2n.nc_output_dataset.variables)
 
-        #print(g2n.nc_output_dataset.file_format)
-        #print(g2n.nc_output_dataset.variables[''])
-        #print(g2n.nc_output_dataset.variables)
-        # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
-        #     print(data)
-        del g2n
-        break
+            logger.debug("Processing for survey: " + str(survey))
+            #try:
+            g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
+
+            g2n.convert2netcdf()
+            logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+            logger.info('-------------------------------------------------------------------')
+            logger.info('Global attributes:')
+            logger.info('-------------------------------------------------------------------')
+            for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+                logger.info(str(key) + ": " + str(value))
+            logger.info('-'*30)
+            logger.info('Dimensions:')
+            logger.info('-'*30)
+            logger.info(g2n.nc_output_dataset.dimensions)
+            logger.info('-'*30)
+            logger.info('Variables:')
+            logger.info('-'*30)
+            logger.info(g2n.nc_output_dataset.variables)
+
+            #print(g2n.nc_output_dataset.file_format)
+            #print(g2n.nc_output_dataset.variables[''])
+            #print(g2n.nc_output_dataset.variables)
+            # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
+            #     print(data)
+            del g2n
+           # except Exception as e:
+
 
 
 if __name__ == '__main__':
