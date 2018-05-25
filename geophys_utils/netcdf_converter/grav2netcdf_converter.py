@@ -204,7 +204,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         :param field: The target column int he observations table.
         :return: The first value of the specified field of the observations table.
         """
-        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field, "null", self.survey_id)
+        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field, "null", self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
         value = next(query_result)
 
@@ -217,14 +217,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''
 
-        abstract = unidecode.unidecode("This gravity survey, {0}, {1} located in {2} measures the slight variations in the earth's "
-        "gravity based on the underlying structure or geology".format(self.survey_id,
-                                                                      self.survey_metadata['SURVEYNAME'],
-                                                                      self.survey_metadata['STATEGROUP']))
-        print("IS THIS DOING ANYTHING?")
-        print(abstract)
-        asci_encoded = abstract.encode('ascii', 'ignore')
-        print(asci_encoded)
+
+
 
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
             'Conventions': "CF-1.6,ACDD-1.3",
@@ -239,7 +233,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'geospatial_north_units': "degrees_north",
             'geospatial_north_resolution': "point",
             'history': "Pulled from point gravity database at Geoscience Australia",
-            'abstract': asci_encoded,
+            'abstract': "This gravity survey, {0}, {1} located in {2} measures the slight variations in the earth's "
+            "gravity based on the underlying structure or geology".format(self.survey_id,
+                                                                      self.survey_metadata['SURVEYNAME'],
+                                                                      self.survey_metadata['STATEGROUP']),
             'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
             'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
             'survey_start_date': str(self.survey_metadata.get('STARTDATE')),
@@ -285,9 +282,18 @@ class Grav2NetCDFConverter(NetCDFConverter):
             :return:
             """
             # call the sql query and assign results into a python list
-            formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field_name_dict['database_field_name'],
+
+            if field_name == 'Freeair' or field_name == 'Bouguer':
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('', field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
+                print(formatted_sql)
+            else:
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field_name_dict['database_field_name'],
+                                                                               field_name_dict['fill_value'],
+                                                                               self.survey_id)
+                print(formatted_sql)
+
             self.cursor.execute(formatted_sql)
             variable_list = []
             for i in self.cursor:
@@ -593,6 +599,7 @@ def main():
             #     print(data)
             del g2n
            # except Exception as e:
+            break
 
 
 
