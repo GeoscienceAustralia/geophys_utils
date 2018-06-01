@@ -30,6 +30,8 @@ import sys
 from datetime import datetime
 from pprint import pformat
 import yaml
+import tempfile
+import netCDF4
 import logging
 
 from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
@@ -38,6 +40,8 @@ from geophys_utils import get_spatial_ref_from_wkt
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Logging level for this module
 
+#TEMP_DIR = tempfile.gettempdir()
+TEMP_DIR = 'E:'
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -154,8 +158,24 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             
             return field_definitions, crs
+        
+        def create_nc_cache():
+            self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W', '_', os.path.splitext(self.aem_dat_path)[0] + '.nc'))
+            self._nc_cache_dataset = netCDF4.Dataset(self.nc_cache_path, mode="w", clobber=True, format='NETCDF4')
+            self._nc_cache_dataset.createDimension(dimname='columns', size=self.field_count)
+            self._nc_cache_dataset.createDimension(dimname='rows', size=None)
+            self.cache_variable = self._nc_cache_dataset.createVariable('cache',
+                                                                        'float64',
+                                                                        ('rows', 'columns')
+                                                                        )
+            
+            logger.debug('Temporary cache file {} created.'.format(self.nc_cache_path))
             
         # Start of __init__() definition
+        self.nc_cache_path = None
+        self._nc_cache_dataset = None
+        self.cache_variable = None
+
         self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
         
         try:
@@ -217,8 +237,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # This is done to permit efficient column-wise data access but it will fail for any
         # invalid floating point values in data file
         #TODO: Use field widths from definition file
-        row_list = []
+        
         self.field_count = 0
+        self.line_count = 0
         
         for line in aem_dat_file:
             line = line.strip()
@@ -233,26 +254,34 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                                )
             else: # First row
                 self.field_count = len(row)
+                create_nc_cache()
             
-            row_list.append(row)
+            try:
+                self.cache_variable[self.line_count,:] = row
+            except Exception as e:
+                logger.debug('row = {}'.format(row))
+                raise e
+            
+            self.line_count += 1
+            
+            if self.line_count == self.line_count // 10000 * 10000:
+                logger.debug('{} lines read'.format(self.line_count))
             
         aem_dat_file.close()
          
-        #logger.debug('row_list: {}'.format(row_list))
-        self.raw_data_array = np.array(row_list, dtype='float32') # Convert list of lists to numpy array
-        logger.info('{} points found'.format(self.raw_data_array.shape[0]))
+        logger.debug('{} points found'.format(self.line_count))
         
         # Only check first row for secondary dimension sizes
         for dimension_field_index in self.dimension_field_definitions.keys():
             dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
             dimension_name = dimension_field_definition['short_name']
-            dimension_size = int(self.raw_data_array[0, dimension_field_index])
+            dimension_size = int(self.cache_variable[0, dimension_field_index])
             dimension_field_definition['dimension_size'] = dimension_size 
             logger.info('secondary dimension "{}" is of size {}'.format(dimension_name, dimension_size))
         
         # Check layer_count for consistency across rows
         #TODO: Implement this check for multiple dimensions
-        #assert not np.any(self.raw_data_array[:,self.max_dimension_field_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.max_dimension_field_index + 1)
+        #assert not np.any(self.cache_variable[:,self.max_dimension_field_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.max_dimension_field_index + 1)
         
         # Check field count
         #TODO: Implement this check for multiple dimensions
@@ -278,22 +307,35 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             self.line_point_counts = None       
             
                
+    def __del__(self):
+        '''
+        Destructor
+        '''
+        try:
+            self.nc_cache_dataset.close()
+            os.remove(self.nc_cache_path)
+        except:
+            pass
+        
+        NetCDFConverter.__del__(self)
+
+    
     def get_1d_data(self, short_name):
         '''
-        Helper function to return 1D array corresponding to short_name from self.raw_data_array
+        Helper function to return 1D array corresponding to short_name from self.cache_variable
         '''
         try:
             field_definition_index = self.field_definitions.index([field_def 
                                                         for field_def in self.field_definitions 
                                                         if field_def['short_name'] == short_name][0]
                                                         )
-            return self.raw_data_array[:,field_definition_index]
+            return self.cache_variable[:,field_definition_index]
         except:
             return None        
         
     def get_2d_data(self, short_name, dimension_name):
         '''
-        Helper function to return 2D array corresponding to short_name from self.raw_data_array
+        Helper function to return 2D array corresponding to short_name from self.cache_variable
         '''
         if True:#try:
             logger.debug('short_name: {}, dimension_name: {}'.format(short_name, dimension_name))
@@ -331,7 +373,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             logger.debug('field_start_index: {}, field_end_index: {}'.format(field_start_index, field_end_index))
 
-            return self.raw_data_array[:,field_start_index:field_end_index]
+            return self.cache_variable[:,field_start_index:field_end_index]
         else:#except:
             return None        
         
@@ -373,7 +415,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         dimensions = OrderedDict()
         
         # Example lat/lon dimensions
-        dimensions['point'] = self.raw_data_array.shape[0]
+        dimensions['point'] = self.cache_variable.shape[0]
         
         for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
             dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
@@ -465,7 +507,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
             yield NetCDFVariable(short_name=short_name, 
-                                 data=self.raw_data_array[:,field_1d_index], 
+                                 data=self.cache_variable[:,field_1d_index], 
                                  dimensions=['point'], 
                                  fill_value=fill_value, 
                                  attributes=field_attributes, 
