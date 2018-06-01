@@ -156,11 +156,13 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             dfn_file.close()
             
+            if not crs: #TODO: Fix this hard-coded hack
+                crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
             
             return field_definitions, crs
         
         def create_nc_cache():
-            self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W', '_', os.path.splitext(self.aem_dat_path)[0] + '.nc'))
+            self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W', '_', os.path.splitext(self.aem_dat_path)[0]) + '.nc')
             self._nc_cache_dataset = netCDF4.Dataset(self.nc_cache_path, mode="w", clobber=True, format='NETCDF4')
             self._nc_cache_dataset.createDimension(dimname='columns', size=self.field_count)
             self._nc_cache_dataset.createDimension(dimname='rows', size=None)
@@ -239,7 +241,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         #TODO: Use field widths from definition file
         
         self.field_count = 0
-        self.line_count = 0
+        self.point_count = 0
         
         for line in aem_dat_file:
             line = line.strip()
@@ -254,22 +256,22 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                                )
             else: # First row
                 self.field_count = len(row)
-                create_nc_cache()
+                create_nc_cache() # Create temporary netCDF file with appropriately dimensioned variable
             
             try:
-                self.cache_variable[self.line_count,:] = row
+                self.cache_variable[self.point_count,:] = row
             except Exception as e:
                 logger.debug('row = {}'.format(row))
                 raise e
             
-            self.line_count += 1
+            self.point_count += 1
             
-            if self.line_count == self.line_count // 10000 * 10000:
-                logger.debug('{} lines read'.format(self.line_count))
+            if self.point_count == self.point_count // 10000 * 10000:
+                logger.debug('{} points read'.format(self.point_count))
             
         aem_dat_file.close()
          
-        logger.debug('{} points found'.format(self.line_count))
+        logger.debug('{} points found'.format(self.point_count))
         
         # Only check first row for secondary dimension sizes
         for dimension_field_index in self.dimension_field_definitions.keys():
@@ -313,7 +315,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         try:
             self.nc_cache_dataset.close()
-            os.remove(self.nc_cache_path)
+            #TODO: Uncomment this for live use
+            #os.remove(self.nc_cache_path) 
         except:
             pass
         
@@ -337,6 +340,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         Helper function to return 2D array corresponding to short_name from self.cache_variable
         '''
+        assert self.dimension_field_definitions, 'No dimiension field definitions found (No 2D variables)'
         if True:#try:
             logger.debug('short_name: {}, dimension_name: {}'.format(short_name, dimension_name))
             field_definition_index = self.field_definitions.index([field_def 
@@ -476,7 +480,12 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         yield self.build_crs_variable(self.crs)
         
         # Create 1D variables
-        for field_1d_index in range(min(self.dimension_field_definitions.keys())):
+        if self.dimension_field_definitions:
+            field_1d_count = min(self.dimension_field_definitions.keys())
+        else:
+            field_1d_count = self.field_count
+                        
+        for field_1d_index in range(field_1d_count):
             field_attributes = {}
             
             short_name = self.field_definitions[field_1d_index]['short_name']

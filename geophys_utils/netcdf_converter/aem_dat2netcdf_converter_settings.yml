@@ -15,6 +15,9 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
     units: m}
   line: {long_name: Line number, short_name: line}
+  Line: {long_name: Line number, short_name: line}
+  flight: {long_name: Flight number, short_name: flight}
+  Flight: {long_name: Flight number, short_name: flight}
   nlayers: {long_name: layers, short_name: layers}
   ndatlm: {long_name: low moment gates, short_name: low_moment_gates}
   ndathm: {long_name: high moment gates, short_name: high_moment_gates}
@@ -31,3 +34,4 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   data_relative_uncertainty: {long_name: Relative uncertainty of data value, short_name: data_relative_uncertainty}
 keywords: geophysics, airborne, AEM, conductivity # String containing comma-separated list of keywords
 dimension_fields: [layers, low_moment_gates, high_moment_gates] # List of posisble dimension field names
+array_column_definitions: [{prefix: CDI_depth_slice, dimension: layers}] # List of definitions for array column definitions
