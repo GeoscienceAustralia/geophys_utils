@@ -204,10 +204,11 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
           
         logger.debug('self.dimension_field_definitions: {}'.format(pformat(self.dimension_field_definitions)))
 
-        self.min_dimension_field_index = min(self.dimension_field_definitions.keys())
-        self.max_dimension_field_index = max(self.dimension_field_definitions.keys())
-        self.fields_per_dimension = len(self.field_definitions) - self.max_dimension_field_index - 1
-        logger.debug('self.fields_per_dimension: {}'.format(self.fields_per_dimension))
+        if self.dimension_field_definitions:
+            self.min_dimension_field_index = min(self.dimension_field_definitions.keys())
+            self.max_dimension_field_index = max(self.dimension_field_definitions.keys())
+            self.fields_per_dimension = len(self.field_definitions) - self.max_dimension_field_index - 1
+            logger.debug('self.fields_per_dimension: {}'.format(self.fields_per_dimension))
         
         logger.info('Reading data file {}'.format(aem_dat_path))
         aem_dat_file = open(aem_dat_path, 'r')
@@ -472,6 +473,10 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
+        
+        # Don't try making 2D variables if no dimension field definitions found
+        if not self.dimension_field_definitions:
+            return
         
         #=======================================================================
         # # Create bad_data_mask array from depth of investigation
