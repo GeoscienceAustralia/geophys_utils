@@ -41,7 +41,10 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Logging level for this module
 
 #TEMP_DIR = tempfile.gettempdir()
-TEMP_DIR = 'E:'
+TEMP_DIR = 'C:\Temp'
+
+# Set this to zero for no limit - only set a non-zero value for testing
+POINT_LIMIT = 10000
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -76,88 +79,53 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             dfn_file = open(dfn_path, 'r')
             for line in dfn_file:
-                # generate nested lists split by ";", ":", "," then "="
-                split_lists = [[[[equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
-                    for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]
-                    ]
-                        for colon_split_string in [colon_split_string.strip() for colon_split_string in semicolon_split_string.split(':')]
-                        ]
-                            for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]
-                            ] 
-                #logger.debug('split_lists: {}'.format(pformat(split_lists))) 
-                
-                try:
-                    rt = split_lists[0][0][1][1] # RecordType?
+                key_value_pairs = {}
+                positional_value_list = []
+                for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]:
+                    for colon_split_string in [colon_split_string.strip() for colon_split_string in semicolon_split_string.split(':')]:
+                        for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]:
+                            definition = [equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
+                            if len(definition) == 2:
+                                key_value_pairs[definition[0]] = definition[1]
+                            elif len(definition) == 1:
+                                positional_value_list.append(definition[0])
+
+                logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
+            
+                # Column definition
+                if key_value_pairs.get('RT') == '' and (positional_value_list 
+                                                        and positional_value_list[0] != 'END DEFN'): 
+                    short_name = positional_value_list[0]
+                    fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
+                    units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
+                    long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
+                    fill_value = key_value_pairs.get('NULL')
+            
+                    field_dict = {'short_name': short_name,
+                                  'format': fmt,
+                                  'long_name': long_name,
+                                  }
+                    if units:
+                        field_dict['units'] = units
+                    if fill_value is not None:
+                        field_dict['fill_value'] = fill_value
+                         
+                    field_definitions.append(field_dict)    
+                                
+                # Projection definition
+                elif key_value_pairs.get('RT') == 'PROJ': 
+                    #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
                      
-                    if rt == '' and len(split_lists[1]) > 1:
-                        units = None
-                        long_name= None
-                        
-                        short_name = split_lists[1][0][0][0]
-                        
-                        fmt = split_lists[1][1][0][0]
-                        
-                        if len(split_lists[1]) > 2:
-                            if len(split_lists[1][2]) == 1: # Only short_name, format and long_name defined
-                                long_name = split_lists[1][2][0][0]
-                                
-                            
-                            elif len(split_lists[1][2][0]) == 2 and split_lists[1][2][0][0] == 'UNITS':
-                                units = split_lists[1][2][0][1]
-                                long_name = split_lists[1][2][1][0]
-                            else:
-                                long_name = split_lists[1][2][0][0]
-                                
-                        field_dict = {'short_name': short_name,
-                                      'format': fmt,
-                                      'long_name': long_name,
-                                      }
-                        if units:
-                            field_dict['units'] = units
-                            
-                        field_definitions.append(field_dict)
-                        
-                    elif rt == 'PROJ':
-                        #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
-                        
-                        #TODO: Parse projection
-                        if (split_lists[1][0][0][0] == 'PROJNAME' 
-                            and split_lists[1][2][0][1] == 'GDA94 / MGA zone 54'):
-                            
-                            # TODO: Remove this hard-coded hack
-                            wkt = '''PROJCS["GDA94 / MGA zone 54",
-    GEOGCS["GDA94",
-        DATUM["Geocentric_Datum_of_Australia_1994",
-            SPHEROID["GRS 1980",6378137,298.257222101,
-                AUTHORITY["EPSG","7019"]],
-            TOWGS84[0,0,0,0,0,0,0],
-            AUTHORITY["EPSG","6283"]],
-        PRIMEM["Greenwich",0,
-            AUTHORITY["EPSG","8901"]],
-        UNIT["degree",0.01745329251994328,
-            AUTHORITY["EPSG","9122"]],
-        AUTHORITY["EPSG","4283"]],
-    UNIT["metre",1,
-        AUTHORITY["EPSG","9001"]],
-    PROJECTION["Transverse_Mercator"],
-    PARAMETER["latitude_of_origin",0],
-    PARAMETER["central_meridian",141],
-    PARAMETER["scale_factor",0.9996],
-    PARAMETER["false_easting",500000],
-    PARAMETER["false_northing",10000000],
-    AUTHORITY["EPSG","28354"],
-    AXIS["Easting",EAST],
-    AXIS["Northing",NORTH]]'''
-                            crs = get_spatial_ref_from_wkt(wkt)
-                            break # Nothing more to do
-                    
-                except IndexError:
-                    continue
+                    #TODO: Parse projection properly
+                    if (key_value_pairs.get('PROJNAME') == 'GDA94 / MGA zone 54'):
+                         
+                        # TODO: Remove this hard-coded hack
+                        wkt = 'EPSG:28354'
+                        crs = get_spatial_ref_from_wkt(wkt)
+                        break # Nothing more to do
             
-            dfn_file.close()
-            
-            if not crs: #TODO: Fix this hard-coded hack
-                crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
+                if not crs: #TODO: Fix this hard-coded hack
+                    crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
             
             return field_definitions, crs
         
@@ -168,7 +136,9 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             self._nc_cache_dataset.createDimension(dimname='rows', size=None)
             self.cache_variable = self._nc_cache_dataset.createVariable('cache',
                                                                         'float64',
-                                                                        ('rows', 'columns')
+                                                                        ('rows', 'columns'),
+                                                                        #chunksizes=(8192, 1), # Chunk by column
+                                                                        **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
                                                                         )
             
             logger.debug('Temporary cache file {} created.'.format(self.nc_cache_path))
@@ -177,6 +147,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         self.nc_cache_path = None
         self._nc_cache_dataset = None
         self.cache_variable = None
+
+        self.dimensions = OrderedDict()
 
         self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
         
@@ -206,32 +178,6 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 if overriding_field_definition:
                     field_definition.update(overriding_field_definition)
         
-        logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
-        
-        #=======================================================================
-        # # Determine index of 'nlayers' field definition. Field definitions after this will be 2D
-        # self.max_dimension_field_index = self.field_definitions.index([field_def 
-        #                                                        for field_def in self.field_definitions 
-        #                                                        if field_def['short_name'] == 'layers'][0]
-        #                                                        )
-        # logger.debug('self.max_dimension_field_index: {}'.format(self.max_dimension_field_index))
-        #=======================================================================
-        
-        self.dimension_field_definitions = {}
-        for field_definition_index in range(len(self.field_definitions)):
-            if self.field_definitions[field_definition_index]['short_name'] in self.settings['dimension_fields']:
-                dimension_field_definition = dict(self.field_definitions[field_definition_index])
-                
-                self.dimension_field_definitions[field_definition_index] = dimension_field_definition
-          
-        logger.debug('self.dimension_field_definitions: {}'.format(pformat(self.dimension_field_definitions)))
-
-        if self.dimension_field_definitions:
-            self.min_dimension_field_index = min(self.dimension_field_definitions.keys())
-            self.max_dimension_field_index = max(self.dimension_field_definitions.keys())
-            self.fields_per_dimension = len(self.field_definitions) - self.max_dimension_field_index - 1
-            logger.debug('self.fields_per_dimension: {}'.format(self.fields_per_dimension))
-        
         logger.info('Reading data file {}'.format(aem_dat_path))
         aem_dat_file = open(aem_dat_path, 'r')
          
@@ -247,7 +193,15 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             line = line.strip()
             if not line: # Skip empty lines
                 continue
-            row = re.sub('\s+', ',', line).split(',')
+            
+            try:
+                row = [float(value) for value in re.sub('\s+', ',', line).split(',')]
+            except ValueError:
+                # Ignore potential non-numeric header row, otherwise raise exception for non-numeric data
+                if self.point_count:
+                    raise
+                else:
+                    continue
             #logger.debug('row: {}'.format(row))
             
             if self.field_count:
@@ -256,6 +210,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                                                                                                )
             else: # First row
                 self.field_count = len(row)
+                logger.debug('self.field_count: {}'.format(self.field_count))
                 create_nc_cache() # Create temporary netCDF file with appropriately dimensioned variable
             
             try:
@@ -268,19 +223,87 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
             if self.point_count == self.point_count // 10000 * 10000:
                 logger.debug('{} points read'.format(self.point_count))
+                
+            if POINT_LIMIT and self.point_count >= POINT_LIMIT:
+                logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
+                break
             
         aem_dat_file.close()
          
+
         logger.debug('{} points found'.format(self.point_count))
+        self.dimensions['point'] = self.point_count # All files will have a point dimension - declare this first
         
-        # Only check first row for secondary dimension sizes
-        for dimension_field_index in self.dimension_field_definitions.keys():
-            dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
-            dimension_name = dimension_field_definition['short_name']
-            dimension_size = int(self.cache_variable[0, dimension_field_index])
-            dimension_field_definition['dimension_size'] = dimension_size 
-            logger.info('secondary dimension "{}" is of size {}'.format(dimension_name, dimension_size))
+        # Set dimension field values from read data
+        # Assume all dimension fields declared before 2D fields      
+        column_start_index = 0
+        for field_definition_index in range(len(self.field_definitions)):
+            field_definition = self.field_definitions[field_definition_index]
+            logger.debug('short_name: {}'.format(field_definition['short_name']))
+            if field_definition['short_name'] in self.settings['dimension_fields']:
+                self.dimensions[field_definition['short_name']] = int(self.cache_variable[0, column_start_index]) # Read value from first line
+                field_definition['column_start_index'] = None # Do not output this column
+                column_start_index += 1 # Single column only
+                continue # Check next field
+            
+
+            # Non-dimension field                
+            field_definition['column_start_index'] = column_start_index
+            
+            # Check for column count in format and strip integers from start of format if found
+            match = re.match('^\d+', field_definition['format'])
+            if match: # format string starts with integers - 2D variable
+                field_dimension_size = int(match.group(0))
+                field_definition['format'] = re.sub('^\d+', '', field_definition['format'])
+                default_dimension_name = field_definition.get('dimension') # Look for default dimension name
+                logger.debug('default_dimension_name: {}'.format(default_dimension_name))
+                if default_dimension_name: # Default dimension name found from settings
+                    actual_dimension_size = self.dimensions.get(default_dimension_name)
+                    logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
+                    if actual_dimension_size is None: # Default dimension not defined
+                        self.dimensions[default_dimension_name] = field_dimension_size
+                    else:
+                        assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
+                        
+                    logger.debug('Variable {} has dimension {} of size {}'.format(field_definition['short_name'],
+                                                                                  default_dimension_name, 
+                                                                                  field_dimension_size))
+                else: # No default dimension name found
+                    non_point_dimensions = [key for key in self.dimensions.keys() if key != 'point']
+                    non_point_dimension_sizes = sum([self.dimensions[key] for key in non_point_dimensions])
+                    if field_dimension_size == non_point_dimension_sizes:
+                        assert False, 'Not implemented yet' #TODO: Implement part variables
+                        for non_point_dimension in non_point_dimensions:
+                            pass
+                       
+                column_start_index += field_dimension_size
+                
+            else: # 1D variable
+                field_dimension_size = 0 
+                column_start_index += 1 # Single column only
+            
+            field_definition['dimension_size'] = field_dimension_size
+            
+        logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
+        logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
         
+
+        #=======================================================================
+        # if self.dimension_field_definitions:
+        #     self.min_dimension_field_index = min(self.dimension_field_definitions.keys())
+        #     self.max_dimension_field_index = max(self.dimension_field_definitions.keys())
+        #     self.fields_per_dimension = len(self.field_definitions) - self.max_dimension_field_index - 1
+        #     logger.debug('self.fields_per_dimension: {}'.format(self.fields_per_dimension))
+        # 
+        # # Only check first row for secondary dimension sizes
+        # for dimension_field_index in self.dimension_field_definitions.keys():
+        #     dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
+        #     dimension_name = dimension_field_definition['short_name']
+        #     dimension_size = dimension_field_definition.get('dimension_size') or int(self.cache_variable[0, dimension_field_index])
+        #     dimension_field_definition['dimension_size'] = int(self.cache_variable[0, dimension_field_index]) 
+        #     logger.info('secondary dimension "{}" is of size {}'.format(dimension_name, dimension_size))
+        # 
+        #=======================================================================
         # Check layer_count for consistency across rows
         #TODO: Implement this check for multiple dimensions
         #assert not np.any(self.cache_variable[:,self.max_dimension_field_index] - self.layer_count), 'Inconsistent layer count(s) found in column {}'.format(self.max_dimension_field_index + 1)
@@ -290,25 +313,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         #expected_field_count = self.max_dimension_field_index + self.layer_count * self.fields_per_dimension + 1
         #assert self.field_count == expected_field_count, 'Invalid field count. Expected {}, found {}'.format(expected_field_count,
         #                                                                                                     self.field_count)
-        
-        # Process lines as a special case
-        try:
-            line_data = self.get_1d_data('line')
-            
-            self.lines, self.line_start_indices, self.line_point_counts = np.unique(line_data, 
-                                                                                    return_index=True, 
-                                                                                    return_inverse=False, 
-                                                                                    return_counts=True
-                                                                                    )
-            logger.info('{} lines found'.format(len(self.lines)))
-            #logger.debug('self.lines: {}, self.line_start_indices: {}, self.line_point_counts: {}'.format(self.lines, self.line_start_indices, self.line_point_counts))
-        except:
-            logger.info('No lines found')
-            self.lines = None
-            self.line_start_indices = None
-            self.line_point_counts = None       
-            
-               
+                       
     def __del__(self):
         '''
         Destructor
@@ -323,63 +328,23 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         NetCDFConverter.__del__(self)
 
     
-    def get_1d_data(self, short_name):
+    def get_raw_data(self, short_name):
         '''
-        Helper function to return 1D array corresponding to short_name from self.cache_variable
+        Helper function to return array corresponding to short_name from self.cache_variable
         '''
         try:
-            field_definition_index = self.field_definitions.index([field_def 
-                                                        for field_def in self.field_definitions 
-                                                        if field_def['short_name'] == short_name][0]
-                                                        )
-            return self.cache_variable[:,field_definition_index]
+            field_definition = [field_definition 
+                                for field_definition in self.field_definitions 
+                                if field_definition['short_name'] == short_name
+                                ][0]
+             
+            column_start_index = field_definition['column_start_index']
+            column_end_index = column_start_index + max(1, field_definition['dimension_size'])
+            
+            return self.cache_variable[:,column_start_index:column_end_index]
         except:
             return None        
         
-    def get_2d_data(self, short_name, dimension_name):
-        '''
-        Helper function to return 2D array corresponding to short_name from self.cache_variable
-        '''
-        assert self.dimension_field_definitions, 'No dimiension field definitions found (No 2D variables)'
-        if True:#try:
-            logger.debug('short_name: {}, dimension_name: {}'.format(short_name, dimension_name))
-            field_definition_index = self.field_definitions.index([field_def 
-                                                        for field_def in self.field_definitions 
-                                                        if field_def['short_name'] == short_name][0]
-                                                        )
-            
-            assert field_definition_index > self.max_dimension_field_index, 'Invalid 2D field name {}'.format(short_name)
-            
-            dimension_offset = field_definition_index - self.max_dimension_field_index - 1
-            
-            dimension_found = False
-            field_count = 0
-            field_offset = 0
-            for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
-                logger.debug('dimension_field_index={}, self.dimension_field_definitions[dimension_field_index]={}'.format(dimension_field_index, self.dimension_field_definitions[dimension_field_index]))
-                dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
-                dimension_size = dimension_field_definition['dimension_size']
-                
-                field_count += dimension_size
-                
-                if dimension_name == dimension_field_definition['short_name']:
-                    dimension_found = True
-                    break
-                    
-                field_offset += dimension_size
-                    
-            assert dimension_found, 'Dimension {} not found'.format(dimension_name)
-
-            logger.debug('dimension_offset: {}, field_count: {}, field_offset: {}'.format(dimension_offset, field_count, field_offset))
-
-            field_start_index = self.max_dimension_field_index + (dimension_offset * field_count) + field_offset + 1
-            field_end_index = field_start_index + dimension_size
-            
-            logger.debug('field_start_index: {}, field_end_index: {}'.format(field_start_index, field_end_index))
-
-            return self.cache_variable[:,field_start_index:field_end_index]
-        else:#except:
-            return None        
         
     def get_global_attributes(self):
         '''
@@ -388,16 +353,19 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
-            'geospatial_east_min': np.min(self.get_1d_data('easting')),
-            'geospatial_east_max': np.max(self.get_1d_data('easting')),
+            'geospatial_east_min': np.min(self.get_raw_data('easting')),
+            'geospatial_east_max': np.max(self.get_raw_data('easting')),
             'geospatial_east_units': "m",
             'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.get_1d_data('northing')),
-            'geospatial_north_max': np.max(self.get_1d_data('northing')),
+            'geospatial_north_min': np.min(self.get_raw_data('northing')),
+            'geospatial_north_max': np.max(self.get_raw_data('northing')),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            'geospatial_vertical_min': np.min(self.get_1d_data('elevation')),
-            'geospatial_vertical_max': np.max(self.get_1d_data('elevation')), # Should this be min(elevation-DOI)?
+            #TODO: Sort out standard names for elevation and get rid of the DTM case
+            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')
+                                              or self.get_raw_data('DTM')),
+            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')
+                                              or self.get_raw_data('DTM')), # Should this be min(elevation-DOI)?
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
@@ -416,61 +384,67 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return OrderedDict of <dimension_name>:<dimension_size> pairs       
         '''
-        dimensions = OrderedDict()
-        
-        # Example lat/lon dimensions
-        dimensions['point'] = self.cache_variable.shape[0]
-        
-        for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
-            dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
-            dimension_name = dimension_field_definition['short_name']
-            dimension_size = dimension_field_definition['dimension_size']
-            dimensions[dimension_name] = dimension_size 
-            
-        dimensions['line'] = len(self.lines)
-              
-        return dimensions
+        return self.dimensions
     
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects       
         '''  
-        def line_variable_generator():
+        def index_variable_generator(field_definition):
             '''
-            Helper generator to yield flight line variables - only called once
+            Helper generator to yield indexing variables
+            N.B: Has side effect of creating one new dimension for each index field
             '''
-            assert self.lines is not None, 'flight Line parameters not defined'
+            # Process index variables
+            try:
+                index_data = self.get_raw_data(field_definition['short_name'])
+                
+                index_values, index_start_indices, index_point_counts = np.unique(index_data, 
+                                                                                  return_index=True, 
+                                                                                  return_inverse=False, 
+                                                                                  return_counts=True
+                                                                                  )
+                logger.info('{} {} values found'.format(len(index_values), field_definition['short_name']))
+                logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
+            except:
+                logger.info('Unable to create {} indexing variables'.format(field_definition['short_name']))
+                return   
+
+            # This is a slightly ugly side effect
+            logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
+            self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
+                                                   size=len(index_values))
             
-            logger.info('\tWriting flight line indexing variables')
+            logger.info('\tWriting {} indexing variables'.format(field_definition['short_name']))
             
-            logger.info('\t\tWriting flight line number')
-            yield NetCDFVariable(short_name='lines', 
-                                 data=self.lines, 
-                                 dimensions=['line'], 
+            logger.info('\t\tWriting {} values'.format(field_definition['short_name']))
+            yield NetCDFVariable(short_name=field_definition['short_name'], 
+                                 data=index_values, 
+                                 dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'flight line number'}, 
+                                 attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
                                  dtype='int32',
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            logger.info('\t\tWriting index of first point in flight line')
-            yield NetCDFVariable(short_name='index_line', 
-                                 data=self.line_start_indices, 
-                                 dimensions=['line'], 
+            logger.info('\t\tWriting index of first point in each {}'.format(field_definition['short_name']))
+            yield NetCDFVariable(short_name='index_' + field_definition['short_name'], 
+                                 data=index_start_indices, 
+                                 dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'zero based index of the first sample in the line'}, 
+                                 attributes={'long_name': 'zero-based index of the first point in each {}'.format(field_definition['short_name'])}, 
                                  dtype='int32',
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            logger.info('\t\tWriting point count for flight line')
-            yield NetCDFVariable(short_name='index_count', 
-                                 data=self.line_point_counts, 
-                                 dimensions=['line'], 
+            logger.info('\t\tWriting point count for each {}'.format(field_definition['short_name']))
+            yield NetCDFVariable(short_name='index_count_' + field_definition['short_name'], 
+                                 data=index_point_counts, 
+                                 dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'number of samples in the line'}, 
+                                 attributes={'long_name': 'number of points in each {}'.format(field_definition['short_name'])}, 
                                  dtype='int32',
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
@@ -479,103 +453,65 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # Create crs variable (points)
         yield self.build_crs_variable(self.crs)
         
-        # Create 1D variables
-        if self.dimension_field_definitions:
-            field_1d_count = min(self.dimension_field_definitions.keys())
-        else:
-            field_1d_count = self.field_count
-                        
-        for field_1d_index in range(field_1d_count):
+        # Create variables
+        for field_definition in self.field_definitions:
+            #logger.debug('field_index: {}'.format(field_index))
             field_attributes = {}
             
-            short_name = self.field_definitions[field_1d_index]['short_name']
+            short_name = field_definition['short_name']
             
-            if short_name == 'line': # Special case for "line" variable
-                for line_variable in line_variable_generator():
-                    yield line_variable
+            if short_name in self.settings['index_fields']:
+                for index_variable in index_variable_generator(field_definition):
+                    # Create index dimension
+                    yield index_variable
                     
                 continue
             
-            long_name = self.field_definitions[field_1d_index].get('long_name')
+            long_name = field_definition.get('long_name')
             if long_name:
                 field_attributes['long_name'] = long_name
                 
-            units = self.field_definitions[field_1d_index].get('units')
+            units = field_definition.get('units')
             if units:
                 field_attributes['units'] = units
                 
-            fmt = self.field_definitions[field_1d_index].get('format')
+            fmt = field_definition.get('format')
             if fmt[0] =='I': # Integer field
                 #TODO: see if we can reduce the size of the integer datatype
                 dtype = 'int32' 
             else:
                 dtype ='float32'
                 
-            fill_value=None
+            fill_value=field_definition.get('fill_value')
                 
-            logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
+            if not field_definition['dimension_size']: # 1D Variable
+                logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
-            yield NetCDFVariable(short_name=short_name, 
-                                 data=self.cache_variable[:,field_1d_index], 
-                                 dimensions=['point'], 
-                                 fill_value=fill_value, 
-                                 attributes=field_attributes, 
-                                 dtype=dtype,
-                                 chunk_size=self.default_chunk_size,
-                                 variable_parameters=self.default_variable_parameters
-                                 )
+                yield NetCDFVariable(short_name=short_name, 
+                                     data=self.cache_variable[:,field_definition['column_start_index']], 
+                                     dimensions=['point'], 
+                                     fill_value=fill_value, 
+                                     attributes=field_attributes, 
+                                     dtype=dtype,
+                                     chunk_size=self.default_chunk_size,
+                                     variable_parameters=self.default_variable_parameters
+                                     )
         
-        # Don't try making 2D variables if no dimension field definitions found
-        if not self.dimension_field_definitions:
-            return
-        
-        #=======================================================================
-        # # Create bad_data_mask array from depth of investigation
-        # top_depth = self.get_2d_data('layer_top_depth')
-        # depth_of_investigation = self.get_1d_data('depth_of_investigation')
-        # bad_data_mask = top_depth > np.repeat(depth_of_investigation[:, np.newaxis], 
-        #                                     top_depth.shape[1], 
-        #                                     axis=1)
-        # logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
-        #=======================================================================
-        
-        # Create 2D variables (points x <secondary dimension>)
-        for field_2d_index in range(self.fields_per_dimension):
-            field_definition_index = self.max_dimension_field_index + 1 + field_2d_index
-            
-            for dimension_field_index in sorted(self.dimension_field_definitions.keys()):
-                dimension_field_definition = self.dimension_field_definitions[dimension_field_index]
-                dimension_name = dimension_field_definition['short_name']
-                dimension_long_name = dimension_field_definition['long_name']
-                dimension_size = dimension_field_definition['dimension_size']
-
-                field_attributes = {}
-                
-                short_name = self.field_definitions[field_definition_index]['short_name']
-                
-                logger.debug('field_2d_index: {}, field_definition_index: {}, dimension_field_index: {}'.format(field_2d_index, field_definition_index, dimension_field_index))
-                
-                long_name = self.field_definitions[field_definition_index].get('long_name')
-                if long_name:
-                    field_attributes['long_name'] = long_name + ' for ' + dimension_long_name
-                     
-                units = self.field_definitions[field_definition_index].get('units')
-                if units:
-                    field_attributes['units'] = units
-                     
-                fmt = self.field_definitions[field_definition_index].get('format')
-                if fmt[0] =='I': # Integer field
-                    #TODO: see if we can reduce the size of the integer datatype
-                    dtype = 'int32' 
-                else:
-                    dtype='float32'
-                logger.debug('fmt={}, dtype={}'.format(fmt, dtype))
-                    
+            #=======================================================================
+            # # Create bad_data_mask array from depth of investigation
+            # top_depth = self.get_raw_data('layer_top_depth')
+            # depth_of_investigation = self.get_raw_data('depth_of_investigation')
+            # bad_data_mask = top_depth > np.repeat(depth_of_investigation[:, np.newaxis], 
+            #                                     top_depth.shape[1], 
+            #                                     axis=1)
+            # logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
+            #=======================================================================
+            else: # 2D variable
                 # Convert resistivity to conductivity
                 if short_name == 'resistivity':
                     short_name = 'conductivity'
                     field_attributes = {'long_name': 'Layer conductivity', 'units': 'S/m'}
-                    data_array =  1.0 / self.get_2d_data('resistivity', dimension_name)
+                    data_array =  1.0 / self.get_raw_data('resistivity')
                     fill_value = 0
                     #===========================================================
                     # data_array[bad_data_mask] = fill_value
@@ -587,32 +523,32 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                     # Search for "reciprocal" in http://ipl.physics.harvard.edu/wp-uploads/2013/03/PS3_Error_Propagation_sp13.pdf
                     short_name = 'conductivity_uncertainty'
                     field_attributes = {'long_name': 'Absolute uncertainty of layer conductivity', 'units': 'S/m'}
-                    data_array =  self.get_2d_data('resistivity_uncertainty', dimension_name) / self.get_2d_data('resistivity', dimension_name)
+                    data_array =  self.get_raw_data('resistivity_uncertainty') / self.get_raw_data('resistivity')
                     fill_value = 0
                     #===========================================================
                     # data_array[bad_data_mask] = fill_value
                     #===========================================================
     
-                    logger.debug('\nresistivity_uncertainty: {}'.format(self.get_2d_data('resistivity_uncertainty', dimension_name)))
-                    logger.debug('\nresistivity: {}'.format(self.get_2d_data('resistivity', dimension_name)))
-                    logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_2d_data('resistivity', dimension_name) 
-                                                                               * self.get_2d_data('resistivity_uncertainty', dimension_name)))
+                    logger.debug('\nresistivity_uncertainty: {}'.format(self.get_raw_data('resistivity_uncertainty')))
+                    logger.debug('\nresistivity: {}'.format(self.get_raw_data('resistivity')))
+                    logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_raw_data('resistivity') 
+                                                                               * self.get_raw_data('resistivity_uncertainty')))
                     logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
                 else:
                     # Don't mess with values
-                    data_array = self.get_2d_data(short_name, dimension_name)
+                    data_array = self.get_raw_data(short_name)
                     fill_value = None
                     
                 # Create composite variable names reflecting dimensionality, e.g. conductivity_x_layers
-                short_name += '_x_' + dimension_name
+                short_name += '_x_' + field_definition['dimension']
                 if long_name:
-                    long_name += ' for ' + dimension_long_name                
+                    long_name += ' per ' + field_definition['dimension']                
                         
                 logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
     
                 yield NetCDFVariable(short_name=short_name, 
                                      data=data_array, 
-                                     dimensions=['point', dimension_name], 
+                                     dimensions=['point', field_definition['dimension']], 
                                      fill_value=fill_value, 
                                      attributes=field_attributes, 
                                      dtype=dtype,
@@ -622,6 +558,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             
         return
     
+    def postprocess_netcdf(self):
+        '''
+        Function to perform post-processing on netCDF file after dimensions and variables
+        have been created. Overrides base class.
+        '''
+        return
+    
+
 def main():
     assert 3 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
 Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])

@@ -31,7 +31,7 @@ import logging
 from pprint import pformat
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
 from geophys_utils import get_spatial_ref_from_wkt
 
@@ -124,7 +124,9 @@ class NetCDFVariable(object):
                 
 
                                              
-                                             
+        logger.debug('self.__dict__: {}'.format(pformat(self.__dict__)))                                     
+        logger.debug('variable_parameters: {}'.format(pformat(variable_parameters))) 
+                                            
         output_variable = nc_output_dataset.createVariable(self.short_name,
                                                            self.dtype,
                                                            self.dimensions,
@@ -416,8 +418,9 @@ class NetCDFConverter(object):
             nc_variable.create_var_in_dataset(self.nc_output_dataset) 
             
         # Set global attributes in netCDF output file
+        logger.debug('self.get_global_attributes(): {}'.format(self.get_global_attributes()))
         for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
-            setattr(self.nc_output_dataset, attribute_name, attribute_value)
+            setattr(self.nc_output_dataset, attribute_name, attribute_value or '')
             
         self.postprocess_netcdf()
             
