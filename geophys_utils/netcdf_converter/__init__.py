@@ -31,7 +31,7 @@ import logging
 from pprint import pformat
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 from geophys_utils import get_spatial_ref_from_wkt
 

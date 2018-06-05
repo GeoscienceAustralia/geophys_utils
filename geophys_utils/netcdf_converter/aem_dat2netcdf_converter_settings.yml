@@ -25,18 +25,19 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   Northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   resistivity: {long_name: Layer resistivity, short_name: resistivity,
-    units: ohm.m, dimension: layer}
+    units: ohm.m, dimensions: layer}
   conductivity: {long_name: Layer conductivity, short_name: conductivity,
-    units: S/m, dimension: layer}
+    units: S/m, dimensions: layer}
   resistivity_uncertainty: {long_name: Uncertainty of the layer resistivity,
-    short_name: resistivity_uncertainty, dimension: layer}
+    short_name: resistivity_uncertainty, dimensions: layer}
   sequence: {long_name: Inversion sequence number, short_name: sequence}
-  data_values: {long_name: Data values measured at each gate, short_name: data_values, units: V/(A.turns.m4), dimension: layer}
-  data_response: {long_name: Data response, short_name: data_response, dimension: layer}
-  data_relative_uncertainty: {long_name: Relative uncertainty of data value, short_name: data_relative_uncertainty, dimension: layer}
-  COND_XZ: {dimension: layer}
-  COND_XZ_DEPTH: {dimension: layer}
+  data_values: {long_name: Data values measured at each gate, short_name: data_values, units: V/(A.turns.m4), 
+    dimensions: [low_moment_gates, high_moment_gates]}
+  data_response: {long_name: Data response, short_name: data_response, dimensions: [low_moment_gates, high_moment_gates]}
+  data_relative_uncertainty: {long_name: Relative uncertainty of data value, short_name: data_relative_uncertainty, 
+    dimensions: [low_moment_gates, high_moment_gates]}
+  COND_XZ: {dimensions: layer}
+  COND_XZ_DEPTH: {dimensions: layer}
 keywords: geophysics, airborne, AEM, conductivity # String containing comma-separated list of keywords
 dimension_fields: [layers, low_moment_gates, high_moment_gates] # List of possible dimension field names
 index_fields: [line, flight] # List of possible index field names
-array_column_definitions: [{prefix: CDI_depth_slice, dimension: layers}] # List of definitions for array column definitions

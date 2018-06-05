@@ -44,7 +44,10 @@ logger.setLevel(logging.DEBUG) # Logging level for this module
 TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 10000
+POINT_LIMIT = 0
+
+# Number of rows per chunk - set to zero for no chunking
+CHUNK_ROWS = 8192
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
     '''
@@ -130,14 +133,17 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             return field_definitions, crs
         
         def create_nc_cache():
-            self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W', '_', os.path.splitext(self.aem_dat_path)[0]) + '.nc')
+            '''
+            Function to create temporary cache file with one 2D variable
+            '''
+            self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W+', '_', os.path.splitext(self.aem_dat_path)[0]) + '.nc')
             self._nc_cache_dataset = netCDF4.Dataset(self.nc_cache_path, mode="w", clobber=True, format='NETCDF4')
             self._nc_cache_dataset.createDimension(dimname='columns', size=self.field_count)
             self._nc_cache_dataset.createDimension(dimname='rows', size=None)
             self.cache_variable = self._nc_cache_dataset.createVariable('cache',
                                                                         'float64',
                                                                         ('rows', 'columns'),
-                                                                        #chunksizes=(8192, 1), # Chunk by column
+                                                                        chunksizes=(CHUNK_ROWS, 1), # Chunk by column
                                                                         **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
                                                                         )
             
@@ -185,7 +191,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # This is done to permit efficient column-wise data access but it will fail for any
         # invalid floating point values in data file
         #TODO: Use field widths from definition file
-        
+               
         self.field_count = 0
         self.point_count = 0
         
@@ -195,7 +201,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 continue
             
             try:
-                row = [float(value) for value in re.sub('\s+', ',', line).split(',')]
+                row_list = [float(value) for value in re.sub('\s+', ',', line).split(',')]
             except ValueError:
                 # Ignore potential non-numeric header row, otherwise raise exception for non-numeric data
                 if self.point_count:
@@ -205,21 +211,28 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             #logger.debug('row: {}'.format(row))
             
             if self.field_count:
-                assert self.field_count == len(row), 'Inconsistent field count. Expected {}, found {}.'.format(self.field_count, 
-                                                                                                               len(row)
+                assert self.field_count == len(row_list), 'Inconsistent field count. Expected {}, found {}.'.format(self.field_count, 
+                                                                                                               len(row_list)
                                                                                                                )
             else: # First row
-                self.field_count = len(row)
+                self.field_count = len(row_list)
                 logger.debug('self.field_count: {}'.format(self.field_count))
                 create_nc_cache() # Create temporary netCDF file with appropriately dimensioned variable
+                memory_cache_array = np.zeros(shape=(CHUNK_ROWS, self.field_count), dtype='float64')
             
             try:
-                self.cache_variable[self.point_count,:] = row
+                # Write row to memory cache
+                memory_cache_array[self.point_count%CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
             except Exception as e:
-                logger.debug('row = {}'.format(row))
+                logger.debug('Error with row = {}'.format(row_list))
                 raise e
             
             self.point_count += 1
+            
+            if self.point_count % CHUNK_ROWS == 0:
+                # Write memory cache to disk cache
+                logger.debug('Writing rows {}-{} to disk cache'.format(self.point_count-CHUNK_ROWS, self.point_count-1))
+                self.cache_variable[self.point_count-CHUNK_ROWS:self.point_count,:] = memory_cache_array
             
             if self.point_count == self.point_count // 10000 * 10000:
                 logger.debug('{} points read'.format(self.point_count))
@@ -228,6 +241,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
                 break
             
+        logger.debug('Writing final rows {}-{} to disk cache'.format(self.point_count-self.point_count%CHUNK_ROWS, self.point_count-1))
+        self.cache_variable[self.point_count-self.point_count%CHUNK_ROWS:self.point_count,:] = memory_cache_array[0:self.point_count%CHUNK_ROWS,:]
         aem_dat_file.close()
          
 
@@ -255,26 +270,40 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             if match: # format string starts with integers - 2D variable
                 field_dimension_size = int(match.group(0))
                 field_definition['format'] = re.sub('^\d+', '', field_definition['format'])
-                default_dimension_name = field_definition.get('dimension') # Look for default dimension name
-                logger.debug('default_dimension_name: {}'.format(default_dimension_name))
-                if default_dimension_name: # Default dimension name found from settings
-                    actual_dimension_size = self.dimensions.get(default_dimension_name)
-                    logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
-                    if actual_dimension_size is None: # Default dimension not defined
-                        self.dimensions[default_dimension_name] = field_dimension_size
-                    else:
-                        assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
-                        
-                    logger.debug('Variable {} has dimension {} of size {}'.format(field_definition['short_name'],
-                                                                                  default_dimension_name, 
+                default_dimension_names = field_definition.get('dimensions') # Look for default dimension name
+                logger.debug('default_dimension_names: {}'.format(default_dimension_names))
+                if default_dimension_names: # Default dimension name(s) found from settings
+                    if type(default_dimension_names) == str: # Only one dimension specified as a string
+                        actual_dimension_size = self.dimensions.get(default_dimension_names)
+                        logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
+                        if actual_dimension_size is None: # Default dimension not already defined - create it
+                            self.dimensions[default_dimension_names] = field_dimension_size
+                        else:
+                            assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
+                            
+                        logger.debug('Variable {} has dimension {} of size {}'.format(field_definition['short_name'],
+                                                                                  default_dimension_names, 
                                                                                   field_dimension_size))
+                    if type(default_dimension_names) == list: # Multiple dimensions specified
+                        assert set(default_dimension_names) <= set(self.dimensions.keys()), 'Dimensions {} not all defined in {}'.format(default_dimension_names, self.dimensions.keys())
+                        assert sum([self.dimensions[key] for key in default_dimension_names]) == field_dimension_size, 'Incorrect dimension sizes'
+                        logger.debug('Removing composite field definition')
+                        self.field_definitions.remove(field_definition)
+                        # Create new field definitions for part dimensions
+                        column_offset = 0
+                        for part_dimension_name in default_dimension_names:
+                            logger.debug('Inserting new field definition')
+                            new_field_definition = dict(field_definition) # Copy original field definition
+                            new_field_definition['dimensions'] = part_dimension_name
+                            new_field_definition['column_start_index'] += column_offset
+                            new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
+                            self.field_definitions.insert(new_field_definition, field_definition_index)
+                            field_definition_index += 1
+                            column_offset += self.dimensions[part_dimension_name] # Offset next column 
+                        
                 else: # No default dimension name found
-                    non_point_dimensions = [key for key in self.dimensions.keys() if key != 'point']
-                    non_point_dimension_sizes = sum([self.dimensions[key] for key in non_point_dimensions])
-                    if field_dimension_size == non_point_dimension_sizes:
-                        assert False, 'Not implemented yet' #TODO: Implement part variables
-                        for non_point_dimension in non_point_dimensions:
-                            pass
+                    #TODO: Implement something to assume existing dimension if only one defined
+                    raise BaseException('Default dimension name(s) not found from settings')
                        
                 column_start_index += field_dimension_size
                 
@@ -540,15 +569,15 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                     fill_value = None
                     
                 # Create composite variable names reflecting dimensionality, e.g. conductivity_x_layers
-                short_name += '_x_' + field_definition['dimension']
+                short_name += '_x_' + field_definition['dimensions']
                 if long_name:
-                    long_name += ' per ' + field_definition['dimension']                
+                    long_name += ' per ' + field_definition['dimensions']                
                         
                 logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
     
                 yield NetCDFVariable(short_name=short_name, 
                                      data=data_array, 
-                                     dimensions=['point', field_definition['dimension']], 
+                                     dimensions=['point', field_definition['dimensions']], 
                                      fill_value=fill_value, 
                                      attributes=field_attributes, 
                                      dtype=dtype,
