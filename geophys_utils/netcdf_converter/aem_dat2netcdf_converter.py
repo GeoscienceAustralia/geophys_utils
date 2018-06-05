@@ -38,7 +38,7 @@ from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Logging level for this module
+logger.setLevel(logging.INFO) # Logging level for this module
 
 #TEMP_DIR = tempfile.gettempdir()
 TEMP_DIR = 'C:\Temp'
@@ -235,7 +235,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                 self.cache_variable[self.point_count-CHUNK_ROWS:self.point_count,:] = memory_cache_array
             
             if self.point_count == self.point_count // 10000 * 10000:
-                logger.debug('{} points read'.format(self.point_count))
+                logger.info('{} points read'.format(self.point_count))
                 
             if POINT_LIMIT and self.point_count >= POINT_LIMIT:
                 logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
@@ -258,6 +258,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             logger.debug('field_definition_index: {}'.format(field_definition_index))
             field_definition = self.field_definitions[field_definition_index]
             logger.debug('short_name: {}'.format(field_definition['short_name']))
+            
             if field_definition['short_name'] in self.settings['dimension_fields']:
                 self.dimensions[field_definition['short_name']] = int(self.cache_variable[0, column_start_index]) # Read value from first line
                 field_definition['column_start_index'] = None # Do not output this column
@@ -601,10 +602,14 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
     
 
 def main():
-    assert 3 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
-Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])
+    assert 2 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
+Usage: {} <dat_in_path> [<dfn_in_path>] [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])
     dat_in_path = sys.argv[1] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
-    dfn_in_path = sys.argv[2] # 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
+
+    if len(sys.argv) >= 3:
+        dfn_in_path = sys.argv[2] # 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
+    else:
+        dfn_in_path = os.path.splitext(dat_in_path)[0] + '.dfn'
 
     if len(sys.argv) >= 4:
         nc_out_path = sys.argv[3] # 'C:\\Temp\\dat_test.nc'
@@ -612,7 +617,7 @@ Usage: {} <dat_in_path> <dfn_in_path> [<nc_out_path>] [<settings_path>]'.format(
         nc_out_path = os.path.splitext(dat_in_path)[0] + '.nc'
         
     if len(sys.argv) == 5:
-        settings_path = sys.argv[4] # 'C:\\Temp\\dat_test.nc'
+        settings_path = sys.argv[4]
     else:
         settings_path = None
         
