@@ -40,8 +40,8 @@ from geophys_utils import get_spatial_ref_from_wkt
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-#TEMP_DIR = tempfile.gettempdir()
-TEMP_DIR = 'C:\Temp'
+TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -356,8 +356,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         '''
         try:
             self.nc_cache_dataset.close()
-            #TODO: Uncomment this for live use
-            #os.remove(self.nc_cache_path) 
+            os.remove(self.nc_cache_path) 
         except:
             pass
         
@@ -638,7 +637,7 @@ Usage: {} <dat_in_path> [<dfn_in_path>] [<nc_out_path>] [<settings_path>]'.forma
     for variable_name in d2n.nc_output_dataset.variables.keys():
         variable = d2n.nc_output_dataset.variables[variable_name]
         logger.debug(pformat(variable))
-        print(variable[:])
+        logger.debug(variable[:])
 
 if __name__ == '__main__':
     # Setup logging handlers if required

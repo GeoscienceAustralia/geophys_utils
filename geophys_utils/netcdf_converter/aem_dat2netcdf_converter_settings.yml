@@ -40,6 +40,10 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   thickness: {dimensions: layer}
   EMSystem_1_XS: {dimensions: secondary_field_window}
   EMSystem_1_ZS: {dimensions: secondary_field_window}
+  EMX_NonHPRG: {dimensions: emx_window}
+  EMX_HPRG: {dimensions: emx_window}
+  EMZ_NonHPRG: {dimensions: emx_window}
+  EMZ_HPRG: {dimensions: emx_window} 
   COND_XZ: {dimensions: layer}
   COND_XZ_DEPTH: {dimensions: layer}
 keywords: geophysics, airborne, AEM, conductivity # String containing comma-separated list of keywords
