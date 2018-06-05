@@ -46,7 +46,7 @@ TEMP_DIR = 'C:\Temp'
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
 
-# Number of rows per chunk - set to zero for no chunking
+# Number of rows per chunk in temporary netCDF cache file
 CHUNK_ROWS = 8192
 
 class AEMDAT2NetCDFConverter(NetCDFConverter):
@@ -252,7 +252,10 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         # Set dimension field values from read data
         # Assume all dimension fields declared before 2D fields      
         column_start_index = 0
-        for field_definition_index in range(len(self.field_definitions)):
+        field_definition_index = -1
+        while field_definition_index < len(self.field_definitions) - 1:
+            field_definition_index += 1
+            logger.debug('field_definition_index: {}'.format(field_definition_index))
             field_definition = self.field_definitions[field_definition_index]
             logger.debug('short_name: {}'.format(field_definition['short_name']))
             if field_definition['short_name'] in self.settings['dimension_fields']:
@@ -289,21 +292,24 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                         assert sum([self.dimensions[key] for key in default_dimension_names]) == field_dimension_size, 'Incorrect dimension sizes'
                         logger.debug('Removing composite field definition')
                         self.field_definitions.remove(field_definition)
+                        field_definition_index -= 1
                         # Create new field definitions for part dimensions
                         column_offset = 0
                         for part_dimension_name in default_dimension_names:
-                            logger.debug('Inserting new field definition')
                             new_field_definition = dict(field_definition) # Copy original field definition
+                            new_field_definition['short_name'] += '_x_' + part_dimension_name
                             new_field_definition['dimensions'] = part_dimension_name
                             new_field_definition['column_start_index'] += column_offset
                             new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
-                            self.field_definitions.insert(new_field_definition, field_definition_index)
+                            
                             field_definition_index += 1
+                            logger.debug('Inserting new field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
+                            self.field_definitions.insert(field_definition_index, new_field_definition)
                             column_offset += self.dimensions[part_dimension_name] # Offset next column 
                         
                 else: # No default dimension name found
                     #TODO: Implement something to assume existing dimension if only one defined
-                    raise BaseException('Default dimension name(s) not found from settings')
+                    raise BaseException('Default dimension name(s) for variable {} not found from settings'.format(field_definition['short_name']))
                        
                 column_start_index += field_dimension_size
                 
@@ -367,6 +373,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                                 if field_definition['short_name'] == short_name
                                 ][0]
              
+            logger.debug('field_definition: {}'.format(pformat(field_definition)))
             column_start_index = field_definition['column_start_index']
             column_end_index = column_start_index + max(1, field_definition['dimension_size'])
             
@@ -391,10 +398,8 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
             #TODO: Sort out standard names for elevation and get rid of the DTM case
-            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')
-                                              or self.get_raw_data('DTM')),
-            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')
-                                              or self.get_raw_data('DTM')), # Should this be min(elevation-DOI)?
+            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')),
+            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')), # Should this be min(elevation-DOI)?
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
@@ -484,7 +489,10 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
         
         # Create variables
         for field_definition in self.field_definitions:
-            #logger.debug('field_index: {}'.format(field_index))
+            # Skip dimension fields
+            if field_definition['short_name'] in self.settings['dimension_fields']:
+                continue
+            
             field_attributes = {}
             
             short_name = field_definition['short_name']
@@ -511,8 +519,10 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
             else:
                 dtype ='float32'
                 
-            fill_value=field_definition.get('fill_value')
+            fill_value = field_definition.get('fill_value')
                 
+            logger.debug('field_definition: {}'.format(pformat(field_definition)))
+            
             if not field_definition['dimension_size']: # 1D Variable
                 logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
@@ -567,12 +577,7 @@ class AEMDAT2NetCDFConverter(NetCDFConverter):
                     # Don't mess with values
                     data_array = self.get_raw_data(short_name)
                     fill_value = None
-                    
-                # Create composite variable names reflecting dimensionality, e.g. conductivity_x_layers
-                short_name += '_x_' + field_definition['dimensions']
-                if long_name:
-                    long_name += ' per ' + field_definition['dimensions']                
-                        
+                                          
                 logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
     
                 yield NetCDFVariable(short_name=short_name, 

@@ -31,7 +31,7 @@ import logging
 from pprint import pformat
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
 from geophys_utils import get_spatial_ref_from_wkt
 
@@ -103,6 +103,8 @@ class NetCDFVariable(object):
         
         # If not a scalar, check array shape against specified dimensions in netCDF dataset
         if self.dimensions:
+            logger.debug('self.dimensions: {}'.format(self.dimensions))
+            logger.debug('nc_output_dataset.dimensions: {}'.format(nc_output_dataset.dimensions))
             assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified: {} not in {}.'.format(self.dimensions, 
                                                                                                                                                   nc_output_dataset.dimensions.keys())
 

@@ -10,7 +10,8 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
     units: m}
   TxHeightMeasured: {long_name: Measured height of the TXRX frame, short_name: tx_height_measured,
     units: m}
-  depth_top: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m}
+  depth_top: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m, dimensions: layer}
+  layer_top_depth: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m, dimensions: layer}
   easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
   Easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
   elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
@@ -19,9 +20,9 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
   Line: {long_name: Line number, short_name: line}
   flight: {long_name: Flight number, short_name: flight}
   Flight: {long_name: Flight number, short_name: flight}
-  nlayers: {long_name: layers, short_name: layers}
-  ndatlm: {long_name: low moment gates, short_name: low_moment_gates}
-  ndathm: {long_name: high moment gates, short_name: high_moment_gates}
+  nlayers: {long_name: layers, short_name: layer}
+  ndatlm: {long_name: low moment gates, short_name: low_moment_gate}
+  ndathm: {long_name: high moment gates, short_name: high_moment_gate}
   northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   Northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   resistivity: {long_name: Layer resistivity, short_name: resistivity,
@@ -32,12 +33,15 @@ field_definitions: # Overrides for short_name, long_name & units keyed by origin
     short_name: resistivity_uncertainty, dimensions: layer}
   sequence: {long_name: Inversion sequence number, short_name: sequence}
   data_values: {long_name: Data values measured at each gate, short_name: data_values, units: V/(A.turns.m4), 
-    dimensions: [low_moment_gates, high_moment_gates]}
-  data_response: {long_name: Data response, short_name: data_response, dimensions: [low_moment_gates, high_moment_gates]}
+    dimensions: [low_moment_gate, high_moment_gate]}
+  data_response: {long_name: Data response, short_name: data_response, dimensions: [low_moment_gate, high_moment_gate]}
   data_relative_uncertainty: {long_name: Relative uncertainty of data value, short_name: data_relative_uncertainty, 
-    dimensions: [low_moment_gates, high_moment_gates]}
+    dimensions: [low_moment_gate, high_moment_gate]}
+  thickness: {dimensions: layer}
+  EMSystem_1_XS: {dimensions: secondary_field_window}
+  EMSystem_1_ZS: {dimensions: secondary_field_window}
   COND_XZ: {dimensions: layer}
   COND_XZ_DEPTH: {dimensions: layer}
 keywords: geophysics, airborne, AEM, conductivity # String containing comma-separated list of keywords
-dimension_fields: [layers, low_moment_gates, high_moment_gates] # List of possible dimension field names
+dimension_fields: [layer, low_moment_gate, high_moment_gate] # List of possible dimension field names
 index_fields: [line, flight] # List of possible index field names
