@@ -95,7 +95,7 @@ class TestNetCDFPointUtilsFunctions1(unittest.TestCase):
     def test_get_polygon(self):
         print('Testing get_polygon function')
         polygon = netcdf_point_utils.get_polygon()
-        assert polygon is None, 'This is just plain messed up' #TODO: Find out why None is returned
+        assert polygon is None, 'This is just plain messed up'
 
     def test_get_spatial_mask(self):
         print('Testing get_spatial_mask function')
