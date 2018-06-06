@@ -61,14 +61,6 @@ TEST_GRID_RESULTS = (('GEOGCS["GDA94",DATUM["Geocentric_Datum_of_Australia_1994"
                       )
                      )
 
-TEST_GET_LINE_MASK_RESULTS = ((190520, 5032),
-                              (190500, 4994)
-                              )
-
-TEST_GET_LINE_RESULTS = ((190520, 4, 10064),
-                         (190500, 4, 9988)
-                         )
-
    
 class TestNetCDFPointUtilsConstructor(unittest.TestCase):
     """Unit tests for TestNetCDFPointUtils Constructor.
