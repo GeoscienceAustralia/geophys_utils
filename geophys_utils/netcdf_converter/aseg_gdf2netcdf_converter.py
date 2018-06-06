@@ -636,11 +636,11 @@ def main():
     
     # Setup Logging
     log_level = logging.DEBUG if args.debug else logging.INFO
-    base_logger = logging.getLogger('geophys_utils.netcdf_converter')
+    base_logger = logging.getLogger('geophys_utils.netcdf_converter') # Logger for base class NetCDFConverter
     base_logger.setLevel(level=log_level)
     logger.setLevel(level=log_level)
 
-    assert 1 <= len(args.positional_args) <= 2, 'Invalid number of arguments.\n\
+    assert 1 <= len(args.positional_args) <= 2, 'Invalid number of positional arguments.\n\
 Usage: {} <options> <dat_in_path> [<nc_out_path>]'.format(sys.argv[0])
 
     dat_in_path = args.positional_args[0] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
