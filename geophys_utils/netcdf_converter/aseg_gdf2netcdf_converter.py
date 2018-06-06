@@ -16,7 +16,7 @@
 #    limitations under the License.
 #===============================================================================
 '''
-ASEGGDF2NetCDFConverter concrete class for converting AEM .dat data to netCDF
+ASEGGDF2NetCDFConverter concrete class for converting ASEG-GDF data to netCDF
 
 Created on 28Mar.2018
 
@@ -618,10 +618,17 @@ def main():
         parser = argparse.ArgumentParser(description='Convert ASEG-GDF file to netCDF')
         parser.add_argument("-f", "--dfn",
                             help="Path to .dfn file",
+                            type=str,
                             dest="dfn_in_path")
         parser.add_argument("-s", "--settings",
                             help="Path to settings file",
+                            type=str,
                             dest="settings_path")
+        parser.add_argument("-c", "--chunking",
+                            help="Chunking size in each dimension",
+                            type=int,
+                            dest="chunking",
+                            default=1024)
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
@@ -653,14 +660,14 @@ Usage: {} <options> <dat_in_path> [<nc_out_path>]'.format(sys.argv[0])
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
     d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
-                                 dat_in_path, 
-                                 dfn_in_path, 
-                                 default_chunk_size=1024, 
-                                 settings_path=args.settings_path)
+                                  dat_in_path, 
+                                  dfn_in_path, 
+                                  default_chunk_size=args.chunking,
+                                  settings_path=args.settings_path)
     d2n.convert2netcdf()
     logger.info('Finished writing netCDF file {}'.format(nc_out_path))
     
-    logger.debug('Global attributes:')
+    logger.debug('\nGlobal attributes:')
     logger.debug(pformat(d2n.nc_output_dataset.__dict__))
     logger.debug('Dimensions:')
     logger.debug(pformat(d2n.nc_output_dataset.dimensions))
