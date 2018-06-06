@@ -103,6 +103,8 @@ class NetCDFVariable(object):
         
         # If not a scalar, check array shape against specified dimensions in netCDF dataset
         if self.dimensions:
+            logger.debug('self.dimensions: {}'.format(self.dimensions))
+            logger.debug('nc_output_dataset.dimensions: {}'.format(nc_output_dataset.dimensions))
             assert set(self.dimensions) <= set(list(nc_output_dataset.dimensions.keys())), 'Invalid dimension(s) specified: {} not in {}.'.format(self.dimensions, 
                                                                                                                                                   nc_output_dataset.dimensions.keys())
 
@@ -124,7 +126,9 @@ class NetCDFVariable(object):
                 
 
                                              
-                                             
+        logger.debug('self.__dict__: {}'.format(pformat(self.__dict__)))                                     
+        logger.debug('variable_parameters: {}'.format(pformat(variable_parameters))) 
+                                            
         output_variable = nc_output_dataset.createVariable(self.short_name,
                                                            self.dtype,
                                                            self.dimensions,
@@ -416,8 +420,9 @@ class NetCDFConverter(object):
             nc_variable.create_var_in_dataset(self.nc_output_dataset) 
             
         # Set global attributes in netCDF output file
+        logger.debug('self.get_global_attributes(): {}'.format(self.get_global_attributes()))
         for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
-            setattr(self.nc_output_dataset, attribute_name, attribute_value)
+            setattr(self.nc_output_dataset, attribute_name, attribute_value or '')
             
         self.postprocess_netcdf()
             

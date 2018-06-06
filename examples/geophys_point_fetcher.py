@@ -16,7 +16,7 @@ from datetime import datetime
 from pprint import pformat
 import numpy as np
 
-from geophys_utils import NetCDFLineUtils
+from geophys_utils import NetCDFPointUtils
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get __main__ logger
@@ -117,7 +117,7 @@ class GeophysPointFetcher(object):
             try:
                 logger.info('Opening {}'.format(nc_path))
                 nc_dataset = netCDF4.Dataset(nc_path, 'r')
-                netcdf_line_utils = NetCDFLineUtils(nc_dataset)
+                netcdf_line_utils = NetCDFPointUtils(nc_dataset)
                 
                 # Skip processing this dataset if it doesn't contain any of the required variables
                 if variable_names and not (set(variable_names) & set(netcdf_line_utils.point_variables)):
