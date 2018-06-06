@@ -156,16 +156,17 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
                 
             logger.debug('Writing final rows {}-{} to disk cache'.format(self.point_count-self.point_count%CHUNK_ROWS, self.point_count-1))
             self.cache_variable[self.point_count-self.point_count%CHUNK_ROWS:self.point_count,:] = memory_cache_array[0:self.point_count%CHUNK_ROWS,:]
-            aem_dat_file.close()
-             
+            
+            aem_dat_file.close()             
     
-            logger.debug('{} points found'.format(self.point_count))
+            logger.info('A total of {} points were read'.format(self.point_count))
             self.dimensions['point'] = self.point_count # All files will have a point dimension - declare this first
             
             
         def get_field_definitions():
             '''
             Function to read raw field definitions from .dfn file, and then massage them to manage 2D data properly
+            Will set self.dimensions as an Ordereddict of dimension sizes keyed by dimension name
             '''
             def parse_dfn_file(dfn_path):
                 logger.info('Reading definitions file {}'.format(dfn_path))
@@ -233,7 +234,7 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
                     if overriding_field_definition:
                         field_definition.update(overriding_field_definition)
             
-            # Update field definitions based on values read from data file
+            # Update field definitions and dimensions based on values read from data file
             # Assume all dimension fields declared before 2D fields      
             column_start_index = 0
             field_definition_index = -1
@@ -385,24 +386,25 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs       
         '''
-        metadata_dict = {'title': 'AEM .dat dataset read from {}'.format(os.path.basename(self.aem_dat_path)),
+        #TODO: implement search lists for different variable names
+        metadata_dict = {'title': 'Dataset read from ASEG-GDF file {}'.format(os.path.basename(self.aem_dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
-            'geospatial_east_min': np.min(self.get_raw_data('easting')),
-            'geospatial_east_max': np.max(self.get_raw_data('easting')),
+            'geospatial_east_min': np.min(self.get_raw_data('easting')) or np.min(self.get_raw_data('longitude')),
+            'geospatial_east_max': np.max(self.get_raw_data('easting')) or np.max(self.get_raw_data('longitude')),
             'geospatial_east_units': "m",
             'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.get_raw_data('northing')),
-            'geospatial_north_max': np.max(self.get_raw_data('northing')),
+            'geospatial_north_min': np.min(self.get_raw_data('northing')) or np.min(self.get_raw_data('latitude')),
+            'geospatial_north_max': np.max(self.get_raw_data('northing')) or np.min(self.get_raw_data('latitude')),
             'geospatial_north_units': "m",
             'geospatial_north_resolution': "point",
-            #TODO: Sort out standard names for elevation and get rid of the DTM case
-            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')),
-            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')), # Should this be min(elevation-DOI)?
+            #TODO: Sort out standard names for elevation and get rid of the DTM case. Should this be min(elevation-DOI)?
+            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')) or np.min(self.get_raw_data('DTM')),
+            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')) or np.min(self.get_raw_data('DTM')), 
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
-            'history': 'Converted from .dat file {} using definitions file {}'.format(self.aem_dat_path,
+            'history': 'Converted from ASEG-GDF file {} using definitions file {}'.format(self.aem_dat_path,
                                                                                      self.dfn_path),
             'date_created': datetime.now().isoformat()
             }
