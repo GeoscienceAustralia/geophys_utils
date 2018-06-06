@@ -37,6 +37,7 @@ if not logger.handlers:
         
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
+from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._netcdf_line_utils import NetCDFLineUtils
 from geophys_utils._csw_utils import CSWUtils
 from geophys_utils._array_pieces import array_pieces
