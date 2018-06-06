@@ -224,24 +224,29 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
                         ' geophysics, geoscientificInformation'.format(self.survey_id, self.survey_metadata['COUNTRYID'], self.survey_metadata['STATEGROUP']),
-            'geospatial_east_min': np.min(self.nc_output_dataset.variables['Long']),
-            'geospatial_east_max': np.max(self.nc_output_dataset.variables['Long']),
-            'geospatial_east_units': "degrees_east",
-            'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.nc_output_dataset.variables['Lat']),
-            'geospatial_north_max': np.max(self.nc_output_dataset.variables['Lat']),
-            'geospatial_north_units': "degrees_north",
-            'geospatial_north_resolution': "point",
+            'geospatial_lon_min': np.min(self.nc_output_dataset.variables['Long']),
+            'geospatial_lon_max': np.max(self.nc_output_dataset.variables['Long']),
+            'geospatial_lon_units': "degrees_east",
+            'geospatial_long_resolution': "point",
+            'geospatial_lat_min': np.min(self.nc_output_dataset.variables['Lat']),
+            'geospatial_lat_max': np.max(self.nc_output_dataset.variables['Lat']),
+            'geospatial_lat_units': "degrees_north",
+            'geospatial_lat_resolution': "point",
             'history': "Pulled from point gravity database at Geoscience Australia",
-            'abstract': "This gravity survey, {0}, {1} located in {2} measures the slight variations in the earth's "
+            'summary': "This gravity survey, {0}, {1} located in {2} measures the slight variations in the earth's "
             "gravity based on the underlying structure or geology".format(self.survey_id,
                                                                       self.survey_metadata['SURVEYNAME'],
                                                                       self.survey_metadata['STATEGROUP']),
             'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
             'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
-            'survey_start_date': str(self.survey_metadata.get('STARTDATE')),
-            'survey_end_date': str(self.survey_metadata.get('ENDDATE')),
-            'date_created': datetime.now().isoformat()
+            'time_coverage_start': str(self.survey_metadata.get('STARTDATE')),
+            'time_coverage_end': str(self.survey_metadata.get('ENDDATE')),
+            'time_coverage_duration': str(self.survey_metadata.get('ENDDATE') - self.survey_metadata.get('STARTDATE')),
+            'date_created': datetime.now().isoformat(),
+            'institution': 'Geoscience Australia',
+            'source': 'ground observation',
+            #'references': '',## Published or web-based references that describe the data or methods used to produce it.
+            'cdm_data_type': 'Point'
             }
 
         return metadata_dict
@@ -282,7 +287,9 @@ class Grav2NetCDFConverter(NetCDFConverter):
             :return:
             """
             # call the sql query and assign results into a python list
-
+            # the sql format will be slightly different for freeiar and bouguer. Instead of simply o1.[variable],
+            # they will instead insert a function with arguements. Thus the o1 isn't needed and an empty string is
+            # instead passed to the sql string.
             if field_name == 'Freeair' or field_name == 'Bouguer':
                 formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('', field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
@@ -599,7 +606,7 @@ def main():
             #     print(data)
             del g2n
            # except Exception as e:
-            break
+
 
 
 

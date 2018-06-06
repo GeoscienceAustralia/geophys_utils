@@ -1,7 +1,7 @@
 field_names :
   Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int8', 'fill_value': '-99'}
-  Lat: {'short_name': 'Lat', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float32', 'units': 'degrees_north', 'fill_value': '-99999.9'}
-  Long: {'short_name': 'Long', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float32', 'units': 'degrees_east', 'fill_value': '-99999.9'}
+  Lat: {'standard_name': 'latitude', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float32', 'units': 'degrees_north', 'fill_value': '-99999.9', 'axis':'Y'}
+  Long: {'standard_name': 'longitude', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float32', 'units': 'degrees_east', 'fill_value': '-99999.9', 'axis':'X'}
   Stattype: {'short_name': 'Stattype', 'long_name': 'Station Type', 'database_field_name': 'STATIONTYPE', 'dtype': 'int8', 'lookup_table': 'STATIONTYPES', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99'}
   Grav: {'short_name': 'Grav', 'long_name': 'Gravity', 'database_field_name': 'GRAV', 'dtype': 'float32', 'units': 'um/s^-2', 'datum': 'GRAVDATUM', 'fill_value': '-99999.9'} #TODO side note - out of curiosity why are these um and not um/s?
   Gravacc: {'short_name': 'Gravacc', 'long_name': 'Gravity Accuracy', 'database_field_name': 'GRAVACC', 'dtype': 'int8', 'units': 'um/s^-2', 'fill_value': '-99'} #um may be null for some surveys...
