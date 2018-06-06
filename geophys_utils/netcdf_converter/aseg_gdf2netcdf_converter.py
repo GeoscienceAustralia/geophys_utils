@@ -22,6 +22,7 @@ Created on 28Mar.2018
 
 @author: Alex Ip
 '''
+import argparse
 from collections import OrderedDict
 import numpy as np
 import re
@@ -605,31 +606,57 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
     
 
 def main():
-    assert 2 <= len(sys.argv) <= 5, 'Invalid number of arguments.\n\
-Usage: {} <dat_in_path> [<dfn_in_path>] [<nc_out_path>] [<settings_path>]'.format(sys.argv[0])
-    dat_in_path = sys.argv[1] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+    '''
+    Main function
+    '''
+    def get_args():
+        """
+        Handles all the arguments that are passed into the script
 
-    if len(sys.argv) >= 3:
-        dfn_in_path = sys.argv[2] # 'C:\\Temp\\Groundwater Data\\nbc_20160421.dfn'
-    else:
-        dfn_in_path = os.path.splitext(dat_in_path)[0] + '.dfn'
+        :return: Returns a parsed version of the arguments.
+        """
+        parser = argparse.ArgumentParser(description='Convert ASEG-GDF file to netCDF')
+        parser.add_argument("-f", "--dfn",
+                            help="Path to .dfn file",
+                            dest="dfn_in_path")
+        parser.add_argument("-s", "--settings",
+                            help="Path to settings file",
+                            dest="settings_path")
+        
+        parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
+                            help='output debug information. Default is no debug info')
+        
+        parser.add_argument('positional_args', 
+                            nargs=argparse.REMAINDER,
+                            help='<dat_in_path> [<nc_out_path>]')
 
-    if len(sys.argv) >= 4:
-        nc_out_path = sys.argv[3] # 'C:\\Temp\\dat_test.nc'
+        return parser.parse_args()
+    
+    args = get_args()
+    
+    # Setup Logging
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    base_logger = logging.getLogger('geophys_utils.netcdf_converter')
+    base_logger.setLevel(level=log_level)
+    logger.setLevel(level=log_level)
+
+    assert 1 <= len(args.positional_args) <= 2, 'Invalid number of arguments.\n\
+Usage: {} <options> <dat_in_path> [<nc_out_path>]'.format(sys.argv[0])
+
+    dat_in_path = args.positional_args[0] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
+
+    if len(args.positional_args) >= 2:
+        nc_out_path = args.positional_args[1] # 'C:\\Temp\\dat_test.nc'
     else:
         nc_out_path = os.path.splitext(dat_in_path)[0] + '.nc'
         
-    if len(sys.argv) == 5:
-        settings_path = sys.argv[4]
-    else:
-        settings_path = None
-        
-        
+    dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
+       
     d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                  dat_in_path, 
                                  dfn_in_path, 
                                  default_chunk_size=1024, 
-                                 settings_path=settings_path)
+                                 settings_path=args.settings_path)
     d2n.convert2netcdf()
     logger.info('Finished writing netCDF file {}'.format(nc_out_path))
     
