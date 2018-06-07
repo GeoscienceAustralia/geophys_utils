@@ -21,6 +21,7 @@ Created on 16Nov.,2016
 @author: u76345
 '''
 import re
+import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
 def get_spatial_ref_from_wkt(wkt):
@@ -94,13 +95,20 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     coord_trans = get_coordinate_transformation(
         from_wkt, to_wkt)  # Transform from specified CRS to native CRS
 
+    coordinate_array = np.array(coordinates) # Copy coordinates into fresh array
+        
     if not coord_trans:  # No transformation required
-        return list(coordinates) # Return copy of original coordinates
-
-    try:  # Multiple coordinates
-        return [coordinate[0:2]
-                for coordinate in coord_trans.TransformPoints(coordinates)]
-    except TypeError:  # Single coordinate
-        return coord_trans.TransformPoint(*coordinates)[0:2]
+        return coordinate_array # Return copy of original coordinates
+    
+    single_coordinate = (coordinate_array.shape == (2,))
+    # Reshape 1D array into 2D single coordinate array if only one coordinate provided
+    if single_coordinate:
+        coordinate_array = coordinate_array.reshape((1,2))
+        
+    new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
+    if single_coordinate:
+        return new_coordinate_array.reshape((2,))
+    else: 
+        return new_coordinate_array
 
 

@@ -25,6 +25,7 @@ Created on 15/11/2016
 import unittest
 import os
 import netCDF4
+import numpy as np
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
 netcdf_grid_utils = None
@@ -33,9 +34,12 @@ NC_PATH = 'test_grid.nc'
 MAX_BYTES = 1600
 MAX_ERROR = 0.000001
 TEST_COORDS = (148.213, -36.015)
+TEST_MULTI_COORDS = np.array([[148.213, -36.015], [148.516, -35.316]])
 TEST_INDICES = [1, 1]
+TEST_MULTI_INDICES = [[1, 1], [176, 77]]
 TEST_FRACTIONAL_INDICES = [1.25, 1.25]
-TEST_VALUE = 0.0
+TEST_VALUE = -99999.
+TEST_MULTI_VALUES = [-99999.0, -134.711334229]
 TEST_INTERPOLATED_VALUE = -99997.6171875
     
 class TestNetCDFGridUtilsConstructor(unittest.TestCase):
@@ -54,9 +58,13 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_grid_utils functions"""
     
     def test_get_indices_from_coords(self):
-        print('Testing get_indices_from_coords function')
+        print('Testing get_indices_from_coords function with single coordinate {}'.format(TEST_COORDS))
         indices = netcdf_grid_utils.get_indices_from_coords(TEST_COORDS)
-        assert indices == TEST_INDICES, 'Indices incorrect'
+        assert (indices == np.array(TEST_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(indices, TEST_INDICES)
+
+        print('Testing get_indices_from_coords function with multi coordinates {}'.format(TEST_MULTI_COORDS))
+        multi_indices = netcdf_grid_utils.get_indices_from_coords(TEST_MULTI_COORDS)
+        assert (multi_indices == np.array(TEST_MULTI_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(multi_indices, TEST_MULTI_INDICES)
 
     def test_get_fractional_indices_from_coords(self):
         print('Testing get_fractional_indices_from_coords function')
@@ -65,9 +73,13 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
             assert round(indices[ordinate_index], 6) == TEST_FRACTIONAL_INDICES[ordinate_index], 'Fractional index incorrect'
 
     def test_get_value_at_coords(self):
-        print('Testing get_value_at_coords function')
+        print('Testing get_value_at_coords function with single coordinate {}'.format(TEST_COORDS))
         value = netcdf_grid_utils.get_value_at_coords(TEST_COORDS)
-        assert value.data == TEST_VALUE, 'Incorrect retrieved value: %s instead of %s' % (value.data, TEST_VALUE)
+        assert value[0] == TEST_VALUE, 'Incorrect retrieved value: {} instead of {}'.format(value.data, TEST_VALUE)
+        
+        print('Testing get_value_at_coords function with multiple coordinates {}'.format(TEST_MULTI_COORDS))
+        multi_values = netcdf_grid_utils.get_value_at_coords(TEST_MULTI_COORDS)
+        assert (np.abs(np.array(multi_values) - np.array(TEST_MULTI_VALUES)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(multi_values, TEST_MULTI_VALUES)
 
     def test_get_interpolated_value_at_coords(self):
         print('Testing get_interpolated_value_at_coords function')

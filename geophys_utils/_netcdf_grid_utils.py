@@ -170,19 +170,14 @@ class NetCDFGridUtils(NetCDFUtils):
         '''
         wkt = wkt or self.wkt
         native_coordinates = transform_coords(coordinates, self.wkt, wkt)
+        # Reshape 1D array into 2D single coordinate array if only one coordinate provided
+        if native_coordinates.shape == (2,):
+            native_coordinates = native_coordinates.reshape((1,2))
         
-
         # Convert coordinates to same dimension ordering as array
         if self.YX_order:
-            try:
-                for coord_index in range(len(native_coordinates)):
-                    if native_coordinates[coord_index] is not None:
-                        native_coordinates[coord_index] = list(
-                            native_coordinates[coord_index])
-                        native_coordinates[coord_index].reverse()
-            except TypeError:
-                native_coordinates = list(native_coordinates)
-                native_coordinates.reverse()
+            native_coordinates = native_coordinates[:,1::-1]
+                
         try:  # Multiple coordinates
             indices = [[np.where(abs(self.dimension_arrays[dim_index] - coordinate[dim_index]) <= (self.pixel_size[dim_index] / 2.0))[0][0] for dim_index in range(2)]
                        if not ([True for dim_index in range(2) if coordinate[dim_index] < self.min_extent[dim_index] or coordinate[dim_index] > self.max_extent[dim_index]])
@@ -241,6 +236,7 @@ class NetCDFGridUtils(NetCDFUtils):
         '''
         # Use arbitrary maximum request size of NetCDFGridUtils.DEFAULT_MAX_BYTES
         # (500,000,000 bytes => 11180 points per query)
+        #TODO: Find a better way of overcoming the netCDF problem where whole rows & columns are retrieved
         max_bytes = max_bytes or 100  # NetCDFGridUtils.DEFAULT_MAX_BYTES
 
         if variable_name:
@@ -250,7 +246,9 @@ class NetCDFGridUtils(NetCDFUtils):
 
         no_data_value = data_variable._FillValue
 
-        indices = self.get_indices_from_coords(coordinates, wkt)
+        indices = np.array(self.get_indices_from_coords(coordinates, wkt))
+        
+#        return data_variable[indices[:,0], indices[:,1]].diagonal() # This could get too big
 
         # Allow for the fact that the NetCDF advanced indexing will pull back
         # n^2 cells rather than n
