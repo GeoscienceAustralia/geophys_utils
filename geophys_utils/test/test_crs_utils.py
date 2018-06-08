@@ -64,8 +64,8 @@ class TestCRSUtils(unittest.TestCase):
         utm_wkt = get_utm_wkt(TestCRSUtils.EPSG4326_COORDS, 
                               TestCRSUtils.EPSG4326_EPSG)
         utm_wkt = re.sub(',\s+', ',', re.sub('\s+', ' ', utm_wkt))
-        test_wkt = re.sub(',\s+', ',', re.sub('\s+', ' ', TestCRSUtils.UTM_WKT))
-        assert utm_wkt == test_wkt, 'Incorrect UTM CRS: {} instead of {}'.format(utm_wkt, test_wkt)
+        expected_wkt = re.sub(',\s+', ',', re.sub('\s+', ' ', TestCRSUtils.UTM_WKT))
+        assert utm_wkt == expected_wkt, 'Incorrect UTM CRS: {} instead of {}'.format(utm_wkt, expected_wkt)
 
     def test_transform_coords(self):
         print('Testing transform_coords function with single coordinate{}'.format(TestCRSUtils.EPSG4326_COORDS))
