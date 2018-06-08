@@ -21,6 +21,7 @@ Created on 16Nov.,2016
 @author: u76345
 '''
 import re
+import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
 def get_spatial_ref_from_wkt(wkt):
@@ -61,6 +62,7 @@ def get_utm_wkt(coordinate, from_wkt):
     '''
     Function to return CRS for UTM zone of specified coordinates.
     Used to transform coords to metres
+    @param coordinate: single coordinate pair
     '''
     def utm_getZone(longitude):
         return (int(1 + (longitude + 180.0) / 6.0))
@@ -70,12 +72,14 @@ def get_utm_wkt(coordinate, from_wkt):
             return 0
         else:
             return 1
+        
+    coordinate_array = np.array(coordinate).reshape((1,2))
 
     latlon_coord_trans = get_coordinate_transformation(
         from_wkt, 'EPSG:4326')
-    latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.TransformPoint(
-        *coordinate)[0:2]
-
+    latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.TransformPoints(
+        coordinate_array)[0][0:2]
+        
     # Set UTM coordinate reference system
     utm_spatial_ref = SpatialReference()
     utm_spatial_ref.SetWellKnownGeogCS('WGS84')
@@ -94,13 +98,20 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     coord_trans = get_coordinate_transformation(
         from_wkt, to_wkt)  # Transform from specified CRS to native CRS
 
+    coordinate_array = np.array(coordinates) # Copy coordinates into fresh array
+        
     if not coord_trans:  # No transformation required
-        return list(coordinates) # Return copy of original coordinates
-
-    try:  # Multiple coordinates
-        return [coordinate[0:2]
-                for coordinate in coord_trans.TransformPoints(coordinates)]
-    except TypeError:  # Single coordinate
-        return coord_trans.TransformPoint(*coordinates)[0:2]
+        return coordinate_array # Return copy of original coordinates
+    
+    is_single_coordinate = (coordinate_array.shape == (2,))
+    # Reshape 1D array into 2D single coordinate array if only one coordinate provided
+    if is_single_coordinate:
+        coordinate_array = coordinate_array.reshape((1,2))
+        
+    new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
+    if is_single_coordinate:
+        return new_coordinate_array.reshape((2,))
+    else: 
+        return new_coordinate_array
 
 
