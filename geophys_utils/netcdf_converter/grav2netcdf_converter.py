@@ -224,12 +224,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
                         ' geophysics, geoscientificInformation'.format(self.survey_id, self.survey_metadata['COUNTRYID'], self.survey_metadata['STATEGROUP']),
-            'geospatial_lon_min': np.min(self.nc_output_dataset.variables['Long']),
-            'geospatial_lon_max': np.max(self.nc_output_dataset.variables['Long']),
+            'geospatial_lon_min': np.min(self.nc_output_dataset.variables['longitude']),
+            'geospatial_lon_max': np.max(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_units': "degrees_east",
             'geospatial_long_resolution': "point",
-            'geospatial_lat_min': np.min(self.nc_output_dataset.variables['Lat']),
-            'geospatial_lat_max': np.max(self.nc_output_dataset.variables['Lat']),
+            'geospatial_lat_min': np.min(self.nc_output_dataset.variables['latitude']),
+            'geospatial_lat_max': np.max(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_units': "degrees_north",
             'geospatial_lat_resolution': "point",
             'history': "Pulled from point gravity database at Geoscience Australia",
@@ -241,7 +241,8 @@ class Grav2NetCDFConverter(NetCDFConverter):
             'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
             'time_coverage_start': str(self.survey_metadata.get('STARTDATE')),
             'time_coverage_end': str(self.survey_metadata.get('ENDDATE')),
-            'time_coverage_duration': str(self.survey_metadata.get('ENDDATE') - self.survey_metadata.get('STARTDATE')),
+            'time_coverage_duration': str(self.survey_metadata.get('ENDDATE') - self.survey_metadata.get('STARTDATE'))
+                if self.survey_metadata.get('STARTDATE') else "Unknown",
             'date_created': datetime.now().isoformat(),
             'institution': 'Geoscience Australia',
             'source': 'ground observation',
@@ -294,12 +295,12 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('', field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
-                print(formatted_sql)
+
             else:
                 formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
-                print(formatted_sql)
+
 
             self.cursor.execute(formatted_sql)
             variable_list = []
@@ -411,7 +412,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             """
             # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
             # lookup_table is later converted to comments.
-            list_of_possible_value = ['long_name', 'units', 'dtype', 'lookup_table', 'dem', 'datum']
+            list_of_possible_value = ['long_name', 'standard_name' 'units', 'dtype', 'lookup_table', 'dem', 'datum']
 
             logger.debug('-----------------')
             logger.debug("Field Name: " + str(field_name))
@@ -541,14 +542,23 @@ class Grav2NetCDFConverter(NetCDFConverter):
                                      fill_value=fill_value,
                                      attributes=attributes
                                      )
-
-            # for all variables yield the information to build a netcdf variable
-            yield NetCDFVariable(short_name=field_value['short_name'],
-                                 data=data,
-                                 dimensions=['point'],
-                                 fill_value=fill_value,
-                                 attributes=attributes
-                                 )
+            if field_name == "Lat" or field_name == "Long":
+                print(field_name)
+                yield NetCDFVariable(short_name=field_value['standard_name'],
+                                     data=data,
+                                     dimensions=['point'],
+                                     fill_value=fill_value,
+                                     attributes=attributes
+                                     )
+            else:
+                print(field_name)
+                # for all variables yield the information to build a netcdf variable
+                yield NetCDFVariable(short_name=field_value['short_name'],
+                                     data=data,
+                                     dimensions=['point'],
+                                     fill_value=fill_value,
+                                     attributes=attributes
+                                     )
 
 def main():
 

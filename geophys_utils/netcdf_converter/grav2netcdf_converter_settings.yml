@@ -1,5 +1,5 @@
 field_names :
-  Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int16', 'fill_value': '-99'}
+  Obsno: {short_name: 'Obsno', long_name: 'Observation Number', database_field_name: 'obsno', dtype: 'int32', 'fill_value': '-99'}
   Lat: {'standard_name': 'latitude', 'long_name': 'Latitude', 'database_field_name': 'dlat', 'dtype': 'float32', 'units': 'degrees_north', 'fill_value': '-99999.9', 'axis':'Y'}
   Long: {'standard_name': 'longitude', 'long_name': 'Longitude', 'database_field_name': 'dlong', 'dtype': 'float32', 'units': 'degrees_east', 'fill_value': '-99999.9', 'axis':'X'}
   Stattype: {'short_name': 'Stattype', 'long_name': 'Station Type', 'database_field_name': 'STATIONTYPE', 'dtype': 'int8', 'lookup_table': 'STATIONTYPES', 'convert_keys_and_data_to_int8': 'True', 'fill_value': '-99'}
@@ -21,5 +21,5 @@ field_names :
   Tcerr: {'short_name': 'Tcerr', 'long_name': 'TC Error', 'database_field_name': 'TCERR', 'dtype': 'float32', 'units': 'um/s^2', 'fill_value': '-99999.9'}
   Gridflag:  {'short_name': 'Gridflag', 'long_name': 'Grid Flag', 'database_field_name': 'GRIDFLAG', 'dtype': 'int8', 'lookup_table': 'GRIDFLAGS', 'fill_value': '-99'}
   Reliab: {'short_name': 'Reliab', 'long_name': 'Estimation of Station Reliability', 'database_field_name': 'reliab', 'dtype': 'int8', 'lookup_table': 'RELIABILITY', 'fill_value': '-99'}
-  Freeair: {'short_name': 'Freeair', 'long_name': 'Free Air Anomaly', 'database_field_name': 'gravity.GRAV_FA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt)', 'dtype': 'float32', 'units': 'um/s^-2', 'fill_value': '-99999.9'} # TODO uom?
-  Bouguer: {'short_name': 'Bouguer', 'long_name': 'Bouguer Anomaly', 'database_field_name': 'gravity.grav_BA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt, o1.gndelevtype, o1.gndelev, o1.nvalue)', 'dtype': 'float32', 'units': 'um/s^-2', 'fill_value': '-99999.9'}
+  Freeair: {'short_name': 'Freeair', 'long_name': 'Free Air Anomaly', 'database_field_name': 'gravity.GRAV_FA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt)', 'dtype': 'float32', 'units': 'um/s^2', 'fill_value': '-99999.9'} # TODO uom?
+  Bouguer: {'short_name': 'Bouguer', 'long_name': 'Bouguer Anomaly', 'database_field_name': 'gravity.grav_BA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt, o1.gndelevtype, o1.gndelev, o1.nvalue)', 'dtype': 'float32', 'units': 'um/s^2', 'fill_value': '-99999.9'}
