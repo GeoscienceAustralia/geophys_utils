@@ -190,8 +190,6 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
         formatted_sql = self.sql_strings_dict_from_yaml['get_survey_metadata'].format(self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
-        print(formatted_sql)
-        print(query_result)
         field_names = [field_desc[0] for field_desc in query_result.description]
         survey_row = next(query_result)
 
@@ -221,6 +219,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
 
         metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
+                         'survey_id': self.survey_id,
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
                         ' geophysics, geoscientificInformation'.format(self.survey_id, self.survey_metadata['COUNTRYID'], self.survey_metadata['STATEGROUP']),
@@ -412,7 +411,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
             """
             # values to parse into NetCDFVariable attributes list. Once passed they become a netcdf variable attribute.
             # lookup_table is later converted to comments.
-            list_of_possible_value = ['long_name', 'standard_name' 'units', 'dtype', 'lookup_table', 'dem', 'datum']
+            list_of_possible_value = ['long_name', 'standard_name', 'units', 'dtype', 'lookup_table', 'dem', 'datum']
 
             logger.debug('-----------------')
             logger.debug("Field Name: " + str(field_name))
@@ -422,7 +421,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
             for value in list_of_possible_value:
                 logger.debug("Value in list_of_possible_value: " + str(value))
-
+                print("UNITS?" + str(value))
                 # if the field value is in the list of accepted values then add to attributes dict
                 if field_value.get(value):
                     logger.debug("Processing: " + str(value))
@@ -457,8 +456,11 @@ class Grav2NetCDFConverter(NetCDFConverter):
 
                     # for all other values, simply add them to attributes_dict
                     else:
+                        print("LOOK HERE")
+                        print(value)
+                        print(field_value[value])
                         attributes_dict[value] = field_value[value]
-
+                        print(attributes_dict[value])
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
