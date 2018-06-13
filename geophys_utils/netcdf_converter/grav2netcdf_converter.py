@@ -27,7 +27,7 @@ Created on 28Mar.2018
 from collections import OrderedDict
 import numpy as np
 import cx_Oracle
-from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
+from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 import sys
 import re
 from datetime import datetime
@@ -50,7 +50,7 @@ console_handler.setFormatter(logger_formatter)
 logger.addHandler(console_handler)
 
 
-class Grav2NetCDFConverter(NetCDFConverter):
+class Grav2NetCDFConverter(ToNetCDFConverter):
     '''
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
@@ -171,7 +171,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
         N.B: Make sure this base class constructor is called from the subclass constructor
         """
 
-        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+        ToNetCDFConverter.__init__(self, nc_out_path, netcdf_format)
 
         self.cursor = con.cursor()
         self.survey_id = survey_id
@@ -268,10 +268,10 @@ class Grav2NetCDFConverter(NetCDFConverter):
                 lookup_dict = self.get_keys_and_values_table(field_value['lookup_table'])
                 new_dimension_name = str(field_value.get('short_name')) + "_lookup_table"
                 dimensions[new_dimension_name] = len(lookup_dict)
-               # print(dimensions[new_dimension_name])
+                # print(dimensions[new_dimension_name])
             else:
                 pass
-       # print(dimensions['point'])
+        # print(dimensions['point'])
         return dimensions
 
     def variable_generator(self):
@@ -450,7 +450,7 @@ class Grav2NetCDFConverter(NetCDFConverter):
                             attributes_dict[value] = self.get_survey_wide_value_from_obs_table(field_value.get(value))
                             # if None is returned then remove the attribute
                             if attributes_dict[value][0] is None:
-                               attributes_dict.pop(value)
+                                attributes_dict.pop(value)
                             else:
                                 pass
 
@@ -617,7 +617,7 @@ def main():
             # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
             #     print(data)
             del g2n
-           # except Exception as e:
+            # except Exception as e:
 
 
 
