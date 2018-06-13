@@ -23,10 +23,10 @@ Created on 28Mar.2018
 @author: Alex Ip
 '''
 from collections import OrderedDict
-from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
+from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 import numpy as np
 
-class CSV2NetCDFConverter(NetCDFConverter):
+class CSV2NetCDFConverter(ToNetCDFConverter):
     '''
     CSV2NetCDFConverter concrete class for converting CSV data to netCDF
     '''
@@ -36,7 +36,7 @@ class CSV2NetCDFConverter(NetCDFConverter):
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
         '''
-        NetCDFConverter.__init__(self, nc_out_path, netcdf_format)
+        ToNetCDFConverter.__init__(self, nc_out_path, netcdf_format)
         
         self.csv_path = csv_path
         

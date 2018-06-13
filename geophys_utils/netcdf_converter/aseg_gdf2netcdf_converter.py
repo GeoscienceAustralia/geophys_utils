@@ -35,7 +35,7 @@ import tempfile
 import netCDF4
 import logging
 
-from geophys_utils.netcdf_converter import NetCDFConverter, NetCDFVariable
+from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ POINT_LIMIT = 0
 # Number of rows per chunk in temporary netCDF cache file
 CHUNK_ROWS = 8192
 
-class ASEGGDF2NetCDFConverter(NetCDFConverter):
+class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
     ASEGGDF2NetCDFConverter concrete class for converting ASEG-GDF data to netCDF
     '''
@@ -327,7 +327,7 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
             
         logger.debug('self.settings: {}'.format(pformat(self.settings)))
 
-        NetCDFConverter.__init__(self, 
+        ToNetCDFConverter.__init__(self, 
                                  nc_out_path, 
                                  netcdf_format, 
                                  default_chunk_size=default_chunk_size, 
@@ -361,7 +361,7 @@ class ASEGGDF2NetCDFConverter(NetCDFConverter):
         except:
             pass
         
-        NetCDFConverter.__del__(self)
+        ToNetCDFConverter.__del__(self)
 
     
     def get_raw_data(self, short_name):
@@ -643,12 +643,12 @@ def main():
     
     # Setup Logging
     log_level = logging.DEBUG if args.debug else logging.INFO
-    base_logger = logging.getLogger('geophys_utils.netcdf_converter') # Logger for base class NetCDFConverter
+    base_logger = logging.getLogger('geophys_utils.netcdf_converter') # Logger for base class ToNetCDFConverter
     base_logger.setLevel(level=log_level)
     logger.setLevel(level=log_level)
 
     assert 1 <= len(args.positional_args) <= 2, 'Invalid number of positional arguments.\n\
-Usage: {} <options> <dat_in_path> [<nc_out_path>]'.format(sys.argv[0])
+Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basename(sys.argv[0]))
 
     dat_in_path = args.positional_args[0] # 'C:\\Temp\\Groundwater Data\\ord_bonaparte_nbc_main_aquifer_clipped.dat'
 
