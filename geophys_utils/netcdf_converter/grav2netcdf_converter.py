@@ -590,34 +590,33 @@ def main():
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
+        logger.debug("Processing for survey: " + str(survey))
+        #try:
+        g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
 
-            logger.debug("Processing for survey: " + str(survey))
-            #try:
-            g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
+        g2n.convert2netcdf()
+        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+        logger.info('-------------------------------------------------------------------')
+        logger.info('Global attributes:')
+        logger.info('-------------------------------------------------------------------')
+        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+            logger.info(str(key) + ": " + str(value))
+        logger.info('-'*30)
+        logger.info('Dimensions:')
+        logger.info('-'*30)
+        logger.info(g2n.nc_output_dataset.dimensions)
+        logger.info('-'*30)
+        logger.info('Variables:')
+        logger.info('-'*30)
+        logger.info(g2n.nc_output_dataset.variables)
 
-            g2n.convert2netcdf()
-            logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-            logger.info('-------------------------------------------------------------------')
-            logger.info('Global attributes:')
-            logger.info('-------------------------------------------------------------------')
-            for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
-                logger.info(str(key) + ": " + str(value))
-            logger.info('-'*30)
-            logger.info('Dimensions:')
-            logger.info('-'*30)
-            logger.info(g2n.nc_output_dataset.dimensions)
-            logger.info('-'*30)
-            logger.info('Variables:')
-            logger.info('-'*30)
-            logger.info(g2n.nc_output_dataset.variables)
-
-            #print(g2n.nc_output_dataset.file_format)
-            #print(g2n.nc_output_dataset.variables[''])
-            #print(g2n.nc_output_dataset.variables)
-            # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
-            #     print(data)
-            del g2n
-            # except Exception as e:
+        #print(g2n.nc_output_dataset.file_format)
+        #print(g2n.nc_output_dataset.variables[''])
+        #print(g2n.nc_output_dataset.variables)
+        # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
+        #     print(data)
+        del g2n
+        # except Exception as e:
 
 
 

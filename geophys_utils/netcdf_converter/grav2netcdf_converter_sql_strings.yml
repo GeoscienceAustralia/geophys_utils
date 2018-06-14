@@ -24,6 +24,7 @@ sql_strings_dict:
     and o1.ellipsoidmeterhgt is not null
     and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
     and o2.obsno is null)
+    -- and gs.surveyid = '201780' -- *** Use this for testing only ***
     order by gs.SURVEYID
   get_survey_metadata:
     >
@@ -80,6 +81,7 @@ sql_strings_dict:
         and o1.ellipsoidmeterhgt is not null
         and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
         and o2.obsno is null
+      order by o1.obsno
   get_field_description:
     >
     SELECT COMMENTS
