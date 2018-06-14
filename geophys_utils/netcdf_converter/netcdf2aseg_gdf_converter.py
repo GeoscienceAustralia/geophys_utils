@@ -80,15 +80,17 @@ class NetCDF2ASEGGDFConverter(object):
             elif len(variable.shape) == 2: # 2D variable
                 columns = variable.shape[1]
                 
+            dtype = str(variable.dtype)
+            
             integer_digits = ceil(log10(np.nanmax(variable[:]) + 1.0))
             #TODO: Find some efficient way of counting decimal places to replace hard-coded value
             fractional_digits = 4
             
-            if str(variable.dtype).startswith('int'):
+            if dtype.startswith('int'):
                 fmt = 'I{}'.format(integer_digits)
-            elif str(variable.dtype).startswith('float') and columns == 1:
+            elif dtype.startswith('float') and columns == 1:
                 fmt = 'F{}.{}'.format(integer_digits, fractional_digits)
-            elif str(variable.dtype).startswith('float') and columns > 1:
+            elif dtype.startswith('float') and columns > 1:
                 fmt = '{}E{}.{}'.format(columns, integer_digits, fractional_digits)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
