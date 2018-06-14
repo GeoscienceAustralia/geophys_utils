@@ -5,30 +5,26 @@
 #TODO: Implement case insensitivity for short_name
 field_definitions: 
   # 1D Variables
-  DOI: {short_name: depth_of_investigation, units: m}
-  DataResidual: {long_name: Data residual, short_name: data_residual}
-  Residual2: {long_name: Data residual 2, short_name: data_residual2}
-  Residual3: {long_name: Data residual 3, short_name: data_residual3}
-  StdDev_TxHeightInverted: {long_name: Uncertainty of the inverted height
+  doi: {short_name: depth_of_investigation, units: m}
+  dataresidual: {long_name: Data residual, short_name: data_residual}
+  residual2: {long_name: Data residual 2, short_name: data_residual2}
+  residual3: {long_name: Data residual 3, short_name: data_residual3}
+  stddev_TxHeightInverted: {long_name: Uncertainty of the inverted height
       of the TXRX frame, short_name: stddev_tx_height_inverted, units: m}
-  TotalResidual: {long_name: Total Residual, short_name: total_residual}
-  TxHeightInverted: {long_name: Inverted height of the TXRX frame, short_name: tx_height_inverted,
+  totalresidual: {long_name: Total Residual, short_name: total_residual}
+  txheightinverted: {long_name: Inverted height of the TXRX frame, short_name: tx_height_inverted,
     units: m}
-  TxHeightMeasured: {long_name: Measured height of the TXRX frame, short_name: tx_height_measured,
+  txheightmeasured: {long_name: Measured height of the TXRX frame, short_name: tx_height_measured,
     units: m}
   easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
-  Easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
   elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
     units: m}
   line: {long_name: Line number, short_name: line}
-  Line: {long_name: Line number, short_name: line}
   flight: {long_name: Flight number, short_name: flight}
-  Flight: {long_name: Flight number, short_name: flight}
   nlayers: {long_name: layers, short_name: layer}
   ndatlm: {long_name: low moment gates, short_name: low_moment_gate}
   ndathm: {long_name: high moment gates, short_name: high_moment_gate}
   northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
-  Northing: {long_name: UTM Northing (y) ordinate, short_name: northing, units: m}
   sequence: {long_name: Inversion sequence number, short_name: sequence}
   # 2D Variables - must have dimensions attribute defined 
   # dimensions attribute must either be a single dimension name or list of part dimension names
@@ -46,14 +42,14 @@ field_definitions:
   data_relative_uncertainty: {long_name: Relative uncertainty of data value, short_name: data_relative_uncertainty, 
     dimensions: [low_moment_gate, high_moment_gate]}
   thickness: {dimensions: layer}
-  EMSystem_1_XS: {dimensions: secondary_field_window}
-  EMSystem_1_ZS: {dimensions: secondary_field_window}
-  EMX_NonHPRG: {dimensions: emx_window}
-  EMX_HPRG: {dimensions: emx_window}
-  EMZ_NonHPRG: {dimensions: emx_window}
-  EMZ_HPRG: {dimensions: emx_window} 
-  COND_XZ: {dimensions: layer}
-  COND_XZ_DEPTH: {dimensions: layer}
+  emsystem_1_xs: {dimensions: secondary_field_window}
+  emsystem_1_zs: {dimensions: secondary_field_window}
+  emx_nonhprg: {dimensions: emx_window}
+  emx_hprg: {dimensions: emx_window}
+  emz_nonhprg: {dimensions: emx_window}
+  emz_hprg: {dimensions: emx_window} 
+  cond_xz: {dimensions: layer}
+  cond_xz_depth: {dimensions: layer}
   
 # String containing comma-separated list of keywords
 keywords: geophysics, airborne, AEM, conductivity 

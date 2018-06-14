@@ -192,7 +192,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     # Column definition
                     if key_value_pairs.get('RT') == '' and (positional_value_list 
                                                             and positional_value_list[0] != 'END DEFN'): 
-                        short_name = positional_value_list[0]
+                        short_name = positional_value_list[0].lower()
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
                         units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
                         long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
