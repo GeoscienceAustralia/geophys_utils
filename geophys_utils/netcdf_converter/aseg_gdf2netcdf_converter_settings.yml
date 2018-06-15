@@ -2,7 +2,6 @@
 
 # Field definition overrides for definitions read from .dfn file
 # N.B: overriding short_name will effectively rename field for subsequent use
-#TODO: Implement case insensitivity for short_name
 field_definitions: 
   # 1D Variables
   doi: {short_name: depth_of_investigation, units: m}

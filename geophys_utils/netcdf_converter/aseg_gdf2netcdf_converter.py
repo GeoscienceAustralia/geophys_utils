@@ -197,10 +197,47 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
                         long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
                         fill_value = key_value_pairs.get('NULL')
-                
+                        
+                        # Parse format to determine columns, data type and numeric format
+                        dtype = 'float32' # Default data type
+                        columns = 1 # Default columns
+                        if fmt:
+                            match = re.match('(\d+)*(\w)(\d+)\.*(\d+)*', fmt)
+                            if match:
+                                columns = match.group(1) or 1
+                                dtype_code = match.group(2)
+                                integer_digits = int(match.group(3))
+                                fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
+                                
+                                # Determine type and size for required significant figures
+                                # Integer type - N.B: Only signed types available
+                                if dtype_code.upper() == 'I':
+                                    if integer_digits < 3: # Short enough for a byte
+                                        dtype = 'int8'
+                                    elif 3 <= integer_digits < 5: # Short enough for a 16-bit integer
+                                        dtype = 'int16'
+                                    elif 5 <= integer_digits < 11: # Short enough for a 32-bit integer
+                                        dtype = 'int32'
+                                    elif 11 <= integer_digits <= 19: # Short enough for a 64-bit integer
+                                        dtype = 'int64'
+                                    else:
+                                        raise Exception('Invalid integer length of {}'.format(integer_digits))     
+                                
+                                # Floating point type - use approximate sig. figs. to determine length
+                                if dtype_code.upper() in ['F', 'E'] : 
+                                    significant_figures = integer_digits + fractional_digits
+                                    if significant_figures < 7: # Short enough for a 32-bit floating-point
+                                        dtype = 'float32'
+                                    elif 7 <= significant_figures <= 20: # Short enough for a 64-bit floating-point
+                                        dtype = 'float64'
+                                    else:
+                                        raise Exception('Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits))                                    
+                                
                         field_dict = {'short_name': short_name,
                                       'format': fmt,
                                       'long_name': long_name,
+                                      'columns': columns,
+                                      'dtype': dtype,
                                       }
                         if units:
                             field_dict['units'] = units
@@ -274,7 +311,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             logger.debug('Variable {} has dimension {} of size {}'.format(field_definition['short_name'],
                                                                                       default_dimension_names, 
                                                                                       field_dimension_size))
-                        if type(default_dimension_names) == list: # Multiple dimensions specified
+                        
+                        # Use dimension size values read from data file to create multiple part-arrays from a single composite
+                        # N.B: This could be considered to be encouraging bad behaviour - the .dfn file should 
+                        # ideally be re-written
+                        if type(default_dimension_names) == list: # Multiple part-dimensions specified
                             assert set(default_dimension_names) <= set(self.dimensions.keys()), 'Dimensions {} not all defined in {}'.format(default_dimension_names, self.dimensions.keys())
                             assert sum([self.dimensions[key] for key in default_dimension_names]) == field_dimension_size, 'Incorrect dimension sizes'
                             logger.debug('Removing original composite field definition')
@@ -290,7 +331,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
                                 
                                 field_definition_index += 1
-                                logger.debug('Inserting new field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
+                                logger.debug('Inserting new part-dimension field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
                                 self.field_definitions.insert(field_definition_index, new_field_definition)
                                 column_offset += self.dimensions[part_dimension_name] # Offset next column 
                             
@@ -517,12 +558,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             if units:
                 field_attributes['units'] = units
                 
-            #TODO: Use field widths from definition file to define size of int & float data types
-            fmt = field_definition.get('format')
-            if fmt[0] =='I': # Integer field
-                dtype = 'int32' 
-            else:
-                dtype ='float32'
+            dtype = field_definition.get('dtype')
                 
             fill_value = field_definition.get('fill_value')
                 
