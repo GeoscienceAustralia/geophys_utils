@@ -199,15 +199,20 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         """
         Helper function to retrieve a survey wide value from the observations table. The returning value is tested
         to be the only possible value (or null) within that survey.
-        :param field: The target column int he observations table.
+        :param field: The target column in the observations table.
         :return: The first value of the specified field of the observations table.
         """
         formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field, "null", self.survey_id)
         query_result = self.cursor.execute(formatted_sql)
-        value = next(query_result)
+        value = None
 
         for result in query_result:
-            assert result == value or result[0] is None
+            logger.debug('value: {}, result: {}'.format(value, result))
+            
+            if value is None:
+                value = result[0]
+            
+            assert value is None or result[0] == value or result[0] is None, 'Variant value found in survey-wide column {}'.format(field)
         return value
 
     def get_global_attributes(self):
