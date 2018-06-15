@@ -202,7 +202,9 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         :param field: The target column in the observations table.
         :return: The first value of the specified field of the observations table.
         """
-        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field, "null", self.survey_id)
+        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field, "null", self.survey_id)
+        formatted_sql = formatted_sql.replace('select', 'select distinct', 1) # Only retrieve distinct results
+        formatted_sql = re.sub('order by .*$', '', formatted_sql) # Don't bother sorting
         query_result = self.cursor.execute(formatted_sql)
         value = None
 
@@ -295,18 +297,23 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             # the sql format will be slightly different for freeiar and bouguer. Instead of simply o1.[variable],
             # they will instead insert a function with arguements. Thus the o1 isn't needed and an empty string is
             # instead passed to the sql string.
-            if field_name == 'Freeair' or field_name == 'Bouguer':
-                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('', field_name_dict['database_field_name'],
+            if field_name in ['Freeair', 'Bouguer']:
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
 
             else:
-                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field_name_dict['database_field_name'],
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
 
 
-            self.cursor.execute(formatted_sql)
+            try:
+                self.cursor.execute(formatted_sql)
+            except:
+                logger.debug(formatted_sql)
+                raise
+            
             variable_list = []
             for i in self.cursor:
                 variable_list.append(
