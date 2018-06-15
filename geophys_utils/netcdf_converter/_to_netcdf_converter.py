@@ -68,7 +68,7 @@ class NetCDFVariable(object):
             Note that custom chunk sizes per dimension can be specified using chunksizes value in variable_parameters
         '''
         self.short_name = short_name # String used for variable name
-        self.data = data # Numpy array
+        self.data = data # Numpy array or None for not set
         self.dimensions = dimensions # List of <dimension_name> strings for array, or None or empty list for scalar
         self.attributes = attributes # dict of variable attribute <key>:<value> pairs 
         self.variable_parameters = dict(variable_parameters or NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS)
@@ -112,7 +112,7 @@ class NetCDFVariable(object):
                                     for dimension_name in self.dimensions
                                     ])
             
-            assert self.data.shape == expected_shape, 'Invalid array shape for specified dimension(s). Expected {}, got {}.'.format(expected_shape,
+            assert (self.data is None) or (self.data.shape == expected_shape), 'Invalid array shape for specified dimension(s). Expected {}, got {}.'.format(expected_shape,
                                                                                                                                     self.data.shape
                                                                                                                                     )
                                              
@@ -135,7 +135,8 @@ class NetCDFVariable(object):
                                                            **variable_parameters
                                                            )
         # Set data values
-        output_variable[:] = self.data
+        if self.data is not None:
+            output_variable[:] = self.data
         
         # Set variable attributes
         output_variable.setncatts(self.attributes)
