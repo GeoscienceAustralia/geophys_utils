@@ -199,15 +199,22 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         """
         Helper function to retrieve a survey wide value from the observations table. The returning value is tested
         to be the only possible value (or null) within that survey.
-        :param field: The target column int he observations table.
+        :param field: The target column in the observations table.
         :return: The first value of the specified field of the observations table.
         """
-        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field, "null", self.survey_id)
+        formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field, "null", self.survey_id)
+        formatted_sql = formatted_sql.replace('select', 'select distinct', 1) # Only retrieve distinct results
+        formatted_sql = re.sub('order by .*$', '', formatted_sql) # Don't bother sorting
         query_result = self.cursor.execute(formatted_sql)
-        value = next(query_result)
+        value = None
 
         for result in query_result:
-            assert result == value or result[0] is None
+            logger.debug('value: {}, result: {}'.format(value, result))
+            
+            if value is None:
+                value = result[0]
+            
+            assert value is None or result[0] == value or result[0] is None, 'Variant value found in survey-wide column {}'.format(field)
         return value
 
     def get_global_attributes(self):
@@ -290,18 +297,23 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             # the sql format will be slightly different for freeiar and bouguer. Instead of simply o1.[variable],
             # they will instead insert a function with arguements. Thus the o1 isn't needed and an empty string is
             # instead passed to the sql string.
-            if field_name == 'Freeair' or field_name == 'Bouguer':
-                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('', field_name_dict['database_field_name'],
+            if field_name in ['Freeair', 'Bouguer']:
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format(field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
 
             else:
-                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.', field_name_dict['database_field_name'],
+                formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field_name_dict['database_field_name'],
                                                                                field_name_dict['fill_value'],
                                                                                self.survey_id)
 
 
-            self.cursor.execute(formatted_sql)
+            try:
+                self.cursor.execute(formatted_sql)
+            except:
+                logger.debug(formatted_sql)
+                raise
+            
             variable_list = []
             for i in self.cursor:
                 variable_list.append(
@@ -590,34 +602,33 @@ def main():
 
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
+        logger.debug("Processing for survey: " + str(survey))
+        #try:
+        g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
 
-            logger.debug("Processing for survey: " + str(survey))
-            #try:
-            g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
+        g2n.convert2netcdf()
+        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+        logger.info('-------------------------------------------------------------------')
+        logger.info('Global attributes:')
+        logger.info('-------------------------------------------------------------------')
+        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+            logger.info(str(key) + ": " + str(value))
+        logger.info('-'*30)
+        logger.info('Dimensions:')
+        logger.info('-'*30)
+        logger.info(g2n.nc_output_dataset.dimensions)
+        logger.info('-'*30)
+        logger.info('Variables:')
+        logger.info('-'*30)
+        logger.info(g2n.nc_output_dataset.variables)
 
-            g2n.convert2netcdf()
-            logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-            logger.info('-------------------------------------------------------------------')
-            logger.info('Global attributes:')
-            logger.info('-------------------------------------------------------------------')
-            for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
-                logger.info(str(key) + ": " + str(value))
-            logger.info('-'*30)
-            logger.info('Dimensions:')
-            logger.info('-'*30)
-            logger.info(g2n.nc_output_dataset.dimensions)
-            logger.info('-'*30)
-            logger.info('Variables:')
-            logger.info('-'*30)
-            logger.info(g2n.nc_output_dataset.variables)
-
-            #print(g2n.nc_output_dataset.file_format)
-            #print(g2n.nc_output_dataset.variables[''])
-            #print(g2n.nc_output_dataset.variables)
-            # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
-            #     print(data)
-            del g2n
-            # except Exception as e:
+        #print(g2n.nc_output_dataset.file_format)
+        #print(g2n.nc_output_dataset.variables[''])
+        #print(g2n.nc_output_dataset.variables)
+        # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
+        #     print(data)
+        del g2n
+        # except Exception as e:
 
 
 

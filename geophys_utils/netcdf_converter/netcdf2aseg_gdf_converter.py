@@ -16,6 +16,7 @@ import yaml
 import tempfile
 import netCDF4
 import logging
+from math import log10, ceil
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
@@ -27,8 +28,12 @@ class NetCDF2ASEGGDFConverter(object):
     '''
     NetCDF2ASEGGDFConverter class definition to convert netCDF file to ASEG-GDF format
     '''
+    # Maximum size of in-memory cache array (in bytes)
+    MAX_MEMORY_BYTES = 1073741824 # 1GB
+    
+    # Default effective chunk size for un-chunked variables.
     # Set to 0 for no chunking (i.e. complete read)
-    DEFAULT_READ_CHUNK_SIZE = 2048
+    DEFAULT_READ_CHUNK_SIZE = 1
     
     def __init__(self,
                  netcdf_in_path,
@@ -74,13 +79,27 @@ class NetCDF2ASEGGDFConverter(object):
                 columns = 1
             elif len(variable.shape) == 2: # 2D variable
                 columns = variable.shape[1]
+                
+            dtype = str(variable.dtype)
+            
+            integer_digits = ceil(log10(np.nanmax(variable[:]) + 1.0))
+            #TODO: Find some efficient way of counting decimal places to replace hard-coded value
+            fractional_digits = 4
+            
+            if dtype.startswith('int'):
+                fmt = 'I{}'.format(integer_digits)
+            elif dtype.startswith('float') and columns == 1:
+                fmt = 'F{}.{}'.format(integer_digits, fractional_digits)
+            elif dtype.startswith('float') and columns > 1:
+                fmt = '{}E{}.{}'.format(columns, integer_digits, fractional_digits)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'dtype': str(variable.dtype),
                                 'chunk_size': chunk_size,
-                                'columns': columns
+                                'columns': columns,
+                                'fmt': fmt
                                 }
-                                
+            
             self.field_definitions[variable_name] = field_definition
 
         logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
@@ -93,8 +112,41 @@ class NetCDF2ASEGGDFConverter(object):
             '''
             Helper function to output .dfn file
             '''
+            # Create, write and close .dat file
+            dfn_file = open(self.dfn_out_path, 'w')
+            dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A76\n') # TODO: Check this first line 
+            
+            defn = 0
             for field_name, field_definition in self.field_definitions.items():
-                pass
+                defn += 1
+                
+                variable = self.nc_dataset.variables[field_name]
+                #print(field_name, variable.dtype)
+                
+                line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
+                                                                              short_name=field_name,
+                                                                              fmt=field_definition['fmt']
+                                                                              )
+                
+                variable_attributes = variable.__dict__
+                
+                optional_attribute_list = []
+                
+                units = variable_attributes.get('units')
+                if units:
+                    optional_attribute_list.append('UNITS = {units}'.format(units=units))
+
+                long_name = variable_attributes.get('long_name')
+                if long_name:
+                    optional_attribute_list.append(long_name)
+                    
+                if optional_attribute_list:
+                    line += ' : ' + ' , '.join(optional_attribute_list) 
+
+                dfn_file.write(line + '\n')
+                
+            dfn_file.close()
+            logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
         
         
         def write_dat_file():
@@ -133,29 +185,33 @@ class NetCDF2ASEGGDFConverter(object):
                                      ]
                                     )
                 logger.debug('total_columns: {}'.format(total_columns))
-                
+                                
                 max_chunk_size = max([field_definition['chunk_size']
                                       for field_definition in self.field_definitions.values()
                                       ]
                                      )
-                logger.debug('max_chunk_size: {}'.format(max_chunk_size))
                 
-                memory_cache_array = np.zeros(shape=(max_chunk_size, total_columns), dtype='float64')
+                # Calculate maximum number of rows which can be read into memory with float64 cells
+                read_chunk_size = (NetCDF2ASEGGDFConverter.MAX_MEMORY_BYTES // total_columns // 8 // max_chunk_size) * max_chunk_size
+                
+                logger.debug('read_chunk_size: {}'.format(read_chunk_size))
+                
+                memory_cache_array = np.zeros(shape=(read_chunk_size, total_columns), dtype='float64')
                 
                 # Process all complete chunks
-                for chunk_index in range(point_count // max_chunk_size):
+                for chunk_index in range(point_count // read_chunk_size):
                     logger.debug('Reading chunk {} for rows {}-{}'.format(chunk_index+1,
-                                                                          chunk_index*max_chunk_size,
-                                                                          (chunk_index+1)*max_chunk_size-1)
+                                                                          chunk_index*read_chunk_size,
+                                                                          (chunk_index+1)*read_chunk_size-1)
                                                                           )
-                    for line in chunk_line_generator(chunk_index*max_chunk_size,
-                                                     (chunk_index+1)*max_chunk_size):
+                    for line in chunk_line_generator(chunk_index*read_chunk_size,
+                                                     (chunk_index+1)*read_chunk_size):
                         yield line
                         
                 # All complete chunks processed - process any remaining rows
-                remaining_points = point_count % max_chunk_size
+                remaining_points = point_count % read_chunk_size
                 if remaining_points:
-                    logger.debug('Reading last, incomplete chunk with {} points'.format(remaining_points))
+                    logger.debug('Reading final chunk with {} points'.format(remaining_points))
                     for line in chunk_line_generator(point_count-remaining_points,
                                                      point_count):
                         yield line
@@ -167,6 +223,7 @@ class NetCDF2ASEGGDFConverter(object):
             for line in line_generator():
                 dat_file.write(line + '\n')
             dat_file.close()
+            logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
                 
         
         

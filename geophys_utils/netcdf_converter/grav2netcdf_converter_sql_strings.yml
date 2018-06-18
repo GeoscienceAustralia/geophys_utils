@@ -24,6 +24,7 @@ sql_strings_dict:
     and o1.ellipsoidmeterhgt is not null
     and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
     and o2.obsno is null)
+    -- and gs.surveyid = '201780' -- *** Use this for testing only ***
     order by gs.SURVEYID
   get_survey_metadata:
     >
@@ -58,7 +59,7 @@ sql_strings_dict:
     and o2.obsno is null)
   get_data:
     >
-    select NVL({0}{1}, {2}) from gravity.OBSERVATIONS o1
+    select NVL({0}, {1}) from gravity.OBSERVATIONS o1
     left join gravity.OBSERVATIONS o2
       on
       o1.surveyid = o2.surveyid
@@ -69,7 +70,7 @@ sql_strings_dict:
       and o1.access_code = o2.access_code
       and o1.status = o2.status
         where
-        o1.surveyid = {3}
+        o1.surveyid = {2}
         and o1.status = 'A'
         and o1.access_code = 'O'
         and o1.grav is not null
@@ -80,6 +81,7 @@ sql_strings_dict:
         and o1.ellipsoidmeterhgt is not null
         and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
         and o2.obsno is null
+      order by o1.obsno
   get_field_description:
     >
     SELECT COMMENTS
