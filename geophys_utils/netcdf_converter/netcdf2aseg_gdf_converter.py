@@ -24,17 +24,27 @@ from geophys_utils import get_spatial_ref_from_wkt
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
+# Maximum size of in-memory cache array (in bytes)
+MAX_MEMORY_BYTES = 1073741824 # 1GB
+
+# Default effective chunk size for un-chunked variables.
+# Set to 0 for no chunking (i.e. complete read)
+DEFAULT_READ_CHUNK_SIZE = 1
+    
 class NetCDF2ASEGGDFConverter(object):
     '''
     NetCDF2ASEGGDFConverter class definition to convert netCDF file to ASEG-GDF format
     '''
-    # Maximum size of in-memory cache array (in bytes)
-    MAX_MEMORY_BYTES = 1073741824 # 1GB
-    
-    # Default effective chunk size for un-chunked variables.
-    # Set to 0 for no chunking (i.e. complete read)
-    DEFAULT_READ_CHUNK_SIZE = 1
-    
+    # Approximate number of significant figures for each datatype
+    SIG_FIGS = OrderedDict([('int8', 2),
+                            ('int16', 4),
+                            ('int32', 10),
+                            ('int64', 19),
+                            ('float32', 6),
+                            ('float64', 20)
+                            ]
+                           )
+
     def __init__(self,
                  netcdf_in_path,
                  dat_out_path=None,
@@ -71,9 +81,9 @@ class NetCDF2ASEGGDFConverter(object):
                 continue
             
             chunk_size = variable.chunking()[0]
-            # If variable is not chunked and NetCDF2ASEGGDFConverter.DEFAULT_READ_CHUNK_SIZE is defined
-            if NetCDF2ASEGGDFConverter.DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
-                chunk_size = min(NetCDF2ASEGGDFConverter.DEFAULT_READ_CHUNK_SIZE, variable.shape[0])
+            # If variable is not chunked and DEFAULT_READ_CHUNK_SIZE is defined
+            if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
+                chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0])
                 
             if len(variable.shape) == 1: # 1D variable
                 columns = 1
@@ -82,16 +92,22 @@ class NetCDF2ASEGGDFConverter(object):
                 
             dtype = str(variable.dtype)
             
+            sig_figs = NetCDF2ASEGGDFConverter.SIG_FIGS[dtype] # Look up approximate significant figures
             integer_digits = ceil(log10(np.nanmax(variable[:]) + 1.0))
-            #TODO: Find some efficient way of counting decimal places to replace hard-coded value
-            fractional_digits = 4
+            fractional_digits = sig_figs - integer_digits
             
             if dtype.startswith('int'):
                 fmt = 'I{}'.format(integer_digits)
-            elif dtype.startswith('float') and columns == 1:
+            elif dtype.startswith('float'):
                 fmt = 'F{}.{}'.format(integer_digits, fractional_digits)
-            elif dtype.startswith('float') and columns > 1:
-                fmt = '{}E{}.{}'.format(columns, integer_digits, fractional_digits)
+            #===================================================================
+            # elif dtype.startswith('float'):
+            #     fmt = 'E{}.{}'.format(integer_digits, fractional_digits)
+            #===================================================================
+            
+            # Pre-pend column count to start of fmt
+            if columns > 1:
+                fmt = '{}{}'.format(columns, fmt)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'dtype': str(variable.dtype),
@@ -192,7 +208,7 @@ class NetCDF2ASEGGDFConverter(object):
                                      )
                 
                 # Calculate maximum number of rows which can be read into memory with float64 cells
-                read_chunk_size = (NetCDF2ASEGGDFConverter.MAX_MEMORY_BYTES // total_columns // 8 // max_chunk_size) * max_chunk_size
+                read_chunk_size = (MAX_MEMORY_BYTES // total_columns // 8 // max_chunk_size) * max_chunk_size
                 
                 logger.debug('read_chunk_size: {}'.format(read_chunk_size))
                 

@@ -148,7 +148,8 @@ def main():
                        'Bouguer', 
                        utm_bbox=[630000,7980000,680000,8030000],
                        colour_scheme='gist_heat',
-                       point_size=50)
+                       point_size=50
+                       )
 
 if __name__ == '__main__':
     main()

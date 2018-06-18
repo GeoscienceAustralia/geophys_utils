@@ -45,7 +45,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 0
+POINT_LIMIT = 100000
 
 # Number of rows per chunk in temporary netCDF cache file
 CHUNK_ROWS = 8192
@@ -54,6 +54,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
     ASEGGDF2NetCDFConverter concrete class for converting ASEG-GDF data to netCDF
     '''
+    # Approximate number of significant figures for each datatype
+    SIG_FIGS = OrderedDict([('int8', 2),
+                            ('int16', 4),
+                            ('int32', 10),
+                            ('int64', 19),
+                            ('float32', 6),
+                            ('float64', 20)
+                            ]
+                           )
+
     def __init__(self, 
                  nc_out_path, 
                  aem_dat_path, 
@@ -76,6 +86,112 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         @param settings_path: Optional path for settings YAML file
         '''
 
+        def get_field_definitions():
+            '''
+            Function to read raw field definitions from .dfn file
+            Will set self.dimensions as an Ordereddict of dimension sizes keyed by dimension name
+            '''
+            def parse_dfn_file(dfn_path):
+                logger.info('Reading definitions file {}'.format(dfn_path))
+                field_definitions = []
+                crs=None
+                
+                dfn_file = open(dfn_path, 'r')
+                for line in dfn_file:
+                    key_value_pairs = {}
+                    positional_value_list = []
+                    for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]:
+                        for colon_split_string in [colon_split_string.strip() for colon_split_string in semicolon_split_string.split(':')]:
+                            for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]:
+                                definition = [equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
+                                if len(definition) == 2:
+                                    key_value_pairs[definition[0]] = definition[1]
+                                elif len(definition) == 1:
+                                    positional_value_list.append(definition[0])
+    
+                    #logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
+                
+                    # Column definition
+                    if key_value_pairs.get('RT') == '' and (positional_value_list 
+                                                            and positional_value_list[0] != 'END DEFN'): 
+                        short_name = positional_value_list[0].lower()
+                        fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
+                        units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
+                        long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
+                        fill_value = key_value_pairs.get('NULL')
+                        
+                        # Parse format to determine columns, data type and numeric format
+                        dtype = None # Unknown datatype
+                        columns = 1 # Default columns
+                        if fmt:
+                            match = re.match('(\d+)*(\w)(\d+)\.*(\d+)*', fmt)
+                            if match:
+                                columns = match.group(1) or 1
+                                dtype_code = match.group(2).upper()
+                                integer_digits = int(match.group(3))
+                                fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
+                                
+                                # Determine type and size for required significant figures
+                                # Integer type - N.B: Only signed types available
+                                if dtype_code == 'I':
+                                    assert not fractional_digits, 'Integer format cannot be defined with fractional digits'
+                                    for test_dtype, sig_figs in ASEGGDF2NetCDFConverter.SIG_FIGS.items():
+                                        if test_dtype.startswith('int') and sig_figs >= integer_digits:
+                                            dtype = test_dtype
+                                            break
+                                    assert dtype, 'Invalid integer length of {}'.format(integer_digits)     
+                                
+                                # Floating point type - use approximate sig. figs. to determine length
+                                elif dtype_code in ['D', 'E', 'F']: 
+                                    for test_dtype, sig_figs in ASEGGDF2NetCDFConverter.SIG_FIGS.items():
+                                        if test_dtype.startswith('float') and sig_figs >= integer_digits + fractional_digits:
+                                            dtype = test_dtype
+                                            break
+                                    assert dtype, 'Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits)                                    
+                                
+                        field_dict = {'short_name': short_name,
+                                      'format': fmt,
+                                      'long_name': long_name,
+                                      'columns': columns,
+                                      'dtype': dtype,
+                                      }
+                        if units:
+                            field_dict['units'] = units
+                        if fill_value is not None:
+                            field_dict['fill_value'] = fill_value
+                             
+                        field_definitions.append(field_dict)    
+                                    
+                    # Projection definition
+                    elif key_value_pairs.get('RT') == 'PROJ': 
+                        #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
+                         
+                        #TODO: Parse projection properly
+                        if (key_value_pairs.get('PROJNAME') == 'GDA94 / MGA zone 54'):
+                             
+                            # TODO: Remove this hard-coded hack
+                            wkt = 'EPSG:28354'
+                            crs = get_spatial_ref_from_wkt(wkt)
+                            break # Nothing more to do
+                
+                    if not crs: #TODO: Fix this hard-coded hack
+                        crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
+                
+                return field_definitions, crs
+            
+            self.field_definitions, self.crs = parse_dfn_file(dfn_path)
+            
+            # Read overriding field definition values from settings
+            if self.settings.get('field_definitions'):
+                for field_definition in self.field_definitions:
+                    overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
+                    if overriding_field_definition:
+                        field_definition.update(overriding_field_definition)
+            
+            logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
+            logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+
+        
         def read_data_file(): 
             '''
             Function to read data file into temporary netCDF cache
@@ -150,6 +266,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 
                 if self.point_count == self.point_count // 10000 * 10000:
                     logger.info('{} points read'.format(self.point_count))
+                    logger.debug('line: {}'.format(line))
                     
                 if POINT_LIMIT and self.point_count >= POINT_LIMIT:
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
@@ -164,116 +281,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             self.dimensions['point'] = self.point_count # All files will have a point dimension - declare this first
             
             
-        def get_field_definitions():
+        def modify_field_definitions():    
             '''
-            Function to read raw field definitions from .dfn file, and then massage them to manage 2D data properly
-            Will set self.dimensions as an Ordereddict of dimension sizes keyed by dimension name
+            Function to update field definitions and dimensions based on values read from data file
+            Assumes all dimension fields declared before 2D fields
             '''
-            def parse_dfn_file(dfn_path):
-                logger.info('Reading definitions file {}'.format(dfn_path))
-                field_definitions = []
-                crs=None
-                
-                dfn_file = open(dfn_path, 'r')
-                for line in dfn_file:
-                    key_value_pairs = {}
-                    positional_value_list = []
-                    for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]:
-                        for colon_split_string in [colon_split_string.strip() for colon_split_string in semicolon_split_string.split(':')]:
-                            for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]:
-                                definition = [equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
-                                if len(definition) == 2:
-                                    key_value_pairs[definition[0]] = definition[1]
-                                elif len(definition) == 1:
-                                    positional_value_list.append(definition[0])
-    
-                    logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
-                
-                    # Column definition
-                    if key_value_pairs.get('RT') == '' and (positional_value_list 
-                                                            and positional_value_list[0] != 'END DEFN'): 
-                        short_name = positional_value_list[0].lower()
-                        fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
-                        units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
-                        long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
-                        fill_value = key_value_pairs.get('NULL')
-                        
-                        # Parse format to determine columns, data type and numeric format
-                        dtype = 'float32' # Default data type
-                        columns = 1 # Default columns
-                        if fmt:
-                            match = re.match('(\d+)*(\w)(\d+)\.*(\d+)*', fmt)
-                            if match:
-                                columns = match.group(1) or 1
-                                dtype_code = match.group(2)
-                                integer_digits = int(match.group(3))
-                                fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
-                                
-                                # Determine type and size for required significant figures
-                                # Integer type - N.B: Only signed types available
-                                if dtype_code.upper() == 'I':
-                                    if integer_digits < 3: # Short enough for a byte
-                                        dtype = 'int8'
-                                    elif 3 <= integer_digits < 5: # Short enough for a 16-bit integer
-                                        dtype = 'int16'
-                                    elif 5 <= integer_digits < 11: # Short enough for a 32-bit integer
-                                        dtype = 'int32'
-                                    elif 11 <= integer_digits <= 19: # Short enough for a 64-bit integer
-                                        dtype = 'int64'
-                                    else:
-                                        raise Exception('Invalid integer length of {}'.format(integer_digits))     
-                                
-                                # Floating point type - use approximate sig. figs. to determine length
-                                if dtype_code.upper() in ['F', 'E'] : 
-                                    significant_figures = integer_digits + fractional_digits
-                                    if significant_figures < 7: # Short enough for a 32-bit floating-point
-                                        dtype = 'float32'
-                                    elif 7 <= significant_figures <= 20: # Short enough for a 64-bit floating-point
-                                        dtype = 'float64'
-                                    else:
-                                        raise Exception('Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits))                                    
-                                
-                        field_dict = {'short_name': short_name,
-                                      'format': fmt,
-                                      'long_name': long_name,
-                                      'columns': columns,
-                                      'dtype': dtype,
-                                      }
-                        if units:
-                            field_dict['units'] = units
-                        if fill_value is not None:
-                            field_dict['fill_value'] = fill_value
-                             
-                        field_definitions.append(field_dict)    
-                                    
-                    # Projection definition
-                    elif key_value_pairs.get('RT') == 'PROJ': 
-                        #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
-                         
-                        #TODO: Parse projection properly
-                        if (key_value_pairs.get('PROJNAME') == 'GDA94 / MGA zone 54'):
-                             
-                            # TODO: Remove this hard-coded hack
-                            wkt = 'EPSG:28354'
-                            crs = get_spatial_ref_from_wkt(wkt)
-                            break # Nothing more to do
-                
-                    if not crs: #TODO: Fix this hard-coded hack
-                        crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
-                
-                return field_definitions, crs
-            
-            self.field_definitions, self.crs = parse_dfn_file(dfn_path)
-            
-            # Read overriding field definition values from settings
-            if self.settings.get('field_definitions'):
-                for field_definition in self.field_definitions:
-                    overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
-                    if overriding_field_definition:
-                        field_definition.update(overriding_field_definition)
-            
-            # Update field definitions and dimensions based on values read from data file
-            # Assume all dimension fields declared before 2D fields      
             column_start_index = 0
             field_definition_index = -1
             while field_definition_index < len(self.field_definitions) - 1:
@@ -378,11 +390,14 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
         
+        # Parse .dfn file and apply overrides
+        get_field_definitions() 
+
         # Read data from self.dfn_path into temporary netCDF variable
         read_data_file()
         
         # Needs to be done after data file has been read in order to access dimension data in first row
-        get_field_definitions() 
+        modify_field_definitions()
         
                        
     def __del__(self):
