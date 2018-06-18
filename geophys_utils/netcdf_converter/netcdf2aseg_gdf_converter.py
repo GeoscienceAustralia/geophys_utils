@@ -113,7 +113,9 @@ class NetCDF2ASEGGDFConverter(object):
             field_definition = {'dtype': str(variable.dtype),
                                 'chunk_size': chunk_size,
                                 'columns': columns,
-                                'fmt': fmt
+                                'fmt': fmt,
+                                'integer_digits': integer_digits,
+                                'fractional_digits': fractional_digits
                                 }
             
             self.field_definitions[variable_name] = field_definition
