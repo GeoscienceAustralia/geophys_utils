@@ -27,6 +27,7 @@ logger.setLevel(logging.INFO) # Logging level for this module
 
 # Maximum size of in-memory cache array (in bytes)
 MAX_MEMORY_BYTES = 1073741824 # 1GB
+#MAX_MEMORY_BYTES = 8388608 # 8MB
 
 # Default effective chunk size for un-chunked variables.
 # Set to 0 for no chunking (i.e. complete read)
@@ -36,7 +37,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 0
+POINT_LIMIT = 10
 
 class NetCDF2ASEGGDFConverter(object):
     '''
@@ -82,7 +83,7 @@ class NetCDF2ASEGGDFConverter(object):
             if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            fmt, dtype, columns, integer_digits, fractional_digits = dtype2aseg_gdf_format(variable)
+            fmt, dtype, columns, integer_digits, fractional_digits, python_format = dtype2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'dtype': dtype,
@@ -90,7 +91,8 @@ class NetCDF2ASEGGDFConverter(object):
                                 'columns': columns,
                                 'fmt': fmt,
                                 'integer_digits': integer_digits,
-                                'fractional_digits': fractional_digits
+                                'fractional_digits': fractional_digits,
+                                'python_format': python_format
                                 }
             
             self.field_definitions[variable_name] = field_definition
@@ -149,7 +151,7 @@ class NetCDF2ASEGGDFConverter(object):
             def line_generator():
                 '''
                 Generator to yield all line strings across all point variables
-                '''
+                '''                    
                 def chunk_line_generator(start_row, end_row):
                     '''
                     Helper Generator to yield line strings for specified rows across all point variables
@@ -168,10 +170,21 @@ class NetCDF2ASEGGDFConverter(object):
                         column_start += field_definition['columns']
                          
                     for line_index in range(row_range):
-                        #TODO: Fix format - temporary implementation with comma-separated strings
-                        yield ','.join(['{}'.format(value) for value in memory_cache_array[line_index,:]]) 
+                        #yield ' '.join(['{}'.format(value) for value in memory_cache_array[line_index,:]]) 
+                        yield ' '.join([column_format_list[column_index].format(memory_cache_array[line_index, column_index]) 
+                                        for column_index in range(total_columns)
+                                        ]
+                                       ) + '\n'
+                        
+                        
                 
-                point_count = self.nc_dataset.dimensions['point'].size
+                # Define formats for individual columns
+                column_format_list = []
+                for field_definition in self.field_definitions.values():
+                    for _column_index in range(field_definition['columns']):
+                        column_format_list.append(field_definition['python_format'])
+                    
+                total_points = self.nc_dataset.dimensions['point'].size
                 
                 total_columns = sum([field_definition['columns']
                                      for field_definition in self.field_definitions.values()
@@ -192,29 +205,41 @@ class NetCDF2ASEGGDFConverter(object):
                 memory_cache_array = np.zeros(shape=(read_chunk_size, total_columns), dtype='float64')
                 
                 # Process all complete chunks
-                for chunk_index in range(point_count // read_chunk_size):
+                point_count = 0
+                for chunk_index in range(total_points // read_chunk_size):
                     logger.debug('Reading chunk {} for rows {}-{}'.format(chunk_index+1,
                                                                           chunk_index*read_chunk_size,
                                                                           (chunk_index+1)*read_chunk_size-1)
                                                                           )
                     for line in chunk_line_generator(chunk_index*read_chunk_size,
                                                      (chunk_index+1)*read_chunk_size):
+                        point_count += 1
                         yield line
                         
+                        if POINT_LIMIT and (point_count >= POINT_LIMIT):
+                            break
+                        
+                    if POINT_LIMIT and (point_count >= POINT_LIMIT):
+                        break
+                    
                 # All complete chunks processed - process any remaining rows
-                remaining_points = point_count % read_chunk_size
-                if remaining_points:
+                remaining_points = total_points % read_chunk_size
+                if remaining_points and (not POINT_LIMIT or (point_count < POINT_LIMIT)):
                     logger.debug('Reading final chunk with {} points'.format(remaining_points))
-                    for line in chunk_line_generator(point_count-remaining_points,
-                                                     point_count):
+                    for line in chunk_line_generator(total_points-remaining_points,
+                                                     total_points):
+                        point_count += 1
                         yield line
+                        
+                        if POINT_LIMIT and (point_count >= POINT_LIMIT):
+                            break
                              
-                logger.info('{} lines output'.format(self.nc_dataset.dimensions['point'].size))
+                logger.info('{} lines output'.format(point_count))
         
             # Create, write and close .dat file
-            dat_file = open(self.dat_out_path, 'w')
+            dat_file = open(self.dat_out_path, mode='w')
             for line in line_generator():
-                dat_file.write(line + '\n')
+                dat_file.write(line)
             dat_file.close()
             logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
                 

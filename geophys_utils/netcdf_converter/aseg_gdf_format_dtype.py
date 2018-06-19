@@ -79,6 +79,7 @@ def dtype2aseg_gdf_format(array_variable):
     @return columns: Number of columns (i.e. 1 for 1D data, or second dimension size for 2D data)
     @return integer_digits: Number of integer digits (derived from maximum value)
     @return fractional_digits: Number of fractional digits (derived from datatype sig. figs - integer_digits)
+    @param python_format: Python Formatter string for fixed-width output
     '''
     if len(array_variable.shape) == 1: # 1D variable
         columns = 1
@@ -89,22 +90,25 @@ def dtype2aseg_gdf_format(array_variable):
         
     dtype = str(array_variable.dtype)
             
-    sig_figs = SIG_FIGS[dtype] # Look up approximate significant figures
+    sig_figs = SIG_FIGS[dtype]+1 # Look up approximate significant figures and add 1
     integer_digits = ceil(log10(np.nanmax(array_variable[:]) + 1.0))
     fractional_digits = sig_figs - integer_digits
     
     if dtype.startswith('int'):
         aseg_gdf_format = 'I{}'.format(integer_digits)
+        python_format = '{' + ':{:d}f'.format(sig_figs, fractional_digits) + '}' # format code f used for float type cache
     elif dtype.startswith('float'):
         aseg_gdf_format = 'F{}.{}'.format(integer_digits, fractional_digits)
+        python_format = '{' + ':{:d}.{:d}f'.format(sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
     #===================================================================
     # elif dtype.startswith('float'):
     #     aseg_gdf_format = 'E{}.{}'.format(integer_digits, fractional_digits)
+    #     python_format = '{' + ':{:d}.{:d}f'.format(sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
     #===================================================================
     
     # Pre-pend column count to start of aseg_gdf_format
     if columns > 1:
         aseg_gdf_format = '{}{}'.format(columns, aseg_gdf_format)
         
-    return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits
+    return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
 
