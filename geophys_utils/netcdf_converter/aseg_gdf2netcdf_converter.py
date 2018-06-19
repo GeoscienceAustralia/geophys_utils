@@ -317,7 +317,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     else: # No default dimension name found from settings
                         match = re.match('(.+)_x_(.+)', field_name)
                         if match:
-                            dimension_name = match.group(2)
+                            dimension_name = match.group(2) # This probably won't happen
                         else:
                             dimension_name = field_name + '_dim' # Nasty, but it will get the job done.  
                             

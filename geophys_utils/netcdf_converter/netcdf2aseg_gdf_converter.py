@@ -186,7 +186,7 @@ class NetCDF2ASEGGDFConverter(object):
                         expanded_array = np.zeros(shape=(row_range,), 
                                                   dtype=value_variable.dtype)
                         
-                        # Assume monotonically increasing start indices
+                        # Assume monotonically increasing start indices to find all relevant indices
                         indices = np.where(np.logical_and((start_variable[:] >= start_row),
                                                           (start_variable[:] <= end_row)))[0]
                         
