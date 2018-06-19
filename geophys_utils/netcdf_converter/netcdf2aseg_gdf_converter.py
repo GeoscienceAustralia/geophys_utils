@@ -5,7 +5,6 @@ Created on 13 Jun. 2018
 '''
 
 import argparse
-from collections import OrderedDict
 import numpy as np
 import re
 import os
@@ -16,10 +15,7 @@ import yaml
 import tempfile
 import netCDF4
 import logging
-from math import log10, ceil
 
-from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
-from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import dtype2aseg_gdf_format
 
 logger = logging.getLogger(__name__)
@@ -37,7 +33,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 10
+POINT_LIMIT = 0
 
 class NetCDF2ASEGGDFConverter(object):
     '''
@@ -58,7 +54,9 @@ class NetCDF2ASEGGDFConverter(object):
         self.dat_out_path = dat_out_path or os.path.splitext(netcdf_in_path)[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
-        self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
+        #self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
+        self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
+                                                           'aseg_gdf2netcdf_converter_settings.yml')
         
         try:
             self.settings = yaml.safe_load(open(self.settings_path))
@@ -70,12 +68,19 @@ class NetCDF2ASEGGDFConverter(object):
         self.nc_dataset = netCDF4.Dataset(self.netcdf_in_path, 'r')
         assert 'point' in self.nc_dataset.dimensions.keys(), 'No point dimension defined in netCDF dataset'
         
+        self.total_points = self.nc_dataset.dimensions['point'].size
+        
         # Build field definitions
-        self.field_definitions = OrderedDict()
+        self.field_definitions = []
         for variable_name, variable in self.nc_dataset.variables.items():
             
-            # Skip scalar variables or those which don't have a point dimension
-            if not len(variable.dimensions) or ('point' not in variable.dimensions):
+            # Skip scalar variables
+            if not len(variable.dimensions):
+                continue
+            
+            # Skip any non-pointwise, non-indexing fields
+            # Note: Indexing variables will be expanded during .dat output
+            if ('point' not in variable.dimensions) and variable_name not in self.settings['index_fields']:
                 continue
             
             chunk_size = variable.chunking()[0]
@@ -86,7 +91,8 @@ class NetCDF2ASEGGDFConverter(object):
             fmt, dtype, columns, integer_digits, fractional_digits, python_format = dtype2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
-            field_definition = {'dtype': dtype,
+            field_definition = {'short_name': variable_name,
+                                'dtype': dtype,
                                 'chunk_size': chunk_size,
                                 'columns': columns,
                                 'fmt': fmt,
@@ -95,9 +101,20 @@ class NetCDF2ASEGGDFConverter(object):
                                 'python_format': python_format
                                 }
             
-            self.field_definitions[variable_name] = field_definition
+            self.field_definitions.append(field_definition)
 
         logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+
+        # Read overriding field definition values from settings
+        if self.settings.get('field_definitions'):
+            print(self.settings['field_definitions'])
+            for field_definition in self.field_definitions:
+                print('short_name:', field_definition['short_name'])
+                overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
+                if overriding_field_definition:
+                    field_definition.update(overriding_field_definition)
+            
+            logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
     
     def convert2aseg_gdf(self): 
         '''
@@ -112,7 +129,8 @@ class NetCDF2ASEGGDFConverter(object):
             dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A76\n') # TODO: Check this first line 
             
             defn = 0
-            for field_name, field_definition in self.field_definitions.items():
+            for field_definition in self.field_definitions:
+                field_name = field_definition['short_name']
                 defn += 1
                 
                 variable = self.nc_dataset.variables[field_name]
@@ -156,17 +174,53 @@ class NetCDF2ASEGGDFConverter(object):
                     '''
                     Helper Generator to yield line strings for specified rows across all point variables
                     '''
+                    def expand_indexing_variable(indexing_field_name, start_row, end_row):
+                        '''
+                        Helper function to expand indexing variables and return an array of the required size
+                        '''
+                        row_range = end_row - start_row
+                        value_variable = self.nc_dataset.variables[indexing_field_name]
+                        start_variable = self.nc_dataset.variables['index_' + indexing_field_name]
+                        count_variable = self.nc_dataset.variables['index_count_' + indexing_field_name]
+                        
+                        expanded_array = np.zeros(shape=(row_range,), 
+                                                  dtype=value_variable.dtype)
+                        
+                        # Assume monotonically increasing start indices
+                        indices = np.where(np.logical_and((start_variable[:] >= start_row),
+                                                          (start_variable[:] <= end_row)))[0]
+                        
+                        #logger.debug('indices: {}'.format(indices))
+                        for index in indices:
+                            start_index = max(start_variable[index]-start_row, 0)
+                            end_index = min(start_index+count_variable[index], row_range)
+                            expanded_array[start_index:end_index] = value_variable[index]
+                            
+                        #logger.debug('expanded_array: {}'.format(expanded_array))
+                        return expanded_array
+                    
                     row_range = end_row - start_row
                     column_start = 0                    
-                    for field_name, field_definition in self.field_definitions.items():
+                    for field_definition in self.field_definitions:
+                        field_name = field_definition['short_name']
                         variable = self.nc_dataset.variables[field_name]
                         
                         if len(variable.shape) == 1: # 1D variable
-                            memory_cache_array[0:row_range, 
-                                               column_start] = variable[start_row:end_row]
-                        if len(variable.shape) == 2: # 2D variable
+                            # Not an indexing variable
+                            if ('point' in variable.dimensions) and (field_name not in self.settings['index_fields']):
+                                memory_cache_array[0:row_range, 
+                                                   column_start] = variable[start_row:end_row]
+                            # Indexing variable
+                            elif ('point' not in variable.dimensions) and (field_name in self.settings['index_fields']): 
+                                memory_cache_array[0:row_range, 
+                                                   column_start] = expand_indexing_variable(field_name, start_row, end_row)
+                            else:
+                                raise BaseException('Invalid dimension for variable {}'.format(field_name))  
+                              
+                        elif len(variable.shape) == 2: # 2D variable
                             memory_cache_array[0:row_range, 
                                                 column_start:column_start+field_definition['columns']] = variable[start_row:end_row]
+                        
                         column_start += field_definition['columns']
                          
                     for line_index in range(row_range):
@@ -180,20 +234,20 @@ class NetCDF2ASEGGDFConverter(object):
                 
                 # Define formats for individual columns
                 column_format_list = []
-                for field_definition in self.field_definitions.values():
+                for field_definition in self.field_definitions:
                     for _column_index in range(field_definition['columns']):
                         column_format_list.append(field_definition['python_format'])
                     
-                total_points = self.nc_dataset.dimensions['point'].size
+                
                 
                 total_columns = sum([field_definition['columns']
-                                     for field_definition in self.field_definitions.values()
+                                     for field_definition in self.field_definitions
                                      ]
                                     )
                 logger.debug('total_columns: {}'.format(total_columns))
                                 
                 max_chunk_size = max([field_definition['chunk_size']
-                                      for field_definition in self.field_definitions.values()
+                                      for field_definition in self.field_definitions
                                       ]
                                      )
                 
@@ -206,7 +260,7 @@ class NetCDF2ASEGGDFConverter(object):
                 
                 # Process all complete chunks
                 point_count = 0
-                for chunk_index in range(total_points // read_chunk_size):
+                for chunk_index in range(self.total_points // read_chunk_size):
                     logger.debug('Reading chunk {} for rows {}-{}'.format(chunk_index+1,
                                                                           chunk_index*read_chunk_size,
                                                                           (chunk_index+1)*read_chunk_size-1)
@@ -214,6 +268,11 @@ class NetCDF2ASEGGDFConverter(object):
                     for line in chunk_line_generator(chunk_index*read_chunk_size,
                                                      (chunk_index+1)*read_chunk_size):
                         point_count += 1
+                        
+                        if point_count == point_count // 10000 * 10000:
+                            logger.info('{} points written'.format(point_count))
+                            #logger.debug('line: {}'.format(line))
+                    
                         yield line
                         
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):
@@ -223,12 +282,17 @@ class NetCDF2ASEGGDFConverter(object):
                         break
                     
                 # All complete chunks processed - process any remaining rows
-                remaining_points = total_points % read_chunk_size
+                remaining_points = self.total_points % read_chunk_size
                 if remaining_points and (not POINT_LIMIT or (point_count < POINT_LIMIT)):
                     logger.debug('Reading final chunk with {} points'.format(remaining_points))
-                    for line in chunk_line_generator(total_points-remaining_points,
-                                                     total_points):
+                    for line in chunk_line_generator(self.total_points-remaining_points,
+                                                     self.total_points):
                         point_count += 1
+                        
+                        if point_count == point_count // 10000 * 10000:
+                            logger.info('{} points written'.format(point_count))
+                            #logger.debug('line: {}'.format(line))
+
                         yield line
                         
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):

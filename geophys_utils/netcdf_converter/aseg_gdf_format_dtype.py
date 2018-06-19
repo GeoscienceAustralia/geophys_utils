@@ -90,21 +90,18 @@ def dtype2aseg_gdf_format(array_variable):
         
     dtype = str(array_variable.dtype)
             
-    sig_figs = SIG_FIGS[dtype]+1 # Look up approximate significant figures and add 1
-    integer_digits = ceil(log10(np.nanmax(array_variable[:]) + 1.0))
-    fractional_digits = sig_figs - integer_digits
+    sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
+    sign_width = 1 if np.nanmin(array_variable[:]) < 0 else 0
+    integer_digits = ceil(log10(np.nanmax(np.abs(array_variable[:])) + 1.0))
     
     if dtype.startswith('int'):
+        fractional_digits = 0
         aseg_gdf_format = 'I{}'.format(integer_digits)
-        python_format = '{' + ':{:d}f'.format(sig_figs, fractional_digits) + '}' # format code f used for float type cache
+        python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits, fractional_digits) + '}'
     elif dtype.startswith('float'):
+        fractional_digits = sig_figs - integer_digits
         aseg_gdf_format = 'F{}.{}'.format(integer_digits, fractional_digits)
-        python_format = '{' + ':{:d}.{:d}f'.format(sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
-    #===================================================================
-    # elif dtype.startswith('float'):
-    #     aseg_gdf_format = 'E{}.{}'.format(integer_digits, fractional_digits)
-    #     python_format = '{' + ':{:d}.{:d}f'.format(sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
-    #===================================================================
+        python_format = '{' + ':{:d}.{:d}f'.format(sign_width+sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
     
     # Pre-pend column count to start of aseg_gdf_format
     if columns > 1:

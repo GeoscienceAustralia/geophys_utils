@@ -55,6 +55,7 @@ keywords: geophysics, airborne, AEM, conductivity
 
 # List of possible dimension field names definining dimension sizes. 
 # Uses overridden short_name values (if set)
+# Not used for output - should be defined in .dfn file instead
 dimension_fields: [layer, low_moment_gate, high_moment_gate]
 
 # List of possible index field names to indicate which fields need to be turned into value, start & count arrays

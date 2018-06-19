@@ -190,7 +190,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             aem_dat_file = open(aem_dat_path, 'r')
              
             self.column_count = 0
-            self.point_count = 0
+            self.total_points = 0
             
             for line in aem_dat_file:
                 line = line.strip()
@@ -201,7 +201,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     row_list = [float(value) for value in re.sub('\s+', ',', line).split(',')]
                 except ValueError:
                     # Ignore potential non-numeric header row, otherwise raise exception for non-numeric data
-                    if self.point_count:
+                    if self.total_points:
                         raise
                     else:
                         continue
@@ -219,33 +219,33 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 
                 try:
                     # Write row to memory cache
-                    memory_cache_array[self.point_count%CACHE_CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
+                    memory_cache_array[self.total_points%CACHE_CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
                 except Exception as e:
                     logger.debug('Error with row = {}'.format(row_list))
                     raise e
                 
-                self.point_count += 1
+                self.total_points += 1
                 
-                if self.point_count % CACHE_CHUNK_ROWS == 0:
+                if self.total_points % CACHE_CHUNK_ROWS == 0:
                     # Write memory cache to disk cache
-                    logger.debug('Writing rows {}-{} to disk cache'.format(self.point_count-CACHE_CHUNK_ROWS, self.point_count-1))
-                    self.cache_variable[self.point_count-CACHE_CHUNK_ROWS:self.point_count,:] = memory_cache_array
+                    logger.debug('Writing rows {}-{} to disk cache'.format(self.total_points-CACHE_CHUNK_ROWS, self.total_points-1))
+                    self.cache_variable[self.total_points-CACHE_CHUNK_ROWS:self.total_points,:] = memory_cache_array
                 
-                if self.point_count == self.point_count // 10000 * 10000:
-                    logger.info('{} points read'.format(self.point_count))
-                    logger.debug('line: {}'.format(line))
+                if self.total_points == self.total_points // 10000 * 10000:
+                    logger.info('{} points read'.format(self.total_points))
+                    #logger.debug('line: {}'.format(line))
                     
-                if POINT_LIMIT and self.point_count >= POINT_LIMIT:
+                if POINT_LIMIT and self.total_points >= POINT_LIMIT:
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
                     break
                 
-            logger.debug('Writing final rows {}-{} to disk cache'.format(self.point_count-self.point_count%CACHE_CHUNK_ROWS, self.point_count-1))
-            self.cache_variable[self.point_count-self.point_count%CACHE_CHUNK_ROWS:self.point_count,:] = memory_cache_array[0:self.point_count%CACHE_CHUNK_ROWS,:]
+            logger.debug('Writing final rows {}-{} to disk cache'.format(self.total_points-self.total_points%CACHE_CHUNK_ROWS, self.total_points-1))
+            self.cache_variable[self.total_points-self.total_points%CACHE_CHUNK_ROWS:self.total_points,:] = memory_cache_array[0:self.total_points%CACHE_CHUNK_ROWS,:]
             
             aem_dat_file.close()             
     
-            logger.info('A total of {} points were read'.format(self.point_count))
-            self.dimensions['point'] = self.point_count # All files will have a point dimension - declare this first
+            logger.info('A total of {} points were read'.format(self.total_points))
+            self.dimensions['point'] = self.total_points # All files will have a point dimension - declare this first
             
             
         def modify_field_definitions():    
@@ -257,12 +257,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             field_definition_index = -1
             while field_definition_index < len(self.field_definitions) - 1:
                 field_definition_index += 1
-                logger.debug('field_definition_index: {}'.format(field_definition_index))
                 field_definition = self.field_definitions[field_definition_index]
-                logger.debug('short_name: {}'.format(field_definition['short_name']))
+                field_name = field_definition['short_name']
+                logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
                 
-                if field_definition['short_name'] in self.settings['dimension_fields']:
-                    self.dimensions[field_definition['short_name']] = int(self.cache_variable[0, column_start_index]) # Read value from first line
+                if field_name in self.settings['dimension_fields']:
+                    self.dimensions[field_name] = int(self.cache_variable[0, column_start_index]) # Read value from first line
                     field_definition['column_start_index'] = None # Do not output this column
                     column_start_index += 1 # Single column only
                     continue # Check next field
@@ -287,7 +287,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             else:
                                 assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
                                 
-                            logger.debug('Variable {} has dimension {} of size {}'.format(field_definition['short_name'],
+                            logger.debug('Variable {} has dimension {} of size {}'.format(field_name,
                                                                                       default_dimension_names, 
                                                                                       field_dimension_size))
                         
@@ -314,9 +314,25 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 self.field_definitions.insert(field_definition_index, new_field_definition)
                                 column_offset += self.dimensions[part_dimension_name] # Offset next column 
                             
-                    else: # No default dimension name found
-                        #TODO: Implement something to assume existing dimension if only one defined
-                        raise BaseException('Default dimension name(s) for variable {} not found from settings'.format(field_definition['short_name']))
+                    else: # No default dimension name found from settings
+                        match = re.match('(.+)_x_(.+)', field_name)
+                        if match:
+                            dimension_name = match.group(2)
+                        else:
+                            dimension_name = field_name + '_dim' # Nasty, but it will get the job done.  
+                            
+                        field_definition['dimensions'] = dimension_name
+                        if not self.dimensions.get(dimension_name):
+                            self.dimensions[dimension_name] = field_dimension_size
+                        else:
+                            assert self.dimensions[dimension_name] == field_dimension_size, 'Invalid size for variable {}. Expected {}, got {}'.format(field_name,
+                                                                                                                                                       self.dimensions[dimension_name],
+                                                                                                                                                       field_dimension_size
+                                                                                                                                                       ) 
+                        
+                        logger.debug('Variable {} has dimension {} of size {}'.format(field_name,
+                                                                                      dimension_name, 
+                                                                                      field_dimension_size))                        
                            
                     column_start_index += field_dimension_size
                     
