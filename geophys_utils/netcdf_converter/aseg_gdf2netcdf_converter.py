@@ -37,33 +37,24 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
+from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import aseg_gdf_format2dtype
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
 TEMP_DIR = tempfile.gettempdir()
-#TEMP_DIR = 'C:\Temp'
+#TEMP_DIR = 'E:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 100000
+POINT_LIMIT = 0
 
 # Number of rows per chunk in temporary netCDF cache file
-CHUNK_ROWS = 8192
+CACHE_CHUNK_ROWS = 8192
 
 class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
     ASEGGDF2NetCDFConverter concrete class for converting ASEG-GDF data to netCDF
     '''
-    # Approximate number of significant figures for each datatype
-    SIG_FIGS = OrderedDict([('int8', 2),
-                            ('int16', 4),
-                            ('int32', 10),
-                            ('int64', 19),
-                            ('float32', 6),
-                            ('float64', 20)
-                            ]
-                           )
-
     def __init__(self, 
                  nc_out_path, 
                  aem_dat_path, 
@@ -121,39 +112,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         fill_value = key_value_pairs.get('NULL')
                         
                         # Parse format to determine columns, data type and numeric format
-                        dtype = None # Unknown datatype
-                        columns = 1 # Default columns
-                        if fmt:
-                            match = re.match('(\d+)*(\w)(\d+)\.*(\d+)*', fmt)
-                            if match:
-                                columns = match.group(1) or 1
-                                dtype_code = match.group(2).upper()
-                                integer_digits = int(match.group(3))
-                                fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
-                                
-                                # Determine type and size for required significant figures
-                                # Integer type - N.B: Only signed types available
-                                if dtype_code == 'I':
-                                    assert not fractional_digits, 'Integer format cannot be defined with fractional digits'
-                                    for test_dtype, sig_figs in ASEGGDF2NetCDFConverter.SIG_FIGS.items():
-                                        if test_dtype.startswith('int') and sig_figs >= integer_digits:
-                                            dtype = test_dtype
-                                            break
-                                    assert dtype, 'Invalid integer length of {}'.format(integer_digits)     
-                                
-                                # Floating point type - use approximate sig. figs. to determine length
-                                elif dtype_code in ['D', 'E', 'F']: 
-                                    for test_dtype, sig_figs in ASEGGDF2NetCDFConverter.SIG_FIGS.items():
-                                        if test_dtype.startswith('float') and sig_figs >= integer_digits + fractional_digits:
-                                            dtype = test_dtype
-                                            break
-                                    assert dtype, 'Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits)                                    
-                                
+                        dtype, columns, integer_digits, fractional_digits = aseg_gdf_format2dtype(fmt)
+                                    
                         field_dict = {'short_name': short_name,
                                       'format': fmt,
                                       'long_name': long_name,
-                                      'columns': columns,
                                       'dtype': dtype,
+                                      'columns': columns,
+                                      'integer_digits': integer_digits, 
+                                      'fractional_digits': fractional_digits
                                       }
                         if units:
                             field_dict['units'] = units
@@ -213,7 +180,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 self.cache_variable = self._nc_cache_dataset.createVariable('cache',
                                                                             'float64',
                                                                             ('rows', 'columns'),
-                                                                            chunksizes=(CHUNK_ROWS, 1), # Chunk by column
+                                                                            chunksizes=(CACHE_CHUNK_ROWS, 1), # Chunk by column
                                                                             **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
                                                                             )
                 
@@ -248,21 +215,21 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     self.column_count = len(row_list)
                     logger.debug('self.column_count: {}'.format(self.column_count))
                     create_nc_cache() # Create temporary netCDF file with appropriately dimensioned variable
-                    memory_cache_array = np.zeros(shape=(CHUNK_ROWS, self.column_count), dtype='float64')
+                    memory_cache_array = np.zeros(shape=(CACHE_CHUNK_ROWS, self.column_count), dtype='float64')
                 
                 try:
                     # Write row to memory cache
-                    memory_cache_array[self.point_count%CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
+                    memory_cache_array[self.point_count%CACHE_CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
                 except Exception as e:
                     logger.debug('Error with row = {}'.format(row_list))
                     raise e
                 
                 self.point_count += 1
                 
-                if self.point_count % CHUNK_ROWS == 0:
+                if self.point_count % CACHE_CHUNK_ROWS == 0:
                     # Write memory cache to disk cache
-                    logger.debug('Writing rows {}-{} to disk cache'.format(self.point_count-CHUNK_ROWS, self.point_count-1))
-                    self.cache_variable[self.point_count-CHUNK_ROWS:self.point_count,:] = memory_cache_array
+                    logger.debug('Writing rows {}-{} to disk cache'.format(self.point_count-CACHE_CHUNK_ROWS, self.point_count-1))
+                    self.cache_variable[self.point_count-CACHE_CHUNK_ROWS:self.point_count,:] = memory_cache_array
                 
                 if self.point_count == self.point_count // 10000 * 10000:
                     logger.info('{} points read'.format(self.point_count))
@@ -272,8 +239,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
                     break
                 
-            logger.debug('Writing final rows {}-{} to disk cache'.format(self.point_count-self.point_count%CHUNK_ROWS, self.point_count-1))
-            self.cache_variable[self.point_count-self.point_count%CHUNK_ROWS:self.point_count,:] = memory_cache_array[0:self.point_count%CHUNK_ROWS,:]
+            logger.debug('Writing final rows {}-{} to disk cache'.format(self.point_count-self.point_count%CACHE_CHUNK_ROWS, self.point_count-1))
+            self.cache_variable[self.point_count-self.point_count%CACHE_CHUNK_ROWS:self.point_count,:] = memory_cache_array[0:self.point_count%CACHE_CHUNK_ROWS,:]
             
             aem_dat_file.close()             
     

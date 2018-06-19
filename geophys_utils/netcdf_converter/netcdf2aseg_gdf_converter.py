@@ -20,6 +20,7 @@ from math import log10, ceil
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
+from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import dtype2aseg_gdf_format
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -31,20 +32,16 @@ MAX_MEMORY_BYTES = 1073741824 # 1GB
 # Set to 0 for no chunking (i.e. complete read)
 DEFAULT_READ_CHUNK_SIZE = 1
     
+TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = 'C:\Temp'
+
+# Set this to zero for no limit - only set a non-zero value for testing
+POINT_LIMIT = 0
+
 class NetCDF2ASEGGDFConverter(object):
     '''
     NetCDF2ASEGGDFConverter class definition to convert netCDF file to ASEG-GDF format
     '''
-    # Approximate number of significant figures for each datatype
-    SIG_FIGS = OrderedDict([('int8', 2),
-                            ('int16', 4),
-                            ('int32', 10),
-                            ('int64', 19),
-                            ('float32', 6),
-                            ('float64', 20)
-                            ]
-                           )
-
     def __init__(self,
                  netcdf_in_path,
                  dat_out_path=None,
@@ -83,34 +80,12 @@ class NetCDF2ASEGGDFConverter(object):
             chunk_size = variable.chunking()[0]
             # If variable is not chunked and DEFAULT_READ_CHUNK_SIZE is defined
             if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
-                chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0])
+                chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            if len(variable.shape) == 1: # 1D variable
-                columns = 1
-            elif len(variable.shape) == 2: # 2D variable
-                columns = variable.shape[1]
-                
-            dtype = str(variable.dtype)
-            
-            sig_figs = NetCDF2ASEGGDFConverter.SIG_FIGS[dtype] # Look up approximate significant figures
-            integer_digits = ceil(log10(np.nanmax(variable[:]) + 1.0))
-            fractional_digits = sig_figs - integer_digits
-            
-            if dtype.startswith('int'):
-                fmt = 'I{}'.format(integer_digits)
-            elif dtype.startswith('float'):
-                fmt = 'F{}.{}'.format(integer_digits, fractional_digits)
-            #===================================================================
-            # elif dtype.startswith('float'):
-            #     fmt = 'E{}.{}'.format(integer_digits, fractional_digits)
-            #===================================================================
-            
-            # Pre-pend column count to start of fmt
-            if columns > 1:
-                fmt = '{}{}'.format(columns, fmt)
+            fmt, dtype, columns, integer_digits, fractional_digits = dtype2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
-            field_definition = {'dtype': str(variable.dtype),
+            field_definition = {'dtype': dtype,
                                 'chunk_size': chunk_size,
                                 'columns': columns,
                                 'fmt': fmt,
