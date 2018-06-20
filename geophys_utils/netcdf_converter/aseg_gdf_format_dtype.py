@@ -99,7 +99,7 @@ def dtype2aseg_gdf_format(array_variable):
         aseg_gdf_format = 'I{}'.format(integer_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits, fractional_digits) + '}'
     elif dtype.startswith('float'):
-        # If array_variable is a netCDF variable with a "format" attribute, use stored format string
+        # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine fractional_digits
         if hasattr(array_variable, 'aseg_gdf_format'): 
             _dtype, _columns, _integer_digits, fractional_digits = aseg_gdf_format2dtype(array_variable.aseg_gdf_format)
             fractional_digits = min(fractional_digits, sig_figs-integer_digits)
@@ -161,11 +161,11 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
                     # Differences found - try larger datatype
                     continue
                 else:
-                    reduced_precision_result = dtype2aseg_gdf_format(smaller_array)
+                    aseg_gdf_format, dtype, columns, integer_digits, derived_fractional_digits, python_format = dtype2aseg_gdf_format(smaller_array)
                     # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
                     # Use the minimum number of decimal places: either specified or derived
-                    reduced_precision_result[4] = min(reduced_precision_result[4], fractional_digits)
-                    return reduced_precision_result
+                    derived_fractional_digits = min(fractional_digits, derived_fractional_digits)
+                    return aseg_gdf_format, dtype, columns, integer_digits, derived_fractional_digits, python_format
 
             
         except ValueError: # current_dtype_index not in dtype_reduction_list
