@@ -109,3 +109,52 @@ def dtype2aseg_gdf_format(array_variable):
         
     return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
 
+
+def fix_precision(array_variable, current_dtype, fractional_digits):
+    '''
+    Function to return revised ASEG-GDF format string and other info from data array or netCDF array variable
+    after correcting excessive precision specification, or None if there is no precision change.
+    @param array_variable: data array or netCDF array variable - assumed to be of dtype float64 for raw data
+    @param current_dtype: Current data type string, e.g. int8 or float32
+    
+    Returns None if no precision change required.
+    @return aseg_gdf_format: ASEG-GDF format string
+    @return dtype: Data type string, e.g. int8 or float32
+    @return columns: Number of columns (i.e. 1 for 1D data, or second dimension size for 2D data)
+    @return integer_digits: Number of integer digits (derived from maximum value)
+    @return fractional_digits: Number of fractional digits (derived from datatype sig. figs - integer_digits)
+    @param python_format: Python Formatter string for fixed-width output
+    '''
+    dtype_reduction_lists = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
+                             ['float64', 'float32'] # Floating point dtypes
+                             ]
+    
+    precision_reduction_result = None
+    for dtype_reduction_list in dtype_reduction_lists:
+        try:
+            current_dtype_index = dtype_reduction_list.index(current_dtype)
+            # Try types from smallest to largest
+            for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
+                smaller_array = array_variable[:].astype(smaller_dtype)
+                difference_array = array_variable[:] - smaller_array
+                print('current_dtype:', current_dtype,
+                      '\nsmaller_dtype:', smaller_dtype,
+                      '\narray_variable\n', 
+                      array_variable[:], 
+                      '\nsmaller_array\n', 
+                      smaller_array,
+                      '\ndifference_array\n', 
+                      difference_array,
+                      '\nfractional_digits:', fractional_digits,
+                      '\ndifference count:', np.count_nonzero(difference_array >= pow(10, -fractional_digits)),
+                      '\ndifference values: ', difference_array[difference_array != 0]
+                      )
+                if np.count_nonzero(difference_array >= pow(10, -fractional_digits)):
+                    # Differences found - try larger datatype
+                    continue
+                else:
+                    precision_reduction_result = dtype2aseg_gdf_format(smaller_array)
+        except ValueError: # current_dtype_index not in dtype_reduction_list
+            continue
+    
+    return precision_reduction_result    
