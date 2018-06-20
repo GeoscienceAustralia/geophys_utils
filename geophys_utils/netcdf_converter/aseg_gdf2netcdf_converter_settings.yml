@@ -54,7 +54,7 @@ field_definitions:
 # N.B: Do NOT include standard attributes like "NAME", "UNIT" or "UNITS"
 variable_attributes:
   DATUM: datum_name
-  PROJECTION: projection_name,
+  PROJECTION: projection_name
 
 # String containing comma-separated list of keywords
 keywords: geophysics, airborne, AEM, conductivity 

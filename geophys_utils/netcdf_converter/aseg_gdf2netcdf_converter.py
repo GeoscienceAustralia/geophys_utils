@@ -135,6 +135,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             for key, attribute_name in self.settings['variable_attributes'].items()
                             if key_value_pairs.get(key.upper()) is not None
                                                    }
+                        
+                        # Store aseg_gdf_format in variable attributes
+                        variable_attribute_dict['aseg_gdf_format'] = fmt 
 
                         if variable_attribute_dict:
                             field_dict['variable_attributes'] = variable_attribute_dict    
@@ -368,13 +371,19 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
                 precision_change_result = fix_field_precision(data_array, dtype, field_definition['fractional_digits']) # (fmt, dtype, columns, integer_digits, fractional_digits, python_format)
-                
+                # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
                     field_definition['integer_digits'] = precision_change_result[3]
                     field_definition['fractional_digits'] = precision_change_result[4]
+                    
+                    # Update the format string in variable attributes
+                    variable_attributes = field_definition.get('variable_attributes') or {}
+                    if not variable_attributes:
+                        field_definition['variable_attributes'] = variable_attributes
+                    variable_attributes['aseg_gdf_format'] = precision_change_result[0]
                 else:
                     logger.debug('Datatype for variable {} not changed'.format(short_name))                   
                 
