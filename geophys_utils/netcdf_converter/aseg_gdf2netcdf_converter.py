@@ -37,7 +37,7 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import aseg_gdf_format2dtype, fix_precision
+from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import aseg_gdf_format2dtype, fix_field_precision
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -46,7 +46,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'E:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 10000
+POINT_LIMIT = 0
 
 # Number of rows per chunk in temporary netCDF cache file
 CACHE_CHUNK_ROWS = 8192
@@ -62,7 +62,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  netcdf_format='NETCDF4_CLASSIC', 
                  default_chunk_size=None, 
                  default_variable_parameters=None,
-                 settings_path=None
+                 settings_path=None,
+                 fix_precision=True
                  ):
         '''
         Concrete constructor for subclass ASEGGDF2NetCDFConverter
@@ -75,6 +76,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
         @param default_variable_parameters: Optional dict containing default parameters for netCDF variable creation
         @param settings_path: Optional path for settings YAML file
+        @param fix_precision: Optional Boolean flag indicating whether to fix (i.e. reduce) field precisions
         '''
 
         def get_field_definitions():
@@ -109,7 +111,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
                         units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
                         long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
-                        fill_value = key_value_pairs.get('NULL')
+                        fill_value = float(key_value_pairs.get('NULL'))
                         
                         # Parse format to determine columns, data type and numeric format
                         dtype, columns, integer_digits, fractional_digits = aseg_gdf_format2dtype(fmt)
@@ -355,7 +357,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
         
-        def fix_field_precision():
+        
+        def fix_all_field_precisions():
             '''
             Helper function to reduce field datatype size if there is no loss in precision
             '''
@@ -364,7 +367,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 dtype = field_definition['dtype']
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
-                precision_change_result = fix_precision(data_array, dtype, field_definition['fractional_digits']) # (fmt, dtype, columns, integer_digits, fractional_digits, python_format)
+                precision_change_result = fix_field_precision(data_array, dtype, field_definition['fractional_digits']) # (fmt, dtype, columns, integer_digits, fractional_digits, python_format)
                 
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
@@ -373,8 +376,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     field_definition['integer_digits'] = precision_change_result[3]
                     field_definition['fractional_digits'] = precision_change_result[4]
                 else:
-                    logger.debug('Datatype for variable {} not changed'.format(short_name))
-                    
+                    logger.debug('Datatype for variable {} not changed'.format(short_name))                   
+                
                 
         # Start of actual __init__() definition
         self.nc_cache_path = None
@@ -412,8 +415,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         # Needs to be done after data file has been read in order to access dimension data in first row
         modify_field_definitions()
         
-        # Fix excessive precision if required
-        fix_field_precision()
+        # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
+        if fix_precision:
+            fix_all_field_precisions()
         
                        
     def __del__(self):
@@ -446,7 +450,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 if field_definition['short_name'] == short_name
                                 ][0]
              
-            logger.debug('field_definition: {}'.format(pformat(field_definition)))
+            #logger.debug('field_definition: {}'.format(pformat(field_definition)))
             column_start_index = field_definition['column_start_index']
             column_end_index = column_start_index + max(1, field_definition['dimension_size'])
             
