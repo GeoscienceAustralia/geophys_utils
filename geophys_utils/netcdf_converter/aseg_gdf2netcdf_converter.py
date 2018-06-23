@@ -37,7 +37,7 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import aseg_gdf_format2dtype, fix_field_precision
+from geophys_utils.netcdf_converter.aseg_gdf_format import aseg_gdf_format2dtype, fix_field_precision
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -59,6 +59,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  nc_out_path, 
                  aem_dat_path, 
                  dfn_path, 
+                 crs_string=None,
                  netcdf_format='NETCDF4_CLASSIC', 
                  default_chunk_size=None, 
                  default_variable_parameters=None,
@@ -86,8 +87,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             def parse_dfn_file(dfn_path):
                 logger.info('Reading definitions file {}'.format(dfn_path))
-                field_definitions = []
-                crs=None
+                self.field_definitions = []
                 
                 dfn_file = open(dfn_path, 'r')
                 for line in dfn_file:
@@ -142,10 +142,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         if variable_attribute_dict:
                             field_dict['variable_attributes'] = variable_attribute_dict    
                         
-                        field_definitions.append(field_dict)    
+                        self.field_definitions.append(field_dict)
+                        
                                     
                     # Projection definition
-                    elif key_value_pairs.get('RT') == 'PROJ': 
+                    elif key_value_pairs.get('RT') == 'PROJ' and not self.crs: 
                         #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
                          
                         #TODO: Parse projection properly
@@ -153,15 +154,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                              
                             # TODO: Remove this hard-coded hack
                             wkt = 'EPSG:28354'
-                            crs = get_spatial_ref_from_wkt(wkt)
+                            self.crs = get_spatial_ref_from_wkt(wkt)
+                            logger.debug('CRS set from .dfn file PROJNAME attribute {}'.format(wkt))
                             break # Nothing more to do
-                
-                    if not crs: #TODO: Fix this hard-coded hack
-                        crs = get_spatial_ref_from_wkt('EPSG:28353') # GDA94 / MGA zone 53
-                
-                return field_definitions, crs
-            
-            self.field_definitions, self.crs = parse_dfn_file(dfn_path)
+                            
+            # Start of get_field_definitions function
+            parse_dfn_file(dfn_path)
             
             # Read overriding field definition values from settings
             if self.settings.get('field_definitions'):
@@ -172,7 +170,19 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             
             logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+                        
+            # Check for CRS definition in latitude field - need to do this after short_name has potentially been remapped
+            if not self.crs:
+                try:
+                    field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
+                    crs_string = field_definition['variable_attributes']['datum_name']
+                    self.crs = get_spatial_ref_from_wkt(crs_string)
+                    logger.debug('CRS set from latitude variable datum_name attribute {}'.format(crs_string))
+                except:
+                    logger.debug('Unable to set CRS from latitude datum_name attribute')               
 
+            assert self.crs, 'Coordinate Reference System undefined'
+            logger.debug('self.crs: {}'.format(self.crs.ExportToPrettyWkt()))
         
         def read_data_file(): 
             '''
@@ -394,10 +404,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.cache_variable = None
         self.column_count = None # Number of columns in .dat file
 
+        if crs_string:
+            self.crs = get_spatial_ref_from_wkt(crs_string)
+            logger.debug('CRS set from supplied crs_string {}'.format(crs_string))
+        else:
+            self.crs = None
+
         self.dimensions = OrderedDict()
 
-        self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
-        
+        self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
+                                                           'aseg_gdf_settings.yml')        
         try:
             self.settings = yaml.safe_load(open(self.settings_path))
         except:
@@ -707,6 +723,10 @@ def main():
                             help="Path to settings file",
                             type=str,
                             dest="settings_path")
+        parser.add_argument("-r", "--crs",
+                            help="Coordinate Reference System string (e.g. GDA94, EPSG:4283)",
+                            type=str,
+                            dest="crs")
         parser.add_argument("-c", "--chunking",
                             help="Chunking size in each dimension",
                             type=int,
@@ -745,6 +765,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
     d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                   dat_in_path, 
                                   dfn_in_path, 
+                                  crs_string=args.crs,
                                   default_chunk_size=args.chunking,
                                   settings_path=args.settings_path)
     d2n.convert2netcdf()

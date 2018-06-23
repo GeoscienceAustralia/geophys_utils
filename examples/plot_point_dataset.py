@@ -30,18 +30,22 @@ import cartopy.io.img_tiles as cimgt
 from math import log10, floor, pow
 
 def plot_point_dataset(netcdf_point_utils,
-                       variable_to_map, # String specifying variable name for colour map
-                       utm_bbox=None, # utm_bbox is of form [xmin, ymin, xmax, ymax] or None for all points
-                       colour_scheme='binary', # Colour map
-                       point_size=10 # Size of point in plot
+                       variable_to_map,
+                       utm_bbox=None,
+                       plot_title=None,
+                       colour_scheme='binary',
+                       point_size=10,
+                       point_step=1
                        ):
     '''
     Function to plot data points on a map
     @param netcdf_point_utils: NetCDFPointUtils object wrapping a netCDF dataset
     @param variable_to_map: String specifying variable name for colour map
     @param utm_bbox: UTM Bounding box of form [xmin, ymin, xmax, ymax] or None for all points. Default=None
+    @param plot_title: String to prefix before dataset title. Default=None for dataset title or dataset basename
     @param colour_scheme: String specifying colour scheme for data points. Default='binary'
-    @param point_size: Point size for data points. Default=10 # Size of point in plot
+    @param point_size: Point size for data points. Default=10
+    @param point_step: Point step between plotted points - used to skip points in dense datasets. Default=1 
     '''
     def rescale_array(input_np_array, new_range_min=0, new_range_max=1):
         old_min = input_np_array.min()
@@ -51,8 +55,14 @@ def plot_point_dataset(netcdf_point_utils,
         scaled_np_array = ((input_np_array - old_min) / old_range * new_range) + new_range_min
     
         return scaled_np_array
+    
+    if plot_title is None:
+        if hasattr(netcdf_point_utils.netcdf_dataset, 'title'):
+            plot_title = netcdf_point_utils.netcdf_dataset.title
+        else:   
+            plot_title = netcdf_point_utils.netcdf_dataset.filepath()
 
-    utm_wkt, utm_coords = netcdf_point_utils.utm_coords(netcdf_point_utils.xycoords[:])
+    utm_wkt, utm_coords = netcdf_point_utils.utm_coords(netcdf_point_utils.xycoords)
 
     utm_zone = get_spatial_ref_from_wkt(utm_wkt).GetUTMZone() # -ve for Southern Hemisphere
     southern_hemisphere = (utm_zone < 0)
@@ -80,20 +90,21 @@ def plot_point_dataset(netcdf_point_utils,
                                       )
         utm_coords = utm_coords[spatial_mask]
     
-    print('UTM bounding box: {}'.format(utm_bbox))
+    print('{} points in UTM bounding box: {}'.format(np.count_nonzero(spatial_mask), utm_bbox))
     #print(utm_coords)
     
     colour_array = rescale_array(variable[spatial_mask], 0, 1)
 
-    #map_image = cimgt.OSM() # https://www.openstreetmap.org/about
-    #map_image = cimgt.StamenTerrain() # http://maps.stamen.com/
-    map_image = cimgt.QuadtreeTiles()
     fig = plt.figure(figsize=(30,30))
 
     ax = fig.add_subplot(1, 1, 1, projection=projection)
 
-    ax.set_title("Point Gravity Survey - " + str(netcdf_point_utils.netcdf_dataset.getncattr('title')))
+    ax.set_title(plot_title)
 
+    #map_image = cimgt.OSM() # https://www.openstreetmap.org/about
+    #map_image = cimgt.StamenTerrain() # http://maps.stamen.com/
+    map_image = cimgt.QuadtreeTiles()
+    #print(map_image.__dict__)
     ax.add_image(map_image, 10)
 
     # Compute and set regular tick spacing
@@ -114,10 +125,10 @@ def plot_point_dataset(netcdf_point_utils,
     cm = plt.cm.get_cmap(colour_scheme)
 
     # build a scatter plot of the specified data, define marker, spatial reference system, and the chosen colour map type
-    sc = ax.scatter(utm_coords[:,0], 
-                    utm_coords[:,1], 
+    sc = ax.scatter(utm_coords[::point_step,0], 
+                    utm_coords[::point_step,1], 
                     marker='o', 
-                    c=colour_array, 
+                    c=colour_array[::point_step], 
                     s=point_size, 
                     alpha=0.9, 
                     transform=projection, 

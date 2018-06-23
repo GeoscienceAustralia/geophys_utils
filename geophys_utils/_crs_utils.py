@@ -24,20 +24,45 @@ import re
 import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
-def get_spatial_ref_from_wkt(wkt):
+# Define CRS name mappings for 
+CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
+                    'EPSG:283': 'EPSG:4283', # EPSG Prefix for UTM zone
+                    }
+
+def get_spatial_ref_from_wkt(wkt_or_crs_name):
     '''
     Function to return SpatialReference object for supplied WKT
-    @param wkt: Well-known text for SpatialReference
+    @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: SpatialReference from WKT
     '''
     spatial_ref = SpatialReference()
-    # Check for EPSG then Well Known Text
-    epsg_match = re.match('^EPSG:(\d+)$', wkt)
-    if epsg_match:
-        spatial_ref.ImportFromEPSG(int(epsg_match.group(1)))
-    else:  # Assume valid WKT definition
-        spatial_ref.ImportFromWkt(wkt)
-    return spatial_ref
+    
+    # Try to resolve WKT
+    result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
+    if not result:
+        return spatial_ref
+
+    # Try to resolve CRS name - either mapped or original
+    result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
+    if not result:
+        return spatial_ref
+
+    # Try common formulations for UTM zones
+    #TODO: Fix this so it works in the Northern hemisphere 
+    modified_crs_name = re.sub('\s+', '', wkt_or_crs_name.strip().upper())
+    utm_match = (re.match('(\w+)/MGAZONE(\d+)', modified_crs_name) or
+                 re.match('(\w+)/(\d+)S', modified_crs_name) or
+                 re.match('(EPSG:283)(\d{2})', modified_crs_name) 
+                 )
+    if utm_match:
+        modified_crs_name = utm_match.group(1)
+        utm_zone = int(utm_match.group(2))
+        result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name)
+    if not result:
+        spatial_ref.SetUTM(utm_zone, False) # Put this here to avoid potential side effects in downstream code
+        return spatial_ref
+
+    assert not result, 'Invalid WKT or CRS name'
 
 def get_coordinate_transformation(from_wkt, to_wkt):
     '''

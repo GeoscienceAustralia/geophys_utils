@@ -16,7 +16,7 @@ import tempfile
 import netCDF4
 import logging
 
-from geophys_utils.netcdf_converter.aseg_gdf_format_dtype import dtype2aseg_gdf_format
+from geophys_utils.netcdf_converter.aseg_gdf_format import dtype2aseg_gdf_format
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -54,9 +54,8 @@ class NetCDF2ASEGGDFConverter(object):
         self.dat_out_path = dat_out_path or os.path.splitext(netcdf_in_path)[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
-        #self.settings_path = settings_path or os.path.splitext(__file__)[0] + '_settings.yml'
         self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
-                                                           'aseg_gdf2netcdf_converter_settings.yml')
+                                                           'aseg_gdf_settings.yml')
         
         try:
             self.settings = yaml.safe_load(open(self.settings_path))
