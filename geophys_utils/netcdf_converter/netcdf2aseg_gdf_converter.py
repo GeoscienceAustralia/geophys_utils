@@ -16,10 +16,10 @@ import tempfile
 import netCDF4
 import logging
 
-from geophys_utils.netcdf_converter.aseg_gdf_format import dtype2aseg_gdf_format
+from geophys_utils.netcdf_converter.aseg_gdf_utils import variable2aseg_gdf_format
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Logging level for this module
+logger.setLevel(logging.DEBUG) # Logging level for this module
 
 # Maximum size of in-memory cache array (in bytes)
 MAX_MEMORY_BYTES = 1073741824 # 1GB
@@ -87,7 +87,7 @@ class NetCDF2ASEGGDFConverter(object):
             if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            fmt, dtype, columns, integer_digits, fractional_digits, python_format = dtype2aseg_gdf_format(variable)
+            fmt, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'short_name': variable_name,
@@ -134,6 +134,7 @@ class NetCDF2ASEGGDFConverter(object):
                 
                 variable = self.nc_dataset.variables[field_name]
                 #print(field_name, variable.dtype)
+                data_array = variable[:]
                 
                 line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
                                                                               short_name=field_name,
@@ -146,11 +147,31 @@ class NetCDF2ASEGGDFConverter(object):
                 
                 units = variable_attributes.get('units')
                 if units:
-                    optional_attribute_list.append('UNITS = {units}'.format(units=units))
+                    optional_attribute_list.append('UNITS={units}'.format(units=units))
 
+                #===============================================================
+                # fill_value = variable_attributes.get('_FillValue') 
+                # if fill_value is not None and fill_value in variable[:].data: # Only write fill value if it actually exists in the data
+                #     logger.debug('type(variable[:]): {}'.format(type(variable[:])))
+                #     #logger.debug('nulls: {}'.format(variable[:][variable[:] == fill_value]))
+                #     optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))
+                #===============================================================
+                if type(data_array) == np.ma.core.MaskedArray:
+                    fill_value = data_array.fill_value
+                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))
+                    
+
+                # Check for additional ASEG-GDF attributes defined in settings
+                for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
+                    attribute_value = variable_attributes.get(netcdf_attribute)
+                    if attribute_value is not None:
+                        optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
+                                                                                                       attribute_value=attribute_value
+                                                                                                       ))
+                    
                 long_name = variable_attributes.get('long_name')
                 if long_name:
-                    optional_attribute_list.append(long_name)
+                    optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
                     
                 if optional_attribute_list:
                     line += ' : ' + ' , '.join(optional_attribute_list) 
@@ -207,6 +228,12 @@ class NetCDF2ASEGGDFConverter(object):
                         if len(variable.shape) == 1: # 1D variable
                             # Not an indexing variable
                             if ('point' in variable.dimensions) and (field_name not in self.settings['index_fields']):
+                                data_array = variable[start_row:end_row]
+                                
+                                # Include fill_values if array is masked
+                                if type(data_array) == np.ma.core.MaskedArray:
+                                    data_array = data_array.data
+                                    
                                 memory_cache_array[0:row_range, 
                                                    column_start] = variable[start_row:end_row]
                             # Indexing variable
@@ -217,8 +244,14 @@ class NetCDF2ASEGGDFConverter(object):
                                 raise BaseException('Invalid dimension for variable {}'.format(field_name))  
                               
                         elif len(variable.shape) == 2: # 2D variable
+                            data_array = variable[start_row:end_row]
+                            
+                            # Include fill_values if array is masked
+                            if type(data_array) == np.ma.core.MaskedArray:
+                                data_array = data_array.data
+                                
                             memory_cache_array[0:row_range, 
-                                                column_start:column_start+field_definition['columns']] = variable[start_row:end_row]
+                                                column_start:column_start+field_definition['columns']] = data_array
                         
                         column_start += field_definition['columns']
                          

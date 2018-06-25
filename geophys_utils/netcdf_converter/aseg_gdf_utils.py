@@ -100,10 +100,11 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
     return dtype, columns, integer_digits, fractional_digits
 
 
-def dtype2aseg_gdf_format(array_variable):
+def variable2aseg_gdf_format(array_variable, decimal_places=None):
     '''
     Function to return ASEG-GDF format string and other info from data array or netCDF array variable
     @param array_variable: data array or netCDF array variable
+    @param decimal_places: Number of decimal places to respect, or None for value derived from datatype and values
     
     @return aseg_gdf_format: ASEG-GDF format string
     @return dtype: Data type string, e.g. int8 or float32
@@ -120,10 +121,16 @@ def dtype2aseg_gdf_format(array_variable):
         raise BaseException('Unable to handle arrays with dimensionality > 3')
         
     dtype = str(array_variable.dtype)
+    data_array = array_variable[:]
+    
+    # Include fill value if required
+    if type(data_array) == np.ma.core.MaskedArray:
+        logger.debug('Array is masked. Including fill value.')
+        data_array = data_array.data
             
     sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
-    sign_width = 1 if np.nanmin(array_variable[:]) < 0 else 0
-    integer_digits = ceil(log10(np.nanmax(np.abs(array_variable[:])) + 1.0))
+    sign_width = 1 if np.nanmin(data_array) < 0 else 0
+    integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
     
     if dtype.startswith('int'):
         fractional_digits = 0
@@ -131,14 +138,19 @@ def dtype2aseg_gdf_format(array_variable):
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits, fractional_digits) + '}'
     elif dtype.startswith('float'):
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine fractional_digits
-        if hasattr(array_variable, 'aseg_gdf_format'): 
+        if decimal_places is not None:
+            fractional_digits = min(decimal_places, sig_figs-integer_digits)
+            logger.debug('fractional_digits set to {} from decimal_places {}'.format(fractional_digits, decimal_places))
+        elif hasattr(array_variable, 'aseg_gdf_format'): 
             _columns, _dtype_code, _integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
-            fractional_digits = min(fractional_digits, sig_figs-integer_digits)
-        else: # No fra
+            fractional_digits = min(fractional_digits, sig_figs-integer_digits+1)
+            logger.debug('fractional_digits set to {} from variable attribute aseg_gdf_format {}'.format(fractional_digits, array_variable.aseg_gdf_format))
+        else: # No aseg_gdf_format variable attribute
             fractional_digits = sig_figs - integer_digits + 1
+            logger.debug('fractional_digits set to {} from sig_figs {} and integer_digits {}'.format(fractional_digits, sig_figs, integer_digits))
             
         aseg_gdf_format = 'F{}.{}'.format(integer_digits, fractional_digits)
-        python_format = '{' + ':{:d}.{:d}f'.format(sign_width+sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
+        python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits+fractional_digits+1, fractional_digits) + '}' # Add 1 to width for decimal point
     
     # Pre-pend column count to start of aseg_gdf_format
     if columns > 1:
@@ -174,31 +186,34 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
     for dtype_reduction_list in dtype_reduction_lists:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
+            data_array = array_variable[:]
+            
+            # Include fill value if required
+            if type(data_array) == np.ma.core.MaskedArray:
+                logger.debug('Array is masked. Including fill value.')
+                data_array = data_array.data
+                
             # Try types from smallest to largest
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
-                smaller_array = array_variable[:].astype(smaller_dtype)
-                difference_array = array_variable[:] - smaller_array
-                logger.debug('current_dtype:', current_dtype,
-                      '\nsmaller_dtype:', smaller_dtype,
-                      '\narray_variable\n', 
-                      array_variable[:], 
-                      '\nsmaller_array\n', 
-                      smaller_array,
-                      '\ndifference_array\n', 
-                      difference_array,
-                      '\nfractional_digits:', fractional_digits,
-                      '\ndifference count:', np.count_nonzero(difference_array >= pow(10, -fractional_digits)),
-                      '\ndifference values: ', difference_array[difference_array != 0]
+                smaller_array = data_array.astype(smaller_dtype)
+                difference_array = data_array - smaller_array
+                logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
+difference_array\n{}\nfractional_digits: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
+                                                                                               smaller_dtype, 
+                                                                                               data_array, 
+                                                                                               smaller_array, 
+                                                                                               difference_array, 
+                                                                                               fractional_digits, 
+                                                                                               np.count_nonzero(difference_array >= pow(10, -fractional_digits)), 
+                                                                                               difference_array[difference_array != 0]
+                                                                                               )
                       )
                 if np.count_nonzero(np.abs(difference_array) >= pow(10, -fractional_digits)):
                     # Differences found - try larger datatype
                     continue
                 else:
-                    aseg_gdf_format, dtype, columns, integer_digits, derived_fractional_digits, python_format = dtype2aseg_gdf_format(smaller_array)
-                    # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
-                    # Use the minimum number of decimal places: either specified or derived
-                    derived_fractional_digits = min(fractional_digits, derived_fractional_digits)
-                    return aseg_gdf_format, dtype, columns, integer_digits, derived_fractional_digits, python_format
+                    aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(smaller_array, fractional_digits)
+                    return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
 
             
         except ValueError: # current_dtype_index not in dtype_reduction_list

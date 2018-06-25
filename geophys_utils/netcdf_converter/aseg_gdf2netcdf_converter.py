@@ -37,7 +37,7 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_format import aseg_gdf_format2dtype, fix_field_precision
+from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -380,7 +380,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 dtype = field_definition['dtype']
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
-                precision_change_result = fix_field_precision(data_array, dtype, field_definition['fractional_digits']) # (fmt, dtype, columns, integer_digits, fractional_digits, python_format)
+                precision_change_result = fix_field_precision(data_array, dtype, field_definition['fractional_digits']) 
+                logger.debug('precision_change_result: {}'.format(precision_change_result))
                 # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
