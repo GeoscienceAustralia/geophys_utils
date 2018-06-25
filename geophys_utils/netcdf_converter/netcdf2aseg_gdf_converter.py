@@ -149,17 +149,9 @@ class NetCDF2ASEGGDFConverter(object):
                 if units:
                     optional_attribute_list.append('UNITS={units}'.format(units=units))
 
-                #===============================================================
-                # fill_value = variable_attributes.get('_FillValue') 
-                # if fill_value is not None and fill_value in variable[:].data: # Only write fill value if it actually exists in the data
-                #     logger.debug('type(variable[:]): {}'.format(type(variable[:])))
-                #     #logger.debug('nulls: {}'.format(variable[:][variable[:] == fill_value]))
-                #     optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))
-                #===============================================================
-                if type(data_array) == np.ma.core.MaskedArray:
-                    fill_value = data_array.fill_value
-                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))
-                    
+                fill_value = variable_attributes.get('_FillValue') 
+                if fill_value is not None:
+                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))                   
 
                 # Check for additional ASEG-GDF attributes defined in settings
                 for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
