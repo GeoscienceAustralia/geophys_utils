@@ -11,6 +11,11 @@ import re
 import numpy as np
 from collections import OrderedDict
 from math import log10, ceil
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO) # Logging level for this module
+
 
 # Approximate maximum number of significant decimal figures for each signed datatype
 SIG_FIGS = OrderedDict([('int8', 2), # 128
@@ -23,15 +28,15 @@ SIG_FIGS = OrderedDict([('int8', 2), # 128
                         ]
                        )
 
-def aseg_gdf_format2dtype(aseg_gdf_format):
+def decode_aseg_gdf_format(aseg_gdf_format):
     '''
-    Function to return Python data type string and other precision information from ASEG-GDF format string
+    Function to decode ASEG-GDF format string
     @param aseg_gdf_format: ASEG-GDF format string
 
-    @return dtype: Data type string, e.g. int8 or float32
     @return columns: Number of columns (i.e. 1 for 1D data, or read from format string for 2D data)
+    @return dtype_code: ASEG-GDF data type character, e.g. "F" or "I"
     @return integer_digits: Number of integer digits read from format string
-    @return fractional_digits: Number of fractional digits read from format string
+    @return fractional_digits: Number of fractional digits read from format string    
     '''
     if not aseg_gdf_format:
         raise BaseException('No ASEG-GDF format string to decode')  
@@ -45,6 +50,27 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
     dtype_code = match.group(2).upper()
     integer_digits = int(match.group(3))
     fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
+    
+    logger.debug('aseg_gdf_format: {}, columns: {}, dtype_code: {}, integer_digits: {}, fractional_digits: {}'.format(aseg_gdf_format, 
+                                                                                                                      columns, 
+                                                                                                                      dtype_code, 
+                                                                                                                      integer_digits, 
+                                                                                                                      fractional_digits
+                                                                                                                      )
+                 ) 
+    return columns, dtype_code, integer_digits, fractional_digits  
+
+def aseg_gdf_format2dtype(aseg_gdf_format):
+    '''
+    Function to return Python data type string and other precision information from ASEG-GDF format string
+    @param aseg_gdf_format: ASEG-GDF format string
+
+    @return dtype: Data type string, e.g. int8 or float32
+    @return columns: Number of columns (i.e. 1 for 1D data, or read from format string for 2D data)
+    @return integer_digits: Number of integer digits read from format string
+    @return fractional_digits: Number of fractional digits read from format string    
+    '''
+    columns, dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(aseg_gdf_format)
     dtype = None # Initially unknown datatype
     
     # Determine type and size for required significant figures
@@ -65,6 +91,12 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
                 break
         assert dtype, 'Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits)                                    
     
+    logger.debug('dtype_code: {}, columns: {}, integer_digits: {}, fractional_digits: {}'.format(dtype, 
+                                                                                                 columns, 
+                                                                                                 integer_digits, 
+                                                                                                 fractional_digits
+                                                                                                 )
+                 ) 
     return dtype, columns, integer_digits, fractional_digits
 
 
@@ -100,10 +132,10 @@ def dtype2aseg_gdf_format(array_variable):
     elif dtype.startswith('float'):
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine fractional_digits
         if hasattr(array_variable, 'aseg_gdf_format'): 
-            _dtype, _columns, _integer_digits, fractional_digits = aseg_gdf_format2dtype(array_variable.aseg_gdf_format)
+            _columns, _dtype_code, _integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
             fractional_digits = min(fractional_digits, sig_figs-integer_digits)
         else: # No fra
-            fractional_digits = sig_figs - integer_digits
+            fractional_digits = sig_figs - integer_digits + 1
             
         aseg_gdf_format = 'F{}.{}'.format(integer_digits, fractional_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+sig_figs+1, fractional_digits) + '}' # Add 1 to width for decimal point
@@ -137,6 +169,8 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
                              ['float64', 'float32'] # Floating point dtypes
                              ]
     
+    logger.debug('array_variable: {}, current_dtype: {}, fractional_digits: {}'.format(array_variable, current_dtype, fractional_digits))
+    
     for dtype_reduction_list in dtype_reduction_lists:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
@@ -144,20 +178,18 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
                 smaller_array = array_variable[:].astype(smaller_dtype)
                 difference_array = array_variable[:] - smaller_array
-                #===============================================================
-                # print('current_dtype:', current_dtype,
-                #       '\nsmaller_dtype:', smaller_dtype,
-                #       '\narray_variable\n', 
-                #       array_variable[:], 
-                #       '\nsmaller_array\n', 
-                #       smaller_array,
-                #       '\ndifference_array\n', 
-                #       difference_array,
-                #       '\nfractional_digits:', fractional_digits,
-                #       '\ndifference count:', np.count_nonzero(difference_array >= pow(10, -fractional_digits)),
-                #       '\ndifference values: ', difference_array[difference_array != 0]
-                #       )
-                #===============================================================
+                logger.debug('current_dtype:', current_dtype,
+                      '\nsmaller_dtype:', smaller_dtype,
+                      '\narray_variable\n', 
+                      array_variable[:], 
+                      '\nsmaller_array\n', 
+                      smaller_array,
+                      '\ndifference_array\n', 
+                      difference_array,
+                      '\nfractional_digits:', fractional_digits,
+                      '\ndifference count:', np.count_nonzero(difference_array >= pow(10, -fractional_digits)),
+                      '\ndifference values: ', difference_array[difference_array != 0]
+                      )
                 if np.count_nonzero(np.abs(difference_array) >= pow(10, -fractional_digits)):
                     # Differences found - try larger datatype
                     continue

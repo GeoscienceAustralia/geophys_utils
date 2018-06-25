@@ -111,7 +111,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
                         units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
                         long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
-                        fill_value = float(key_value_pairs.get('NULL'))
+                        fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
                         
                         # Parse format to determine columns, data type and numeric format
                         dtype, columns, integer_digits, fractional_digits = aseg_gdf_format2dtype(fmt)
@@ -145,17 +145,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         self.field_definitions.append(field_dict)
                         
                                     
-                    # Projection definition
-                    elif key_value_pairs.get('RT') == 'PROJ' and not self.crs: 
-                        #logger.debug('split_lists[1]: {}'.format(pformat(split_lists[1])))
-                         
-                        #TODO: Parse projection properly
-                        if (key_value_pairs.get('PROJNAME') == 'GDA94 / MGA zone 54'):
-                             
-                            # TODO: Remove this hard-coded hack
-                            wkt = 'EPSG:28354'
-                            self.crs = get_spatial_ref_from_wkt(wkt)
-                            logger.debug('CRS set from .dfn file PROJNAME attribute {}'.format(wkt))
+                    # Set CRS from projection name
+                    elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME') and not self.crs:                          
+                        projection_name = key_value_pairs.get('COMMENT')
+                        if projection_name:
+                            self.crs = get_spatial_ref_from_wkt(projection_name)
+                            logger.debug('CRS set from .dfn file PROJNAME attribute {}'.format(projection_name))
                             break # Nothing more to do
                             
             # Start of get_field_definitions function
@@ -377,6 +372,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             for field_definition in self.field_definitions:
                 short_name = field_definition['short_name']
+                
+                # Skip dimension fields
+                if short_name in self.settings['dimension_fields']:
+                    continue
+                
                 dtype = field_definition['dtype']
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
