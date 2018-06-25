@@ -151,7 +151,7 @@ class NetCDF2ASEGGDFConverter(object):
 
                 fill_value = variable_attributes.get('_FillValue') 
                 if fill_value is not None:
-                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value))                   
+                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
 
                 # Check for additional ASEG-GDF attributes defined in settings
                 for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
