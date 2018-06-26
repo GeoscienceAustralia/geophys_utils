@@ -159,15 +159,17 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
 
 
-def fix_field_precision(array_variable, current_dtype, fractional_digits):
+def fix_field_precision(array_variable, current_dtype, fractional_digits, fill_value=None):
     '''
     Function to return revised ASEG-GDF format string and other info from data array or netCDF array variable
     after correcting datatype for excessive precision specification, or None if there is no precision change.
     Arrays are copied to smaller representations and then the difference with the original is checked to
-    ensure that any difference is less than precision of the specified number of fractional digits
+    ensure that any difference is less than precision of the specified number of fractional digits.
+    Note that fill_value is also considered and potentially modified if data precision is changed
     @param array_variable: data array or netCDF array variable - assumed to be of dtype float64 for raw data
     @param current_dtype: Current data type string, e.g. int8 or float32
     @param fractional_digits: Number of fractional digits for precision checking
+    @param fill_value: fill value or None
     
     Returns None if no precision change required.
     @return aseg_gdf_format: ASEG-GDF format string
@@ -175,7 +177,8 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
     @return columns: Number of columns (i.e. 1 for 1D data, or second dimension size for 2D data)
     @return integer_digits: Number of integer digits (derived from maximum value)
     @return fractional_digits: Number of fractional digits (derived from datatype sig. figs - integer_digits)
-    @param python_format: Python Formatter string for fixed-width output
+    @return python_format: Python Formatter string for fixed-width output
+    @return fill_value: Potentially modified fill value
     '''
     dtype_reduction_lists = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
                              ['float64', 'float32'] # Floating point dtypes
@@ -191,8 +194,12 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits):
             # Include fill value if required
             if type(data_array) == np.ma.core.MaskedArray:
                 logger.debug('Array is masked. Including fill value.')
-                data_array = data_array.data
-                
+                fill_value = data_array.fill_value # Use masked array fill value instead of any provided value
+                no_data_mask = data_array.mask
+                data_array = data_array.data # Include mask value
+            if fill_value is not None:
+                no_data_mask = (data_array == fill_value)
+            
             # Try types from smallest to largest
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
                 smaller_array = data_array.astype(smaller_dtype)
@@ -213,7 +220,30 @@ difference_array\n{}\nfractional_digits: {}\ndifference count: {}\ndifference va
                     continue
                 else:
                     aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(smaller_array, fractional_digits)
-                    return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
+
+                    if fill_value is not None:
+                        # Use reduced precision fill_value if available and unambiguous
+                        if np.any(no_data_mask):
+                            reduced_precision_fill_value = data_array[no_data_mask][0] 
+                            
+                            # Check for ambiguity introduced by reduced precision
+                            if np.any(data_array[~no_data_mask] == reduced_precision_fill_value):
+                                logger.debug('Reduced precision fill value of {} is ambiguous'.format(reduced_precision_fill_value))
+                                continue
+                            else:
+                                fill_value = reduced_precision_fill_value
+                        
+                        # Try truncating fill_value to <integer_digits>.<fractional_digits> rather than rounding for neater output later on
+                        try:
+                            pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(integer_digits) + '}\.\d{0,' + '{}'.format(fractional_digits) + '})')
+                            search = re.search(pattern, str(fill_value))
+                            truncated_fill_value = float(search.group(1)+search.group(2))
+                            assert not np.any(data_array[~no_data_mask] == truncated_fill_value), 'Truncated fill value of {} is ambiguous'.format(truncated_fill_value)
+                            fill_value = truncated_fill_value
+                        except Exception as e:
+                            logger.info('Unable to truncate fill value to {}: {}'.format(aseg_gdf_format, e))
+                            
+                    return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format, fill_value
 
             
         except ValueError: # current_dtype_index not in dtype_reduction_list

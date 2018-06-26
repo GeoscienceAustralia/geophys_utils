@@ -134,7 +134,6 @@ class NetCDF2ASEGGDFConverter(object):
                 
                 variable = self.nc_dataset.variables[field_name]
                 #print(field_name, variable.dtype)
-                data_array = variable[:]
                 
                 line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
                                                                               short_name=field_name,
@@ -149,7 +148,7 @@ class NetCDF2ASEGGDFConverter(object):
                 if units:
                     optional_attribute_list.append('UNITS={units}'.format(units=units))
 
-                fill_value = variable_attributes.get('_FillValue') 
+                fill_value = variable_attributes.get('_FillValue')
                 if fill_value is not None:
                     optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
 

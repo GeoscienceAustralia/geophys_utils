@@ -116,7 +116,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         # Parse format to determine columns, data type and numeric format
                         dtype, columns, integer_digits, fractional_digits = aseg_gdf_format2dtype(fmt)
                                     
-                        field_dict = {'short_name': short_name,
+                        field_definition = {'short_name': short_name,
                                       'format': fmt,
                                       'long_name': long_name,
                                       'dtype': dtype,
@@ -125,9 +125,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                       'fractional_digits': fractional_digits
                                       }
                         if units:
-                            field_dict['units'] = units
+                            field_definition['units'] = units
                         if fill_value is not None:
-                            field_dict['fill_value'] = fill_value
+                            field_definition['fill_value'] = fill_value
                              
                         
                         # Set variable attributes in field definition
@@ -140,16 +140,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         variable_attribute_dict['aseg_gdf_format'] = fmt 
 
                         if variable_attribute_dict:
-                            field_dict['variable_attributes'] = variable_attribute_dict    
+                            field_definition['variable_attributes'] = variable_attribute_dict    
                         
-                        self.field_definitions.append(field_dict)
+                        self.field_definitions.append(field_definition)
                         
                                     
                     # Set CRS from projection name
-                    elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME') and not self.crs:                          
+                    elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME') and not self.spatial_ref:                          
                         projection_name = key_value_pairs.get('COMMENT')
                         if projection_name:
-                            self.crs = get_spatial_ref_from_wkt(projection_name)
+                            self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
                             logger.debug('CRS set from .dfn file PROJNAME attribute {}'.format(projection_name))
                             break # Nothing more to do
                             
@@ -167,17 +167,17 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
                         
             # Check for CRS definition in latitude field - need to do this after short_name has potentially been remapped
-            if not self.crs:
+            if not self.spatial_ref:
                 try:
                     field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
                     crs_string = field_definition['variable_attributes']['datum_name']
-                    self.crs = get_spatial_ref_from_wkt(crs_string)
+                    self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
                     logger.debug('CRS set from latitude variable datum_name attribute {}'.format(crs_string))
                 except:
                     logger.debug('Unable to set CRS from latitude datum_name attribute')               
 
-            assert self.crs, 'Coordinate Reference System undefined'
-            logger.debug('self.crs: {}'.format(self.crs.ExportToPrettyWkt()))
+            assert self.spatial_ref, 'Coordinate Reference System undefined'
+            logger.debug('self.spatial_ref: {}'.format(self.spatial_ref.ExportToPrettyWkt()))
         
         def read_data_file(): 
             '''
@@ -369,6 +369,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         def fix_all_field_precisions():
             '''
             Helper function to reduce field datatype size if there is no loss in precision
+            N.B: May modify fill_value variable attribute to same format as data if fill_value is not in data
             '''
             for field_definition in self.field_definitions:
                 short_name = field_definition['short_name']
@@ -380,16 +381,33 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 dtype = field_definition['dtype']
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
-                precision_change_result = fix_field_precision(data_array, dtype, field_definition['fractional_digits']) 
-                logger.debug('precision_change_result: {}'.format(precision_change_result))
-                # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format
+                precision_change_result = fix_field_precision(data_array, dtype, 
+                                                              field_definition['fractional_digits'],
+                                                              field_definition.get('fill_value')
+                                                              ) 
+                # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format, modified_fill_value
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
+                    logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
                     field_definition['integer_digits'] = precision_change_result[3]
                     field_definition['fractional_digits'] = precision_change_result[4]
                     
+                    # Modify fill_value if required
+                    original_fill_value = field_definition.get('fill_value')
+                    modified_fill_value = precision_change_result[6]
+                    if (original_fill_value is not None 
+                        and modified_fill_value is not None 
+                        and (original_fill_value != modified_fill_value)): # Fill value has been modified
+                        
+                        field_definition['fill_value'] = modified_fill_value
+                        data_array[np.logical_or((data_array == original_fill_value), 
+                                                 np.isnan(data_array))] = modified_fill_value
+                    
+                        logger.info('fill_value changed from {} to {}'.format(original_fill_value, 
+                                                                              modified_fill_value)
+                                                                              )
                     # Update the format string in variable attributes
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
@@ -406,10 +424,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.column_count = None # Number of columns in .dat file
 
         if crs_string:
-            self.crs = get_spatial_ref_from_wkt(crs_string)
+            self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
             logger.debug('CRS set from supplied crs_string {}'.format(crs_string))
         else:
-            self.crs = None
+            self.spatial_ref = None
 
         self.dimensions = OrderedDict()
 
@@ -490,27 +508,41 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         Concrete method to return dict of global attribute <key>:<value> pairs       
         '''
         #TODO: implement search lists for different variable names
+        
         metadata_dict = {'title': 'Dataset read from ASEG-GDF file {}'.format(os.path.basename(self.aem_dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
-            'geospatial_east_min': np.min(self.get_raw_data('easting')) or np.min(self.get_raw_data('longitude')),
-            'geospatial_east_max': np.max(self.get_raw_data('easting')) or np.max(self.get_raw_data('longitude')),
-            'geospatial_east_units': "m",
-            'geospatial_east_resolution': "point",
-            'geospatial_north_min': np.min(self.get_raw_data('northing')) or np.min(self.get_raw_data('latitude')),
-            'geospatial_north_max': np.max(self.get_raw_data('northing')) or np.min(self.get_raw_data('latitude')),
-            'geospatial_north_units': "m",
-            'geospatial_north_resolution': "point",
             #TODO: Sort out standard names for elevation and get rid of the DTM case. Should this be min(elevation-DOI)?
-            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')) or np.min(self.get_raw_data('DTM')),
-            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')) or np.min(self.get_raw_data('DTM')), 
+            'geospatial_vertical_min': np.min(self.get_raw_data('elevation')) or np.min(self.get_raw_data('dtm')),
+            'geospatial_vertical_max': np.max(self.get_raw_data('elevation')) or np.min(self.get_raw_data('dtm')), 
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
             'history': 'Converted from ASEG-GDF file {} using definitions file {}'.format(self.aem_dat_path,
                                                                                      self.dfn_path),
-            'date_created': datetime.now().isoformat()
+            'date_created': datetime.now().isoformat(),
+            'geospatial_east_resolution': "point",
+            'geospatial_north_resolution': "point",
             }
+            
+        if self.spatial_ref.GetUTMZone(): # CRS is in UTM
+            metadata_dict.update({
+                'geospatial_east_min': np.min(self.get_raw_data('easting')),
+                'geospatial_east_max': np.max(self.get_raw_data('easting')),
+                'geospatial_east_units': "m",
+                'geospatial_north_min': np.min(self.get_raw_data('northing')),
+                'geospatial_north_max': np.max(self.get_raw_data('northing')),
+                'geospatial_north_units': "m",
+                })
+        else:
+            metadata_dict.update({
+                'geospatial_east_min': np.min(self.get_raw_data('longitude')),
+                'geospatial_east_max': np.max(self.get_raw_data('longitude')),
+                'geospatial_east_units': "degrees East",
+                'geospatial_north_min': np.min(self.get_raw_data('latitude')),
+                'geospatial_north_max': np.max(self.get_raw_data('latitude')),
+                'geospatial_north_units': "degrees North",
+                })
         
         if self.settings.get('keywords'):
             metadata_dict['keywords'] = self.settings['keywords']
@@ -544,7 +576,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                                                   return_counts=True
                                                                                   )
                 logger.info('{} {} values found'.format(len(index_values), field_definition['short_name']))
-                logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
+                #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
             except:
                 logger.info('Unable to create {} indexing variables'.format(field_definition['short_name']))
                 return   
@@ -590,7 +622,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  )
               
         # Create crs variable
-        yield self.build_crs_variable(self.crs)
+        yield self.build_crs_variable(self.spatial_ref)
         
         # Create and yield variables
         for field_definition in self.field_definitions:
