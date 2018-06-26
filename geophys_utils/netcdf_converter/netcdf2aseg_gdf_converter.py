@@ -17,6 +17,8 @@ import netCDF4
 import logging
 
 from geophys_utils.netcdf_converter.aseg_gdf_utils import variable2aseg_gdf_format
+from geophys_utils import get_spatial_ref_from_wkt
+
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Logging level for this module
@@ -94,7 +96,7 @@ class NetCDF2ASEGGDFConverter(object):
                                 'dtype': dtype,
                                 'chunk_size': chunk_size,
                                 'columns': columns,
-                                'fmt': fmt,
+                                'format': fmt,
                                 'integer_digits': integer_digits,
                                 'fractional_digits': fractional_digits,
                                 'python_format': python_format
@@ -123,51 +125,188 @@ class NetCDF2ASEGGDFConverter(object):
             '''
             Helper function to output .dfn file
             '''
+            def write_defns(dfn_file):
+                """
+                Helper function to write multiple DEFN lines
+                """
+                defn = 0
+                for field_definition in self.field_definitions:
+                    field_name = field_definition['short_name']
+                    defn += 1
+                    
+                    variable = self.nc_dataset.variables[field_name]
+                    #print(field_name, variable.dtype)
+                    
+                    line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
+                                                                                  short_name=field_name,
+                                                                                  fmt=field_definition['format']
+                                                                                  )
+                    
+                    variable_attributes = variable.__dict__
+                    
+                    optional_attribute_list = []
+                    
+                    units = variable_attributes.get('units')
+                    if units:
+                        optional_attribute_list.append('UNITS={units}'.format(units=units))
+    
+                    fill_value = variable_attributes.get('_FillValue')
+                    if fill_value is not None:
+                        optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
+    
+                    # Check for additional ASEG-GDF attributes defined in settings
+                    for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
+                        attribute_value = variable_attributes.get(netcdf_attribute)
+                        if attribute_value is not None:
+                            optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
+                                                                                                           attribute_value=attribute_value
+                                                                                                           ))
+                        
+                    long_name = variable_attributes.get('long_name')
+                    if long_name:
+                        optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
+                        
+                    if optional_attribute_list:
+                        line += ' : ' + ' , '.join(optional_attribute_list) 
+    
+                    dfn_file.write(line + '\n')
+                    
+                defn += 1
+                dfn_file.write('DEFN {defn} ST=RECD,RT=;END DEFN\n'.format(defn=defn))
+                return # End of function write_defns
+            
+                
+            def write_proj(dfn_file):
+                """
+                Helper function to write PROJ lines
+From standard:
+DEFN 1 ST=RECD,RT=PROJ; RT: A4
+DEFN 2 ST=RECD,RT=PROJ; COORDSYS: A40: NAME=projection name, POSC projection name
+DEFN 3 ST=RECD,RT=PROJ; DATUM: A40: NAME=datum name, EPSG compliant ellipsoid name
+DEFN 4 ST=RECD,RT=PROJ; MAJ_AXIS: D12.1: UNIT=m, NAME=major_axis, Major axis in units
+relevant to the ellipsoid definition
+DEFN 5 ST=RECD,RT=PROJ; INVFLATT: D14.9: NAME=inverse flattening, 1/f inverse of flattening
+DEFN 6 ST=RECD,RT=PROJ; PRIMEMER: F10.1: UNIT=deg, NAME=prime_meridian, Location of prime
+meridian relative to Greenwich
+DEFN 7 ST=RECD,RT=PROJ; PROJMETH: A30: NAME=projection_method, eg. Transverse Mercator,
+Lambert etc
+DEFN 8 ST=RECD,RT=PROJ; PARAM1: D14.0: NAME=Proj_par1, 1st projecton paramater See Table 1
+DEFN 9 ST=RECD,RT=PROJ; PARAM2: D14.0: NAME=Proj_par2, 2nd projection parameter
+DEFN 10 ST=RECD,RT=PROJ; PARAM3: D14.0: NAME=Proj_par3, 3rd projection parameter
+DEFN 11 ST=RECD,RT=PROJ; PARAM4: D14.0: NAME=Proj_par4, 4th projection parameter
+DEFN 12 ST=RECD,RT=PROJ; PARAM5: D14.0: NAME=Proj_par5, 5th projection parameter
+DEFN 13 ST=RECD,RT=PROJ; PARAM6: D14.0: NAME=Proj_par6, 6th projection parameter
+DEFN 14 ST=RECD,RT=PROJ; PARAM7: D14.0: NAME=Proj_par7, 7th projection parameter
+DEFN 15 ST=RECD,RT=PROJ; END DEFN  
+
+From sample file:
+DEFN 1 ST=RECD,RT=PROJ; RT:A4
+DEFN 2 ST=RECD,RT=PROJ; PROJNAME:A30: COMMENT=GDA94 / MGA zone 54
+DEFN 3 ST=RECD,RT=PROJ; ELLPSNAM:A30: COMMENT=GRS 1980
+DEFN 4 ST=RECD,RT=PROJ; MAJ_AXIS: D12.1: UNIT=m, COMMENT=6378137.000000
+DEFN 5 ST=RECD,RT=PROJ; ECCENT: D12.9: COMMENT=298.257222
+DEFN 6 ST=RECD,RT=PROJ; PRIMEMER: F10.1: UNIT=deg, COMMENT=0.000000
+DEFN 7 ST=RECD,RT=PROJ; PROJMETH: A30: COMMENT=Transverse Mercator
+DEFN 8 ST=RECD,RT=PROJ; PARAM1: D14.0: COMMENT=      0.000000
+DEFN 9 ST=RECD,RT=PROJ; PARAM2: D14.0: COMMENT=    141.000000
+DEFN 10 ST=RECD,RT=PROJ; PARAM3: D14.0: COMMENT=      0.999600
+DEFN 11 ST=RECD,RT=PROJ; PARAM4: D14.0: COMMENT= 500000.000000
+DEFN 12 ST=RECD,RT=PROJ; PARAM5: D14.0: COMMENT=10000000.00000
+DEFN 13 ST=RECD,RT=PROJ; PARAM6: D14.0:
+DEFN 14 ST=RECD,RT=PROJ; PARAM7: D14.0:
+DEFN 15 ST=RECD,RT=PROJ; END DEFN
+PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse Mercator  0.000000  141.000000  0.999600 500000.000000 10000000.00000
+                """
+                wkt = None
+                for crs_variable_name in ['crs', 'transverse_mercator']:
+                    if crs_variable_name in self.nc_dataset.variables.keys():
+                        wkt = self.nc_dataset.variables[crs_variable_name].spatial_ref
+                        break
+                assert wkt, 'No Coordinate Reference System defined'
+                
+                spatial_ref = get_spatial_ref_from_wkt(wkt)
+                geogcs = spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
+                projcs = spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
+                ellipse_name = spatial_ref.GetAttrValue('spheroid', 0)
+                major_axis = spatial_ref.GetAttrValue('spheroid', 1)
+                prime_meridian = spatial_ref.GetAttrValue('primem', 1)
+                inverse_flattening = spatial_ref.GetInvFlattening()
+                #eccentricity = spatial_ref.GetAttrValue('spheroid', 2) # Same as inverse_flattening?
+                
+                if spatial_ref.IsProjected():
+                    if projcs.startswith(geogcs):
+                        projection_name = projcs
+                    else:
+                        projection_name = geogcs + ' / ' + re.sub('[\:\,\=]+', '', projcs) # e.g. 'GDA94 / UTM Zone 54, Southern Hemisphere'
+                    projection_method = spatial_ref.GetAttrValue('projection').replace('_', ' ')
+                    projection_parameters = re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', spatial_ref.ExportToPrettyWkt())
+                else: # Unprojected CRS
+                    projection_name = None
+                    projection_method = None
+                    projection_parameters = None
+
+                defn = 1
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; RT:A4\n'.format(defn=defn)); defn += 1
+                
+                if projcs:
+                    dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; COORDSYS: A40: NAME={projection_name}, POSC projection name\n'.format(defn=defn,
+                                                                                                                                     projection_name=projection_name
+                                                                                                                                     )); defn += 1
+
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; DATUM: A40: NAME={ellipse_name}, EPSG compliant ellipsoid name\n'.format(defn=defn, 
+                                                                                                                                      ellipse_name=ellipse_name
+                                                                                                                                      )); defn += 1
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; MAJ_AXIS: D12.1: UNIT={unit}, NAME={major_axis}, Major axis\n'.format(defn=defn,
+                                                                                                                                   unit='m', 
+                                                                                                                                   major_axis=major_axis
+                                                                                                                                   )); defn += 1
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; INVFLATT: D14.9: NAME={inverse_flattening}, 1/f inverse of flattening\n'.format(defn=defn,
+                                                                                                                                             inverse_flattening=inverse_flattening
+                                                                                                                                             )); defn += 1
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PRIMEMER: F10.1: UNIT={unit}, NAME={prime_meridian}, Location of prime meridian\n'.format(defn=defn,
+                                                                                                                                                       unit='degree', 
+                                                                                                                                                       prime_meridian=prime_meridian
+                                                                                                                                                       )); defn += 1
+                #===============================================================
+                # # Non-standard definitions from sample
+                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; ELLPSNAM:A30: NAME={ellipse_name}\n'.format(defn=defn,
+                #                                                                                          ellipse_name=ellipse_name
+                #                                                                                          )); defn += 1
+                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PROJNAME:A40: NAME={projection_name}\n'.format(defn=defn,
+                #                                                                                             projection_name=projection_name
+                #                                                                                             )); defn += 1
+                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; ECCENT: D12.9: NAME={eccentricity}\n'.format(defn=defn,
+                #                                                                                           eccentricity=eccentricity
+                #                                                                                           )); defn += 1
+                #===============================================================
+                
+                if projection_method:                    
+                    dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PROJMETH: A30: NAME={projection_method}, projection method\n'.format(defn=defn,
+                                                                                                                      projection_method=projection_method
+                                                                                                                      )); defn += 1
+                    # Write all projection parameters starting from DEFN 8
+                    param_no = 0
+                    for param_name, param_value in projection_parameters:
+                        param_no += 1  
+                        dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PARAM{param_no}: D14.0: NAME={param_value}, {param_name}\n'.format(defn=defn,
+                                                                                                                                          param_no=param_no,
+                                                                                                                                          param_value=param_value,
+                                                                                                                                          param_name=param_name
+                                                                                                                                          )); defn += 1                   
+                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; END DEFN\n'.format(defn=defn)); defn += 1   
+                
+                #TODO: Write fixed length PROJ line at end of file
+                  
+                return # End of function write_proj
+                
+
             # Create, write and close .dat file
             dfn_file = open(self.dfn_out_path, 'w')
             dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A76\n') # TODO: Check this first line 
             
-            defn = 0
-            for field_definition in self.field_definitions:
-                field_name = field_definition['short_name']
-                defn += 1
-                
-                variable = self.nc_dataset.variables[field_name]
-                #print(field_name, variable.dtype)
-                
-                line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
-                                                                              short_name=field_name,
-                                                                              fmt=field_definition['fmt']
-                                                                              )
-                
-                variable_attributes = variable.__dict__
-                
-                optional_attribute_list = []
-                
-                units = variable_attributes.get('units')
-                if units:
-                    optional_attribute_list.append('UNITS={units}'.format(units=units))
-
-                fill_value = variable_attributes.get('_FillValue')
-                if fill_value is not None:
-                    optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
-
-                # Check for additional ASEG-GDF attributes defined in settings
-                for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
-                    attribute_value = variable_attributes.get(netcdf_attribute)
-                    if attribute_value is not None:
-                        optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
-                                                                                                       attribute_value=attribute_value
-                                                                                                       ))
-                    
-                long_name = variable_attributes.get('long_name')
-                if long_name:
-                    optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
-                    
-                if optional_attribute_list:
-                    line += ' : ' + ' , '.join(optional_attribute_list) 
-
-                dfn_file.write(line + '\n')
+            write_defns(dfn_file)
+            
+            write_proj(dfn_file)
                 
             dfn_file.close()
             logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
