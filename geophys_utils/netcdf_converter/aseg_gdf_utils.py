@@ -155,29 +155,33 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
     sign_width = 1 if np.nanmin(data_array) < 0 else 0
     integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
-    width_specifier = integer_digits + decimal_places + sign_width + 1
     
     aseg_dtype_code = ASEG_DTYPE_CODE_MAPPING.get(dtype)
     assert aseg_dtype_code, 'Unhandled dtype {}'.format(dtype)
     
     if aseg_dtype_code == 'I': # Integer
         decimal_places = 0
+        width_specifier = integer_digits + sign_width
         aseg_gdf_format = 'I{}'.format(width_specifier)
         python_format = '{' + ':{:d}.{:d}f'.format(width_specifier, decimal_places) + '}'
     #TODO: Remove 'A' after string field handling has been properly implemented
     elif aseg_dtype_code in ['F', 'D', 'A']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine decimal_places
         if decimal_places is not None:
-            decimal_places = min(decimal_places, sig_figs-integer_digits+1)
+            decimal_places = min(decimal_places, sig_figs-integer_digits)
             logger.debug('decimal_places set to {} from decimal_places {}'.format(decimal_places, decimal_places))
         elif hasattr(array_variable, 'aseg_gdf_format'): 
             _columns, _aseg_dtype_code, _integer_digits, decimal_places = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
-            decimal_places = min(decimal_places, sig_figs-integer_digits+1)
+            decimal_places = min(decimal_places, sig_figs-integer_digits)
             logger.debug('decimal_places set to {} from variable attribute aseg_gdf_format {}'.format(decimal_places, array_variable.aseg_gdf_format))
         else: # No aseg_gdf_format variable attribute
-            decimal_places = sig_figs - integer_digits + 1
+            decimal_places = sig_figs - integer_digits # Allow for full precision of datatype
             logger.debug('decimal_places set to {} from sig_figs {} and integer_digits {}'.format(decimal_places, sig_figs, integer_digits))
-            
+        
+        width_specifier = min(sign_width + integer_digits + 1 + decimal_places,
+                              sign_width + sig_figs + 1
+                              )
+                                  
         aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, width_specifier, decimal_places)
         python_format = '{' + ':{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
     #===========================================================================
