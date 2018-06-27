@@ -115,15 +115,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
                         
                         # Parse format to determine columns, data type and numeric format
-                        dtype, columns, integer_digits, fractional_digits = aseg_gdf_format2dtype(fmt)
+                        dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
                                     
                         field_definition = {'short_name': short_name,
                                       'format': fmt,
                                       'long_name': long_name,
                                       'dtype': dtype,
                                       'columns': columns,
-                                      'integer_digits': integer_digits, 
-                                      'fractional_digits': fractional_digits
+                                      'width_specifier': width_specifier, 
+                                      'decimal_places': decimal_places
                                       }
                         if units:
                             field_definition['units'] = units
@@ -391,17 +391,17 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 data_array = self.get_raw_data(short_name)
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
                 precision_change_result = fix_field_precision(data_array, dtype, 
-                                                              field_definition['fractional_digits'],
+                                                              field_definition['decimal_places'],
                                                               field_definition.get('fill_value')
                                                               ) 
-                # aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format, modified_fill_value
+                # aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, modified_fill_value
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
                     logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
-                    field_definition['integer_digits'] = precision_change_result[3]
-                    field_definition['fractional_digits'] = precision_change_result[4]
+                    field_definition['width_specifier'] = precision_change_result[3]
+                    field_definition['decimal_places'] = precision_change_result[4]
                     
                     # Modify fill_value if required
                     original_fill_value = field_definition.get('fill_value')

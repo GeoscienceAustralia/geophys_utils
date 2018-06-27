@@ -90,7 +90,7 @@ class NetCDF2ASEGGDFConverter(object):
             if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(variable)
+            aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'short_name': variable_name,
@@ -98,8 +98,8 @@ class NetCDF2ASEGGDFConverter(object):
                                 'chunk_size': chunk_size,
                                 'columns': columns,
                                 'format': aseg_gdf_format,
-                                'integer_digits': integer_digits,
-                                'fractional_digits': fractional_digits,
+                                'width_specifier': width_specifier,
+                                'decimal_places': decimal_places,
                                 'python_format': python_format
                                 }
             
