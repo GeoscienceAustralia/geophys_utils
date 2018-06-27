@@ -55,6 +55,7 @@ class NetCDF2ASEGGDFConverter(object):
         self.netcdf_in_path = netcdf_in_path
         self.dat_out_path = dat_out_path or os.path.splitext(netcdf_in_path)[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
+        self.defn = 0 # DEFN number for last line written to .dfn file
         
         self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
                                                            'aseg_gdf_settings.yml')
@@ -89,14 +90,14 @@ class NetCDF2ASEGGDFConverter(object):
             if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            fmt, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(variable)
+            aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format = variable2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
             field_definition = {'short_name': variable_name,
                                 'dtype': dtype,
                                 'chunk_size': chunk_size,
                                 'columns': columns,
-                                'format': fmt,
+                                'format': aseg_gdf_format,
                                 'integer_digits': integer_digits,
                                 'fractional_digits': fractional_digits,
                                 'python_format': python_format
@@ -117,6 +118,48 @@ class NetCDF2ASEGGDFConverter(object):
             
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
     
+    def write_record2dfn_file(self, 
+                              dfn_file, 
+                              rt, 
+                              name, 
+                              aseg_gdf_format, 
+                              definition=None, 
+                              defn=None, 
+                              st='RECD'):
+        '''
+        Helper function to write line to .dfn file.
+        self.defn is used to track the DEFN number, which can be reset using the optional defn parameter
+        @param dfn_file: output file for DEFN line 
+        @param rt: value for "RT=<rt>" portion of DEFN line, e.g. '' or 'PROJ'  
+        @param name: Name of DEFN 
+        @param aseg_gdf_format: ASEG-GDF output format, e.g. 'I5', 'D12.1' or 'A30'
+        @param definition=None: Definition string
+        @param defn=None: New value of DEFN number. Defaults to self.defn+1
+        @param st: value for "RT=<rt>" portion of DEFN line. Default = 'RECD'
+        
+        @return line: output line 
+        '''
+        if defn is None:
+            self.defn += 1 # Increment last DEFN value (initialised to 0 in constructor)
+        else:
+            self.defn = defn
+            
+        line = 'DEFN {defn} ST={st},RT={rt}; {name}'.format(defn=defn,
+                                                            st=st,
+                                                            rt=rt,
+                                                            name=name,
+                                                            )    
+        
+        if aseg_gdf_format:
+            line +=  ': {aseg_gdf_format}'.format(aseg_gdf_format=aseg_gdf_format)
+            
+        if definition:
+            line += ': ' + definition
+            
+        dfn_file.write(line + '\n')
+        return line
+        
+                
     def convert2aseg_gdf(self): 
         '''
         Function to convert netCDF file to ASEG-GDF
@@ -129,18 +172,14 @@ class NetCDF2ASEGGDFConverter(object):
                 """
                 Helper function to write multiple DEFN lines
                 """
-                defn = 0
+                self.defn = 0 # reset DEFN number
                 for field_definition in self.field_definitions:
-                    field_name = field_definition['short_name']
-                    defn += 1
+                    variable_name = field_definition['short_name']
+                    # Map variable name to standard ASEG-GDF field name if required
+                    field_name = self.settings['aseg_field_mapping'].get(variable_name) or variable_name
                     
-                    variable = self.nc_dataset.variables[field_name]
-                    #print(field_name, variable.dtype)
-                    
-                    line = 'DEFN {defn} ST=RECD,RT=; {short_name} : {fmt}'.format(defn=defn,
-                                                                                  short_name=field_name,
-                                                                                  fmt=field_definition['format']
-                                                                                  )
+                    variable = self.nc_dataset.variables[variable_name]
+                    logger.debug('variable_name: {}, field_name: {}, variable.dtype: {}'.format(variable_name, field_name, variable.dtype))
                     
                     variable_attributes = variable.__dict__
                     
@@ -167,12 +206,25 @@ class NetCDF2ASEGGDFConverter(object):
                         optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
                         
                     if optional_attribute_list:
-                        line += ' : ' + ' , '.join(optional_attribute_list) 
+                        definition = ' , '.join(optional_attribute_list)
+                    else:
+                        definition = None
     
-                    dfn_file.write(line + '\n')
+                    self.write_record2dfn_file(dfn_file,
+                                               rt='',
+                                               name=field_name,
+                                               aseg_gdf_format=field_definition['format'],
+                                               definition=definition,
+                                               )
                     
-                defn += 1
-                dfn_file.write('DEFN {defn} ST=RECD,RT=;END DEFN\n'.format(defn=defn))
+                    
+                # Write 'END DEFN'
+                self.write_record2dfn_file(dfn_file,
+                                           rt='',
+                                           name='END DEFN',
+                                           aseg_gdf_format=''
+                                           )
+                    
                 return # End of function write_defns
             
                 
@@ -228,10 +280,10 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 geogcs = spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
                 projcs = spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
                 ellipse_name = spatial_ref.GetAttrValue('spheroid', 0)
-                major_axis = spatial_ref.GetAttrValue('spheroid', 1)
-                prime_meridian = spatial_ref.GetAttrValue('primem', 1)
-                inverse_flattening = spatial_ref.GetInvFlattening()
-                #eccentricity = spatial_ref.GetAttrValue('spheroid', 2) # Same as inverse_flattening?
+                major_axis = float(spatial_ref.GetAttrValue('spheroid', 1))
+                prime_meridian = float(spatial_ref.GetAttrValue('primem', 1))
+                inverse_flattening = float(spatial_ref.GetInvFlattening())
+                #eccentricity = spatial_ref.GetAttrValue('spheroid', 2) # Non-standard definition same as inverse_flattening?
                 
                 if spatial_ref.IsProjected():
                     if projcs.startswith(geogcs):
@@ -239,61 +291,108 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     else:
                         projection_name = geogcs + ' / ' + re.sub('[\:\,\=]+', '', projcs) # e.g. 'GDA94 / UTM Zone 54, Southern Hemisphere'
                     projection_method = spatial_ref.GetAttrValue('projection').replace('_', ' ')
-                    projection_parameters = re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', spatial_ref.ExportToPrettyWkt())
+                    projection_parameters = [(key, float(value))
+                                              for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', spatial_ref.ExportToPrettyWkt())
+                                              ]
                 else: # Unprojected CRS
                     projection_name = None
                     projection_method = None
                     projection_parameters = None
 
-                defn = 1
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; RT:A4\n'.format(defn=defn)); defn += 1
+                self.defn = 0  # reset DEFN number
+                
+                # write 'DEFN 1 ST=RECD,RT=PROJ; RT:A4'
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='RT',
+                                           aseg_gdf_format='A4'
+                                           )
                 
                 if projcs:
-                    dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; COORDSYS: A40: NAME={projection_name}, POSC projection name\n'.format(defn=defn,
-                                                                                                                                     projection_name=projection_name
-                                                                                                                                     )); defn += 1
+                    self.write_record2dfn_file(dfn_file,
+                                               rt='PROJ',
+                                               name='COORDSYS',
+                                               aseg_gdf_format='A40',
+                                               definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
+                                               )
 
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; DATUM: A40: NAME={ellipse_name}, EPSG compliant ellipsoid name\n'.format(defn=defn, 
-                                                                                                                                      ellipse_name=ellipse_name
-                                                                                                                                      )); defn += 1
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; MAJ_AXIS: D12.1: UNIT={unit}, NAME={major_axis}, Major axis\n'.format(defn=defn,
-                                                                                                                                   unit='m', 
-                                                                                                                                   major_axis=major_axis
-                                                                                                                                   )); defn += 1
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; INVFLATT: D14.9: NAME={inverse_flattening}, 1/f inverse of flattening\n'.format(defn=defn,
-                                                                                                                                             inverse_flattening=inverse_flattening
-                                                                                                                                             )); defn += 1
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PRIMEMER: F10.1: UNIT={unit}, NAME={prime_meridian}, Location of prime meridian\n'.format(defn=defn,
-                                                                                                                                                       unit='degree', 
-                                                                                                                                                       prime_meridian=prime_meridian
-                                                                                                                                                       )); defn += 1
-                #===============================================================
-                # # Non-standard definitions from sample
-                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; ELLPSNAM:A30: NAME={ellipse_name}\n'.format(defn=defn,
-                #                                                                                          ellipse_name=ellipse_name
-                #                                                                                          )); defn += 1
-                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PROJNAME:A40: NAME={projection_name}\n'.format(defn=defn,
-                #                                                                                             projection_name=projection_name
-                #                                                                                             )); defn += 1
-                # dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; ECCENT: D12.9: NAME={eccentricity}\n'.format(defn=defn,
-                #                                                                                           eccentricity=eccentricity
-                #                                                                                           )); defn += 1
-                #===============================================================
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='DATUM',
+                                           aseg_gdf_format='A40',
+                                           definition='NAME={ellipse_name}, Ellipsoid name'.format(ellipse_name=ellipse_name)
+                                           )
+                
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='MAJ_AXIS',
+                                           aseg_gdf_format='D12.1',
+                                           definition='UNIT={unit}, NAME={major_axis}, Major axis'.format(unit='m', major_axis=major_axis)
+                                           )
+
+
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='INVFLATT',
+                                           aseg_gdf_format='D14.9',
+                                           definition='NAME={inverse_flattening}, 1/f inverse of flattening'.format(inverse_flattening=inverse_flattening)
+                                           )
+
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='PRIMEMER',
+                                           aseg_gdf_format='F10.1',
+                                           definition='UNIT={unit}, NAME={prime_meridian}, Location of prime meridian'.format(unit='degree', prime_meridian=prime_meridian)
+                                           )
+
+#===============================================================================
+#                 # Non-standard definitions
+#                 self.write_record2dfn_file(dfn_file,
+#                                            rt='PROJ',
+#                                            name='ELLPSNAM',
+#                                            aseg_gdf_format='A30',
+#                                            definition='NAME={ellipse_name}, Non-standard definition for ellipse name'.format(ellipse_name=ellipse_name)
+#                                            )
+# 
+#                 self.write_record2dfn_file(dfn_file,
+#                                            rt='PROJ',
+#                                            name='PROJNAME',
+#                                            aseg_gdf_format='A40',
+#                                            definition='NAME={projection_name}, Non-standard definition for projection name'.format(projection_name=projection_name)
+#                                            )
+# 
+#                 self.write_record2dfn_file(dfn_file,
+#                                            rt='PROJ',
+#                                            name='ECCENT',
+#                                            aseg_gdf_format='D12.9',
+#                                            definition='NAME={eccentricity}, Non-standard definition for ellipsoidal eccentricity'.format(eccentricity=eccentricity)
+#                                            )
+#===============================================================================
                 
                 if projection_method:                    
-                    dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PROJMETH: A30: NAME={projection_method}, projection method\n'.format(defn=defn,
-                                                                                                                      projection_method=projection_method
-                                                                                                                      )); defn += 1
+                    self.write_record2dfn_file(dfn_file,
+                                               rt='PROJ',
+                                               name='PROJMETH',
+                                               aseg_gdf_format='A30',
+                                               definition='NAME={projection_method}, projection method'.format(projection_method=projection_method)
+                                               )
+
                     # Write all projection parameters starting from DEFN 8
                     param_no = 0
                     for param_name, param_value in projection_parameters:
                         param_no += 1  
-                        dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; PARAM{param_no}: D14.0: NAME={param_value}, {param_name}\n'.format(defn=defn,
-                                                                                                                                          param_no=param_no,
-                                                                                                                                          param_value=param_value,
-                                                                                                                                          param_name=param_name
-                                                                                                                                          )); defn += 1                   
-                dfn_file.write('DEFN {defn} ST=RECD,RT=PROJ; END DEFN\n'.format(defn=defn)); defn += 1   
+                        self.write_record2dfn_file(dfn_file,
+                                                   rt='PROJ',
+                                                   name='PARAM{param_no}'.format(param_no=param_no),
+                                                   aseg_gdf_format='D14.0',
+                                                   definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
+                                                   )
+                # Write 'END DEFN'
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='END DEFN',
+                                           aseg_gdf_format=''
+                                           )
                 
                 #TODO: Write fixed length PROJ line at end of file
                   
@@ -352,12 +451,12 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     row_range = end_row - start_row
                     column_start = 0                    
                     for field_definition in self.field_definitions:
-                        field_name = field_definition['short_name']
-                        variable = self.nc_dataset.variables[field_name]
+                        variable_name = field_definition['short_name']
+                        variable = self.nc_dataset.variables[variable_name]
                         
                         if len(variable.shape) == 1: # 1D variable
                             # Not an indexing variable
-                            if ('point' in variable.dimensions) and (field_name not in self.settings['index_fields']):
+                            if ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
                                 data_array = variable[start_row:end_row]
                                 
                                 # Include fill_values if array is masked
@@ -367,11 +466,11 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                 memory_cache_array[0:row_range, 
                                                    column_start] = variable[start_row:end_row]
                             # Indexing variable
-                            elif ('point' not in variable.dimensions) and (field_name in self.settings['index_fields']): 
+                            elif ('point' not in variable.dimensions) and (variable_name in self.settings['index_fields']): 
                                 memory_cache_array[0:row_range, 
-                                                   column_start] = expand_indexing_variable(field_name, start_row, end_row)
+                                                   column_start] = expand_indexing_variable(variable_name, start_row, end_row)
                             else:
-                                raise BaseException('Invalid dimension for variable {}'.format(field_name))  
+                                raise BaseException('Invalid dimension for variable {}'.format(variable_name))  
                               
                         elif len(variable.shape) == 2: # 2D variable
                             data_array = variable[start_row:end_row]

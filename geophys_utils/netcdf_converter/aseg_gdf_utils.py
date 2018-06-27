@@ -28,13 +28,25 @@ SIG_FIGS = OrderedDict([('int8', 2), # 128
                         ]
                        )
 
+DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
+                         ['float64', 'float32'] # Floating point dtypes
+                         ]
+    
+ASEG_DTYPE_CODE_MAPPING = {'int16': 'I',
+                           'int32': 'I',
+                           'int64': 'I',
+                           'float32': 'F',
+                           'float64': 'D',
+                           'str': 'A'
+                           }
+
 def decode_aseg_gdf_format(aseg_gdf_format):
     '''
     Function to decode ASEG-GDF format string
     @param aseg_gdf_format: ASEG-GDF format string
 
     @return columns: Number of columns (i.e. 1 for 1D data, or read from format string for 2D data)
-    @return dtype_code: ASEG-GDF data type character, e.g. "F" or "I"
+    @return aseg_dtype_code: ASEG-GDF data type character, e.g. "F" or "I"
     @return integer_digits: Number of integer digits read from format string
     @return fractional_digits: Number of fractional digits read from format string    
     '''
@@ -47,18 +59,18 @@ def decode_aseg_gdf_format(aseg_gdf_format):
         raise BaseException('Invalid ASEG-GDF format string {}'.format(aseg_gdf_format))  
       
     columns = match.group(1) or 1
-    dtype_code = match.group(2).upper()
+    aseg_dtype_code = match.group(2).upper()
     integer_digits = int(match.group(3))
     fractional_digits = int(match.group(4)) if match.group(4) is not None else 0
     
-    logger.debug('aseg_gdf_format: {}, columns: {}, dtype_code: {}, integer_digits: {}, fractional_digits: {}'.format(aseg_gdf_format, 
+    logger.debug('aseg_gdf_format: {}, columns: {}, aseg_dtype_code: {}, integer_digits: {}, fractional_digits: {}'.format(aseg_gdf_format, 
                                                                                                                       columns, 
-                                                                                                                      dtype_code, 
+                                                                                                                      aseg_dtype_code, 
                                                                                                                       integer_digits, 
                                                                                                                       fractional_digits
                                                                                                                       )
                  ) 
-    return columns, dtype_code, integer_digits, fractional_digits  
+    return columns, aseg_dtype_code, integer_digits, fractional_digits  
 
 def aseg_gdf_format2dtype(aseg_gdf_format):
     '''
@@ -70,12 +82,12 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
     @return integer_digits: Number of integer digits read from format string
     @return fractional_digits: Number of fractional digits read from format string    
     '''
-    columns, dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(aseg_gdf_format)
+    columns, aseg_dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(aseg_gdf_format)
     dtype = None # Initially unknown datatype
     
     # Determine type and size for required significant figures
     # Integer type - N.B: Only signed types available
-    if dtype_code == 'I':
+    if aseg_dtype_code == 'I':
         assert not fractional_digits, 'Integer format cannot be defined with fractional digits'
         for test_dtype, sig_figs in SIG_FIGS.items():
             if test_dtype.startswith('int') and sig_figs >= integer_digits:
@@ -84,14 +96,21 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
         assert dtype, 'Invalid integer length of {}'.format(integer_digits)     
     
     # Floating point type - use approximate sig. figs. to determine length
-    elif dtype_code in ['D', 'E', 'F']: 
+    elif aseg_dtype_code in ['D', 'E', 'F']: 
         for test_dtype, sig_figs in SIG_FIGS.items():
             if test_dtype.startswith('float') and sig_figs >= integer_digits + fractional_digits:
                 dtype = test_dtype
                 break
         assert dtype, 'Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits)                                    
     
-    logger.debug('dtype_code: {}, columns: {}, integer_digits: {}, fractional_digits: {}'.format(dtype, 
+    if aseg_dtype_code == 'A':
+        assert not fractional_digits, 'String format cannot be defined with fractional digits'
+        dtype = str
+        
+    else:
+        raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
+    
+    logger.debug('aseg_dtype_code: {}, columns: {}, integer_digits: {}, fractional_digits: {}'.format(dtype, 
                                                                                                  columns, 
                                                                                                  integer_digits, 
                                                                                                  fractional_digits
@@ -132,25 +151,39 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     sign_width = 1 if np.nanmin(data_array) < 0 else 0
     integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
     
-    if dtype.startswith('int'):
+    aseg_dtype_code = ASEG_DTYPE_CODE_MAPPING.get(dtype)
+    assert aseg_dtype_code, 'Unhandled dtype {}'.format(dtype)
+    
+    if aseg_dtype_code == 'I': # Integer
         fractional_digits = 0
         aseg_gdf_format = 'I{}'.format(integer_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits, fractional_digits) + '}'
-    elif dtype.startswith('float'):
+    elif aseg_dtype_code in ['F', 'D']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine fractional_digits
         if decimal_places is not None:
             fractional_digits = min(decimal_places, sig_figs-integer_digits)
             logger.debug('fractional_digits set to {} from decimal_places {}'.format(fractional_digits, decimal_places))
         elif hasattr(array_variable, 'aseg_gdf_format'): 
-            _columns, _dtype_code, _integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
+            _columns, _aseg_dtype_code, _integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
             fractional_digits = min(fractional_digits, sig_figs-integer_digits+1)
             logger.debug('fractional_digits set to {} from variable attribute aseg_gdf_format {}'.format(fractional_digits, array_variable.aseg_gdf_format))
         else: # No aseg_gdf_format variable attribute
             fractional_digits = sig_figs - integer_digits + 1
             logger.debug('fractional_digits set to {} from sig_figs {} and integer_digits {}'.format(fractional_digits, sig_figs, integer_digits))
             
-        aseg_gdf_format = 'F{}.{}'.format(integer_digits, fractional_digits)
+        aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, integer_digits, fractional_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits+fractional_digits+1, fractional_digits) + '}' # Add 1 to width for decimal point
+    elif aseg_dtype_code == 'A': # String
+        #TODO: Finish implementing this properly
+        if hasattr(array_variable, 'aseg_gdf_format'):
+            _columns, _aseg_dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
+        else:
+            # TODO: Remove hard-coded hack
+            integer_digits = 40
+            fractional_digits = 0
+        python_format = '{' + ':{:d}s'.format(integer_digits) + '}'
+    else:
+        raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
     
     # Pre-pend column count to start of aseg_gdf_format
     if columns > 1:
@@ -165,7 +198,7 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits, fill_v
     after correcting datatype for excessive precision specification, or None if there is no precision change.
     Arrays are copied to smaller representations and then the difference with the original is checked to
     ensure that any difference is less than precision of the specified number of fractional digits.
-    Note that fill_value is also considered and potentially modified if data precision is changed
+    Note that fill_value is also considered but potentially modified only if data precision is changed
     @param array_variable: data array or netCDF array variable - assumed to be of dtype float64 for raw data
     @param current_dtype: Current data type string, e.g. int8 or float32
     @param fractional_digits: Number of fractional digits for precision checking
@@ -180,13 +213,9 @@ def fix_field_precision(array_variable, current_dtype, fractional_digits, fill_v
     @return python_format: Python Formatter string for fixed-width output
     @return fill_value: Potentially modified fill value
     '''
-    dtype_reduction_lists = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
-                             ['float64', 'float32'] # Floating point dtypes
-                             ]
-    
     logger.debug('array_variable: {}, current_dtype: {}, fractional_digits: {}'.format(array_variable, current_dtype, fractional_digits))
     
-    for dtype_reduction_list in dtype_reduction_lists:
+    for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
             data_array = array_variable[:]
@@ -246,6 +275,6 @@ difference_array\n{}\nfractional_digits: {}\ndifference count: {}\ndifference va
                     return aseg_gdf_format, dtype, columns, integer_digits, fractional_digits, python_format, fill_value
 
             
-        except ValueError: # current_dtype_index not in dtype_reduction_list
+        except ValueError: # current_dtype not in dtype_reduction_list
             continue
    

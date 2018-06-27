@@ -1,6 +1,7 @@
 # Default settings file for ASEGGDF2NetCDFConverter class
 
 # Field definition overrides for definitions read from .dfn file
+# keyed by lower-case ASEG-GDF field name.
 # N.B: overriding short_name will effectively rename field for subsequent use
 field_definitions: 
   # 1D Variables
@@ -71,3 +72,10 @@ index_fields: [line, flight]
 # List of possible fields to be ignored (i.e. not output) 
 # Uses overridden short_name values (if set)
 ignored_fields: [Proj_CGG, Proj_Client] 
+
+# NetCDF variable name to ASEG-GDF field name mappings for ASEG-GDF output
+aseg_field_mapping:
+  longitude: LONGITUD
+  latitude: LATITUDE
+  easting: EASTING
+  northing: NORTHING
