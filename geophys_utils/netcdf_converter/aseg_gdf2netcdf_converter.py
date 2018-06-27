@@ -22,6 +22,7 @@ Created on 28Mar.2018
 
 @author: Alex Ip
 '''
+#TODO: Rewrite variable_generator and get_raw_data functions to accommodate string fields
 import argparse
 from collections import OrderedDict
 import numpy as np
@@ -105,7 +106,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     #logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
                 
                     # Column definition
-                    if key_value_pairs.get('RT') == '' and (positional_value_list 
+                    if key_value_pairs.get('RT') in ['', 'DATA'] and (positional_value_list 
                                                             and positional_value_list[0] != 'END DEFN'): 
                         short_name = positional_value_list[0].lower()
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
@@ -212,25 +213,33 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             self.column_count = 0
             self.total_points = 0
             
+            first_line = True
             for line in aem_dat_file:
                 line = line.strip()
+                #logger.debug('line: {}'.format(line))
                 if not line: # Skip empty lines
                     continue
                 
                 try:
                     row_list = [float(value) for value in re.sub('\s+', ',', line).split(',')]
+                    first_line = False
                 except ValueError:
                     # Ignore potential non-numeric header row, otherwise raise exception for non-numeric data
-                    if self.total_points:
-                        raise
-                    else:
+                    if first_line:
+                        first_line = False
                         continue
-                #logger.debug('row: {}'.format(row))
+                    else:
+                        raise
+
+                #logger.debug('row_list: {}'.format(row_list))
                 
                 if self.column_count:
-                    assert self.column_count == len(row_list), 'Inconsistent column count. Expected {}, found {}.'.format(self.column_count, 
-                                                                                                                   len(row_list)
-                                                                                                                   )
+                    if self.column_count != len(row_list):
+                        logger.info('Inconsistent column count in line {}. Expected {}, found {}.'.format(self.total_points+1,
+                                                                                                          self.column_count, 
+                                                                                                          len(row_list)
+                                                                                                          ))
+                        continue
                 else: # First row
                     self.column_count = len(row_list)
                     logger.debug('self.column_count: {}'.format(self.column_count))
@@ -450,19 +459,22 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
         
-        # Parse .dfn file and apply overrides
-        get_field_definitions() 
-
-        # Read data from self.dfn_path into temporary netCDF variable
-        read_data_file()
-        
-        # Needs to be done after data file has been read in order to access dimension data in first row
-        modify_field_definitions()
-        
-        # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
-        if fix_precision:
-            fix_all_field_precisions()
-        
+        try:
+            # Parse .dfn file and apply overrides
+            get_field_definitions() 
+    
+            # Read data from self.dfn_path into temporary netCDF variable
+            read_data_file()
+            
+            # Needs to be done after data file has been read in order to access dimension data in first row
+            modify_field_definitions()
+            
+            # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
+            if fix_precision:
+                fix_all_field_precisions()
+        except Exception as e:
+            logger.error('Unable to create ASEGGDF2NetCDFConverter object: {}'.format(e))
+            self.__del__()
                        
     def __del__(self):
         '''
@@ -488,6 +500,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         '''
         Helper function to return array corresponding to short_name from self.cache_variable
         '''
+        #TODO: Rewrite this to work with string fields
         try:
             field_definition = [field_definition 
                                 for field_definition in self.field_definitions 
@@ -559,7 +572,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     def variable_generator(self):
         '''
         Concrete generator to yield NetCDFVariable objects       
-        '''  
+        ''' 
+        #TODO: Rewrite this to work with string fields 
         def index_variable_generator(field_definition):
             '''
             Helper generator to yield indexing variables
@@ -621,6 +635,56 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
               
+        def lookup_variable_generator(field_definition):
+            '''
+            Helper generator to yield lookup variables for string fields
+            N.B: Has side effect of creating one new dimension for each lookup field. 
+            This new dimension will NOT appear in self.dimensions
+            '''
+            # Process lookup variables
+            try:
+                lookup_data = self.get_raw_data(field_definition['short_name'])
+                
+                key_array, index_array = np.unique(lookup_data, return_inverse=True)
+                
+                logger.info('{} {} lookup values found'.format(len(key_array), field_definition['short_name']))
+                #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
+            except:
+                logger.info('Unable to create {} lookup variables'.format(field_definition['short_name']))
+                return   
+
+            # This is a slightly ugly side effect
+            logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
+            self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
+                                                   size=len(key_array))
+            
+            logger.info('\tWriting {} lookup variables'.format(field_definition['short_name']))
+            
+            logger.info('\t\tWriting {} lookup values'.format(field_definition['short_name']))
+            yield NetCDFVariable(short_name='{}_lookup'.format(field_definition['short_name']), 
+                                 data=key_array, 
+                                 dimensions=[field_definition['short_name']], 
+                                 fill_value=None, 
+                                 attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
+                                 dtype=key_array.dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
+                                 )
+                        
+            logger.info('\t\tWriting {} lookup indices'.format(field_definition['short_name']))
+            yield NetCDFVariable(short_name=field_definition['short_name'], 
+                                 data=index_array, 
+                                 dimensions=['point'], 
+                                 fill_value=-1, 
+                                 attributes={'long_name': 'zero-based index of value in {}_lookup'.format(field_definition['short_name']),
+                                             'lookup': '{}_lookup'.format(field_definition['short_name'])
+                                             }, 
+                                 dtype='int32',
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
+                                 )
+
+              
         # Create crs variable
         yield self.build_crs_variable(self.spatial_ref)
         
@@ -642,6 +706,17 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     yield index_variable
                     
                 continue
+            
+            #===================================================================
+            # # This will be useful in the future after string field handling has been implemented
+            # # Process string fields as lookups
+            # if field_definition['format'].startswith('A'):
+            #     for lookup_variable in lookup_variable_generator(field_definition):
+            #         # Create index dimension
+            #         yield lookup_variable
+            #         
+            #     continue
+            #===================================================================
             
             long_name = field_definition.get('long_name')
             if long_name:
@@ -795,14 +870,29 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
-                                  dat_in_path, 
-                                  dfn_in_path, 
-                                  crs_string=args.crs,
-                                  default_chunk_size=args.chunking,
-                                  settings_path=args.settings_path)
-    d2n.convert2netcdf()
-    logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+    try:
+        d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
+                                      dat_in_path, 
+                                      dfn_in_path, 
+                                      crs_string=args.crs,
+                                      default_chunk_size=args.chunking,
+                                      settings_path=args.settings_path)
+        d2n.convert2netcdf()
+        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+    except Exception as e:
+        logger.error('Failed to create netCDF file {}'.format(e))
+        try:
+            del d2n
+        except Exception as e:
+            logger.debug('Unable to delete ASEGGDF2NetCDFConverter object: {}'.format(e))
+        
+        try:
+            os.remove(nc_out_path) 
+            logger.debug('Deleted incomplete netCDF file {}'.format(nc_out_path))
+        except Exception as e:
+            logger.debug('Unable to delete incomplete netCDF file {}: {}'.format(nc_out_path, e))
+            
+        
     
     #===========================================================================
     # logger.debug('\nGlobal attributes:')

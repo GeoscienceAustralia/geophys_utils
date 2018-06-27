@@ -384,7 +384,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         self.write_record2dfn_file(dfn_file,
                                                    rt='PROJ',
                                                    name='PARAM{param_no}'.format(param_no=param_no),
-                                                   aseg_gdf_format='D14.0',
+                                                   aseg_gdf_format='D14.0', #TODO: Investigate whether this is OK - it looks dodgy to me
                                                    definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
                                                    )
                 # Write 'END DEFN'

@@ -21,18 +21,19 @@ logger.setLevel(logging.INFO) # Logging level for this module
 SIG_FIGS = OrderedDict([('int8', 2), # 128
                         ('int16', 4), # 32768
                         ('int32', 10), # 2147483648 - should be 9, but made 10 because int64 is unsupported
-                        ('int64', 19), # 9223372036854775808
+                        ('int64', 19), # 9223372036854775808 - Not supported in netCDF3 or netCDF4-Classic
                         # https://en.wikipedia.org/wiki/Floating-point_arithmetic#IEEE_754:_floating_point_in_modern_computers
                         ('float32', 7), # 7.2
-                        ('float64', 20) # 15.9 - should be 16, but made 20 to support unrealistic precision specifications
+                        ('float64', 30) # 15.9 - should be 16, but made 30 to support unrealistic precision specifications
                         ]
                        )
 
 DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
-                         ['float64', 'float32'] # Floating point dtypes
+                         ['float64', 'float32', 'int16', 'int8'] # Floating point dtypes
                          ]
     
-ASEG_DTYPE_CODE_MAPPING = {'int16': 'I',
+ASEG_DTYPE_CODE_MAPPING = {'int8': 'I',
+                           'int16': 'I',
                            'int32': 'I',
                            'int64': 'I',
                            'float32': 'F',
@@ -96,16 +97,20 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
         assert dtype, 'Invalid integer length of {}'.format(integer_digits)     
     
     # Floating point type - use approximate sig. figs. to determine length
-    elif aseg_dtype_code in ['D', 'E', 'F']: 
+    #TODO: Remove 'A' after string field handling has been properly implemented
+    elif aseg_dtype_code in ['D', 'E', 'F', 'A']: # Floating point
         for test_dtype, sig_figs in SIG_FIGS.items():
             if test_dtype.startswith('float') and sig_figs >= integer_digits + fractional_digits:
                 dtype = test_dtype
                 break
         assert dtype, 'Invalid floating point format of {}.{}'.format(integer_digits, fractional_digits)                                    
     
-    if aseg_dtype_code == 'A':
-        assert not fractional_digits, 'String format cannot be defined with fractional digits'
-        dtype = str
+    #===========================================================================
+    # #TODO: Uncomment this section after string field handling has been properly implemented
+    # elif aseg_dtype_code == 'A':
+    #     assert not fractional_digits, 'String format cannot be defined with fractional digits'
+    #     dtype = str
+    #===========================================================================
         
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
@@ -158,7 +163,8 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         fractional_digits = 0
         aseg_gdf_format = 'I{}'.format(integer_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits, fractional_digits) + '}'
-    elif aseg_dtype_code in ['F', 'D']: # Floating point
+    #TODO: Remove 'A' after string field handling has been properly implemented
+    elif aseg_dtype_code in ['F', 'D', 'A']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine fractional_digits
         if decimal_places is not None:
             fractional_digits = min(decimal_places, sig_figs-integer_digits)
@@ -173,15 +179,18 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             
         aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, integer_digits, fractional_digits)
         python_format = '{' + ':{:d}.{:d}f'.format(sign_width+integer_digits+fractional_digits+1, fractional_digits) + '}' # Add 1 to width for decimal point
-    elif aseg_dtype_code == 'A': # String
-        #TODO: Finish implementing this properly
-        if hasattr(array_variable, 'aseg_gdf_format'):
-            _columns, _aseg_dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
-        else:
-            # TODO: Remove hard-coded hack
-            integer_digits = 40
-            fractional_digits = 0
-        python_format = '{' + ':{:d}s'.format(integer_digits) + '}'
+    #===========================================================================
+    # #TODO: Uncomment this section after string field handling has been properly implemented
+    # elif aseg_dtype_code == 'A': # String
+    #     #TODO: Finish implementing this properly
+    #     if hasattr(array_variable, 'aseg_gdf_format'):
+    #         _columns, _aseg_dtype_code, integer_digits, fractional_digits = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
+    #     else:
+    #         # TODO: Remove hard-coded hack
+    #         integer_digits = 40
+    #         fractional_digits = 0
+    #     python_format = '{' + ':{:d}s'.format(integer_digits) + '}'
+    #===========================================================================
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
     

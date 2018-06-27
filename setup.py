@@ -24,15 +24,23 @@ setup(name='geophys_utils',
       version=version,
       packages=[
           'geophys_utils',
-          'geophys_utils.test'
+          'geophys_utils.test',
+          'geophys_utils.netcdf_converter'
       ],
-      package_data={'geophys_utils': ['csw_utils_settings.yml']
+      package_data={'geophys_utils': ['csw_utils_settings.yml'],
+                    'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml']
                     },
       scripts=(['bin/csw_find',
-                'bin/rechunk'] 
+                'bin/rechunk'
+                'bin/aseg2nc',
+                'bin/nc2aseg',
+                ] 
                if (os.name == 'posix')
                else (['bin\\csw_find.bat',
-                      'bin\\rechunk.bat'] 
+                      'bin\\rechunk.bat',
+                      'bin\\aseg2nc.bat',
+                      'bin\\nc2aseg.bat',
+                      ] 
                      if (os.name == 'nt')
                      else [])),
       requires=[
@@ -50,7 +58,7 @@ setup(name='geophys_utils',
             'yaml'
             'unidecode'
             ],
-      url='https://github.com/alex-ip/geophys_utils',
+      url='https://github.com/geoscienceaustralia/geophys_utils',
       author='Alex Ip - Geoscience Australia',
       maintainer='Alex Ip - Geoscience Australia',
       maintainer_email='alex.ip@ga.gov.au',

@@ -21,6 +21,7 @@ field_definitions:
     units: m}
   line: {long_name: Line number, short_name: line}
   flight: {long_name: Flight number, short_name: flight}
+  flt: {long_name: Flight number, short_name: flight}
   nlayers: {long_name: layers, short_name: layer}
   ndatlm: {long_name: low moment gates, short_name: low_moment_gate}
   ndathm: {long_name: high moment gates, short_name: high_moment_gate}

@@ -182,8 +182,9 @@ class ToNetCDFConverter(object):
         '''
         try:
             self.nc_output_dataset.close()
-        except:
-            pass
+            logger.debug('Closed netCDF output dataset')
+        except Exception as e:
+            logger.debug('Unable to close netCDF output dataset: {}'.format(e))
         
     @abc.abstractmethod
     def get_global_attributes(self):
