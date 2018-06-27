@@ -144,7 +144,7 @@ class NetCDF2ASEGGDFConverter(object):
         else:
             self.defn = defn
             
-        line = 'DEFN {defn} ST={st},RT={rt}; {name}'.format(defn=defn,
+        line = 'DEFN {defn} ST={st},RT={rt}; {name}'.format(defn=self.defn,
                                                             st=st,
                                                             rt=rt,
                                                             name=name,
