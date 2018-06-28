@@ -50,7 +50,9 @@ class NetCDF2ASEGGDFConverter(object):
         '''
         Constructor for class NetCDF2ASEGGDFConverter
         '''
-        assert os.path.isfile(netcdf_in_path), '{} is not a valid file'.format(netcdf_in_path)
+        assert (os.path.isfile(netcdf_in_path) or 
+                (netcdf_in_path.startswith('http') and netcdf_in_path.lower().endswith('.nc'))
+                ), '{} is not a valid file or OPeNDAP endpoint'.format(netcdf_in_path)
         
         self.netcdf_in_path = netcdf_in_path
         self.dat_out_path = dat_out_path or os.path.splitext(netcdf_in_path)[0] + '.dat'
@@ -76,20 +78,33 @@ class NetCDF2ASEGGDFConverter(object):
         self.field_definitions = []
         for variable_name, variable in self.nc_dataset.variables.items():
             
-            # Skip scalar variables
-            if not len(variable.dimensions):
+            #===================================================================
+            # # Skip scalar variables
+            # if not len(variable.dimensions):
+            #     continue
+            # 
+            # # Skip any non-pointwise, non-indexing fields
+            # # Note: Indexing variables will be expanded during .dat output
+            # if ('point' not in variable.dimensions) and variable_name not in self.settings['index_fields']:
+            #     continue
+            #===================================================================
+            
+            # Skip any non-scalar, non-pointwise fields
+            if variable.shape and ('point' not in variable.dimensions):
                 continue
             
-            # Skip any non-pointwise, non-indexing fields
-            # Note: Indexing variables will be expanded during .dat output
-            if ('point' not in variable.dimensions) and variable_name not in self.settings['index_fields']:
+            # Don't output CRS variable
+            if variable_name in ['crs', 'transverse_mercator']:
                 continue
             
-            chunk_size = variable.chunking()[0]
+            chunk_size = variable.chunking()[0] if variable.chunking() is not None else DEFAULT_READ_CHUNK_SIZE
             # If variable is not chunked and DEFAULT_READ_CHUNK_SIZE is defined
-            if DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
+            if not variable.shape: # Scalar
+                chunk_size = None
+            elif DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
+            print(variable_name, repr(variable))
             aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
             
             #TODO: Add extra field definition stuff like ASEG-GDF format specifier
@@ -429,8 +444,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         '''
                         row_range = end_row - start_row
                         value_variable = self.nc_dataset.variables[indexing_field_name]
-                        start_variable = self.nc_dataset.variables['index_' + indexing_field_name]
-                        count_variable = self.nc_dataset.variables['index_count_' + indexing_field_name]
+                        start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_field_name)]
+                        count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_field_name)]
                         
                         expanded_array = np.zeros(shape=(row_range,), 
                                                   dtype=value_variable.dtype)
@@ -447,6 +462,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                             
                         #logger.debug('expanded_array: {}'.format(expanded_array))
                         return expanded_array
+                    
                     
                     row_range = end_row - start_row
                     column_start = 0                    
@@ -486,7 +502,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                          
                     for line_index in range(row_range):
                         #yield ' '.join(['{}'.format(value) for value in memory_cache_array[line_index,:]]) 
-                        yield ' '.join([column_format_list[column_index].format(memory_cache_array[line_index, column_index]) 
+                        yield ''.join([column_format_list[column_index].format(memory_cache_array[line_index, column_index]) 
                                         for column_index in range(total_columns)
                                         ]
                                        ) + '\n'
@@ -509,6 +525,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                 
                 max_chunk_size = max([field_definition['chunk_size']
                                       for field_definition in self.field_definitions
+                                      if field_definition['chunk_size'] is not None
                                       ]
                                      )
                 
@@ -517,6 +534,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 
                 logger.debug('read_chunk_size: {}'.format(read_chunk_size))
                 
+                #TODO: *** Make this able to handle non-numeric (string) data ***
                 memory_cache_array = np.zeros(shape=(read_chunk_size, total_columns), dtype='float64')
                 
                 # Process all complete chunks

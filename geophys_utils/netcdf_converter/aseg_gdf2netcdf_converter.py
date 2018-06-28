@@ -47,7 +47,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'E:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 10000
+POINT_LIMIT = 0
 
 # Number of rows per chunk in temporary netCDF cache file
 CACHE_CHUNK_ROWS = 8192
@@ -269,7 +269,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         value_string = line[start_char:end_char]
                         
                         # Work-around for badly formatted files with first entry too short
-                        if not aseg_gdf_format.startswith('A'): # Not a string field
+                        if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
                             value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
                             end_char = start_char + len(value_string) # Adjust character offset for next column
                         
@@ -370,7 +370,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 else:
                     row_list = read_fixed_length_fields(line)
                     
-                if not row_list:
+                if not row_list: # Invalid line - ignore
                     continue
                 
                 chunk_list.append(row_list)
@@ -381,7 +381,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     chunk_list = [] # Reset chunk after writing
                 
                 if not line_count % 10000:
-                    logger.info('{} lines read'.format(self.total_points))
+                    logger.info('{} lines read'.format(line_count))
                      
                 if POINT_LIMIT and self.total_points >= POINT_LIMIT:
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
@@ -716,11 +716,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.info('\tWriting {} indexing variables'.format(field_definition['short_name']))
             
             logger.info('\t\tWriting {} values'.format(field_definition['short_name']))
+            
+            variable_attributes = (field_definition.get('variable_attributes') or {})
+            if field_definition.get('long_name'):
+                variable_attributes['long_name'] = field_definition['long_name'] 
+                
             yield NetCDFVariable(short_name=field_definition['short_name'], 
                                  data=index_values, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
-                                 attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
+                                 attributes=variable_attributes, 
                                  dtype='int32',
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
@@ -768,14 +773,18 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
 
             logger.info('\tWriting {} lookup variables'.format(field_definition['short_name']))
             
+            variable_attributes = (field_definition.get('variable_attributes') or {})
+            if field_definition.get('long_name'):
+                variable_attributes['long_name'] = field_definition['long_name'] 
+                
             # Write lookup data as scalar if only one value
             if len(lookup_array) == 1:
                 logger.info('\t\tWriting {} single lookup value'.format(field_definition['short_name']))
-                yield NetCDFVariable(short_name='{}'.format(field_definition['short_name']), 
+                yield NetCDFVariable(short_name=field_definition['short_name'], 
                                      data=lookup_array, 
                                      dimensions=[], 
                                      fill_value=None, 
-                                     attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
+                                     attributes=variable_attributes, 
                                      dtype='str' if lookup_data.dtype == object else lookup_data.dtype,
                                      chunk_size=self.default_chunk_size,
                                      variable_parameters=self.default_variable_parameters
@@ -792,8 +801,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  data=lookup_array, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=None, 
-                                 attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
-                                 dtype='str' if lookup_data.dtype == object else lookup_data.dtype,
+                                 attributes=variable_attributes, 
+                                 dtype='str' if (lookup_data.dtype == object) else lookup_data.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -964,6 +973,12 @@ def main():
                             type=int,
                             dest="chunking",
                             default=1024)
+        parser.add_argument('-o', '--optimise', 
+                            help='Optimise datatypes to reduce variable size without affecting precision. Default is True',
+                            type=bool,
+                            dest='optimise',
+                            default=True
+                            )
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
@@ -994,16 +1009,18 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    try:
+    if True:#try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
                                       crs_string=args.crs,
                                       default_chunk_size=args.chunking,
-                                      settings_path=args.settings_path)
+                                      settings_path=args.settings_path,
+                                      fix_precision=args.optimise
+                                      )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    except Exception as e:
+    else:#except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n
