@@ -47,7 +47,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'E:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 0
+POINT_LIMIT = 10000
 
 # Number of rows per chunk in temporary netCDF cache file
 CACHE_CHUNK_ROWS = 8192
@@ -61,7 +61,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  aem_dat_path, 
                  dfn_path, 
                  crs_string=None,
-                 netcdf_format='NETCDF4_CLASSIC', 
+                 netcdf_format='NETCDF4', 
                  default_chunk_size=None, 
                  default_variable_parameters=None,
                  settings_path=None,
@@ -183,97 +183,220 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         def read_data_file(): 
             '''
             Function to read data file into temporary netCDF cache
-            Converts entire numeric file into a single variable of float32 datatype
-            This is done to permit efficient column-wise data access but it will fail for any
-            invalid floating point values in data file (except in possible header row which is ignored)
             '''   
             def create_nc_cache():
                 '''
                 Function to create temporary cache file with one 2D variable
                 Needs to have self.column_count defined to work
                 '''
-                assert self.column_count, 'self.column_count not defined'
-                
                 self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W+', '_', os.path.splitext(self.aem_dat_path)[0]) + '.nc')
                 self._nc_cache_dataset = netCDF4.Dataset(self.nc_cache_path, mode="w", clobber=True, format='NETCDF4')
-                self._nc_cache_dataset.createDimension(dimname='columns', size=self.column_count)
-                self._nc_cache_dataset.createDimension(dimname='rows', size=None)
-                self.cache_variable = self._nc_cache_dataset.createVariable('cache',
-                                                                            'float64',
-                                                                            ('rows', 'columns'),
-                                                                            chunksizes=(CACHE_CHUNK_ROWS, 1), # Chunk by column
-                                                                            **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
-                                                                            )
+                self._nc_cache_dataset.createDimension(dimname='rows', size=None) # Unlimited size
                 
+                self.column_count = 0
+                for field_definition in self.field_definitions:
+                    short_name = field_definition['short_name']
+                    columns = field_definition['columns']
+
+                    if columns == 1: # 1D variable
+                        field_dimensions =('rows',)
+                        chunksizes=(CACHE_CHUNK_ROWS,)
+                    else: # 2D variable
+                        field_dimension_name = short_name+'_dim' # Default 2nd dimension name
+
+                        # Look up any dimension name(s) for this variable from settings
+                        override_definition = self.settings['field_definitions'].get(short_name)
+                        # Determine name of dimension
+                        if override_definition:
+                            override_dimensions = override_definition.get('dimensions')
+                            if override_dimensions:
+                                if type(override_dimensions) == list:
+                                    field_dimension_name = '_plus_'.join(override_dimensions) # Multiple partial dimensions
+                                elif type(override_dimensions) == str:
+                                    field_dimension_name = override_dimensions # Single dimension
+                                    
+                        # Create dimension if it doesn't already exist
+                        if field_dimension_name not in self._nc_cache_dataset.dimensions.keys():
+                            self._nc_cache_dataset.createDimension(dimname=field_dimension_name, size=columns)
+                            
+                        field_dimensions =('rows', field_dimension_name)
+                        chunksizes=(CACHE_CHUNK_ROWS, columns)
+                        
+                    logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
+                    self._nc_cache_dataset.createVariable(varname=short_name,
+                                                          datatype=field_definition['dtype'],
+                                                          dimensions=field_dimensions,
+                                                          chunksizes=chunksizes,
+                                                          **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
+                                                          )
+                    self.column_count += columns
                 logger.debug('Created temporary cache file {}'.format(self.nc_cache_path))
             
-            logger.info('Reading data file {}'.format(aem_dat_path))
-            aem_dat_file = open(aem_dat_path, 'r')
-             
-            self.column_count = 0
-            self.total_points = 0
+            def cache_chunk_list(chunk_list, start_row):
+                '''
+                Helper function to write list of lists to cache variables
+                '''
+                end_row = start_row + len(chunk_list)
+                logger.debug('Writing rows {}-{} to disk cache'.format(start_row, end_row))
+                for field_index in range(len(self.field_definitions)):
+                    field_definition = self.field_definitions[field_index]
+                    short_name = field_definition['short_name']
+                    variable = self._nc_cache_dataset.variables[short_name]
+                    
+                    chunk_array = np.array([row_list[field_index] for row_list in chunk_list])
+                    #logger.debug('{} chunk_array: {}'.format(short_name, chunk_array))
+                    
+                    variable[start_row:end_row] = chunk_array
             
-            first_line = True
-            for line in aem_dat_file:
-                line = line.strip()
-                #logger.debug('line: {}'.format(line))
-                if not line: # Skip empty lines
-                    continue
+                self.total_points += len(chunk_list)
                 
-                try:
-                    row_list = [float(value) for value in re.sub('\s+', ',', line).split(',')]
-                    first_line = False
-                except ValueError:
-                    # Ignore potential non-numeric header row, otherwise raise exception for non-numeric data
-                    if first_line:
-                        first_line = False
-                        continue
-                    else:
-                        raise
+                
+            def read_fixed_length_fields(line):
+                '''
+                Helper function to read fixed length fields into a list of lists
+                '''
+                row_list = []
+                line_column_count = 0
+                start_char = 0
+                for field_definition in self.field_definitions:
+                    short_name = field_definition['short_name']
+                    columns = field_definition['columns']
+                    dtype = field_definition['dtype']
+                    aseg_gdf_format = field_definition['format']
+                    column_list = []
+                    for _column_offset in range(columns):
+                        end_char = start_char + field_definition['width_specifier']
+                        value_string = line[start_char:end_char]
+                        
+                        # Work-around for badly formatted files with first entry too short
+                        if not aseg_gdf_format.startswith('A'): # Not a string field
+                            value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
+                            end_char = start_char + len(value_string) # Adjust character offset for next column
+                        
+                        value_string = value_string.strip()
+                        try:
+                            if dtype.startswith('int'):
+                                value = int(value_string)
+                            if dtype.startswith('float'):
+                                value = float(value_string)
+                            else: # Assume string
+                                value = value_string
+                        except ValueError:
+                            logger.warning('Unable to convert "{}" field value "{}" to type {}'.format(short_name, value_string, dtype))
+                            logger.debug('line: "{}"'.format(line))
+                            return None
+                        #logger.debug('value_string: {}, repr(value): {}'.format(value_string, repr(value)))
+                        line_column_count += 1
+                        column_list.append(value)
+                        start_char = end_char
+                    #logger.debug('column_list: {}'.format(column_list))
+                    if column_list:
+                        if columns == 1: # 1D variable
+                            row_list.append(column_list[0]) 
+                        else:
+                            row_list.append(column_list) 
+                            
+                #logger.debug('row_list: {}'.format(row_list))
+                if line_column_count != self.column_count:
+                    logger.warning('Invalid number of columns found: Expected {}, found {}. Skipping line'.format(self.column_count, line_column_count))
+                    logger.debug('line: "{}"'.format(line))
+                    return None
+                return row_list
+                
+                
+            def read_tab_delimited_fields(line):
+                '''
+                Helper function to read tab-delimited fields into a list of lists
+                N.B: This should not be required, but ASEG-supplied example file Example_Gravity_Springfield_1989.dat requires it
+                '''
+                row_list = []
+                value_list = line.split('\t')
 
                 #logger.debug('row_list: {}'.format(row_list))
+                if len(value_list) != self.column_count:
+                    logger.warning('Invalid number of columns found: Expected {}, found {}. Skipping line'.format(self.column_count, len(value_list)))
+                    logger.debug('line: "{}"'.format(line))
+                    return None
+
+                value_index = 0
+                for field_definition in self.field_definitions:
+                    short_name = field_definition['short_name']
+                    columns = field_definition['columns']
+                    dtype = field_definition['dtype']
+                    column_list = []
+                    for _column_offset in range(columns):
+                        value_string = value_list[value_index].strip()
+                        try:
+                            if dtype.startswith('int'):
+                                value = int(value_string)
+                            if dtype.startswith('float'):
+                                value = float(value_string)
+                            else: # Assume string
+                                value = value_string
+                        except ValueError:
+                            logger.warning('Unable to convert "{}" field value "{}" to type {}'.format(short_name, value_string, dtype))
+                            logger.debug('line: "{}"'.format(line))
+                            return None
+                        #logger.debug('value_string: {}, repr(value): {}'.format(value_string, repr(value)))
+                        value_index += 1
+                        column_list.append(value)
+
+                    #logger.debug('column_list: {}'.format(column_list))
+                    if column_list:
+                        if columns == 1: # 1D variable
+                            row_list.append(column_list[0]) 
+                        else:
+                            row_list.append(column_list) 
+                            
+                return row_list
                 
-                if self.column_count:
-                    if self.column_count != len(row_list):
-                        logger.info('Inconsistent column count in line {}. Expected {}, found {}.'.format(self.total_points+1,
-                                                                                                          self.column_count, 
-                                                                                                          len(row_list)
-                                                                                                          ))
-                        continue
-                else: # First row
-                    self.column_count = len(row_list)
-                    logger.debug('self.column_count: {}'.format(self.column_count))
-                    create_nc_cache() # Create temporary netCDF file with appropriately dimensioned variable
-                    memory_cache_array = np.zeros(shape=(CACHE_CHUNK_ROWS, self.column_count), dtype='float64')
                 
-                try:
-                    # Write row to memory cache
-                    memory_cache_array[self.total_points%CACHE_CHUNK_ROWS,:] = np.array(row_list, dtype='float64')
-                except Exception as e:
-                    logger.debug('Error with row = {}'.format(row_list))
-                    raise e
+            logger.info('Reading data file {}'.format(aem_dat_path))
+            aem_dat_file = open(aem_dat_path, 'r')
+            
+            create_nc_cache()
+            
+            line_count = 0
+            self.total_points = 0
+            chunk_list = []
+            for line in aem_dat_file:
+                line = re.sub('\n$', '', line) # Strip trailing EOL
+                #logger.debug('line: "{}"'.format(line))
+                if not line.strip(): # Skip empty lines
+                    continue
                 
-                self.total_points += 1
-                
-                if self.total_points % CACHE_CHUNK_ROWS == 0:
-                    # Write memory cache to disk cache
-                    logger.debug('Writing rows {}-{} to disk cache'.format(self.total_points-CACHE_CHUNK_ROWS, self.total_points-1))
-                    self.cache_variable[self.total_points-CACHE_CHUNK_ROWS:self.total_points,:] = memory_cache_array
-                
-                if self.total_points == self.total_points // 10000 * 10000:
-                    logger.info('{} points read'.format(self.total_points))
-                    #logger.debug('line: {}'.format(line))
+                if '\t' in line: # Assume tab delimited line
+                    row_list = read_tab_delimited_fields(line)
+                else:
+                    row_list = read_fixed_length_fields(line)
                     
+                if not row_list:
+                    continue
+                
+                chunk_list.append(row_list)
+                line_count += 1
+                
+                if len(chunk_list) % CACHE_CHUNK_ROWS == 0:
+                    cache_chunk_list(chunk_list, self.total_points)
+                    chunk_list = [] # Reset chunk after writing
+                
+                if not line_count % 10000:
+                    logger.info('{} lines read'.format(self.total_points))
+                     
                 if POINT_LIMIT and self.total_points >= POINT_LIMIT:
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
                     break
-                
-            logger.debug('Writing final rows {}-{} to disk cache'.format(self.total_points-self.total_points%CACHE_CHUNK_ROWS, self.total_points-1))
-            self.cache_variable[self.total_points-self.total_points%CACHE_CHUNK_ROWS:self.total_points,:] = memory_cache_array[0:self.total_points%CACHE_CHUNK_ROWS,:]
+                 
+            if len(chunk_list):
+                cache_chunk_list(chunk_list, self.total_points)
+                chunk_list = [] # Reset chunk after writing
             
             aem_dat_file.close()             
     
             logger.info('A total of {} points were read'.format(self.total_points))
+            
+            assert self.total_points, 'Unable to read any points'
+            
             self.dimensions['point'] = self.total_points # All files will have a point dimension - declare this first
             
             
@@ -288,7 +411,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 field_definition_index += 1
                 field_definition = self.field_definitions[field_definition_index]
                 field_name = field_definition['short_name']
-                logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
+                #logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
                 
                 if field_name in self.settings['dimension_fields']:
                     self.dimensions[field_name] = int(self.cache_variable[0, column_start_index]) # Read value from first line
@@ -498,20 +621,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     
     def get_raw_data(self, short_name):
         '''
-        Helper function to return array corresponding to short_name from self.cache_variable
+        Helper function to return array corresponding to short_name from self._nc_cache_dataset
         '''
-        #TODO: Rewrite this to work with string fields
         try:
-            field_definition = [field_definition 
-                                for field_definition in self.field_definitions 
-                                if field_definition['short_name'] == short_name
-                                ][0]
-             
-            #logger.debug('field_definition: {}'.format(pformat(field_definition)))
-            column_start_index = field_definition['column_start_index']
-            column_end_index = column_start_index + max(1, field_definition['dimension_size'])
-            
-            return self.cache_variable[:,column_start_index:column_end_index]
+            return self._nc_cache_dataset.variables[short_name][:]
         except:
             return None        
         
@@ -614,7 +727,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  )
                         
             logger.info('\t\tWriting index of first point in each {}'.format(field_definition['short_name']))
-            yield NetCDFVariable(short_name='index_' + field_definition['short_name'], 
+            yield NetCDFVariable(short_name='{}_start_index'.format(field_definition['short_name']), 
                                  data=index_start_indices, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
@@ -625,7 +738,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  )
                         
             logger.info('\t\tWriting point count for each {}'.format(field_definition['short_name']))
-            yield NetCDFVariable(short_name='index_count_' + field_definition['short_name'], 
+            yield NetCDFVariable(short_name='{}_point_count'.format(field_definition['short_name']), 
                                  data=index_point_counts, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
@@ -645,28 +758,42 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             try:
                 lookup_data = self.get_raw_data(field_definition['short_name'])
                 
-                key_array, index_array = np.unique(lookup_data, return_inverse=True)
+                lookup_array, index_array = np.unique(lookup_data, return_inverse=True)
                 
-                logger.info('{} {} lookup values found'.format(len(key_array), field_definition['short_name']))
+                logger.info('{} {} lookup values found'.format(len(lookup_array), field_definition['short_name']))
                 #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
             except:
                 logger.info('Unable to create {} lookup variables'.format(field_definition['short_name']))
                 return   
 
+            logger.info('\tWriting {} lookup variables'.format(field_definition['short_name']))
+            
+            # Write lookup data as scalar if only one value
+            if len(lookup_array) == 1:
+                logger.info('\t\tWriting {} single lookup value'.format(field_definition['short_name']))
+                yield NetCDFVariable(short_name='{}'.format(field_definition['short_name']), 
+                                     data=lookup_array, 
+                                     dimensions=[], 
+                                     fill_value=None, 
+                                     attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
+                                     dtype='str' if lookup_data.dtype == object else lookup_data.dtype,
+                                     chunk_size=self.default_chunk_size,
+                                     variable_parameters=self.default_variable_parameters
+                                     )
+                return
+                        
             # This is a slightly ugly side effect
             logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
             self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
-                                                   size=len(key_array))
+                                                   size=len(lookup_array))
             
-            logger.info('\tWriting {} lookup variables'.format(field_definition['short_name']))
-            
-            logger.info('\t\tWriting {} lookup values'.format(field_definition['short_name']))
+            logger.info('\t\tWriting {} {} lookup values'.format(len(lookup_array), field_definition['short_name']))
             yield NetCDFVariable(short_name='{}_lookup'.format(field_definition['short_name']), 
-                                 data=key_array, 
+                                 data=lookup_array, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=None, 
                                  attributes={'long_name': field_definition['long_name']} if field_definition.get('long_name') else {}, 
-                                 dtype=key_array.dtype,
+                                 dtype='str' if lookup_data.dtype == object else lookup_data.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -679,7 +806,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  attributes={'long_name': 'zero-based index of value in {}_lookup'.format(field_definition['short_name']),
                                              'lookup': '{}_lookup'.format(field_definition['short_name'])
                                              }, 
-                                 dtype='int32',
+                                 dtype='int8' if len(lookup_array) < 128 else 'int32' if len(lookup_array) < 32768 else index_array.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -707,16 +834,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     
                 continue
             
-            #===================================================================
-            # # This will be useful in the future after string field handling has been implemented
-            # # Process string fields as lookups
-            # if field_definition['format'].startswith('A'):
-            #     for lookup_variable in lookup_variable_generator(field_definition):
-            #         # Create index dimension
-            #         yield lookup_variable
-            #         
-            #     continue
-            #===================================================================
+            # Process string fields as lookups
+            if field_definition['format'].startswith('A') or short_name in self.settings['lookup_fields']:
+                for lookup_variable in lookup_variable_generator(field_definition):
+                    # Create index dimension
+                    yield lookup_variable
+                     
+                continue
             
             long_name = field_definition.get('long_name')
             if long_name:
@@ -739,7 +863,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
                 yield NetCDFVariable(short_name=short_name, 
-                                     data=self.cache_variable[:,field_definition['column_start_index']], 
+                                     data=self.get_raw_data(short_name), 
                                      dimensions=['point'], 
                                      fill_value=fill_value, 
                                      attributes=field_attributes, 

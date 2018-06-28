@@ -59,7 +59,7 @@ def decode_aseg_gdf_format(aseg_gdf_format):
     if not match:
         raise BaseException('Invalid ASEG-GDF format string {}'.format(aseg_gdf_format))  
       
-    columns = match.group(1) or 1
+    columns = int(match.group(1)) if match.group(1) is not None else 1
     aseg_dtype_code = match.group(2).upper()
     width_specifier = int(match.group(3))
     decimal_places = int(match.group(4)) if match.group(4) is not None else 0
@@ -98,19 +98,16 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
     
     # Floating point type - use approximate sig. figs. to determine length
     #TODO: Remove 'A' after string field handling has been properly implemented
-    elif aseg_dtype_code in ['D', 'E', 'F', 'A']: # Floating point
+    elif aseg_dtype_code in ['D', 'E', 'F']: # Floating point
         for test_dtype, sig_figs in SIG_FIGS.items():
             if test_dtype.startswith('float') and sig_figs >= width_specifier-2: # Allow for sign and decimal place
                 dtype = test_dtype
                 break
         assert dtype, 'Invalid floating point format of {}.{}'.format(width_specifier, decimal_places)                                    
     
-    #===========================================================================
-    # #TODO: Uncomment this section after string field handling has been properly implemented
-    # elif aseg_dtype_code == 'A':
-    #     assert not decimal_places, 'String format cannot be defined with fractional digits'
-    #     dtype = str
-    #===========================================================================
+    elif aseg_dtype_code == 'A':
+        assert not decimal_places, 'String format cannot be defined with fractional digits'
+        dtype = '<U{}'.format(width_specifier) # Numpy fixed-length string type
         
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
@@ -284,7 +281,7 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                             assert not np.any(data_array[~no_data_mask] == truncated_fill_value), 'Truncated fill value of {} is ambiguous'.format(truncated_fill_value)
                             fill_value = truncated_fill_value
                         except Exception as e:
-                            logger.info('Unable to truncate fill value to {}: {}'.format(aseg_gdf_format, e))
+                            logger.info('Unable to truncate fill value from {} to {} ({}). Keeping original value.'.format(fill_value, truncated_fill_value, e))
                             
                     return aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, fill_value
 
