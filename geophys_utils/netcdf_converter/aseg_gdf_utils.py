@@ -142,7 +142,6 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         raise BaseException('Unable to handle arrays with dimensionality > 2')
         
     data_array = array_variable[:]
-    print(array_variable, repr(data_array))
     
     if not len(array_variable.shape): # Scalar
         dtype = type(data_array).__name__

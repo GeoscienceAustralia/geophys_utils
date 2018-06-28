@@ -797,7 +797,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                    size=len(lookup_array))
             
             logger.info('\t\tWriting {} {} lookup values'.format(len(lookup_array), field_definition['short_name']))
-            yield NetCDFVariable(short_name='{}_lookup'.format(field_definition['short_name']), 
+            yield NetCDFVariable(short_name=field_definition['short_name'], 
                                  data=lookup_array, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=None, 
@@ -808,7 +808,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  )
                         
             logger.info('\t\tWriting {} lookup indices'.format(field_definition['short_name']))
-            yield NetCDFVariable(short_name=field_definition['short_name'], 
+            yield NetCDFVariable(short_name='{}_index'.format(field_definition['short_name']), 
                                  data=index_array, 
                                  dimensions=['point'], 
                                  fill_value=-1, 
