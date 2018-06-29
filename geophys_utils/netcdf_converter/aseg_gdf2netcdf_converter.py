@@ -280,7 +280,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             if dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
-                                value = value_string
+                                value = value_string.strip
                         except ValueError:
                             logger.warning('Unable to convert "{}" field value "{}" to type {}'.format(short_name, value_string, dtype))
                             logger.debug('line: "{}"'.format(line))

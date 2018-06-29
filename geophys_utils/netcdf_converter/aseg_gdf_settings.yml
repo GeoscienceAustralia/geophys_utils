@@ -68,11 +68,11 @@ dimension_fields: [layer, low_moment_gate, high_moment_gate]
 
 # List of possible index field names to indicate which fields need to be turned into value, start & count arrays
 # Uses overridden short_name values (if set)
-index_fields: [line, flight]
+index_fields: []
 
 # List of possible lookup field names to indicate which fields need to be turned into lookup arrays
 # Uses overridden short_name values (if set)
-lookup_fields: []
+lookup_fields: [line, flight]
 
 # List of possible ASEG-GDF fields to be ignored (i.e. not output to netCDF) 
 # Uses overridden short_name values (if set)
