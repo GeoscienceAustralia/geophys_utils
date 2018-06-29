@@ -222,7 +222,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         field_dimensions =('rows', field_dimension_name)
                         chunksizes=(CACHE_CHUNK_ROWS, columns)
                         
-                    logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
+                    #logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
                     self._nc_cache_dataset.createVariable(varname=short_name,
                                                           datatype=field_definition['dtype'],
                                                           dimensions=field_dimensions,
@@ -280,7 +280,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             if dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
-                                value = value_string.strip
+                                value = value_string
                         except ValueError:
                             logger.warning('Unable to convert "{}" field value "{}" to type {}'.format(short_name, value_string, dtype))
                             logger.debug('line: "{}"'.format(line))
@@ -1009,7 +1009,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    if True:#try:
+    try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
@@ -1020,7 +1020,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    else:#except Exception as e:
+    except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n

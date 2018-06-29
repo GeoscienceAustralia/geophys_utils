@@ -128,7 +128,7 @@ class NetCDFVariable(object):
                                              
         logger.debug('self.__dict__: {}'.format(pformat(self.__dict__)))                                     
         logger.debug('variable_parameters: {}'.format(pformat(variable_parameters))) 
-                                            
+
         output_variable = nc_output_dataset.createVariable(self.short_name,
                                                            self.dtype,
                                                            self.dimensions,
@@ -403,6 +403,7 @@ class ToNetCDFConverter(object):
                               data=0, 
                               dimensions=[], # Scalar
                               fill_value=None, 
+                              chunk_size=0,
                               attributes=crs_attributes,
                               dtype='int8' # Byte datatype
                               )    
