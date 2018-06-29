@@ -151,7 +151,7 @@ class ToNetCDFConverter(object):
     @abc.abstractmethod
     def __init__(self, 
                  nc_out_path, 
-                 netcdf_format='NETCDF4_CLASSIC', 
+                 netcdf_format='NETCDF4', 
                  default_chunk_size=None, # None means take default, zero means not chunked.
                  default_variable_parameters=None
                  ):
@@ -182,8 +182,9 @@ class ToNetCDFConverter(object):
         '''
         try:
             self.nc_output_dataset.close()
-        except:
-            pass
+            logger.debug('Closed netCDF output dataset')
+        except Exception as e:
+            logger.debug('Unable to close netCDF output dataset: {}'.format(e))
         
     @abc.abstractmethod
     def get_global_attributes(self):

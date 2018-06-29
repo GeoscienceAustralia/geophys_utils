@@ -61,29 +61,35 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         self._nc_cache_dataset.createDimension('start_end', 2)
         
-        # Cater for two possible variable naming conventions
-        #TODO: Remove this after the variable naming scheme has been finalised
-        try:
-            index_line_variable = self.netcdf_dataset.variables['index_line']
-            index_count_variable = self.netcdf_dataset.variables['index_count']
-        except:
-            index_line_variable = self.netcdf_dataset.variables['_index_line']
-            index_count_variable = self.netcdf_dataset.variables['_index_count']
-        
-        var_options = index_line_variable.filters() or {}
+        # Cater for possible variable naming conventions
+        #TODO: Remove this after the variable naming scheme has been finalised        
+        line_start_variable = None
+        line_count_variable = None
+        for line_index_naming in [{'start': 'index_line', 'count': 'index_count'},
+                                  {'start': '_index_line', 'count': '_index_count'},
+                                  {'start': 'index_line', 'count': 'index_count_line'},
+                                  ]:
+            line_start_variable = self.netcdf_dataset.variables.get(line_index_naming['start'])
+            line_count_variable = self.netcdf_dataset.variables.get(line_index_naming['count'])
+            if line_start_variable and line_count_variable:
+                break
+            
+        assert line_start_variable and line_count_variable, 'Line indexing variables not found'
+            
+        var_options = line_start_variable.filters() or {}
         
         var_options['zlib'] = False
-        if hasattr(index_line_variable, '_FillValue'):
-            var_options['fill_value'] = index_line_variable._FillValue
+        if hasattr(line_start_variable, '_FillValue'):
+            var_options['fill_value'] = line_start_variable._FillValue
             
         self._nc_cache_dataset.createVariable('line_start_end', 
-                                      index_line_variable.dtype, 
+                                      line_start_variable.dtype, 
                                       ('line', 'start_end'),
                                       **var_options
                                       )
         self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        self.line_start_end[:,0] = self.fetch_array(index_line_variable)
-        self.line_start_end[:,1] = self.fetch_array(index_count_variable)
+        self.line_start_end[:,0] = self.fetch_array(line_start_variable)
+        self.line_start_end[:,1] = self.fetch_array(line_count_variable)
         self.line_start_end[:,1] += self.line_start_end[:,0]
         
         self.kdtree = None
