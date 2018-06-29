@@ -39,23 +39,20 @@ class LineCache(object):
         '''
         Constructor
         '''
-        self.index_range = 0
-        self.netCDF2ASEG_GDF_converter = netCDF2ASEG_GDF_converter
+        #self.netCDF2ASEG_GDF_converter = netCDF2ASEG_GDF_converter
+        self.settings = netCDF2ASEG_GDF_converter.settings
+        self.field_definitions = netCDF2ASEG_GDF_converter.field_definitions
+        self.nc_dataset = netCDF2ASEG_GDF_converter.nc_dataset
         
-        self.cache = []
-        for field_definition in self.netCDF2ASEG_GDF_converter.field_definitions:
-            self.cache.append({'field_definition': field_definition,
-                               'data': None})
-        
+        self.clear_cache()
+       
         
     def clear_cache(self): 
         '''
         Clear cache
         '''
         self.index_range = 0
-           
-        for variable_cache in self.cache:
-            variable_cache['data'] = None
+        self.cache = {}
 
     
     def read_points(self, start_index, end_index):
@@ -65,9 +62,9 @@ class LineCache(object):
             '''
             Helper function to expand indexing variables and return an array of the required size
             '''
-            value_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables[indexing_variable_name]
-            start_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
-            count_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
+            value_variable = self.nc_dataset.variables[indexing_variable_name]
+            start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
+            count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
             
             expanded_array = np.zeros(shape=(self.index_range,), 
                                       dtype=value_variable.dtype)
@@ -90,7 +87,7 @@ class LineCache(object):
             '''
             Helper function to expand lookup variables and return an array of the required size
             '''
-            indexing_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables[indexing_variable_name]
+            indexing_variable = self.nc_dataset.variables[indexing_variable_name]
             
             if not lookup_variable_name: # lookup_variable_name not supplied
                 if hasattr(indexing_variable, 'lookup'): 
@@ -102,48 +99,42 @@ class LineCache(object):
                 else:
                     raise BaseException('lookup_variable_name not supplied and cannot be inferred')
             
-            lookup_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables[lookup_variable_name]    
+            lookup_variable = self.nc_dataset.variables[lookup_variable_name]    
                 
             return lookup_variable[indexing_variable[start_index:end_index]]
+    
     
         # Start of read_points function
         self.index_range = end_index - start_index
 
-        for variable_cache in self.cache:
-            variable_name = variable_cache['field_definition']['short_name']
-            variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables[variable_name]
+        for field_definition in self.field_definitions:
+            short_name = field_definition['short_name']
+            variable_name = field_definition['variable_name']
+            
+            variable = self.nc_dataset.variables[variable_name]
             
             if len(variable.shape) == 0: # Scalar variable - repeat value for each point
                 data = variable[:]
-                variable_cache['data'] = np.array([data] * self.index_range)
+                self.cache[short_name] = np.array([data] * self.index_range)
                 
-            elif len(variable.shape) == 1: # 1D variable
-                # Not an indexing variable
-                if ('point' in variable.dimensions) and (variable_name not in self.netCDF2ASEG_GDF_converter.settings['index_fields']):
+            elif len(variable.shape) in [1, 2]: # 1D or 2D variable
+                # Indexing array variable
+                if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
+                    self.cache[short_name] = expand_indexing_variable(variable_name, start_index, end_index)
+                    
+                # Lookup array variable
+                elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields']) or variable_name.endswith('_index'): 
+                    self.cache[short_name] = expand_lookup_variable(variable_name, start_index, end_index)
+
+                # A data array variable
+                if ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
                     data = variable[start_index:end_index]
                     
                     # Include fill_values if array is masked
                     if type(data) == np.ma.core.MaskedArray:
                         data = data.data
                         
-                    variable_cache['data'] = variable[start_index:end_index]
-                # Indexing variable
-                elif ('point' not in variable.dimensions) and (variable_name in self.netCDF2ASEG_GDF_converter.netCDF2ASEG_GDF_converter.settings['index_fields']): 
-                    variable_cache['data'] = expand_indexing_variable(variable_name, start_index, end_index)
-                    
-                # Lookup variable
-                elif (variable_name in self.netCDF2ASEG_GDF_converter.settings['lookup_fields']) or variable_name.endswith('_index'): 
-                    variable_cache['data'] = expand_lookup_variable(variable_name, start_index, end_index)
- 
-                  
-            elif len(variable.shape) == 2: # 2D variable
-                data = variable[start_index:end_index]
-                
-                # Include fill_values if array is masked
-                if type(data) == np.ma.core.MaskedArray:
-                    data = data.data
-                    
-                variable_cache['data'] = data
+                    self.cache[short_name] = data
             else:
                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
             
@@ -155,10 +146,10 @@ class LineCache(object):
         
         for index in range(self.index_range):
             line = ''
-            for variable_cache in self.cache:
-                field_definition = variable_cache['field_definition']
+            for field_definition in self.field_definitions:
+                short_name = field_definition['short_name']
                 python_format = field_definition['python_format']
-                data = variable_cache['data'][index]
+                data = self.cache[short_name][index]
                 if len(data.shape) == 0: # Element from 1D variable
                     line += python_format.format(data)
                 elif len(data.shape) == 1: # Row from 2D variable
@@ -212,60 +203,6 @@ class NetCDF2ASEGGDFConverter(object):
         
         self.total_points = self.nc_dataset.dimensions['point'].size
         
-        # Build field definitions
-        self.field_definitions = []
-        for variable_name, variable in self.nc_dataset.variables.items():
-            
-            #===================================================================
-            # # Skip scalar variables
-            # if not len(variable.dimensions):
-            #     continue
-            # 
-            # # Skip any non-pointwise, non-indexing fields
-            # # Note: Indexing variables will be expanded during .dat output
-            # if ('point' not in variable.dimensions) and variable_name not in self.settings['index_fields']:
-            #     continue
-            #===================================================================
-            
-            # Skip any non-scalar, non-pointwise fields - probably lookup fields
-            if variable.shape and ('point' not in variable.dimensions):
-                continue
-            
-            # Don't output CRS scalar variable - assume all other scalars are to be applied to every point
-            if not variable.shape and variable_name in ['crs', 'transverse_mercator']:
-                continue
-            
-            chunk_size = variable.chunking()[0] if variable.chunking() is not None else CACHE_CHUNK_ROWS
-            # If variable is not chunked and CACHE_CHUNK_ROWS is defined
-            if not variable.shape: # Scalar
-                chunk_size = None
-            elif CACHE_CHUNK_ROWS and (chunk_size == variable.shape[0]):
-                chunk_size = min(CACHE_CHUNK_ROWS, variable.shape[0]) # Use default chunking
-                
-            aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
-            
-            field_definition = {'short_name': variable_name,
-                                'dtype': dtype,
-                                'chunk_size': chunk_size,
-                                'columns': columns,
-                                'format': aseg_gdf_format,
-                                'width_specifier': width_specifier,
-                                'decimal_places': decimal_places,
-                                'python_format': python_format
-                                }
-            
-            self.field_definitions.append(field_definition)
-
-        logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
-
-        # Read overriding field definition values from settings
-        if self.settings.get('field_definitions'):
-            for field_definition in self.field_definitions:
-                overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
-                if overriding_field_definition:
-                    field_definition.update(overriding_field_definition)
-            
-            logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
     
     def write_record2dfn_file(self, 
                               dfn_file, 
@@ -313,6 +250,78 @@ class NetCDF2ASEGGDFConverter(object):
         '''
         Function to convert netCDF file to ASEG-GDF
         '''
+        def get_field_definitions():
+            '''
+            Helper function to get field definitions from netCDF file
+            '''
+            # Build field definitions
+            self.field_definitions = []
+            for variable_name, variable in self.nc_dataset.variables.items():
+                # Skip any non-scalar, non-pointwise fields except index variables
+                # These are probably lookup fields
+                if (variable.shape 
+                    and ('point' not in variable.dimensions)
+                    and variable_name not in self.settings['index_fields']):
+                    continue
+                
+                # Don't output CRS scalar variable - assume all other scalars are to be applied to every point
+                if not variable.shape and variable_name in ['crs', 'transverse_mercator']:
+                    continue
+                
+                # Resolve lookups
+                if hasattr(variable, 'lookup'):
+                    short_name = variable.lookup # Use lookup variable name for output
+                    lookup_variable = self.nc_dataset.variables[short_name]
+                    variable_attributes = lookup_variable.__dict__
+                    aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(lookup_variable)
+                else:
+                    short_name = variable_name
+                    variable_attributes = variable.__dict__
+                    aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
+                    
+                # Map variable name to standard ASEG-GDF field name if required
+                short_name = self.settings['aseg_field_mapping'].get(short_name) or short_name
+                    
+                try:
+                    read_chunk_size = int(variable.chunking()[0])
+                except:
+                    read_chunk_size = CACHE_CHUNK_ROWS # Use default chunking for reads
+                    
+                field_definition = {'variable_name': variable_name,
+                                    'short_name': short_name,
+                                    'dtype': dtype,
+                                    'chunk_size': read_chunk_size,
+                                    'columns': columns,
+                                    'format': aseg_gdf_format,
+                                    'width_specifier': width_specifier,
+                                    'decimal_places': decimal_places,
+                                    'python_format': python_format
+                                    }
+                
+    
+                # Set variable attributes in field definition
+                variable_attribute_dict = {attribute_name: variable_attributes.get(key.upper())
+                    for key, attribute_name in self.settings['variable_attributes'].items()
+                    if variable_attributes.get(key.upper()) is not None
+                                           }
+                        
+                if variable_attribute_dict:
+                    field_definition['variable_attributes'] = variable_attribute_dict  
+                      
+                self.field_definitions.append(field_definition)
+                
+            logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+    
+            # Read overriding field definition values from settings
+            if self.settings.get('field_definitions'):
+                for field_definition in self.field_definitions:
+                    overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
+                    if overriding_field_definition:
+                        field_definition.update(overriding_field_definition)
+                
+                logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
+        
+        
         def write_dfn_file():
             '''
             Helper function to output .dfn file
@@ -323,42 +332,29 @@ class NetCDF2ASEGGDFConverter(object):
                 """
                 self.defn = 0 # reset DEFN number
                 for field_definition in self.field_definitions:
-                    variable_name = field_definition['short_name']
-                    variable = self.nc_dataset.variables[variable_name]
-                    
-                    # Resolve lookups
-                    if hasattr(variable, 'lookup'):
-                        field_name = variable.lookup # Use lookup variable name for output
-                        lookup_variable = self.nc_dataset.variables[field_name]
-                        variable_attributes = lookup_variable.__dict__
-                    else:
-                        field_name = variable_name
-                        variable_attributes = variable.__dict__
-                        
-                    # Map variable name to standard ASEG-GDF field name if required
-                    field_name = self.settings['aseg_field_mapping'].get(variable_name) or variable_name
-                    
-                    #logger.debug('variable_name: {}, field_name: {}, variable.dtype: {}'.format(variable_name, field_name, variable.dtype))                  
+                    short_name = field_definition['short_name']
                     
                     optional_attribute_list = []
                     
-                    units = variable_attributes.get('units')
+                    units = field_definition.get('units')
                     if units:
                         optional_attribute_list.append('UNITS={units}'.format(units=units))
     
-                    fill_value = variable_attributes.get('_FillValue')
+                    fill_value = field_definition.get('_FillValue')
                     if fill_value is not None:
                         optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
     
                     # Check for additional ASEG-GDF attributes defined in settings
-                    for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
-                        attribute_value = variable_attributes.get(netcdf_attribute)
-                        if attribute_value is not None:
-                            optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
+                    variable_attributes = field_definition.get('variable_attributes')
+                    if variable_attributes:
+                        for aseg_gdf_attribute, netcdf_attribute in self.settings['variable_attributes'].items():
+                            attribute_value = variable_attributes.get(netcdf_attribute)
+                            if attribute_value is not None:
+                                optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
                                                                                                            attribute_value=attribute_value
                                                                                                            ))
                         
-                    long_name = variable_attributes.get('long_name')
+                    long_name = field_definition.get('long_name')
                     if long_name:
                         optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
                         
@@ -369,7 +365,7 @@ class NetCDF2ASEGGDFConverter(object):
     
                     self.write_record2dfn_file(dfn_file,
                                                rt='',
-                                               name=field_name,
+                                               name=short_name,
                                                aseg_gdf_format=field_definition['format'],
                                                definition=definition,
                                                )
@@ -652,6 +648,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 
         
         # Start of convert2aseg_gdf function        
+        get_field_definitions()
+        
         write_dfn_file()
 
         write_dat_file()
