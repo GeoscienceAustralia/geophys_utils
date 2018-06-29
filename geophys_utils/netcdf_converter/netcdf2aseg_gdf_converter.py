@@ -23,13 +23,8 @@ from geophys_utils import get_spatial_ref_from_wkt
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-# Maximum size of in-memory cache array (in bytes)
-MAX_MEMORY_BYTES = 1073741824 # 1GB
-#MAX_MEMORY_BYTES = 8388608 # 8MB
-
-# Default effective chunk size for un-chunked variables.
-# Set to 0 for no chunking (i.e. complete read)
-DEFAULT_READ_CHUNK_SIZE = 1
+# Default number of rows to read before outputting chunk of lines.
+DEFAULT_READ_CHUNK_SIZE = 8192
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
@@ -42,8 +37,9 @@ class LineCache(object):
     '''
     def __init__(self, netCDF2ASEG_GDF_converter, cache_size):
         '''
+        Constructor
         '''
-        self.index_range = None
+        self.index_range = 0
         self.netCDF2ASEG_GDF_converter = netCDF2ASEG_GDF_converter
         self.cache_size = cache_size
         
@@ -51,6 +47,16 @@ class LineCache(object):
         for field_definition in self.netCDF2ASEG_GDF_converter.field_definitions:
             self.cache.append({'field_definition': field_definition,
                                'data': None})
+        
+        
+    def clear_cache(self): 
+        '''
+        Clear cache
+        '''
+        self.index_range = 0
+           
+        for variable_cache in self.cache:
+            variable_cache['data'] = None
 
     
     def read_points(self, start_index, end_index):
@@ -60,12 +66,11 @@ class LineCache(object):
             '''
             Helper function to expand indexing variables and return an array of the required size
             '''
-            row_range = end_index - start_index
             value_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables[indexing_variable_name]
             start_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
             count_variable = self.netCDF2ASEG_GDF_converter.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
             
-            expanded_array = np.zeros(shape=(row_range,), 
+            expanded_array = np.zeros(shape=(self.index_range,), 
                                       dtype=value_variable.dtype)
             
             # Assume monotonically increasing start indices to find all relevant indices
@@ -75,7 +80,7 @@ class LineCache(object):
             #logger.debug('indices: {}'.format(indices))
             for index in indices:
                 start_index = max(start_variable[index]-start_index, 0)
-                end_index = min(start_index+count_variable[index], row_range)
+                end_index = min(start_index+count_variable[index], self.index_range)
                 expanded_array[start_index:end_index] = value_variable[index]
                 
             #logger.debug('expanded_array: {}'.format(expanded_array))
@@ -104,6 +109,9 @@ class LineCache(object):
     
         # Start of read_points function
         self.index_range = end_index - start_index
+        assert self.index_range <= self.cache_size, 'Index range {}-{} is larger than cache size {}'.format(start_index, 
+                                                                                                       end_index, 
+                                                                                                       self.cache_size)
 
         for variable_cache in self.cache:
             variable_name = variable_cache['field_definition']['short_name']
@@ -143,7 +151,7 @@ class LineCache(object):
             else:
                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
             
-    def line_generator(self):
+    def chunk_buffer_generator(self, clear_cache=True):
         '''
         Generator yielding lines for all data in cache
         '''
@@ -166,7 +174,9 @@ class LineCache(object):
             # Strip leading spaces as per ASEG practice, even though this makes the 
             # width of the first field wrong.
             yield line.lstrip() + '\n' 
-                    
+            
+        if clear_cache:
+            self.clear_cache() # Clear cache after outputting all lines                   
                                        
                                        
 class NetCDF2ASEGGDFConverter(object):
@@ -554,11 +564,11 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
         
         
-        def write_dat_file():
+        def write_dat_file(read_chunk_size=None):
             '''
             Helper function to output .dat file
             '''
-            def line_generator():
+            def chunk_buffer_generator():
                 '''
                 Generator to yield all line strings across all point variables for specified row range
                 '''                    
@@ -568,36 +578,13 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     '''
                     line_cache.read_points(start_index, end_index)
                     
-                    for line in line_cache.line_generator():
+                    for line in line_cache.chunk_buffer_generator():
                         yield line
 
                         
-                # Start of line_generator
+                # Start of chunk_buffer_generator
                 # Define formats for individual columns
-                column_format_list = []
-                for field_definition in self.field_definitions:
-                    for _column_index in range(field_definition['columns']):
-                        column_format_list.append(field_definition['python_format'])
-                    
-                
-                
-                total_columns = sum([field_definition['columns']
-                                     for field_definition in self.field_definitions
-                                     ]
-                                    )
-                logger.debug('total_columns: {}'.format(total_columns))
-                                
-                max_chunk_size = max([field_definition['chunk_size']
-                                      for field_definition in self.field_definitions
-                                      if field_definition['chunk_size'] is not None
-                                      ]
-                                     )
-                
-                # Calculate maximum number of rows which can be read into memory with float64 cells
-                read_chunk_size = (MAX_MEMORY_BYTES // total_columns // 8 // max_chunk_size) * max_chunk_size
-                
-                logger.debug('read_chunk_size: {}'.format(read_chunk_size))
-                
+                chunk_buffer = ''
                 line_cache = LineCache(self, read_chunk_size)
                 
                 # Process all complete chunks
@@ -612,13 +599,16 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         point_count += 1
                         
                         if point_count == point_count // 10000 * 10000:
-                            logger.info('{} points written'.format(point_count))
+                            logger.info('{} points read'.format(point_count))
                             #logger.debug('line: {}'.format(line))
                     
-                        yield line
+                        chunk_buffer += line
                         
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):
                             break
+                        
+                    yield chunk_buffer
+                    chunk_buffer = ''
                         
                     if POINT_LIMIT and (point_count >= POINT_LIMIT):
                         break
@@ -632,25 +622,31 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         point_count += 1
                         
                         if point_count == point_count // 10000 * 10000:
-                            logger.info('{} points written'.format(point_count))
+                            logger.info('{} points read'.format(point_count))
                             #logger.debug('line: {}'.format(line))
 
-                        yield line
+                        chunk_buffer += line
                         
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):
                             break
                              
+                    yield chunk_buffer
+                    chunk_buffer = ''
+                
                 logger.info('{} lines output'.format(point_count))
         
+            read_chunk_size = read_chunk_size or DEFAULT_READ_CHUNK_SIZE
+            
             # Create, write and close .dat file
             dat_file = open(self.dat_out_path, mode='w')
-            for line in line_generator():
-                dat_file.write(line)
+            for chunk_buffer in chunk_buffer_generator():
+                logger.debug('Writing chunk to {}'.format(self.dat_out_path))
+                dat_file.write(chunk_buffer)
             dat_file.close()
             logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
                 
         
-        # Start of convert2aseg_gdf function
+        # Start of convert2aseg_gdf function        
         write_dfn_file()
         write_dat_file()
     
