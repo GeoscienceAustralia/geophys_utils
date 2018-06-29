@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
 # Default number of rows to read before outputting chunk of lines.
-DEFAULT_READ_CHUNK_SIZE = 8192
+CACHE_CHUNK_ROWS = 8192
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
@@ -35,13 +35,12 @@ POINT_LIMIT = 0
 class LineCache(object):
     '''
     '''
-    def __init__(self, netCDF2ASEG_GDF_converter, cache_size):
+    def __init__(self, netCDF2ASEG_GDF_converter):
         '''
         Constructor
         '''
         self.index_range = 0
         self.netCDF2ASEG_GDF_converter = netCDF2ASEG_GDF_converter
-        self.cache_size = cache_size
         
         self.cache = []
         for field_definition in self.netCDF2ASEG_GDF_converter.field_definitions:
@@ -109,9 +108,6 @@ class LineCache(object):
     
         # Start of read_points function
         self.index_range = end_index - start_index
-        assert self.index_range <= self.cache_size, 'Index range {}-{} is larger than cache size {}'.format(start_index, 
-                                                                                                       end_index, 
-                                                                                                       self.cache_size)
 
         for variable_cache in self.cache:
             variable_name = variable_cache['field_definition']['short_name']
@@ -136,7 +132,7 @@ class LineCache(object):
                     variable_cache['data'] = expand_indexing_variable(variable_name, start_index, end_index)
                     
                 # Lookup variable
-                elif (variable_name in self.settings['index_fields']) or variable_name.endswith('_index'): 
+                elif (variable_name in self.netCDF2ASEG_GDF_converter.settings['lookup_fields']) or variable_name.endswith('_index'): 
                     variable_cache['data'] = expand_lookup_variable(variable_name, start_index, end_index)
  
                   
@@ -153,7 +149,7 @@ class LineCache(object):
             
     def chunk_buffer_generator(self, clear_cache=True):
         '''
-        Generator yielding lines for all data in cache
+        Generator yielding chunks for all data in cache
         '''
         assert self.index_range, 'Cache is empty'
         
@@ -231,20 +227,20 @@ class NetCDF2ASEGGDFConverter(object):
             #     continue
             #===================================================================
             
-            # Skip any non-scalar, non-pointwise fields
+            # Skip any non-scalar, non-pointwise fields - probably lookup fields
             if variable.shape and ('point' not in variable.dimensions):
                 continue
             
-            # Don't output CRS variable
-            if variable_name in ['crs', 'transverse_mercator']:
+            # Don't output CRS scalar variable - assume all other scalars are to be applied to every point
+            if not variable.shape and variable_name in ['crs', 'transverse_mercator']:
                 continue
             
-            chunk_size = variable.chunking()[0] if variable.chunking() is not None else DEFAULT_READ_CHUNK_SIZE
-            # If variable is not chunked and DEFAULT_READ_CHUNK_SIZE is defined
+            chunk_size = variable.chunking()[0] if variable.chunking() is not None else CACHE_CHUNK_ROWS
+            # If variable is not chunked and CACHE_CHUNK_ROWS is defined
             if not variable.shape: # Scalar
                 chunk_size = None
-            elif DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
-                chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
+            elif CACHE_CHUNK_ROWS and (chunk_size == variable.shape[0]):
+                chunk_size = min(CACHE_CHUNK_ROWS, variable.shape[0]) # Use default chunking
                 
             aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
             
@@ -328,13 +324,21 @@ class NetCDF2ASEGGDFConverter(object):
                 self.defn = 0 # reset DEFN number
                 for field_definition in self.field_definitions:
                     variable_name = field_definition['short_name']
+                    variable = self.nc_dataset.variables[variable_name]
+                    
+                    # Resolve lookups
+                    if hasattr(variable, 'lookup'):
+                        field_name = variable.lookup # Use lookup variable name for output
+                        lookup_variable = self.nc_dataset.variables[field_name]
+                        variable_attributes = lookup_variable.__dict__
+                    else:
+                        field_name = variable_name
+                        variable_attributes = variable.__dict__
+                        
                     # Map variable name to standard ASEG-GDF field name if required
                     field_name = self.settings['aseg_field_mapping'].get(variable_name) or variable_name
                     
-                    variable = self.nc_dataset.variables[variable_name]
-                    logger.debug('variable_name: {}, field_name: {}, variable.dtype: {}'.format(variable_name, field_name, variable.dtype))
-                    
-                    variable_attributes = variable.__dict__
+                    #logger.debug('variable_name: {}, field_name: {}, variable.dtype: {}'.format(variable_name, field_name, variable.dtype))                  
                     
                     optional_attribute_list = []
                     
@@ -564,7 +568,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
         
         
-        def write_dat_file(read_chunk_size=None):
+        def write_dat_file(cache_chunk_rows=None):
             '''
             Helper function to output .dat file
             '''
@@ -585,17 +589,18 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 # Start of chunk_buffer_generator
                 # Define formats for individual columns
                 chunk_buffer = ''
-                line_cache = LineCache(self, read_chunk_size)
+                
+                line_cache = LineCache(self) # Create cache for multiple rows
                 
                 # Process all complete chunks
                 point_count = 0
-                for chunk_index in range(self.total_points // read_chunk_size):
+                for chunk_index in range(self.total_points // cache_chunk_rows):
                     logger.debug('Reading chunk {} for rows {}-{}'.format(chunk_index+1,
-                                                                          chunk_index*read_chunk_size,
-                                                                          (chunk_index+1)*read_chunk_size-1)
+                                                                          chunk_index*cache_chunk_rows,
+                                                                          (chunk_index+1)*cache_chunk_rows-1)
                                                                           )
-                    for line in chunk_line_generator(chunk_index*read_chunk_size,
-                                                     (chunk_index+1)*read_chunk_size):
+                    for line in chunk_line_generator(chunk_index*cache_chunk_rows,
+                                                     (chunk_index+1)*cache_chunk_rows):
                         point_count += 1
                         
                         if point_count == point_count // 10000 * 10000:
@@ -614,7 +619,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         break
                     
                 # All complete chunks processed - process any remaining rows
-                remaining_points = self.total_points % read_chunk_size
+                remaining_points = self.total_points % cache_chunk_rows
                 if remaining_points and (not POINT_LIMIT or (point_count < POINT_LIMIT)):
                     logger.debug('Reading final chunk with {} points'.format(remaining_points))
                     for line in chunk_line_generator(self.total_points-remaining_points,
@@ -635,7 +640,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 
                 logger.info('{} lines output'.format(point_count))
         
-            read_chunk_size = read_chunk_size or DEFAULT_READ_CHUNK_SIZE
+            cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
             
             # Create, write and close .dat file
             dat_file = open(self.dat_out_path, mode='w')
@@ -648,6 +653,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         
         # Start of convert2aseg_gdf function        
         write_dfn_file()
+
         write_dat_file()
     
        
