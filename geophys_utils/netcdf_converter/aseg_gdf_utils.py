@@ -179,7 +179,7 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         decimal_places = 0
         width_specifier = integer_digits + sign_width + 1
         aseg_gdf_format = 'I{}'.format(width_specifier)
-        python_format = '{' + ':>{:d}d'.format(width_specifier) + '}'
+        python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}'
 
     elif aseg_dtype_code in ['F', 'D', 'E']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine decimal_places

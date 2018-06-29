@@ -21,7 +21,7 @@ from geophys_utils import get_spatial_ref_from_wkt
 
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Logging level for this module
+logger.setLevel(logging.INFO) # Logging level for this module
 
 # Maximum size of in-memory cache array (in bytes)
 MAX_MEMORY_BYTES = 1073741824 # 1GB
@@ -236,7 +236,6 @@ class NetCDF2ASEGGDFConverter(object):
             elif DEFAULT_READ_CHUNK_SIZE and (chunk_size == variable.shape[0]):
                 chunk_size = min(DEFAULT_READ_CHUNK_SIZE, variable.shape[0]) # Use default chunking
                 
-            print(variable_name, repr(variable))
             aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
             
             field_definition = {'short_name': variable_name,
@@ -255,9 +254,7 @@ class NetCDF2ASEGGDFConverter(object):
 
         # Read overriding field definition values from settings
         if self.settings.get('field_definitions'):
-            print(self.settings['field_definitions'])
             for field_definition in self.field_definitions:
-                print('short_name:', field_definition['short_name'])
                 overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
                 if overriding_field_definition:
                     field_definition.update(overriding_field_definition)
