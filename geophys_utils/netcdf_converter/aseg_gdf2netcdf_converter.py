@@ -103,7 +103,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 elif len(definition) == 1:
                                     positional_value_list.append(definition[0])
     
-                    #logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
+                    logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
                 
                     # Column definition
                     if key_value_pairs.get('RT') in ['', 'DATA'] and (positional_value_list 
@@ -147,12 +147,25 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         
                                     
                     # Set CRS from projection name
-                    elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME') and not self.spatial_ref:                          
-                        projection_name = key_value_pairs.get('COMMENT')
-                        if projection_name:
-                            self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
-                            logger.debug('CRS set from .dfn file PROJNAME attribute {}'.format(projection_name))
-                            break # Nothing more to do
+                    elif not self.spatial_ref:
+                        if (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'COORDSYS'): # As per ASEG standard                       
+                            projection_name = key_value_pairs.get('NAME')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file COORDSYS COMMENT attribute {}'.format(projection_name))
+                                break # Nothing more to do
+                        elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME'): # Non-standard                        
+                            projection_name = key_value_pairs.get('COMMENT')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file PROJNAME NAME attribute {}'.format(projection_name))
+                                break # Nothing more to do
+                        elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'DATUM'): # Unprojected                         
+                            projection_name = key_value_pairs.get('NAME')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file DATUM NAME attribute {}'.format(projection_name))
+                                break # Nothing more to do
                             
             # Start of get_field_definitions function
             parse_dfn_file(dfn_path)
@@ -1009,7 +1022,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    try:
+    if True:#try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
@@ -1020,7 +1033,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    except Exception as e:
+    else:#except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n

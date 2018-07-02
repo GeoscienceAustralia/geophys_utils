@@ -10,7 +10,7 @@ import re
 import os
 import sys
 from datetime import datetime
-from pprint import pformat
+from pprint import pformat, pprint
 import yaml
 import tempfile
 import netCDF4
@@ -110,6 +110,7 @@ class LineCache(object):
         for field_definition in self.field_definitions:
             short_name = field_definition['short_name']
             variable_name = field_definition['variable_name']
+            #logger.debug('variable_name: {}'.format(variable_name))
             
             variable = self.nc_dataset.variables[variable_name]
             
@@ -120,14 +121,14 @@ class LineCache(object):
             elif len(variable.shape) in [1, 2]: # 1D or 2D variable
                 # Indexing array variable
                 if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
-                    self.cache[short_name] = expand_indexing_variable(variable_name, start_index, end_index)
+                    self.cache[short_name] = expand_indexing_variable(variable_name)
                     
                 # Lookup array variable
                 elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields']) or variable_name.endswith('_index'): 
-                    self.cache[short_name] = expand_lookup_variable(variable_name, start_index, end_index)
+                    self.cache[short_name] = expand_lookup_variable(variable_name)
 
                 # A data array variable
-                if ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
+                elif ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
                     data = variable[start_index:end_index]
                     
                     # Include fill_values if array is masked
@@ -137,7 +138,10 @@ class LineCache(object):
                     self.cache[short_name] = data
             else:
                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
-            
+        
+        #logger.debug('self.cache: {}'.format(pformat(self.cache)))
+        
+        
     def chunk_buffer_generator(self, clear_cache=True):
         '''
         Generator yielding chunks for all data in cache
@@ -150,17 +154,17 @@ class LineCache(object):
                 short_name = field_definition['short_name']
                 python_format = field_definition['python_format']
                 data = self.cache[short_name][index]
-                if len(data.shape) == 0: # Element from 1D variable
+                if field_definition['columns'] == 1: # Element from 1D variable
                     line += python_format.format(data)
-                elif len(data.shape) == 1: # Row from 2D variable
-                    for element in data:
-                        line += python_format.format(element)
+                elif field_definition['columns'] > 1: # Row from 2D variable
+                    line += ''.join([python_format.format(element) for element in data])
                 else:
                     raise BaseException('Invalid dimensionality for variable {}'.format(field_definition['short_name']))
                             
             # Strip leading spaces as per ASEG practice, even though this makes the 
             # width of the first field wrong.
-            yield line.lstrip() + '\n' 
+            #logger.debug('line: {}'.format(line.lstrip()))
+            yield line.lstrip() 
             
         if clear_cache:
             self.clear_cache() # Clear cache after outputting all lines                   
@@ -268,7 +272,7 @@ class NetCDF2ASEGGDFConverter(object):
                 if not variable.shape and variable_name in ['crs', 'transverse_mercator']:
                     continue
                 
-                # Resolve lookups
+                # Resolve lookups - use lookup variable instead of index variable
                 if hasattr(variable, 'lookup'):
                     short_name = variable.lookup # Use lookup variable name for output
                     lookup_variable = self.nc_dataset.variables[short_name]
@@ -298,7 +302,14 @@ class NetCDF2ASEGGDFConverter(object):
                                     'python_format': python_format
                                     }
                 
-    
+                fill_value = variable_attributes.get('_FillValue') # System attribute
+                if fill_value is not None:
+                    field_definition['fill_value'] = fill_value
+                                
+                long_name = variable_attributes.get('long_name')
+                if long_name is not None:
+                    field_definition['long_name'] = long_name
+                                
                 # Set variable attributes in field definition
                 variable_attribute_dict = {attribute_name: variable_attributes.get(key.upper())
                     for key, attribute_name in self.settings['variable_attributes'].items()
@@ -340,10 +351,14 @@ class NetCDF2ASEGGDFConverter(object):
                     if units:
                         optional_attribute_list.append('UNITS={units}'.format(units=units))
     
-                    fill_value = field_definition.get('_FillValue')
+                    fill_value = field_definition.get('fill_value')
                     if fill_value is not None:
                         optional_attribute_list.append('NULL=' + field_definition['python_format'].format(fill_value).strip())                   
     
+                    long_name = field_definition.get('long_name')
+                    if long_name:
+                        optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
+                        
                     # Check for additional ASEG-GDF attributes defined in settings
                     variable_attributes = field_definition.get('variable_attributes')
                     if variable_attributes:
@@ -353,10 +368,6 @@ class NetCDF2ASEGGDFConverter(object):
                                 optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
                                                                                                            attribute_value=attribute_value
                                                                                                            ))
-                        
-                    long_name = field_definition.get('long_name')
-                    if long_name:
-                        optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
                         
                     if optional_attribute_list:
                         definition = ' , '.join(optional_attribute_list)
@@ -448,7 +459,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                               for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', spatial_ref.ExportToPrettyWkt())
                                               ]
                 else: # Unprojected CRS
-                    projection_name = None
+                    projection_name = geogcs
                     projection_method = None
                     projection_parameters = None
 
@@ -461,13 +472,12 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                            aseg_gdf_format='A4'
                                            )
                 
-                if projcs:
-                    self.write_record2dfn_file(dfn_file,
-                                               rt='PROJ',
-                                               name='COORDSYS',
-                                               aseg_gdf_format='A40',
-                                               definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
-                                               )
+                self.write_record2dfn_file(dfn_file,
+                                           rt='PROJ',
+                                           name='COORDSYS',
+                                           aseg_gdf_format='A40',
+                                           definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
+                                           )
 
                 self.write_record2dfn_file(dfn_file,
                                            rt='PROJ',
@@ -576,73 +586,50 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     '''
                     Helper Generator to yield line strings for specified rows across all point variables
                     '''
+                    logger.debug('Reading rows {}-{}'.format(start_index+1, end_index))
                     line_cache.read_points(start_index, end_index)
                     
+                    logger.debug('Preparing ASEG-GDF lines for rows {}-{}'.format(start_index+1, end_index))
                     for line in line_cache.chunk_buffer_generator():
                         yield line
 
                         
                 # Start of chunk_buffer_generator
-                # Define formats for individual columns
-                chunk_buffer = ''
-                
                 line_cache = LineCache(self) # Create cache for multiple rows
                 
                 # Process all complete chunks
                 point_count = 0
-                for chunk_index in range(self.total_points // cache_chunk_rows):
-                    logger.debug('Reading chunk {} for rows {}-{}'.format(chunk_index+1,
-                                                                          chunk_index*cache_chunk_rows,
-                                                                          (chunk_index+1)*cache_chunk_rows-1)
-                                                                          )
-                    for line in chunk_line_generator(chunk_index*cache_chunk_rows,
-                                                     (chunk_index+1)*cache_chunk_rows):
+                for chunk_index in range(self.total_points // cache_chunk_rows + 1):
+                    for line in chunk_line_generator(start_index=chunk_index*cache_chunk_rows,
+                                                     end_index=min((chunk_index+1)*cache_chunk_rows,
+                                                                   self.total_points
+                                                                   )
+                                                     ):
                         point_count += 1
                         
                         if point_count == point_count // 10000 * 10000:
                             logger.info('{} points read'.format(point_count))
                             #logger.debug('line: {}'.format(line))
+                        
+                        yield line
                     
-                        chunk_buffer += line
-                        
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):
-                            break
-                        
-                    yield chunk_buffer
-                    chunk_buffer = ''
+                            break                    
                         
                     if POINT_LIMIT and (point_count >= POINT_LIMIT):
                         break
-                    
-                # All complete chunks processed - process any remaining rows
-                remaining_points = self.total_points % cache_chunk_rows
-                if remaining_points and (not POINT_LIMIT or (point_count < POINT_LIMIT)):
-                    logger.debug('Reading final chunk with {} points'.format(remaining_points))
-                    for line in chunk_line_generator(self.total_points-remaining_points,
-                                                     self.total_points):
-                        point_count += 1
-                        
-                        if point_count == point_count // 10000 * 10000:
-                            logger.info('{} points read'.format(point_count))
-                            #logger.debug('line: {}'.format(line))
-
-                        chunk_buffer += line
-                        
-                        if POINT_LIMIT and (point_count >= POINT_LIMIT):
-                            break
-                             
-                    yield chunk_buffer
-                    chunk_buffer = ''
                 
                 logger.info('{} lines output'.format(point_count))
-        
+                
+                
+            # Start of write_dat_file function
             cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
             
             # Create, write and close .dat file
             dat_file = open(self.dat_out_path, mode='w')
-            for chunk_buffer in chunk_buffer_generator():
-                logger.debug('Writing chunk to {}'.format(self.dat_out_path))
-                dat_file.write(chunk_buffer)
+            logger.debug('Writing lines to {}'.format(self.dat_out_path))
+            for line in chunk_buffer_generator():
+                dat_file.write(line + '\n')
             dat_file.close()
             logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
                 

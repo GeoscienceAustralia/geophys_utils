@@ -157,17 +157,17 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             integer_digits = ceil(log10(np.abs(data) + 1.0))
     else: # Array
         dtype = str(array_variable.dtype)
-        
+        if dtype == "<class 'str'>": # String array
+            dtype = 'str'
+            width_specifier = max([len(string.strip()) for string in data_array])
+            decimal_places = 0
+            
         # Include fill value if required
         if type(data_array) == np.ma.core.MaskedArray:
             logger.debug('Array is masked. Including fill value.')
             data_array = data_array.data
                 
-        if dtype == 'str':
-            raise BaseException('Need to implement this for string arrays')
-            #width_specifier = len(data_array)
-            #decimal_places = 0
-        else:
+        if dtype != 'str': # Numeric datatype
             sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
             sign_width = 1 if np.nanmin(data_array) < 0 else 0
             integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
