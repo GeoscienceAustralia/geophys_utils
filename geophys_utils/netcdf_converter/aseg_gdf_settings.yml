@@ -76,7 +76,7 @@ lookup_fields: [line, flight]
 
 # List of possible ASEG-GDF fields to be ignored (i.e. not output to netCDF) 
 # Uses overridden short_name values (if set)
-ignored_fields: [Proj_CGG, Proj_Client] 
+ignored_fields: [] # e.g. Proj_CGG, Proj_Client
 
 # NetCDF variable name to ASEG-GDF field name mappings for ASEG-GDF output
 aseg_field_mapping:

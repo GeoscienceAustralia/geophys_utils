@@ -699,8 +699,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         '''
         Concrete generator to yield NetCDFVariable objects       
         ''' 
-        #TODO: Rewrite this to work with string fields 
-        def index_variable_generator(field_definition):
+        def index_variable_generator():
             '''
             Helper generator to yield indexing variables
             N.B: Has side effect of creating one new dimension for each index field. 
@@ -766,79 +765,90 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
               
-        def lookup_variable_generator(field_definition):
+        def lookup_variable_generator():
             '''
             Helper generator to yield lookup variables for string fields
             N.B: Has side effect of creating one new dimension for each lookup field. 
             This new dimension will NOT appear in self.dimensions
             '''
-            # Process lookup variables
-            try:
-                lookup_data = self.get_raw_data(field_definition['short_name'])
-                
-                lookup_array, index_array = np.unique(lookup_data, return_inverse=True)
-                
-                logger.info('{} {} lookup values found'.format(len(lookup_array), field_definition['short_name']))
-                #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
-            except:
-                logger.info('Unable to create {} lookup variables'.format(field_definition['short_name']))
-                return   
+            assert lookup_array.shape[0] > 1, 'lookup_array must have more than one value'
+            
+            short_name = field_definition['short_name']
 
-            logger.info('\tWriting {} lookup variables'.format(field_definition['short_name']))
+            logger.info('\tWriting {} lookup variables'.format(short_name))
             
             variable_attributes = (field_definition.get('variable_attributes') or {})
             if field_definition.get('long_name'):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
-            # Write lookup data as scalar if only one value
-            if len(lookup_array) == 1:
-                logger.info('\t\tWriting {} single lookup value'.format(field_definition['short_name']))
-                yield NetCDFVariable(short_name=field_definition['short_name'], 
-                                     data=lookup_array, 
-                                     dimensions=[], 
-                                     fill_value=None, 
-                                     attributes=variable_attributes, 
-                                     dtype='str' if lookup_data.dtype == object else lookup_data.dtype,
-                                     chunk_size=self.default_chunk_size,
-                                     variable_parameters=self.default_variable_parameters
-                                     )
-                return
-                        
-            # This is a slightly ugly side effect
-            logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
-            self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
+            # Creating a new dimension is a slightly ugly side effect
+            logger.info('\tCreating dimension for {}'.format(short_name))
+            self.nc_output_dataset.createDimension(dimname=short_name, 
                                                    size=len(lookup_array))
             
-            logger.info('\t\tWriting {} {} lookup values'.format(len(lookup_array), field_definition['short_name']))
-            yield NetCDFVariable(short_name=field_definition['short_name'], 
+            logger.info('\t\tWriting {} {} lookup values to array variable {}'.format(len(lookup_array), 
+                                                                                      short_name, 
+                                                                                      short_name))
+            yield NetCDFVariable(short_name=short_name, 
                                  data=lookup_array, 
-                                 dimensions=[field_definition['short_name']], 
+                                 dimensions=[short_name], 
                                  fill_value=None, 
                                  attributes=variable_attributes, 
-                                 dtype='str' if (lookup_data.dtype == object) else lookup_data.dtype,
+                                 dtype='str' if (lookup_array.dtype == object) else lookup_array.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            logger.info('\t\tWriting {} lookup indices'.format(field_definition['short_name']))
-            yield NetCDFVariable(short_name='{}_index'.format(field_definition['short_name']), 
+            variable_name = '{}_index'.format(short_name)
+            logger.info('\t\tWriting {} lookup indices to array variable {}'.format(short_name,
+                                                                                    variable_name))
+            yield NetCDFVariable(short_name=variable_name, 
                                  data=index_array, 
                                  dimensions=['point'], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'zero-based index of value in {}_lookup'.format(field_definition['short_name']),
-                                             'lookup': field_definition['short_name']
+                                 attributes={'long_name': 'zero-based index of value in {}_lookup'.format(short_name),
+                                             'lookup': short_name
                                              }, 
                                  dtype='int8' if len(lookup_array) < 128 else 'int32' if len(lookup_array) < 32768 else index_array.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
 
-              
+            return        
+        
+        
+        def scalar_variable_generator():
+            '''
+            Helper generator to yield scalar variable for single-value field
+            '''
+            assert lookup_array.shape[0] == 1, 'lookup_array must have exactly one (i.e. unique) value'
+            short_name = field_definition['short_name']
+
+            logger.info('\tWriting single {} value to scalar variable'.format(short_name))
+            
+            variable_attributes = (field_definition.get('variable_attributes') or {})
+            if field_definition.get('long_name'):
+                variable_attributes['long_name'] = field_definition['long_name'] 
+                
+            yield NetCDFVariable(short_name=short_name, 
+                                 data=lookup_array, 
+                                 dimensions=[], 
+                                 fill_value=None, 
+                                 attributes=variable_attributes, 
+                                 dtype='str' if lookup_array.dtype == object else lookup_array.dtype,
+                                 chunk_size=self.default_chunk_size,
+                                 variable_parameters=self.default_variable_parameters
+                                 )
+            return
+                        
+        # Start of variable_generator function
         # Create crs variable
         yield self.build_crs_variable(self.spatial_ref)
         
         # Create and yield variables
         for field_definition in self.field_definitions:
+            #logger.debug('field_definition: {}'.format(pformat(field_definition)))
+            
             short_name = field_definition['short_name']
             
             # Skip dimension fields or ignored fields
@@ -848,22 +858,35 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             
             field_attributes = OrderedDict()
             
-            # Process index fields
-            if short_name in self.settings['index_fields']:
-                for index_variable in index_variable_generator(field_definition):
-                    # Create index dimension
-                    yield index_variable
-                    
+            raw_data = self.get_raw_data(short_name)
+            lookup_array, index_array = np.unique(raw_data, return_inverse=True)
+            unique_value_count = lookup_array.shape[0]
+            logger.debug('{} unique values found for {}'.format(unique_value_count, short_name))
+
+            # Only one unique value in data - write to scalar variable
+            if unique_value_count == 1: 
+                yield next(scalar_variable_generator())
                 continue
             
-            # Process string fields as lookups
-            if field_definition['format'].startswith('A') or short_name in self.settings['lookup_fields']:
-                for lookup_variable in lookup_variable_generator(field_definition):
+            # Process string fields or designated lookup fields as lookups
+            elif (field_definition['format'].startswith('A') # String field
+                or short_name in self.settings['lookup_fields'] # Designated lookup field
+                ):
+                for lookup_variable in lookup_variable_generator():
                     # Create index dimension
                     yield lookup_variable
                      
                 continue
             
+            # Process designated index fields
+            elif short_name in self.settings['index_fields']:
+                for index_variable in index_variable_generator():
+                    # Create index dimension
+                    yield index_variable
+                    
+                continue
+            
+            # Process normal data field
             long_name = field_definition.get('long_name')
             if long_name:
                 field_attributes['long_name'] = long_name
@@ -879,8 +902,6 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 
             fill_value = field_definition.get('fill_value')
                 
-            logger.debug('field_definition: {}'.format(pformat(field_definition)))
-            
             if not field_definition['dimension_size']: # 1D Variable
                 logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
@@ -1022,7 +1043,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    if True:#try:
+    try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
@@ -1033,7 +1054,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    else:#except Exception as e:
+    except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n
