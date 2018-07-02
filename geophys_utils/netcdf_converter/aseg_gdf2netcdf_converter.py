@@ -806,7 +806,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  data=index_array, 
                                  dimensions=['point'], 
                                  fill_value=-1, 
-                                 attributes={'long_name': 'zero-based index of value in {}_lookup'.format(short_name),
+                                 attributes={'long_name': 'zero-based index of value in {}'.format(short_name),
                                              'lookup': short_name
                                              }, 
                                  dtype='int8' if len(lookup_array) < 128 else 'int32' if len(lookup_array) < 32768 else index_array.dtype,
