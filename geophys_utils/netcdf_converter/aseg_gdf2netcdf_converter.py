@@ -38,7 +38,7 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision
+from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -524,42 +524,72 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     continue
                 
                 dtype = field_definition['dtype']
-                data_array = self.get_raw_data(short_name)
+                cache_variable = self._nc_cache_dataset.variables[short_name]
+                data_array = cache_variable[:]
+                
+                # Include fill value if required
+                if type(data_array) == np.ma.core.MaskedArray:
+                    logger.debug('Array is masked. Including fill value.')
+                    fill_value = data_array.fill_value # Use masked array fill value instead of any provided value
+                    no_data_mask = data_array.mask
+                    data_array = data_array.data # Include mask value
+                else:
+                    fill_value = field_definition.get('fill_value')
+                    
+                if fill_value is None:
+                    no_data_mask = []
+                else:
+                    no_data_mask = (data_array == fill_value)
+            
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
                 precision_change_result = fix_field_precision(data_array, dtype, 
                                                               field_definition['decimal_places'],
-                                                              field_definition.get('fill_value')
+                                                              no_data_mask,
+                                                              fill_value
                                                               ) 
                 # aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, modified_fill_value
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
-                    logger.debug('precision_change_result: {}'.format(precision_change_result))
+                    #logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
                     field_definition['width_specifier'] = precision_change_result[3]
                     field_definition['decimal_places'] = precision_change_result[4]
                     
-                    # Modify fill_value if required
-                    original_fill_value = field_definition.get('fill_value')
+                    # Try truncating modified fill value
                     modified_fill_value = precision_change_result[6]
-                    if (original_fill_value is not None 
-                        and modified_fill_value is not None 
-                        and (original_fill_value != modified_fill_value)): # Fill value has been modified
-                        
-                        field_definition['fill_value'] = modified_fill_value
-                        data_array[np.logical_or((data_array == original_fill_value), 
-                                                 np.isnan(data_array))] = modified_fill_value
                     
-                        logger.info('fill_value changed from {} to {}'.format(original_fill_value, 
-                                                                              modified_fill_value)
-                                                                              )
                     # Update the format string in variable attributes
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
                         field_definition['variable_attributes'] = variable_attributes
                     variable_attributes['aseg_gdf_format'] = precision_change_result[0]
-                else:
-                    logger.debug('Datatype for variable {} not changed'.format(short_name))                   
+                else: # Data type unchanged
+                    logger.debug('Datatype for variable {} not changed'.format(short_name))
+                    # Try truncating original fill value
+                    modified_fill_value = truncate(fill_value, 
+                                                   data_array, 
+                                                   no_data_mask, 
+                                                   field_definition['width_specifier'], 
+                                                   field_definition['decimal_places'])
+                    
+                logger.debug('(fill_value: {} modified_fill_value: {}'.format(fill_value, modified_fill_value))
+                # Fill value has been modified                     
+                if (fill_value is not None 
+                    and modified_fill_value is not None 
+                    and (fill_value != modified_fill_value)): 
+                    
+                    field_definition['fill_value'] = modified_fill_value
+                    # Change fill_value in array variable
+                    cache_variable[np.logical_or((data_array == fill_value), 
+                                             np.isnan(data_array))] = modified_fill_value
+                
+                    logger.info('{} fill_value changed from {} to {} for format {}'.format(short_name,
+                                                                             fill_value, 
+                                                                             modified_fill_value,
+                                                                             field_definition['format'])
+                                                                             )
+            
                 
                 
         # Start of actual __init__() definition
@@ -847,7 +877,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         
         # Create and yield variables
         for field_definition in self.field_definitions:
-            #logger.debug('field_definition: {}'.format(pformat(field_definition)))
+            logger.debug('field_definition: {}'.format(pformat(field_definition)))
             
             short_name = field_definition['short_name']
             

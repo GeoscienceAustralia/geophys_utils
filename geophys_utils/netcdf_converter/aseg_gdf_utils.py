@@ -160,7 +160,7 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         dtype = str(array_variable.dtype)
         if dtype in ['str', "<class 'str'>"]: # String array or string array variable
             dtype = 'str'
-            width_specifier = max([len(string.strip()) for string in data_array])
+            width_specifier = max([len(string.strip()) for string in data_array]) + 1
             decimal_places = 0
             
         else:  # Numeric datatype
@@ -220,14 +220,14 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     return aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format
 
 
-def fix_field_precision(array_variable, current_dtype, decimal_places, fill_value=None):
+def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=[], fill_value=None):
     '''
     Function to return revised ASEG-GDF format string and other info from data array or netCDF array variable
     after correcting datatype for excessive precision specification, or None if there is no precision change.
     Arrays are copied to smaller representations and then the difference with the original is checked to
     ensure that any difference is less than precision of the specified number of fractional digits.
     Note that fill_value is also considered but potentially modified only if data precision is changed
-    @param array_variable: data array or netCDF array variable - assumed to be of dtype float64 for raw data
+    @param data_array: data array - assumed to be of dtype float64 for raw data
     @param current_dtype: Current data type string, e.g. int8 or float32
     @param decimal_places: Number of fractional digits for precision checking
     @param fill_value: fill value or None
@@ -241,22 +241,12 @@ def fix_field_precision(array_variable, current_dtype, decimal_places, fill_valu
     @return python_format: Python Formatter string for fixed-width output
     @return fill_value: Potentially modified fill value
     '''
-    logger.debug('array_variable: {}, current_dtype: {}, decimal_places: {}'.format(array_variable, current_dtype, decimal_places))
+    logger.debug('data_array: {}, current_dtype: {}, decimal_places: {}'.format(data_array, current_dtype, decimal_places))
     
     for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
-            data_array = array_variable[:]
-            
-            # Include fill value if required
-            if type(data_array) == np.ma.core.MaskedArray:
-                logger.debug('Array is masked. Including fill value.')
-                fill_value = data_array.fill_value # Use masked array fill value instead of any provided value
-                no_data_mask = data_array.mask
-                data_array = data_array.data # Include mask value
-            if fill_value is not None:
-                no_data_mask = (data_array == fill_value)
-            
+
             # Try types from smallest to largest
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
                 smaller_array = data_array.astype(smaller_dtype)
@@ -286,24 +276,50 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                             # Check for ambiguity introduced by reduced precision
                             if np.any(data_array[~no_data_mask] == reduced_precision_fill_value):
                                 logger.debug('Reduced precision fill value of {} is ambiguous'.format(reduced_precision_fill_value))
-                                continue
-                            else:
+                                continue # Can't use this datatype - try the next bigger one
+                            elif fill_value != reduced_precision_fill_value:
+                                logger.debug('fill_value precision reduced from {} to {}'.format(fill_value, 
+                                                                                                reduced_precision_fill_value)
+                                                                                                )
                                 fill_value = reduced_precision_fill_value
                         
-                        # Try truncating fill_value to <width_specifier>.<decimal_places> rather than rounding for neater output later on
-                        try:
-                            truncated_fill_value = None;
-                            pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(width_specifier) + '}\.\d{0,' + '{}'.format(decimal_places) + '})')
-                            search = re.search(pattern, str(fill_value))
-                            truncated_fill_value = float(search.group(1)+search.group(2))
-                            assert not np.any(data_array[~no_data_mask] == truncated_fill_value), 'Truncated fill value of {} is ambiguous'.format(truncated_fill_value)
-                            fill_value = truncated_fill_value
-                        except Exception as e:
-                            logger.info('Unable to truncate fill value from {} to {} ({}). Keeping original value.'.format(fill_value, truncated_fill_value, e))
-                            
+                        fill_value = truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_places)
+                        
                     return aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, fill_value
 
             
         except ValueError: # current_dtype not in dtype_reduction_list
             continue
-   
+
+
+def truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_places):
+    '''
+    Function to truncate fill_value to <width_specifier>.<decimal_places> rather than rounding for neater output later on
+
+    @param fill_value: Original fill value
+    @param data_array: Array containing data
+    @param no_data_mask: Boolean mask array (true for valid data)
+    @param width_specifier:  Width of field in number of characters
+    @param decimal_places: Number of fractional digits for precision checking
+    
+    @return fill_value: Potentially modified fill value
+    '''
+    try:
+        truncated_fill_value = None
+        integer_digits = width_specifier - decimal_places #TODO: Fix this for integers and negative numbers
+        if fill_value < 0:
+            integer_digits -= 1 # Allow for "-"
+        if decimal_places > 0:
+            integer_digits -= 1 # Allow for "."
+            
+        pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(integer_digits) + '}\.\d{0,' + '{}'.format(decimal_places) + '})')
+        search = re.search(pattern, str(fill_value))
+        truncated_fill_value = float(search.group(1)+search.group(2))
+        # Check for any ambiguity introduced by truncation
+        assert not np.any(data_array[~no_data_mask] == truncated_fill_value), 'Truncated fill value of {} is ambiguous'.format(truncated_fill_value)
+        if fill_value != truncated_fill_value:
+            logger.debug('fill_value truncated from {} to {}'.format(fill_value, truncated_fill_value))
+        return truncated_fill_value
+    except Exception as e:
+        logger.debug('Unable to truncate fill value from {} to {} ({}). Keeping original value.'.format(fill_value, truncated_fill_value, e))
+        return fill_value
