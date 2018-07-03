@@ -109,9 +109,13 @@ def points2convex_hull(point_list, dilation=0, tolerance=0):
 
     # Offset outward by specified dilation and simplify with specified
     # tolerance
-    convex_hull = convex_hull.buffer(
-        dilation, cap_style=2, join_style=2, mitre_limit=tolerance).simplify(tolerance)
+    if dilation != 0:
+        convex_hull = convex_hull.buffer(
+            dilation, cap_style=2, join_style=2, mitre_limit=tolerance)
 
+    if tolerance != 0:
+        convex_hull = convex_hull.simplify(tolerance)
+    
     # Convert polygon to list
     return [coordinates for coordinates in convex_hull.exterior.coords]
 
