@@ -143,28 +143,32 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         
     data_array = array_variable[:]
     
+    # Try to determine the dtype string from the variable and data_array type
     if not len(array_variable.shape): # Scalar
         dtype = type(data_array).__name__
         if dtype == 'str':
-            width_specifier = len(data_array)
-            decimal_places = 0
-        else:
+            width_specifier = len(data_array) + 1
+            decimal_places = 0 
+        elif dtype == 'ndarray': # Single-element array
+            dtype = str(array_variable.dtype)
+            data = np.asscalar(data_array)
+
             sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
-            sign_width = 1 if data_array < 0 else 0
-            integer_digits = ceil(log10(np.abs(data_array) + 1.0))
+            sign_width = 1 if data < 0 else 0
+            integer_digits = ceil(log10(np.abs(data) + 1.0))
     else: # Array
         dtype = str(array_variable.dtype)
-        
-        # Include fill value if required
-        if type(data_array) == np.ma.core.MaskedArray:
-            logger.debug('Array is masked. Including fill value.')
-            data_array = data_array.data
+        if dtype in ['str', "<class 'str'>"]: # String array or string array variable
+            dtype = 'str'
+            width_specifier = max([len(string.strip()) for string in data_array])
+            decimal_places = 0
+            
+        else:  # Numeric datatype
+            # Include fill value if required
+            if type(data_array) == np.ma.core.MaskedArray:
+                logger.debug('Array is masked. Including fill value.')
+                data_array = data_array.data
                 
-        if dtype == 'str':
-            raise BaseException('Need to implement this for string arrays')
-            #width_specifier = len(data_array)
-            #decimal_places = 0
-        else:
             sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
             sign_width = 1 if np.nanmin(data_array) < 0 else 0
             integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
@@ -174,9 +178,9 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     
     if aseg_dtype_code == 'I': # Integer
         decimal_places = 0
-        width_specifier = integer_digits + sign_width
+        width_specifier = integer_digits + sign_width + 1
         aseg_gdf_format = 'I{}'.format(width_specifier)
-        python_format = '{' + ':{:d}.{:d}f'.format(width_specifier, decimal_places) + '}'
+        python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}'
 
     elif aseg_dtype_code in ['F', 'D', 'E']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine decimal_places
@@ -191,12 +195,12 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             decimal_places = sig_figs - integer_digits # Allow for full precision of datatype
             logger.debug('decimal_places set to {} from sig_figs {} and integer_digits {}'.format(decimal_places, sig_figs, integer_digits))
         
-        width_specifier = min(sign_width + integer_digits + 1 + decimal_places,
-                              sign_width + sig_figs + 1
+        width_specifier = min(sign_width + integer_digits + decimal_places + 2,
+                              sign_width + sig_figs + 2
                               )
                                   
         aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, width_specifier, decimal_places)
-        python_format = '{' + ':{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
+        python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
 
     elif aseg_dtype_code == 'A': # String
         if hasattr(array_variable, 'aseg_gdf_format'):
@@ -205,7 +209,7 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         else:
             aseg_gdf_format = 'A{}'.format(width_specifier)
             
-        python_format = '{' + ':.{:d}s'.format(width_specifier) + '}'
+        python_format = '{' + ':>{:d}s'.format(width_specifier) + '}'
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
     
