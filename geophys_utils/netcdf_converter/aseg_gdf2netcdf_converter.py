@@ -22,7 +22,6 @@ Created on 28Mar.2018
 
 @author: Alex Ip
 '''
-#TODO: Rewrite variable_generator and get_raw_data functions to accommodate string fields
 import argparse
 from collections import OrderedDict
 import numpy as np
@@ -573,7 +572,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                    field_definition['width_specifier'], 
                                                    field_definition['decimal_places'])
                     
-                logger.debug('(fill_value: {} modified_fill_value: {}'.format(fill_value, modified_fill_value))
+                #logger.debug('(fill_value: {} modified_fill_value: {}'.format(fill_value, modified_fill_value))
                 # Fill value has been modified                     
                 if (fill_value is not None 
                     and modified_fill_value is not None 
@@ -737,15 +736,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             # Process index variables
             try:
-                index_data = self.get_raw_data(field_definition['short_name'])
-                
-                index_values, index_start_indices, index_point_counts = np.unique(index_data, 
-                                                                                  return_index=True, 
-                                                                                  return_inverse=False, 
-                                                                                  return_counts=True
-                                                                                  )
-                logger.info('{} {} values found'.format(len(index_values), field_definition['short_name']))
-                #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
+                logger.info('{} {} values found'.format(len(lookup_array), field_definition['short_name']))
+                #logger.debug('lookup_array: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(lookup_array, index_start_indices, index_point_counts))
             except:
                 logger.info('Unable to create {} indexing variables'.format(field_definition['short_name']))
                 return   
@@ -753,7 +745,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # This is a slightly ugly side effect
             logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
             self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
-                                                   size=len(index_values))
+                                                   size=len(lookup_array))
             
             logger.info('\tWriting {} indexing variables'.format(field_definition['short_name']))
             
@@ -764,7 +756,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
             yield NetCDFVariable(short_name=field_definition['short_name'], 
-                                 data=index_values, 
+                                 data=lookup_array, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
                                  attributes=variable_attributes, 
@@ -847,9 +839,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             return        
         
         
-        def scalar_variable_generator():
+        def get_scalar_variable():
             '''
-            Helper generator to yield scalar variable for single-value field
+            Helper function to return scalar variable for single-value field
             '''
             assert lookup_array.shape[0] == 1, 'lookup_array must have exactly one (i.e. unique) value'
             short_name = field_definition['short_name']
@@ -860,7 +852,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             if field_definition.get('long_name'):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
-            yield NetCDFVariable(short_name=short_name, 
+            return NetCDFVariable(short_name=short_name, 
                                  data=lookup_array, 
                                  dimensions=[], 
                                  fill_value=None, 
@@ -869,7 +861,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
-            return
+            
                         
         # Start of variable_generator function
         # Create crs variable
@@ -877,7 +869,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         
         # Create and yield variables
         for field_definition in self.field_definitions:
-            logger.debug('field_definition: {}'.format(pformat(field_definition)))
+            #logger.debug('field_definition: {}'.format(pformat(field_definition)))
             
             short_name = field_definition['short_name']
             
@@ -889,13 +881,20 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             field_attributes = OrderedDict()
             
             raw_data = self.get_raw_data(short_name)
-            lookup_array, index_array = np.unique(raw_data, return_inverse=True)
+            
+            lookup_array, index_start_indices, index_array, index_point_counts = np.unique(raw_data, 
+                                                                              return_index=True, 
+                                                                              return_inverse=True, 
+                                                                              return_counts=True
+                                                                              )            
+            
             unique_value_count = lookup_array.shape[0]
             logger.debug('{} unique values found for {}'.format(unique_value_count, short_name))
 
-            # Only one unique value in data - write to scalar variable
-            if unique_value_count == 1: 
-                yield next(scalar_variable_generator())
+            # Only one unique value in data for ALL points - write to scalar variable
+            #TODO: Check what happens with masked arrays
+            if (unique_value_count == 1) and (index_point_counts[0] == raw_data.shape[0]): 
+                yield get_scalar_variable()
                 continue
             
             # Process string fields or designated lookup fields as lookups

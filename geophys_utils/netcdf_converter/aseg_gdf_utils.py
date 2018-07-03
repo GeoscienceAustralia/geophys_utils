@@ -163,7 +163,7 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             width_specifier = max([len(string.strip()) for string in data_array]) + 1
             decimal_places = 0
             
-        else:  # Numeric datatype
+        else:  # Numeric datatype array
             # Include fill value if required
             if type(data_array) == np.ma.core.MaskedArray:
                 logger.debug('Array is masked. Including fill value.')
@@ -306,11 +306,12 @@ def truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_plac
     '''
     try:
         truncated_fill_value = None
-        integer_digits = width_specifier - decimal_places #TODO: Fix this for integers and negative numbers
+        
+        integer_digits = width_specifier - decimal_places
         if fill_value < 0:
-            integer_digits -= 1 # Allow for "-"
+            integer_digits -= 1 # Allow for sign
         if decimal_places > 0:
-            integer_digits -= 1 # Allow for "."
+            integer_digits -= 1 # Allow for decimal point
             
         pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(integer_digits) + '}\.\d{0,' + '{}'.format(decimal_places) + '})')
         search = re.search(pattern, str(fill_value))
