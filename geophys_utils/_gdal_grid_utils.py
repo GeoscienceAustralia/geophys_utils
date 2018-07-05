@@ -56,6 +56,7 @@ def get_gdal_grid_values(gdal_dataset, sample_points, from_crs, band_no=1):
     
     native_sample_points = transform_coords(sample_points, from_crs, to_crs)
     
+    #TODO: Make this faster
     values = []
     for point in native_sample_points:
         indices = (int((point[0] - geotransform[0]) / geotransform[1] + 0.5),

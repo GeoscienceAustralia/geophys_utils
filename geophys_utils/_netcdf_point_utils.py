@@ -391,3 +391,246 @@ class NetCDFPointUtils(NetCDFUtils):
         else: # Return indices of complete coordinate array, not the spatial subset
             return distances, np.where(spatial_mask)[0][indices]
             
+
+    def get_lookup_mask(self, 
+                        lookup_value_list, 
+                        lookup_variable_name='line',
+                        indexing_variable_name=None,
+                        indexing_dimension='point'
+                        ): 
+        '''
+        Function to return mask array based on lookup variable
+        '''
+        if lookup_variable_name:
+            lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+            
+            if lookup_variable.shape == (): # Scalar
+                dimension = self.netcdf_dataset.get(indexing_dimension)
+                assert dimension, 'Invalid indexing_dimension {} specified'.format(indexing_dimension)
+                # Repeat boolean value across dimension size
+                return np.array([lookup_variable[:] in lookup_value_list] * dimension.size)
+        
+            indexing_variable_name = indexing_variable_name or lookup_variable_name + '_index'
+            
+            try:
+                indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+            except:
+                raise BaseException('indexing_variable_name not supplied and cannot be inferred')
+            
+        elif indexing_variable_name:
+            indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+            
+            if hasattr(indexing_variable, 'lookup'): 
+                # Get lookup variable name from variable attribute
+                lookup_variable_name = indexing_variable.lookup
+            elif indexing_variable_name.endswith('_index'):
+                # Infer lookup variable name from indexing variable name
+                lookup_variable_name = re.sub('_index$', '', indexing_variable_name)
+            else:
+                raise BaseException('lookup_variable_name not supplied and cannot be inferred')
+            
+            lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+        else:
+            raise BaseException('Must supply either lookup_variable_name or indexing_variable_name')
+        
+        lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], np.array(lookup_value_list))]
+        logger.debug('lookup_indices: {}'.format(lookup_indices))  
+          
+        lookup_mask = np.in1d(indexing_variable, lookup_indices) 
+        logger.debug('lookup_mask: {}'.format(lookup_mask))  
+        return lookup_mask
+                       
+
+#===============================================================================
+#     def lookup_mask_generator(self, 
+#                         lookup_value_list, 
+#                         lookup_variable_name='line',
+#                         indexing_variable_name=None
+#                         ): 
+#         '''
+#         Generator to yield mask array based on lookup variable for each of a list of lookup values
+#         '''
+#         if lookup_variable_name:
+#             indexing_variable_name = indexing_variable_name or lookup_variable_name + '_index'
+#             
+#             try:
+#                 indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+#             except:
+#                 raise BaseException('indexing_variable_name not supplied and cannot be inferred')
+#             
+#         elif indexing_variable_name:
+#             indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+#             
+#             if hasattr(indexing_variable, 'lookup'): 
+#                 # Get lookup variable name from variable attribute
+#                 lookup_variable_name = indexing_variable.lookup
+#             elif indexing_variable_name.endswith('_index'):
+#                 # Infer lookup variable name from indexing variable name
+#                 lookup_variable_name = re.sub('_index$', '', indexing_variable_name)
+#             else:
+#                 raise BaseException('lookup_variable_name not supplied and cannot be inferred')
+#             
+#         else:
+#             raise BaseException('Must supply either lookup_variable_name or indexing_variable_name')
+# 
+#         lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+#         
+#         for lookup_value in lookup_value_list:
+#             lookup_indices = np.where(lookup_variable[:] == lookup_value)[0]
+#             logger.debug('lookup_indices: {}'.format(lookup_indices))  
+#               
+#             lookup_mask = np.in1d(indexing_variable, lookup_indices) 
+#             logger.debug('lookup_mask: {}'.format(lookup_mask))  
+#             yield lookup_mask
+#                        
+#===============================================================================
+    def get_index_mask(self, 
+                        lookup_value_list, 
+                        lookup_variable_name='line',
+                        start_index_variable_name=None,
+                        count_variable_name=None,
+                        point_count=None
+                        ): 
+        '''
+        Function to return mask array based on index variable
+        '''
+        try:
+            lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+        except:
+            raise BaseException('Invalid lookup_variable_name')
+
+        start_index_variable_name = start_index_variable_name or lookup_variable_name + '_start_index'            
+        try:
+            start_index_variable = self.netcdf_dataset.variables[start_index_variable_name]
+        except:
+            raise BaseException('start_index_variable_name not supplied and cannot be inferred')
+        
+        count_variable_name = count_variable_name or lookup_variable_name + '_count'            
+        try:
+            count_variable = self.netcdf_dataset.variables[count_variable_name]
+        except:
+            raise BaseException('count_variable_name not supplied and cannot be inferred')
+
+        point_count = point_count or self.netcdf_dataset.dimension['point'].size         
+
+        
+        lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], lookup_value_list)]
+        logger.debug('lookup_indices: {}'.format(lookup_indices))  
+        start_indices = start_index_variable[lookup_indices]
+        logger.debug('start_indices: {}'.format(start_indices))  
+        counts = count_variable[lookup_indices]
+        logger.debug('counts: {}'.format(counts))  
+        
+        # Build mask
+        index_mask = np.zeros(shape=(point_count,), dtype='bool')  
+        for lookup_index in range(len(lookup_indices)):
+            index_mask[start_indices[lookup_index]:start_indices[lookup_index]+counts[lookup_index]] = True
+            
+        return index_mask 
+    
+                       
+#===============================================================================
+#     def read_points(self, start_index, end_index, mask=None):
+#         '''
+#         '''
+#         def expand_indexing_variable(indexing_variable_name):
+#             '''
+#             Helper function to expand indexing variables and return an array of the required size
+#             '''
+#             value_variable = self.nc_dataset.variables[indexing_variable_name]
+#             start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
+#             count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
+#             
+#             expanded_array = np.zeros(shape=(self.index_range,), 
+#                                       dtype=value_variable.dtype)
+#             
+#             # Assume monotonically increasing start indices to find all relevant indices
+#             indices = np.where(np.logical_and((start_variable[:] >= start_index),
+#                                               (start_variable[:] <= end_index)))[0]
+#             
+#             #logger.debug('indices: {}'.format(indices))
+#             for index in indices:
+#                 start_index = max(start_variable[index]-start_index, 0)
+#                 end_index = min(start_index+count_variable[index], self.index_range)
+#                 expanded_array[start_index:end_index] = value_variable[index]
+#                 
+#             #logger.debug('expanded_array: {}'.format(expanded_array))
+#             return expanded_array
+#         
+#         
+#         def expand_lookup_variable(indexing_variable_name, lookup_variable_name=None):
+#             '''
+#             Helper function to expand lookup variables and return an array of the required size
+#             '''
+#             indexing_variable = self.nc_dataset.variables[indexing_variable_name]
+#             
+#             if not lookup_variable_name: # lookup_variable_name not supplied
+#                 if hasattr(indexing_variable, 'lookup'): 
+#                     # Get lookup variable name from variable attribute
+#                     lookup_variable_name = indexing_variable.lookup
+#                 elif indexing_variable_name.endswith('_index'):
+#                     # Infer lookup variable name from indexing variable name
+#                     lookup_variable_name = re.sub('_index$', '', indexing_variable_name)
+#                 else:
+#                     raise BaseException('lookup_variable_name not supplied and cannot be inferred')
+#             
+#             lookup_variable = self.nc_dataset.variables[lookup_variable_name]    
+#                 
+#             return lookup_variable[indexing_variable[start_index:end_index]]
+#     
+#     
+#         # Start of read_points function
+#         self.index_range = end_index - start_index
+#         
+#         if mask is None: # No mask defined - take all points in range
+#             subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+#         else:
+#             subset_mask = mask[start_index:end_index]
+#             self.index_range = np.count_nonzero(subset_mask)
+#             
+#         # If no points to retrieve, don't read anything
+#         if not self.index_range:
+#             logger.debug('No points to retrieve - all masked out')            
+#             return
+# 
+#         for field_definition in self.field_definitions:
+#             short_name = field_definition['short_name']
+#             variable_name = field_definition['variable_name']
+#             #logger.debug('variable_name: {}'.format(variable_name))
+#             
+#             variable = self.nc_dataset.variables[variable_name]
+#             
+#             if len(variable.shape) == 0: # Scalar variable - repeat value for each point
+#                 data = variable[:]
+#                 self.cache[short_name] = np.array([data] * self.index_range)
+#                 
+#             elif len(variable.shape) in [1, 2]: # 1D or 2D variable
+#                 # Indexing array variable
+#                 if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
+#                     self.cache[short_name] = expand_indexing_variable(variable_name)[subset_mask]
+#                     
+#                 # Lookup array variable
+#                 elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields'] or variable_name.endswith('_index')): 
+#                     self.cache[short_name] = expand_lookup_variable(variable_name)[subset_mask]
+# 
+#                 # A data array variable
+#                 elif ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
+#                     data = variable[start_index:end_index]
+#                     
+#                     # Include fill_values if array is masked
+#                     if type(data) == np.ma.core.MaskedArray:
+#                         data = data.data
+#                         
+#                     self.cache[short_name] = data[subset_mask]
+#             else:
+#                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
+#         
+#         #logger.debug('self.cache: {}'.format(pformat(self.cache)))
+# 
+#     def point_generator(self, mask=None):
+#         '''
+#         '''
+#         pass
+#===============================================================================
+        
+    
