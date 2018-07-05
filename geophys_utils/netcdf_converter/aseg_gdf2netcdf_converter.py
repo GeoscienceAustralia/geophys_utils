@@ -42,8 +42,8 @@ from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype,
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-#TEMP_DIR = tempfile.gettempdir()
-TEMP_DIR = 'D:\Temp'
+TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = 'D:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
