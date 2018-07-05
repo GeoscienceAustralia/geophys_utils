@@ -580,8 +580,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     
                     field_definition['fill_value'] = modified_fill_value
                     # Change fill_value in array variable
-                    cache_variable[np.logical_or((data_array == fill_value), 
+                    data_array[np.logical_or((data_array == fill_value), 
                                              np.isnan(data_array))] = modified_fill_value
+                    cache_variable[:] = data_array
                 
                     logger.info('{} fill_value changed from {} to {} for format {}'.format(short_name,
                                                                              fill_value, 

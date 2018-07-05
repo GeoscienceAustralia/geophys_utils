@@ -528,55 +528,102 @@ class NetCDFPointUtils(NetCDFUtils):
             
         return index_mask 
     
+
+    def expand_indexing_variable(self, 
+                                 indexing_variable_name, 
+                                 start_index=0, 
+                                 end_index=0, 
+                                 indexing_dimension='point',
+                                 mask=None):
+        '''
+        Helper function to expand indexing variables and return an array of the required size
+        '''       
+        end_index = end_index or self.nc_dataset.dimensions[indexing_dimension].size
+        index_range = end_index - start_index
+         
+        if mask is None: # No mask defined - take all points in range
+            subset_mask = np.ones(shape=(index_range,), dtype='bool')
+        else:
+            subset_mask = mask[start_index:end_index]
+        
+        value_variable = self.nc_dataset.variables[indexing_variable_name]
+        start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
+        count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
+            
+        expanded_array = np.zeros(shape=(index_range,), 
+                                  dtype=value_variable.dtype)
+         
+        # Assume monotonically increasing start indices to find all relevant indices
+        indices = np.where(np.logical_and((start_variable[:] >= start_index),
+                                          (start_variable[:] <= end_index)))[0]
+         
+        #logger.debug('indices: {}'.format(indices))
+        for index in indices:
+            start_index = max(start_variable[index]-start_index, 0)
+            end_index = min(start_index+count_variable[index], index_range)
+            expanded_array[start_index:end_index] = value_variable[index]
+             
+        #logger.debug('expanded_array: {}'.format(expanded_array))
+        return expanded_array[subset_mask]
+     
+     
+    def expand_lookup_variable(self, 
+                               lookup_variable_name='line',
+                               indexing_variable_name=None, 
+                               start_index=0, 
+                               end_index=0, 
+                               mask=None,
+                               indexing_dimension='point'):
+        '''
+        Function to expand lookup variables and return an array of the required size
+        '''
+        if lookup_variable_name:
+            lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+            
+            if lookup_variable.shape == (): # Scalar
+                dimension = self.netcdf_dataset.get(indexing_dimension)
+                assert dimension, 'Invalid indexing_dimension {} specified'.format(indexing_dimension)
+                # Repeat boolean value across dimension size
+                return np.array([lookup_variable[:]] * dimension.size)
+        
+            indexing_variable_name = indexing_variable_name or lookup_variable_name + '_index'
+            
+            try:
+                indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+            except:
+                raise BaseException('indexing_variable_name not supplied and cannot be inferred')
+            
+        elif indexing_variable_name:
+            indexing_variable = self.netcdf_dataset.variables[indexing_variable_name]
+            
+            if hasattr(indexing_variable, 'lookup'): 
+                # Get lookup variable name from variable attribute
+                lookup_variable_name = indexing_variable.lookup
+            elif indexing_variable_name.endswith('_index'):
+                # Infer lookup variable name from indexing variable name
+                lookup_variable_name = re.sub('_index$', '', indexing_variable_name)
+            else:
+                raise BaseException('lookup_variable_name not supplied and cannot be inferred')
+            
+            lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
+        else:
+            raise BaseException('Must supply either lookup_variable_name or indexing_variable_name')
+             
+        end_index = end_index or indexing_variable.shape[0] # Usually this will be the point count
+        index_range = end_index - start_index
+         
+        if mask is None: # No mask defined - take all points in range
+            subset_mask = np.ones(shape=(index_range,), dtype='bool')
+        else:
+            subset_mask = mask[start_index:end_index]
+        
+        return lookup_variable[indexing_variable[start_index:end_index][subset_mask]]
+
                        
 #===============================================================================
 #     def read_points(self, start_index, end_index, mask=None):
 #         '''
 #         '''
-#         def expand_indexing_variable(indexing_variable_name):
-#             '''
-#             Helper function to expand indexing variables and return an array of the required size
-#             '''
-#             value_variable = self.nc_dataset.variables[indexing_variable_name]
-#             start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
-#             count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
-#             
-#             expanded_array = np.zeros(shape=(self.index_range,), 
-#                                       dtype=value_variable.dtype)
-#             
-#             # Assume monotonically increasing start indices to find all relevant indices
-#             indices = np.where(np.logical_and((start_variable[:] >= start_index),
-#                                               (start_variable[:] <= end_index)))[0]
-#             
-#             #logger.debug('indices: {}'.format(indices))
-#             for index in indices:
-#                 start_index = max(start_variable[index]-start_index, 0)
-#                 end_index = min(start_index+count_variable[index], self.index_range)
-#                 expanded_array[start_index:end_index] = value_variable[index]
-#                 
-#             #logger.debug('expanded_array: {}'.format(expanded_array))
-#             return expanded_array
-#         
-#         
-#         def expand_lookup_variable(indexing_variable_name, lookup_variable_name=None):
-#             '''
-#             Helper function to expand lookup variables and return an array of the required size
-#             '''
-#             indexing_variable = self.nc_dataset.variables[indexing_variable_name]
-#             
-#             if not lookup_variable_name: # lookup_variable_name not supplied
-#                 if hasattr(indexing_variable, 'lookup'): 
-#                     # Get lookup variable name from variable attribute
-#                     lookup_variable_name = indexing_variable.lookup
-#                 elif indexing_variable_name.endswith('_index'):
-#                     # Infer lookup variable name from indexing variable name
-#                     lookup_variable_name = re.sub('_index$', '', indexing_variable_name)
-#                 else:
-#                     raise BaseException('lookup_variable_name not supplied and cannot be inferred')
-#             
-#             lookup_variable = self.nc_dataset.variables[lookup_variable_name]    
-#                 
-#             return lookup_variable[indexing_variable[start_index:end_index]]
 #     
 #     
 #         # Start of read_points function
