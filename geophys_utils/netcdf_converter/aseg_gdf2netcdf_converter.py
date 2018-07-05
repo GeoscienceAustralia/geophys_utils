@@ -42,8 +42,8 @@ from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype,
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-TEMP_DIR = tempfile.gettempdir()
-#TEMP_DIR = 'E:\Temp'
+#TEMP_DIR = tempfile.gettempdir()
+TEMP_DIR = 'D:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -64,7 +64,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  default_chunk_size=None, 
                  default_variable_parameters=None,
                  settings_path=None,
-                 fix_precision=True
+                 fix_precision=True,
+                 space_delimited=False
                  ):
         '''
         Concrete constructor for subclass ASEGGDF2NetCDFConverter
@@ -253,12 +254,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 for field_index in range(len(self.field_definitions)):
                     field_definition = self.field_definitions[field_index]
                     short_name = field_definition['short_name']
-                    variable = self._nc_cache_dataset.variables[short_name]
+                    cache_variable = self._nc_cache_dataset.variables[short_name]
                     
                     chunk_array = np.array([row_list[field_index] for row_list in chunk_list])
-                    #logger.debug('{} chunk_array: {}'.format(short_name, chunk_array))
-                    
-                    variable[start_row:end_row] = chunk_array
+                    #logger.debug('{} {}-element {} chunk_array: {}'.format(short_name, chunk_array.shape[0], chunk_array.dtype, chunk_array))
+
+                    cache_variable[start_row:end_row] = chunk_array
             
                 self.total_points += len(chunk_list)
                 
@@ -289,7 +290,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         try:
                             if dtype.startswith('int'):
                                 value = int(value_string)
-                            if dtype.startswith('float'):
+                            elif dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
                                 value = value_string
@@ -316,14 +317,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 return row_list
                 
                 
-            def read_tab_delimited_fields(line):
+            def read_delimited_fields(line, delimiter_regex='\s+'):
                 '''
-                Helper function to read tab-delimited fields into a list of lists
+                Helper function to read delimited fields into a list of lists
                 N.B: This should not be required, but ASEG-supplied example file Example_Gravity_Springfield_1989.dat requires it
                 '''
                 row_list = []
-                value_list = line.split('\t')
+                value_list = re.sub(delimiter_regex, '\t', line.strip()).split('\t')
 
+                #logger.debug('value_list: {}'.format(value_list))
                 #logger.debug('row_list: {}'.format(row_list))
                 if len(value_list) != self.column_count:
                     logger.warning('Invalid number of columns found: Expected {}, found {}. Skipping line'.format(self.column_count, len(value_list)))
@@ -341,7 +343,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         try:
                             if dtype.startswith('int'):
                                 value = int(value_string)
-                            if dtype.startswith('float'):
+                            elif dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
                                 value = value_string
@@ -377,8 +379,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 if not line.strip(): # Skip empty lines
                     continue
                 
-                if '\t' in line: # Assume tab delimited line
-                    row_list = read_tab_delimited_fields(line)
+                if self.space_delimited:
+                    row_list = read_delimited_fields(line, '\s+')
+                elif '\t' in line: # Assume tab delimited line
+                    row_list = read_delimited_fields(line, '\t')
                 else:
                     row_list = read_fixed_length_fields(line)
                     
@@ -597,7 +601,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self._nc_cache_dataset = None
         self.cache_variable = None
         self.column_count = None # Number of columns in .dat file
-
+        self.space_delimited = space_delimited
+        
         if crs_string:
             self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
             logger.debug('CRS set from supplied crs_string {}'.format(crs_string))
@@ -625,7 +630,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
         
-        try:
+        if True:#try:
             # Parse .dfn file and apply overrides
             get_field_definitions() 
     
@@ -638,7 +643,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
             if fix_precision:
                 fix_all_field_precisions()
-        except Exception as e:
+        else:#except Exception as e:
             logger.error('Unable to create ASEGGDF2NetCDFConverter object: {}'.format(e))
             self.__del__()
                        
@@ -1043,6 +1048,12 @@ def main():
                             dest='optimise',
                             default=True
                             )
+        parser.add_argument('-a', '--space_delimited', 
+                            help='Read .dat file as space-delimited instead of fixed-length. Default is False',
+                            type=bool,
+                            dest='space_delimited',
+                            default=False
+                            )
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
@@ -1073,18 +1084,19 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    try:
+    if True:#try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
                                       crs_string=args.crs,
                                       default_chunk_size=args.chunking,
                                       settings_path=args.settings_path,
-                                      fix_precision=args.optimise
+                                      fix_precision=args.optimise,
+                                      space_delimited=args.space_delimited
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    except Exception as e:
+    else:#except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n
