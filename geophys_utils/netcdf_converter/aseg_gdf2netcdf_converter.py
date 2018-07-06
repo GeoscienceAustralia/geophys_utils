@@ -427,10 +427,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 field_definition_index += 1
                 field_definition = self.field_definitions[field_definition_index]
                 field_name = field_definition['short_name']
-                #logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
+                cache_variable = self._nc_cache_dataset.variables[field_name]
+                logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
                 
                 if field_name in self.settings['dimension_fields']:
-                    self.dimensions[field_name] = int(self.cache_variable[0, column_start_index]) # Read value from first line
+                    self.dimensions[field_name] = int(cache_variable[0]) # Read value from first line
                     field_definition['column_start_index'] = None # Do not output this column
                     column_start_index += 1 # Single column only
                     continue # Check next field
@@ -471,16 +472,20 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             # Create new field definitions for part dimensions
                             column_offset = 0
                             for part_dimension_name in default_dimension_names:
+                                columns = self.dimensions[part_dimension_name]
                                 new_field_definition = dict(field_definition) # Copy original field definition
+                                new_field_definition['cache_variable_name'] = field_definition['short_name']
                                 new_field_definition['short_name'] += '_x_' + part_dimension_name
                                 new_field_definition['dimensions'] = part_dimension_name
+                                new_field_definition['column_offset'] = column_offset
+                                new_field_definition['columns'] = columns
                                 new_field_definition['column_start_index'] += column_offset
                                 new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
                                 
                                 field_definition_index += 1
                                 logger.debug('Inserting new part-dimension field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
                                 self.field_definitions.insert(field_definition_index, new_field_definition)
-                                column_offset += self.dimensions[part_dimension_name] # Offset next column 
+                                column_offset += columns # Offset next column 
                             
                     else: # No default dimension name found from settings
                         match = re.match('(.+)_x_(.+)', field_name)
@@ -521,14 +526,20 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             for field_definition in self.field_definitions:
                 short_name = field_definition['short_name']
+                cache_variable_name = field_definition.get('cache_variable_name')
                 
                 # Skip dimension fields
                 if short_name in self.settings['dimension_fields']:
                     continue
                 
                 dtype = field_definition['dtype']
-                cache_variable = self._nc_cache_dataset.variables[short_name]
-                data_array = cache_variable[:]
+                
+                if cache_variable_name: # Part dimension  - shared cache variable
+                    cache_variable = self._nc_cache_dataset.variables[cache_variable_name]
+                    data_array = cache_variable[:,field_definition['column_offset']:field_definition['columns']]
+                else: # Normal data variable
+                    cache_variable = self._nc_cache_dataset.variables[short_name]
+                    data_array = cache_variable[:]
                 
                 # Include fill value if required
                 if type(data_array) == np.ma.core.MaskedArray:
@@ -599,10 +610,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         # Start of actual __init__() definition
         self.nc_cache_path = None
         self._nc_cache_dataset = None
-        self.cache_variable = None
         self.column_count = None # Number of columns in .dat file
         self.space_delimited = space_delimited
-        
+
         if crs_string:
             self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
             logger.debug('CRS set from supplied crs_string {}'.format(crs_string))
@@ -630,7 +640,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.aem_dat_path = aem_dat_path
         self.dfn_path = dfn_path
         
-        if True:#try:
+        try:
             # Parse .dfn file and apply overrides
             get_field_definitions() 
     
@@ -643,7 +653,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
             if fix_precision:
                 fix_all_field_precisions()
-        else:#except Exception as e:
+        except Exception as e:
             logger.error('Unable to create ASEGGDF2NetCDFConverter object: {}'.format(e))
             self.__del__()
                        
@@ -657,7 +667,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('Closed temporary cache file {}'.format(self.nc_cache_path))
         except:
             pass
-        
+         
         try:
             os.remove(self.nc_cache_path) 
             logger.debug('Deleted temporary cache file {}'.format(self.nc_cache_path))
@@ -667,14 +677,21 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         ToNetCDFConverter.__del__(self)
 
     
-    def get_raw_data(self, short_name):
+    def get_raw_data(self, variable_name):
         '''
         Helper function to return array corresponding to short_name from self._nc_cache_dataset
         '''
         try:
-            return self._nc_cache_dataset.variables[short_name][:]
+            return self._nc_cache_dataset.variables[variable_name][:]
         except:
-            return None        
+            try: # Try part dimension with shared cache variable
+                field_definition = [field_definition 
+                                    for field_definition in self.field_definitions
+                                    if field_definition.get('short_name') == variable_name
+                                    ][0]
+                return self._nc_cache_dataset.variables[field_definition['cache_variable_name']][:,field_definition['column_offset']:field_definition['column_offset']+field_definition['columns']]
+            except:
+                return None        
         
         
     def get_global_attributes(self):
@@ -897,9 +914,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             unique_value_count = lookup_array.shape[0]
             logger.debug('{} unique values found for {}'.format(unique_value_count, short_name))
 
-            # Only one unique value in data for ALL points - write to scalar variable
+            # Only one unique value in data for ALL points in a 1D variable - write to scalar variable
             #TODO: Check what happens with masked arrays
-            if (unique_value_count == 1) and (index_point_counts[0] == raw_data.shape[0]): 
+            if (field_definition['columns'] == 1) and (unique_value_count == 1) and (index_point_counts[0] == raw_data.shape[0]): 
                 yield get_scalar_variable()
                 continue
             
@@ -1044,13 +1061,13 @@ def main():
                             default=1024)
         parser.add_argument('-o', '--optimise', 
                             help='Optimise datatypes to reduce variable size without affecting precision. Default is True',
-                            type=bool,
+                            type=int,
                             dest='optimise',
                             default=True
                             )
         parser.add_argument('-a', '--space_delimited', 
                             help='Read .dat file as space-delimited instead of fixed-length. Default is False',
-                            type=bool,
+                            type=int,
                             dest='space_delimited',
                             default=False
                             )
@@ -1084,7 +1101,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    if True:#try:
+    try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
@@ -1096,7 +1113,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    else:#except Exception as e:
+    except Exception as e:
         logger.error('Failed to create netCDF file {}'.format(e))
         try:
             del d2n
