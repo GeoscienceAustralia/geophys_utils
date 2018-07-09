@@ -624,7 +624,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 # Start of chunk_buffer_generator
                 line_cache = RowCache(self) # Create cache for multiple rows
                 
-                # Process all complete chunks
+                # Process all chunks
                 point_count = 0
                 for chunk_index in range(self.total_points // cache_chunk_rows + 1):
                     for line in chunk_line_generator(start_index=chunk_index*cache_chunk_rows,

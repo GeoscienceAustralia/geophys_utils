@@ -24,8 +24,11 @@ import netCDF4
 import numpy as np
 import math
 import os
+import sys
 import re
 import tempfile
+from collections import OrderedDict
+from pprint import pformat, pprint
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
@@ -36,6 +39,10 @@ import logging
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get __main__ logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
+
+DEFAULT_READ_CHUNK_SIZE = 8192
+
+POINT_LIMIT = 0
     
 class NetCDFPointUtils(NetCDFUtils):
     '''
@@ -52,7 +59,7 @@ class NetCDFPointUtils(NetCDFUtils):
 
         self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
                                      if 'point' in self.netcdf_dataset.variables[var_name].dimensions
-                                     and var_name not in ['latitude', 'longitude', 'point', 'fiducial', 'flag_linetype']
+                                     and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
                                      ])
         
         # Create local cache for coordinates
@@ -66,32 +73,40 @@ class NetCDFPointUtils(NetCDFUtils):
         self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
         self._nc_cache_dataset.createDimension('xy', 2)
         
-        var_options = self.netcdf_dataset.variables['longitude'].filters() or {}
+        try:
+            x_variable = self.netcdf_dataset.variables['longitude']
+            y_variable = self.netcdf_dataset.variables['latitude']
+        except:
+            x_variable = self.netcdf_dataset.variables['easting']
+            y_variable = self.netcdf_dataset.variables['northing']
+            
+            
+        var_options = x_variable.filters() or {}
         var_options['zlib'] = False
-        if hasattr(self.netcdf_dataset.variables['longitude'], '_FillValue'):
-            var_options['fill_value'] = self.netcdf_dataset.variables['longitude']._FillValue
+        if hasattr(x_variable, '_FillValue'):
+            var_options['fill_value'] = x_variable._FillValue
 
         self._nc_cache_dataset.createVariable('xycoords', 
-                                      self.netcdf_dataset.variables['longitude'].dtype, 
+                                      x_variable.dtype, 
                                       ('point', 'xy'),
                                       **var_options
                                       )
         self.xycoords = self._nc_cache_dataset.variables['xycoords']
-        self.xycoords[:,0] = self.fetch_array(self.netcdf_dataset.variables['longitude'])
-        self.xycoords[:,1] = self.fetch_array(self.netcdf_dataset.variables['latitude'])
+        self.xycoords[:,0] = self.fetch_array(x_variable)
+        self.xycoords[:,1] = self.fetch_array(y_variable)
  
         # Determine exact spatial bounds
-        min_lon = np.nanmin(self.xycoords[:,0])
-        max_lon = np.nanmax(self.xycoords[:,0])
-        min_lat = np.nanmin(self.xycoords[:,1])
-        max_lat = np.nanmax(self.xycoords[:,1])
+        xmin = np.nanmin(self.xycoords[:,0])
+        xmax = np.nanmax(self.xycoords[:,0])
+        ymin = np.nanmin(self.xycoords[:,1])
+        ymax = np.nanmax(self.xycoords[:,1])
         
         # Create nested list of bounding box corner coordinates
-        self.native_bbox = [[min_lon, min_lat], [max_lon, min_lat], [max_lon, max_lat], [min_lon, max_lat]]
+        self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
         self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
 
         # Define bounds
-        self.bounds = [min_lon, min_lat, max_lon, max_lat]
+        self.bounds = [xmin, ymin, xmax, ymax]
                
         self.kdtree = None
         
@@ -581,7 +596,7 @@ class NetCDFPointUtils(NetCDFUtils):
             lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
             
             if lookup_variable.shape == (): # Scalar
-                dimension = self.netcdf_dataset.get(indexing_dimension)
+                dimension = self.netcdf_dataset.dimensions.get(indexing_dimension)
                 assert dimension, 'Invalid indexing_dimension {} specified'.format(indexing_dimension)
                 # Repeat boolean value across dimension size
                 return np.array([lookup_variable[:]] * dimension.size)
@@ -620,64 +635,201 @@ class NetCDFPointUtils(NetCDFUtils):
         return lookup_variable[indexing_variable[start_index:end_index][subset_mask]]
 
                        
-#===============================================================================
-#     def read_points(self, start_index, end_index, mask=None):
-#         '''
-#         '''
-#     
-#     
-#         # Start of read_points function
-#         self.index_range = end_index - start_index
-#         
-#         if mask is None: # No mask defined - take all points in range
-#             subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
-#         else:
-#             subset_mask = mask[start_index:end_index]
-#             self.index_range = np.count_nonzero(subset_mask)
-#             
-#         # If no points to retrieve, don't read anything
-#         if not self.index_range:
-#             logger.debug('No points to retrieve - all masked out')            
-#             return
-# 
-#         for field_definition in self.field_definitions:
-#             short_name = field_definition['short_name']
-#             variable_name = field_definition['variable_name']
-#             #logger.debug('variable_name: {}'.format(variable_name))
-#             
-#             variable = self.nc_dataset.variables[variable_name]
-#             
-#             if len(variable.shape) == 0: # Scalar variable - repeat value for each point
-#                 data = variable[:]
-#                 self.cache[short_name] = np.array([data] * self.index_range)
-#                 
-#             elif len(variable.shape) in [1, 2]: # 1D or 2D variable
-#                 # Indexing array variable
-#                 if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
-#                     self.cache[short_name] = expand_indexing_variable(variable_name)[subset_mask]
-#                     
-#                 # Lookup array variable
-#                 elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields'] or variable_name.endswith('_index')): 
-#                     self.cache[short_name] = expand_lookup_variable(variable_name)[subset_mask]
-# 
-#                 # A data array variable
-#                 elif ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
-#                     data = variable[start_index:end_index]
-#                     
-#                     # Include fill_values if array is masked
-#                     if type(data) == np.ma.core.MaskedArray:
-#                         data = data.data
-#                         
-#                     self.cache[short_name] = data[subset_mask]
-#             else:
-#                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
-#         
-#         #logger.debug('self.cache: {}'.format(pformat(self.cache)))
-# 
-#     def point_generator(self, mask=None):
-#         '''
-#         '''
-#         pass
-#===============================================================================
+    def chunk_point_data_generator(self, 
+                                   start_index=0, 
+                                   end_index=0,
+                                   mask=None,
+                                   yield_variable_attributes_first=False):
+        '''
+        Generator to optionally yield variable attributes followed by all point data for the specified point index range
+        Used to retrieve data as chunks for outputting as point-wise lists of lists
+        @param start_index: start point index of range to read 
+        @param end_index: end point index of range to read. Defaults to number of points
+        @param mask: Optional Boolean mask array to subset points
+        @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to False
         
+        @yield variable_attributes: dict of netCDF variable attributes. Optionally the first item yielded if yield_variable_attributes_first is True
+        @yield point_value_list: List of single values for 1D variables or sub-lists for 2D variables for a single point
+        '''
+        # Start of point_data_generator function
+        end_index = end_index or self.point_count
+        index_range = end_index - start_index
+         
+        if mask is None: # No mask defined - take all points in range
+            subset_mask = np.ones(shape=(index_range,), dtype='bool')
+        else:
+            subset_mask = mask[start_index:end_index]
+            index_range = np.count_nonzero(subset_mask)
+             
+        # If no points to retrieve, don't read anything
+        if not index_range:
+            logger.debug('No points to retrieve - all masked out')            
+            return
+ 
+        variable_attributes = {}
+        memory_cache = OrderedDict()
+        for variable_name, variable in iter(self.netcdf_dataset.variables.items()):
+            #logger.debug('variable_name: {}'.format(variable_name))
+            
+            # Scalar variable - repeat value for each point
+            if len(variable.shape) == 0:
+                # Skip CRS variable
+                if variable_name in ['crs', 'transverse_mercator']:
+                    continue 
+                
+                data = variable[:]
+                memory_cache[variable_name] = np.array([data] * index_range)
+                 
+            elif len(variable.shape) in [1, 2]: # 1D or 2D variable
+                if (variable.dimensions[0] != 'point'): # Variable dimensions attribute does not start with "point"
+                    
+                    if (self.netcdf_dataset.variables.get(variable_name + '_start_index')
+                        and self.netcdf_dataset.variables.get(variable_name + '_point_count')
+                        ): # Indexing array variable
+                        memory_cache[variable_name] = self.expand_indexing_variable(variable_name, 
+                                                                                    start_index=start_index, 
+                                                                                    end_index=end_index,
+                                                                                    mask=mask)
+                    # else ignore any non-pointwise variables
+                     
+                else: # 'point' is in variable.dimensions
+                    if variable_name.endswith('_index') or hasattr(variable, 'lookup'): # Lookup indexing array variable
+                        # Get attributes from lookup variable, not indexing variable
+                        variable_name = re.sub('_index$', '', variable_name) if variable_name.endswith('_index') else variable.lookup
+                        variable = self.netcdf_dataset.variables[variable_name] 
+                        
+                        memory_cache[variable_name] = self.expand_lookup_variable(variable_name, 
+                                                                                  start_index=start_index, 
+                                                                                  end_index=end_index, 
+                                                                                  mask=mask)
+                    else: # A point data array variable
+                        data = variable[start_index:end_index]
+                         
+                        # Include fill_values if array is masked
+                        if type(data) == np.ma.core.MaskedArray:
+                            data = data.data
+                             
+                        memory_cache[variable_name] = data[subset_mask]
+            else:
+                raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))  
+               
+            if yield_variable_attributes_first:
+                variable_attributes[variable_name] = dict(variable.__dict__)
+            
+        logger.debug('variable_attributes: {}'.format(pformat(variable_attributes)))
+        logger.debug('memory_cache: {}'.format(pformat(memory_cache)))
+        
+        if yield_variable_attributes_first:
+            yield variable_attributes
+        
+        for index in range(index_range):
+            point_value_list = []
+            for variable_name, variable in iter(memory_cache.items()):
+                data = variable[index]
+                
+                # Convert array to string if required
+                if type(data) == np.ndarray and data.dtype == object:
+                    data = str(data)
+
+                if len(variable.shape) == 1: # Element from 1D variable
+                    point_value_list.append(data)
+                elif len(variable.shape) > 1: # Row from 2D variable
+                    point_value_list.append([element for element in data])
+                else:
+                    raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))
+                            
+            yield point_value_list
+                
+ 
+    def all_point_data_generator(self,
+                                 mask=None,
+                                 read_chunk_size=None,
+                                 yield_variable_attributes_first=True):
+        '''
+        Generator to yield variable attributes followed by lists of values for all points
+        @param mask: Optional Boolean mask array to subset points
+        @param read_chunk_size: Number of points to read from the netCDF per chunk (for greater efficiency than single point reads)
+        @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to True
+        
+        @yield variable_attributes: dict of netCDF variable attributes. Optionally the first item yielded if yield_variable_attributes_first is True
+        @yield point_value_list: List of single values for 1D variables or sub-lists for 2D variables for a single point
+        '''
+        read_chunk_size = read_chunk_size or DEFAULT_READ_CHUNK_SIZE
+        
+        # Process all chunks
+        point_count = 0
+        for chunk_index in range(self.point_count // read_chunk_size + 1):
+            for line in self.chunk_point_data_generator(start_index=chunk_index*read_chunk_size,
+                                                        end_index=min((chunk_index+1)*read_chunk_size,
+                                                                      self.point_count
+                                                                      ),
+                                                        mask=mask,
+                                                        yield_variable_attributes_first=yield_variable_attributes_first
+                                             ):
+                if not yield_variable_attributes_first:
+                    point_count += 1
+                
+                yield_variable_attributes_first = False # Only yield variable attributes from the first chunk
+
+                if point_count and point_count == point_count // 10000 * 10000:
+                    logger.info('{} points read from netCDF file'.format(point_count))
+                
+                #logger.debug('line: {}'.format(line))
+                yield line
+            
+                if POINT_LIMIT and (point_count >= POINT_LIMIT):
+                    break                    
+                
+            if POINT_LIMIT and (point_count >= POINT_LIMIT):
+                break
+        
+        logger.info('{} points read from netCDF file'.format(point_count))
+
+
+
+
+def main():
+    '''
+    Main function for quick and dirty testing
+    '''
+    netcdf_path = sys.argv[1]
+    
+    netcdf_dataset = netCDF4.Dataset(netcdf_path, 'r')
+
+    ncpu = NetCDFPointUtils(netcdf_dataset)
+    
+    # Create mask for first ten points
+    mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
+    mask[0:10] = True
+    
+    point_data_generator = ncpu.all_point_data_generator(mask)
+    
+    # Retrieve point vriable attributes first
+    variable_attributes = next(point_data_generator)
+    logger.info('variable_attributes: {}'.format(variable_attributes))
+    
+    # Use long names instead of variable names where they exist
+    field_names = [variable_attributes[variable_name].get('long_name') or variable_name
+                   for variable_name in variable_attributes.keys()]    
+    logger.info('field_names: {}'.format(field_names))
+    
+    for point_data in point_data_generator:
+        #logger.info('point_data: {}'.format(pformat(point_data)))
+        result_dict = dict(zip(field_names, point_data))
+        logger.info('result_dict: {}'.format(result_dict))
+        
+       
+if __name__ == '__main__':
+    # Setup logging handlers if required
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for logger {}'.format(logger.name))
+
+    main()        
     
