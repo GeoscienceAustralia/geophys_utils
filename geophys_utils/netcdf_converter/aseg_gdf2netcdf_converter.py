@@ -215,7 +215,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         field_dimensions =('rows',)
                         chunksizes=(CACHE_CHUNK_ROWS,)
                     else: # 2D variable
-                        field_dimension_name = short_name+'_dim' # Default 2nd dimension name
+                        field_dimension_name = short_name + '_dim' # Default 2nd dimension name
 
                         # Look up any dimension name(s) for this variable from settings
                         override_definition = self.settings['field_definitions'].get(short_name)
@@ -226,7 +226,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 if type(override_dimensions) == list:
                                     field_dimension_name = '_plus_'.join(override_dimensions) # Multiple partial dimensions
                                 elif type(override_dimensions) == str:
-                                    field_dimension_name = override_dimensions # Single dimension
+                                    # Note that the "_dim" suffix is required to avoid triggering an obscure netCDF4 bug which seems to occur when 
+                                    # a dimension is defined with the same name as an existing variable.
+                                    # See https://github.com/Unidata/netcdf-c/issues/295
+                                    # This does not appear to be an issue when the dimension is defined before the variable, but we can't do that for
+                                    # the cache dataset, only the final one
+                                    field_dimension_name = override_dimensions + '_dim' # Single dimension
                                     
                         # Create dimension if it doesn't already exist
                         if field_dimension_name not in self._nc_cache_dataset.dimensions.keys():
@@ -235,7 +240,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         field_dimensions =('rows', field_dimension_name)
                         chunksizes=(CACHE_CHUNK_ROWS, columns)
                         
-                    #logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
+                    logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
                     self._nc_cache_dataset.createVariable(varname=short_name,
                                                           datatype=field_definition['dtype'],
                                                           dimensions=field_dimensions,
@@ -243,6 +248,14 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                           **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
                                                           )
                     self.column_count += columns
+                    
+                try: # Do a sync now to force an error if there are dimension/variable naming conflicts
+                    self._nc_cache_dataset.sync()
+                    logger.debug('NetCDF sync completed')
+                except:
+                    logger.debug(self._nc_cache_dataset.dimensions, self._nc_cache_dataset.variables)
+                    raise
+                              
                 logger.debug('Created temporary cache file {}'.format(self.nc_cache_path))
             
             def cache_chunk_list(chunk_list, start_row):
@@ -257,7 +270,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     cache_variable = self._nc_cache_dataset.variables[short_name]
                     
                     chunk_array = np.array([row_list[field_index] for row_list in chunk_list])
-                    #logger.debug('{} {}-element {} chunk_array: {}'.format(short_name, chunk_array.shape[0], chunk_array.dtype, chunk_array))
+                    #logger.debug('{} cache_variable: {}'.format(cache_variable.name, cache_variable))
+                    #logger.debug('{}: {}-element {} chunk_array: {}'.format(short_name, chunk_array.shape[0], chunk_array.dtype, chunk_array))
 
                     cache_variable[start_row:end_row] = chunk_array
             
@@ -432,6 +446,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 
                 if field_name in self.settings['dimension_fields']:
                     self.dimensions[field_name] = int(cache_variable[0]) # Read value from first line
+                    #logger.debug('self.dimensions["{}"] set to {}'.format(field_name, cache_variable[0]))
                     field_definition['column_start_index'] = None # Do not output this column
                     column_start_index += 1 # Single column only
                     continue # Check next field
@@ -446,13 +461,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     field_dimension_size = int(match.group(0))
                     field_definition['format'] = re.sub('^\d+', '', field_definition['format'])
                     default_dimension_names = field_definition.get('dimensions') # Look for default dimension name
-                    logger.debug('default_dimension_names: {}'.format(default_dimension_names))
+                    #logger.debug('default_dimension_names: {}'.format(default_dimension_names))
+                    #logger.debug('self.dimensions: {}'.format(self.dimensions))
                     if default_dimension_names: # Default dimension name(s) found from settings
                         if type(default_dimension_names) == str: # Only one dimension specified as a string
                             actual_dimension_size = self.dimensions.get(default_dimension_names)
                             logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
                             if actual_dimension_size is None: # Default dimension not already defined - create it
                                 self.dimensions[default_dimension_names] = field_dimension_size
+                                #logger.debug('Set self.dimensions[{}] = {}'.format(default_dimension_names, field_dimension_size))
                             else:
                                 assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
                                 
@@ -463,9 +480,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         # Use dimension size values read from data file to create multiple part-arrays from a single composite
                         # N.B: This could be considered to be encouraging bad behaviour - the .dfn file should 
                         # ideally be re-written
-                        if type(default_dimension_names) == list: # Multiple part-dimensions specified
+                        elif type(default_dimension_names) == list: # Multiple part-dimensions specified
                             assert set(default_dimension_names) <= set(self.dimensions.keys()), 'Dimensions {} not all defined in {}'.format(default_dimension_names, self.dimensions.keys())
-                            assert sum([self.dimensions[key] for key in default_dimension_names]) == field_dimension_size, 'Incorrect dimension sizes'
+                            combined_dimension_size = sum([self.dimensions[key] for key in default_dimension_names])
+                            assert combined_dimension_size == field_dimension_size, 'Incorrect dimension sizes. Expected {}, found {}'.format(combined_dimension_size, field_dimension_size)
                             logger.debug('Removing original composite field definition')
                             self.field_definitions.remove(field_definition)
                             field_definition_index -= 1
@@ -977,6 +995,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
             #=======================================================================
             else: # 2D variable
+                #TODO: Move this code to post-processing
                 # Convert resistivity to conductivity
                 if short_name == 'resistivity':
                     short_name = 'conductivity'
@@ -999,11 +1018,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     # data_array[bad_data_mask] = fill_value
                     #===========================================================
     
-                    logger.debug('\nresistivity_uncertainty: {}'.format(self.get_raw_data('resistivity_uncertainty')))
-                    logger.debug('\nresistivity: {}'.format(self.get_raw_data('resistivity')))
-                    logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_raw_data('resistivity') 
-                                                                               * self.get_raw_data('resistivity_uncertainty')))
-                    logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+                    #===========================================================
+                    # logger.debug('\nresistivity_uncertainty: {}'.format(self.get_raw_data('resistivity_uncertainty')))
+                    # logger.debug('\nresistivity: {}'.format(self.get_raw_data('resistivity')))
+                    # logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_raw_data('resistivity') 
+                    #                                                            * self.get_raw_data('resistivity_uncertainty')))
+                    # logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+                    #===========================================================
                 else:
                     # Don't mess with values
                     data_array = self.get_raw_data(short_name)
