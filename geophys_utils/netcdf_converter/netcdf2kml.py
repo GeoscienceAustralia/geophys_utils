@@ -110,20 +110,33 @@ def plot_points_in_kml():
     assert index == count
     return points_folder
 
+
+def build_dynamic_network_link(containing_folder):
+    """
+    Build a network link, set the parameters, and place in the specified folder.
+    """
+    net_link = containing_folder.newnetworklink(name="Network Link")
+    net_link.link.href = "http://127.0.0.1:5000/query"
+    net_link.link.viewrefreshmode = simplekml.ViewRefreshMode.onstop
+    net_link.link.viewrefreshtime = 1
+    net_link.link.refreshinterval = 2
+    return net_link
+
 def build_multiple_kmls(list_of_surveys):
 
     pass
 
 
 def main():
-    # build the polygon, points, and regions
+    # build the polygon, points, network link, and regions
     polygon_folder, polygon = build_polygon()
     dataset_points_folder = plot_points_in_kml()
     dataset_polygon_region = build_region(MAX_LOD_PIXELS, MIN_LOD_PIXELS + 400, MIN_FADE_EXTENT, MAX_FADE_EXTENT)
     dataset_points_region = build_region(MIN_LOD_PIXELS - 200, MAX_LOD_PIXELS, MIN_FADE_EXTENT, MAX_FADE_EXTENT)
+    dataset_network_link = build_dynamic_network_link(dataset_points_folder)
 
     # structure them correctly
-    polygon_folder.region = dataset_polygon_region # insert built polygon region into polygon folder
+    polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
     dataset_points_folder.region = dataset_points_region # insert built point region into point folder
 
     print("Building kml for survey: " + survey_title)
