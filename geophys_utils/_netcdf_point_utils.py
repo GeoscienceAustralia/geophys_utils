@@ -37,11 +37,13 @@ from scipy.spatial.ckdtree import cKDTree
 import logging
 
 # Setup logging handlers if required
-logger = logging.getLogger(__name__) # Get __main__ logger
+logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
+# Default number of points to read per chunk
 DEFAULT_READ_CHUNK_SIZE = 8192
 
+# Set this to a number other than zero for testing
 POINT_LIMIT = 0
     
 class NetCDFPointUtils(NetCDFUtils):
@@ -663,7 +665,7 @@ class NetCDFPointUtils(NetCDFUtils):
              
         # If no points to retrieve, don't read anything
         if not index_range:
-            logger.debug('No points to retrieve - all masked out')            
+            logger.debug('No points to retrieve for point indices {}-{}: All masked out'.format(start_index, end_index-1))            
             return
  
         variable_attributes = {}
@@ -739,7 +741,9 @@ class NetCDFPointUtils(NetCDFUtils):
                     raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))
                             
             yield point_value_list
-                
+            
+        logger.debug('{} points read for point indices {}-{}'.format(index_range, start_index, end_index-1))        
+        
  
     def all_point_data_generator(self,
                                  mask=None,
@@ -796,7 +800,7 @@ def main():
     
     netcdf_dataset = netCDF4.Dataset(netcdf_path, 'r')
 
-    ncpu = NetCDFPointUtils(netcdf_dataset)
+    ncpu = NetCDFPointUtils(netcdf_dataset, debug=False) # Enable debug output here
     
     # Create mask for first ten points
     mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
@@ -804,7 +808,7 @@ def main():
     
     point_data_generator = ncpu.all_point_data_generator(mask)
     
-    # Retrieve point vriable attributes first
+    # Retrieve point variable attributes first
     variable_attributes = next(point_data_generator)
     logger.info('variable_attributes: {}'.format(variable_attributes))
     
