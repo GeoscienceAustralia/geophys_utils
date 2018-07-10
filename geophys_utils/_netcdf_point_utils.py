@@ -640,6 +640,7 @@ class NetCDFPointUtils(NetCDFUtils):
     def chunk_point_data_generator(self, 
                                    start_index=0, 
                                    end_index=0,
+                                   field_list=None,
                                    mask=None,
                                    yield_variable_attributes_first=False):
         '''
@@ -647,6 +648,7 @@ class NetCDFPointUtils(NetCDFUtils):
         Used to retrieve data as chunks for outputting as point-wise lists of lists
         @param start_index: start point index of range to read 
         @param end_index: end point index of range to read. Defaults to number of points
+        @param field_list: Optional list of field names to read. Default is None for all variables 
         @param mask: Optional Boolean mask array to subset points
         @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to False
         
@@ -668,17 +670,31 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('No points to retrieve for point indices {}-{}: All masked out'.format(start_index, end_index-1))            
             return
  
+        logger.debug('field_list: {}'.format(field_list))
+        
         variable_attributes = {}
         memory_cache = OrderedDict()
         for variable_name, variable in iter(self.netcdf_dataset.variables.items()):
             #logger.debug('variable_name: {}'.format(variable_name))
             
-            # Scalar variable - repeat value for each point
+            # Skip fields not in field_list if field_list specified
+            #TODO: Find a better way of identifying lookup index variables
+            if (field_list 
+                and not (variable_name in field_list
+                     or (hasattr(variable, 'lookup') and variable.lookup in field_list) # Check for lookup index variables
+                     or re.sub('_index$', '', variable_name) in field_list # Check for lookup index variables
+                     )
+                ):
+                logger.debug('Ignoring variable {}'.format(variable_name))
+                continue
+            
+            # Scalar variable
             if len(variable.shape) == 0:
                 # Skip CRS variable
                 if variable_name in ['crs', 'transverse_mercator']:
                     continue 
                 
+                # Repeat scalar value for each point
                 data = variable[:]
                 memory_cache[variable_name] = np.array([data] * index_range)
                  
@@ -746,11 +762,13 @@ class NetCDFPointUtils(NetCDFUtils):
         
  
     def all_point_data_generator(self,
+                                 field_list=None,
                                  mask=None,
                                  read_chunk_size=None,
                                  yield_variable_attributes_first=True):
         '''
         Generator to yield variable attributes followed by lists of values for all points
+        @param field_list: Optional list of field names to read. Default is None for all variables 
         @param mask: Optional Boolean mask array to subset points
         @param read_chunk_size: Number of points to read from the netCDF per chunk (for greater efficiency than single point reads)
         @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to True
@@ -763,7 +781,8 @@ class NetCDFPointUtils(NetCDFUtils):
         # Process all chunks
         point_count = 0
         for chunk_index in range(self.point_count // read_chunk_size + 1):
-            for line in self.chunk_point_data_generator(start_index=chunk_index*read_chunk_size,
+            for line in self.chunk_point_data_generator(field_list=field_list,
+                                                        start_index=chunk_index*read_chunk_size,
                                                         end_index=min((chunk_index+1)*read_chunk_size,
                                                                       self.point_count
                                                                       ),
@@ -790,9 +809,7 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.info('{} points read from netCDF file'.format(point_count))
 
 
-
-
-def main():
+def main(debug=False):
     '''
     Main function for quick and dirty testing
     '''
@@ -800,13 +817,17 @@ def main():
     
     netcdf_dataset = netCDF4.Dataset(netcdf_path, 'r')
 
-    ncpu = NetCDFPointUtils(netcdf_dataset, debug=False) # Enable debug output here
+    ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug) # Enable debug output here
     
-    # Create mask for first ten points
+    # Create mask for last ten points
     mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
-    mask[0:10] = True
+    mask[-10:] = True
     
-    point_data_generator = ncpu.all_point_data_generator(mask)
+    # Set list of fields to read
+    #field_list = None
+    field_list = ['latitude', 'longitude', 'line'] 
+    
+    point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
     # Retrieve point variable attributes first
     variable_attributes = next(point_data_generator)
@@ -818,7 +839,7 @@ def main():
     logger.info('field_names: {}'.format(field_names))
     
     for point_data in point_data_generator:
-        #logger.info('point_data: {}'.format(pformat(point_data)))
+        #logger.debug('point_data: {}'.format(pformat(point_data)))
         result_dict = dict(zip(field_names, point_data))
         logger.info('result_dict: {}'.format(result_dict))
         
