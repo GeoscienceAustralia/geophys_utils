@@ -135,13 +135,13 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         """
         sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
-        accuracy_method_keys_and_values_dict = OrderedDict()
+        keys_and_values_dict = OrderedDict()
         for s in query_result:
             # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
-            accuracy_method_keys_and_values_dict[s[0]] = s[1]
+            keys_and_values_dict[s[0]] = s[1]
 
         # returns as string. Python dict not accepted.
-        return accuracy_method_keys_and_values_dict
+        return keys_and_values_dict
 
     def get_value_for_key(self, value_column: str, table_name: str, key_column: str,  key: str):
         """
@@ -467,7 +467,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                         else:
                             attributes_dict[value] = self.get_survey_wide_value_from_obs_table(field_value.get(value))
                             # if None is returned then remove the attribute
-                            if attributes_dict[value][0] is None:
+                            if attributes_dict[value] is None:
                                 attributes_dict.pop(value)
                             else:
                                 pass
@@ -596,15 +596,13 @@ def main():
     # execute sql to return surveys to convert to netcdf
 
     survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
-    survey_id_list = []
-
+    
     # tidy the survey id strings
-    for survey_row in survey_cursor:
-        tidy_sur = re.search('\d+', survey_row[0]).group()
-        survey_id_list.append(tidy_sur)
+    survey_id_list = [re.search('\d+', survey_row[0]).group()
+                      for survey_row in survey_cursor
+                      ]
 
-    #logger.debug('Survey count =', str(len(survey_id_list)))
-
+    logger.debug('Survey count = {}'.format(len(survey_id_list)))
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
         logger.debug("Processing for survey: " + str(survey))
