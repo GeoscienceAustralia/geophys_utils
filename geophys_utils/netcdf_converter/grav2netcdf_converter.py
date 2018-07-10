@@ -440,7 +440,6 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
             for value in list_of_possible_value:
                 logger.debug("Value in list_of_possible_value: " + str(value))
-                print("UNITS?" + str(value))
                 # if the field value is in the list of accepted values then add to attributes dict
                 if field_value.get(value):
                     logger.debug("Processing: " + str(value))
@@ -475,11 +474,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
                     # for all other values, simply add them to attributes_dict
                     else:
-                        print("LOOK HERE")
-                        print(value)
-                        print(field_value[value])
                         attributes_dict[value] = field_value[value]
-                        print(attributes_dict[value])
+                        logger.debug('attributes_dict["{}"] = {}'.format(value, field_value[value]))
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
@@ -574,8 +570,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                                      fill_value=fill_value,
                                      attributes=index_attributes
                                      )
+                
             else: # Not a lookup field
-                print(field_name)
                 yield NetCDFVariable(short_name=(field_value.get('standard_name') or field_value['short_name']).lower(),
                                      data=data,
                                      dimensions=['point'],
