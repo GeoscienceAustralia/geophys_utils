@@ -135,7 +135,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         """
         sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
-        accuracy_method_keys_and_values_dict = {}
+        accuracy_method_keys_and_values_dict = OrderedDict()
         for s in query_result:
             # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
             accuracy_method_keys_and_values_dict[s[0]] = s[1]
@@ -243,8 +243,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             "gravity based on the underlying structure or geology".format(self.survey_id,
                                                                       self.survey_metadata['SURVEYNAME'],
                                                                       self.survey_metadata['STATEGROUP']),
-            'location_accuracy_min': np.min(self.nc_output_dataset.variables['Locacc']),
-            'location_accuracy_max': np.max(self.nc_output_dataset.variables['Locacc']),
+            'location_accuracy_min': np.min(self.nc_output_dataset.variables['locacc']),
+            'location_accuracy_max': np.max(self.nc_output_dataset.variables['locacc']),
             'time_coverage_start': str(self.survey_metadata.get('STARTDATE')),
             'time_coverage_end': str(self.survey_metadata.get('ENDDATE')),
             'time_coverage_duration': str(self.survey_metadata.get('ENDDATE') - self.survey_metadata.get('STARTDATE'))
@@ -270,10 +270,10 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         dimensions = OrderedDict()
         dimensions['point'] = point_count  # number of points per survey
 
-        for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
+        for field_value in Grav2NetCDFConverter.settings['field_names'].values():
             if field_value.get('lookup_table'):
                 lookup_dict = self.get_keys_and_values_table(field_value['lookup_table'])
-                new_dimension_name = str(field_value.get('short_name')) + "_lookup_table"
+                new_dimension_name = field_value['short_name'].lower()
                 dimensions[new_dimension_name] = len(lookup_dict)
                 # print(dimensions[new_dimension_name])
             else:
@@ -372,35 +372,42 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             logger.debug('handle_key_value_cases() with field value: ' + str(field_value) + ' and key_value_tables_dict: ' + str(lookup_table_dict))
 
             # get the keys into a list
-            lookup_key_list = []
-            # value_list=[]
-            [lookup_key_list.append(lookup_key) for lookup_key, lookup_value in lookup_table_dict.items()]
+            lookup_key_list = [lookup_key for lookup_key in lookup_table_dict.keys()]
 
             # for key, value2 in lookup_table_dict.items():
             #     key_list.append(key)
             #     value_list.append(value2)
 
             # create the lookup table to convert variables with strings as keys.
-            lookup_dict = {}
-            for lookup_key in lookup_key_list:
-                lookup_dict[lookup_key] = lookup_key_list.index(lookup_key)
-            # get the data
+            lookup_dict = {lookup_key: lookup_key_list.index(lookup_key)
+                           for lookup_key in lookup_key_list}
+            
+            # get the array of numeric foreign key values
             field_data_array = get_data(field_value)
 
-            # transform the data_list into the mapped valued.
+            # transform the data_list into the mapped value.
             #transformed_list = convert_list_to_mapped_values(value_array, mapping_dict) # using the function
-            transformed_list = []
-            for field_data in field_data_array:
-                [transformed_list.append(lookup_dict.get(lookup_key)) for lookup_key, lookup_value, in lookup_dict.items()
-                 if field_data == lookup_key]
+            transformed_list = [lookup_dict.get(lookup_key) for lookup_key in field_data_array]
+                                
+            #===================================================================
+            # transformed_list =[]                   
+            # for field_data in field_data_array:
+            #     [transformed_list.append(lookup_dict.get(lookup_key)) for lookup_key, lookup_value, in lookup_dict.items()
+            #      if field_data == lookup_key]
+            #===================================================================
 
             # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
             # the existing value of the table_key_dict in a new dict
-            converted_dict = {}
-            for keys, values in lookup_table_dict.items():
-                for map_key, map_value in lookup_dict.items():
-                    if keys == map_key:
-                        converted_dict[map_value] = lookup_table_dict[keys]
+            converted_dict = {lookup_table_dict[key]: value 
+                              for key, value in lookup_table_dict.items()}
+            
+            #===================================================================
+            # converted_dict = {}
+            # for keys, values in lookup_table_dict.items():
+            #     for map_key, map_value in lookup_dict.items():
+            #         if keys == map_key:
+            #             converted_dict[map_value] = lookup_table_dict[keys]
+            #===================================================================
 
             return transformed_list, converted_dict
 
@@ -540,34 +547,36 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             if field_value.get('lookup_table'):
 
                 # get the values from the lookup table dict and convert into a np.array
-                grid_value_list = []
                 lookup_table_dict = self.get_keys_and_values_table(field_value['lookup_table'])
-                for key, value in iter(lookup_table_dict.items()):
-                    grid_value_list.append(value)
+                grid_value_list = [value for value in iter(lookup_table_dict.values())]
                 lookup_table_array = np.array(grid_value_list)
                 attributes.pop('dtype', None)
                 attributes.pop('lookup_table', None)
 
-                dim_name = str(field_value.get('short_name')) + "_lookup_table"
+                dim_name = field_value['short_name'].lower()
 
+                # Yield lookup table with same name as field
                 yield NetCDFVariable(short_name=dim_name,
                                      data=lookup_table_array,
                                      dimensions=[dim_name],
                                      fill_value=fill_value,
                                      attributes=attributes
                                      )
-            if field_name == "Lat" or field_name == "Long":
-                print(field_name)
-                yield NetCDFVariable(short_name=field_value['standard_name'],
+                
+                # Yield index table with name of <field_name>_index 
+                index_attributes = dict(attributes)
+                index_attributes['long_name'] = "zero-based index of value in " + dim_name
+                index_attributes['lookup'] = dim_name
+                    
+                yield NetCDFVariable(short_name=((field_value.get('standard_name') or field_value['short_name']) + '_index').lower(),
                                      data=data,
                                      dimensions=['point'],
                                      fill_value=fill_value,
-                                     attributes=attributes
+                                     attributes=index_attributes
                                      )
-            else:
+            else: # Not a lookup field
                 print(field_name)
-                # for all variables yield the information to build a netcdf variable
-                yield NetCDFVariable(short_name=field_value['short_name'],
+                yield NetCDFVariable(short_name=(field_value.get('standard_name') or field_value['short_name']).lower(),
                                      data=data,
                                      dimensions=['point'],
                                      fill_value=fill_value,
