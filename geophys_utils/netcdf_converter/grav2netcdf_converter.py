@@ -332,38 +332,12 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                             else:
                                 gravity_metadata[key] = value
 
-                                # if isinstance(metadata_attribute, list):
-                                #     if key == metadata_attribute[0]:
-                                #         # get_value_for_key(value_column: str, table_name: str, key_column: str,  key: str)
-                                #         gravity_metadata[key] = str(self.get_value_for_key('DESCRIPTION', metadata_attribute[1], key, value))
 
             logger.debug("GA gravity metadata")
             logger.debug(gravity_metadata)
 
             return gravity_metadata
 
-        # def handle_key_value_cases_2(field_value, key_values_tables_dict):
-        #     value_array = get_data(field_value)
-        #     ka, ea = np.unique(value_array, return_inverse=True)
-        #     print("ka: " + str(ka))
-        #     print("ea: " + str(ea))
-        #     return ea, ka
-        #
-        # def convert_list_to_mapped_values(list_to_edit, mapping_dict):
-        #
-        #     logger.debug('- - - - - - - - - - - - - - - - - -')
-        #     logger.debug('convert_list_to_mapped_values()')
-        #     logger.debug('list_to_edit: ' + str(list_to_edit))
-        #     logger.debug('mapping_dict: ' + str(mapping_dict))
-        #     transformed_list = []
-        #
-        #     for l in list_to_edit:
-        #         for key5, value5, in mapping_dict.items():
-        #             if l == key5:
-        #                 transformed_list.append(mapping_dict.get(key5))
-        #             else:
-        #                 pass
-        #     return transformed_list
 
         def handle_key_value_cases(field_value, lookup_table_dict):
             """
@@ -468,11 +442,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
                     # for all other values, simply add them to attributes_dict
                     else:
-                        print("LOOK HERE")
-                        print(value)
-                        print(field_value[value])
                         attributes_dict[value] = field_value[value]
-                        print(attributes_dict[value])
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
