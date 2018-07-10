@@ -691,7 +691,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # Scalar variable
             if len(variable.shape) == 0:
                 # Skip CRS variable
-                if variable_name in ['crs', 'transverse_mercator']:
+                if variable_name in ['crs', 'transverse_mercator'] or re.match('ga_.+_metadata', variable_name):
                     continue 
                 
                 # Repeat scalar value for each point
@@ -824,8 +824,8 @@ def main(debug=False):
     mask[-10:] = True
     
     # Set list of fields to read
-    #field_list = None
-    field_list = ['latitude', 'longitude', 'line'] 
+    field_list = None
+    #field_list = ['latitude', 'longitude', 'line'] 
     
     point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
