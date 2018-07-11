@@ -32,7 +32,7 @@ TEMP_DIR = tempfile.gettempdir()
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
 
-class LineCache(object):
+class RowCache(object):
     '''
     '''
     def __init__(self, netCDF2ASEG_GDF_converter):
@@ -55,7 +55,7 @@ class LineCache(object):
         self.cache = {}
 
     
-    def read_points(self, start_index, end_index):
+    def read_points(self, start_index, end_index, mask=None):
         '''
         '''
         def expand_indexing_variable(indexing_variable_name):
@@ -106,6 +106,17 @@ class LineCache(object):
     
         # Start of read_points function
         self.index_range = end_index - start_index
+        
+        if mask is None: # No mask defined - take all points in range
+            subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+        else:
+            subset_mask = mask[start_index:end_index]
+            self.index_range = np.count_nonzero(subset_mask)
+            
+        # If no points to retrieve, don't read anything
+        if not self.index_range:
+            logger.debug('No points to retrieve - all masked out')            
+            return
 
         for field_definition in self.field_definitions:
             short_name = field_definition['short_name']
@@ -121,11 +132,11 @@ class LineCache(object):
             elif len(variable.shape) in [1, 2]: # 1D or 2D variable
                 # Indexing array variable
                 if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
-                    self.cache[short_name] = expand_indexing_variable(variable_name)
+                    self.cache[short_name] = expand_indexing_variable(variable_name)[subset_mask]
                     
                 # Lookup array variable
-                elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields']) or variable_name.endswith('_index'): 
-                    self.cache[short_name] = expand_lookup_variable(variable_name)
+                elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields'] or variable_name.endswith('_index')): 
+                    self.cache[short_name] = expand_lookup_variable(variable_name)[subset_mask]
 
                 # A data array variable
                 elif ('point' in variable.dimensions) and (variable_name not in self.settings['index_fields']):
@@ -135,7 +146,7 @@ class LineCache(object):
                     if type(data) == np.ma.core.MaskedArray:
                         data = data.data
                         
-                    self.cache[short_name] = data
+                    self.cache[short_name] = data[subset_mask]
             else:
                 raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))     
         
@@ -146,25 +157,32 @@ class LineCache(object):
         '''
         Generator yielding chunks for all data in cache
         '''
-        assert self.index_range, 'Cache is empty'
+        if not self.index_range:
+            logger.debug('Cache is empty - nothing to yield')
+            return
         
         for index in range(self.index_range):
-            line = ''
+            value_list = []
             for field_definition in self.field_definitions:
                 short_name = field_definition['short_name']
-                python_format = field_definition['python_format']
+
                 data = self.cache[short_name][index]
+                
+                # Convert array to string if required
+                if type(data) == np.ndarray and data.dtype == object:
+                    data = str(data)
+
                 if field_definition['columns'] == 1: # Element from 1D variable
-                    line += python_format.format(data)
+                    value_list.append(data)
                 elif field_definition['columns'] > 1: # Row from 2D variable
-                    line += ''.join([python_format.format(element) for element in data])
+                    value_list += [element for element in data]
                 else:
                     raise BaseException('Invalid dimensionality for variable {}'.format(field_definition['short_name']))
                             
             # Strip leading spaces as per ASEG practice, even though this makes the 
             # width of the first field wrong.
             #logger.debug('line: {}'.format(line.lstrip()))
-            yield line.lstrip() 
+            yield value_list 
             
         if clear_cache:
             self.clear_cache() # Clear cache after outputting all lines                   
@@ -176,8 +194,6 @@ class NetCDF2ASEGGDFConverter(object):
     '''
     def __init__(self,
                  netcdf_in_path,
-                 dat_out_path=None,
-                 dfn_out_path=None,
                  settings_path=None
                  ):
         '''
@@ -188,8 +204,6 @@ class NetCDF2ASEGGDFConverter(object):
                 ), '{} is not a valid file or OPeNDAP endpoint'.format(netcdf_in_path)
         
         self.netcdf_in_path = netcdf_in_path
-        self.dat_out_path = dat_out_path or os.path.splitext(netcdf_in_path)[0] + '.dat'
-        self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         self.defn = 0 # DEFN number for last line written to .dfn file
         
         self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
@@ -250,7 +264,10 @@ class NetCDF2ASEGGDFConverter(object):
         return line
         
                 
-    def convert2aseg_gdf(self): 
+    def convert2aseg_gdf(self, 
+                         dat_out_path=None,
+                         dfn_out_path=None,
+                         mask=None): 
         '''
         Function to convert netCDF file to ASEG-GDF
         '''
@@ -574,43 +591,54 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
         
         
-        def write_dat_file(cache_chunk_rows=None):
+        def write_dat_file(cache_chunk_rows=None, mask=None):
             '''
             Helper function to output .dat file
             '''
-            def chunk_buffer_generator():
+            def chunk_buffer_generator(mask=None):
                 '''
                 Generator to yield all line strings across all point variables for specified row range
                 '''                    
-                def chunk_line_generator(start_index, end_index):
+                def chunk_line_generator(start_index, end_index, mask=None):
                     '''
                     Helper Generator to yield line strings for specified rows across all point variables
                     '''
+                    python_format_list = []
+                    for field_definition in self.field_definitions:
+                        for _column_index in range(field_definition['columns']):
+                            python_format_list.append(field_definition['python_format'])
+                            
+                    value_count = len(python_format_list)
+        
                     logger.debug('Reading rows {}-{}'.format(start_index+1, end_index))
-                    line_cache.read_points(start_index, end_index)
+                    line_cache.read_points(start_index, end_index, mask=mask)
                     
                     logger.debug('Preparing ASEG-GDF lines for rows {}-{}'.format(start_index+1, end_index))
-                    for line in line_cache.chunk_buffer_generator():
-                        yield line
+                    for value_list in line_cache.chunk_buffer_generator():
+                        #logger.debug('value_list: {}'.format(value_list))
+                        # Turn list of values into a string using python_formats
+                        yield ''.join([python_format_list[value_index].format(value_list[value_index])
+                                       for value_index in range(value_count)]).lstrip()
 
                         
                 # Start of chunk_buffer_generator
-                line_cache = LineCache(self) # Create cache for multiple rows
+                line_cache = RowCache(self) # Create cache for multiple rows
                 
-                # Process all complete chunks
+                # Process all chunks
                 point_count = 0
                 for chunk_index in range(self.total_points // cache_chunk_rows + 1):
                     for line in chunk_line_generator(start_index=chunk_index*cache_chunk_rows,
                                                      end_index=min((chunk_index+1)*cache_chunk_rows,
                                                                    self.total_points
-                                                                   )
+                                                                   ),
+                                                     mask=mask
                                                      ):
                         point_count += 1
                         
                         if point_count == point_count // 10000 * 10000:
-                            logger.info('{} points read'.format(point_count))
-                            #logger.debug('line: {}'.format(line))
+                            logger.info('{} points written'.format(point_count))
                         
+                        #logger.debug('line: {}'.format(line))
                         yield line
                     
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):
@@ -628,18 +656,21 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             # Create, write and close .dat file
             dat_file = open(self.dat_out_path, mode='w')
             logger.debug('Writing lines to {}'.format(self.dat_out_path))
-            for line in chunk_buffer_generator():
+            for line in chunk_buffer_generator(mask):
                 dat_file.write(line + '\n')
             dat_file.close()
             logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
                 
         
         # Start of convert2aseg_gdf function        
+        self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_in_path)[0] + '.dat'
+        self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
+        
         get_field_definitions()
         
         write_dfn_file()
 
-        write_dat_file()
+        write_dat_file(mask=mask)
     
        
 def main():
@@ -692,11 +723,18 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     dfn_out_path = args.dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
     
     netcdf2aseg_gdf_converter = NetCDF2ASEGGDFConverter(nc_in_path,
-                                                        dat_out_path,
-                                                        dfn_out_path
                                                         )
     
-    netcdf2aseg_gdf_converter.convert2aseg_gdf()
+    mask = None # Process all points
+    #===========================================================================
+    # # Temporary mask for testing - only take every 1000th point
+    # mask = np.zeros(shape=(netcdf2aseg_gdf_converter.total_points,), dtype='bool')
+    # mask[1:netcdf2aseg_gdf_converter.total_points:1000] = True
+    #===========================================================================
+
+    netcdf2aseg_gdf_converter.convert2aseg_gdf(dat_out_path,
+                                               dfn_out_path,
+                                               mask)
     
        
 if __name__ == '__main__':

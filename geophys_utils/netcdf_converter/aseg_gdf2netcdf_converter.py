@@ -22,7 +22,6 @@ Created on 28Mar.2018
 
 @author: Alex Ip
 '''
-#TODO: Rewrite variable_generator and get_raw_data functions to accommodate string fields
 import argparse
 from collections import OrderedDict
 import numpy as np
@@ -38,13 +37,13 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision
+from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
 TEMP_DIR = tempfile.gettempdir()
-#TEMP_DIR = 'E:\Temp'
+#TEMP_DIR = 'D:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -65,7 +64,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  default_chunk_size=None, 
                  default_variable_parameters=None,
                  settings_path=None,
-                 fix_precision=True
+                 fix_precision=True,
+                 space_delimited=False
                  ):
         '''
         Concrete constructor for subclass ASEGGDF2NetCDFConverter
@@ -215,7 +215,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         field_dimensions =('rows',)
                         chunksizes=(CACHE_CHUNK_ROWS,)
                     else: # 2D variable
-                        field_dimension_name = short_name+'_dim' # Default 2nd dimension name
+                        field_dimension_name = short_name + '_dim' # Default 2nd dimension name
 
                         # Look up any dimension name(s) for this variable from settings
                         override_definition = self.settings['field_definitions'].get(short_name)
@@ -226,7 +226,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 if type(override_dimensions) == list:
                                     field_dimension_name = '_plus_'.join(override_dimensions) # Multiple partial dimensions
                                 elif type(override_dimensions) == str:
-                                    field_dimension_name = override_dimensions # Single dimension
+                                    # Note that the "_dim" suffix is required to avoid triggering an obscure netCDF4 bug which seems to occur when 
+                                    # a dimension is defined with the same name as an existing variable.
+                                    # See https://github.com/Unidata/netcdf-c/issues/295
+                                    # This does not appear to be an issue when the dimension is defined before the variable, but we can't do that for
+                                    # the cache dataset, only the final one
+                                    field_dimension_name = override_dimensions + '_dim' # Single dimension
                                     
                         # Create dimension if it doesn't already exist
                         if field_dimension_name not in self._nc_cache_dataset.dimensions.keys():
@@ -235,7 +240,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         field_dimensions =('rows', field_dimension_name)
                         chunksizes=(CACHE_CHUNK_ROWS, columns)
                         
-                    #logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
+                    logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
                     self._nc_cache_dataset.createVariable(varname=short_name,
                                                           datatype=field_definition['dtype'],
                                                           dimensions=field_dimensions,
@@ -243,6 +248,14 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                           **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
                                                           )
                     self.column_count += columns
+                    
+                try: # Do a sync now to force an error if there are dimension/variable naming conflicts
+                    self._nc_cache_dataset.sync()
+                    logger.debug('NetCDF sync completed')
+                except:
+                    logger.debug(self._nc_cache_dataset.dimensions, self._nc_cache_dataset.variables)
+                    raise
+                              
                 logger.debug('Created temporary cache file {}'.format(self.nc_cache_path))
             
             def cache_chunk_list(chunk_list, start_row):
@@ -254,12 +267,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 for field_index in range(len(self.field_definitions)):
                     field_definition = self.field_definitions[field_index]
                     short_name = field_definition['short_name']
-                    variable = self._nc_cache_dataset.variables[short_name]
+                    cache_variable = self._nc_cache_dataset.variables[short_name]
                     
                     chunk_array = np.array([row_list[field_index] for row_list in chunk_list])
-                    #logger.debug('{} chunk_array: {}'.format(short_name, chunk_array))
-                    
-                    variable[start_row:end_row] = chunk_array
+                    #logger.debug('{} cache_variable: {}'.format(cache_variable.name, cache_variable))
+                    #logger.debug('{}: {}-element {} chunk_array: {}'.format(short_name, chunk_array.shape[0], chunk_array.dtype, chunk_array))
+
+                    cache_variable[start_row:end_row] = chunk_array
             
                 self.total_points += len(chunk_list)
                 
@@ -290,7 +304,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         try:
                             if dtype.startswith('int'):
                                 value = int(value_string)
-                            if dtype.startswith('float'):
+                            elif dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
                                 value = value_string
@@ -317,14 +331,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 return row_list
                 
                 
-            def read_tab_delimited_fields(line):
+            def read_delimited_fields(line, delimiter_regex='\s+'):
                 '''
-                Helper function to read tab-delimited fields into a list of lists
+                Helper function to read delimited fields into a list of lists
                 N.B: This should not be required, but ASEG-supplied example file Example_Gravity_Springfield_1989.dat requires it
                 '''
                 row_list = []
-                value_list = line.split('\t')
+                value_list = re.sub(delimiter_regex, '\t', line.strip()).split('\t')
 
+                #logger.debug('value_list: {}'.format(value_list))
                 #logger.debug('row_list: {}'.format(row_list))
                 if len(value_list) != self.column_count:
                     logger.warning('Invalid number of columns found: Expected {}, found {}. Skipping line'.format(self.column_count, len(value_list)))
@@ -342,7 +357,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         try:
                             if dtype.startswith('int'):
                                 value = int(value_string)
-                            if dtype.startswith('float'):
+                            elif dtype.startswith('float'):
                                 value = float(value_string)
                             else: # Assume string
                                 value = value_string
@@ -378,8 +393,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 if not line.strip(): # Skip empty lines
                     continue
                 
-                if '\t' in line: # Assume tab delimited line
-                    row_list = read_tab_delimited_fields(line)
+                if self.space_delimited:
+                    row_list = read_delimited_fields(line, '\s+')
+                elif '\t' in line: # Assume tab delimited line
+                    row_list = read_delimited_fields(line, '\t')
                 else:
                     row_list = read_fixed_length_fields(line)
                     
@@ -424,10 +441,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 field_definition_index += 1
                 field_definition = self.field_definitions[field_definition_index]
                 field_name = field_definition['short_name']
-                #logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
+                cache_variable = self._nc_cache_dataset.variables[field_name]
+                logger.debug('field_definition_index: {}, field_name: {}'.format(field_definition_index, field_name))
                 
                 if field_name in self.settings['dimension_fields']:
-                    self.dimensions[field_name] = int(self.cache_variable[0, column_start_index]) # Read value from first line
+                    self.dimensions[field_name] = int(cache_variable[0]) # Read value from first line
+                    #logger.debug('self.dimensions["{}"] set to {}'.format(field_name, cache_variable[0]))
                     field_definition['column_start_index'] = None # Do not output this column
                     column_start_index += 1 # Single column only
                     continue # Check next field
@@ -442,13 +461,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     field_dimension_size = int(match.group(0))
                     field_definition['format'] = re.sub('^\d+', '', field_definition['format'])
                     default_dimension_names = field_definition.get('dimensions') # Look for default dimension name
-                    logger.debug('default_dimension_names: {}'.format(default_dimension_names))
+                    #logger.debug('default_dimension_names: {}'.format(default_dimension_names))
+                    #logger.debug('self.dimensions: {}'.format(self.dimensions))
                     if default_dimension_names: # Default dimension name(s) found from settings
                         if type(default_dimension_names) == str: # Only one dimension specified as a string
                             actual_dimension_size = self.dimensions.get(default_dimension_names)
                             logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
                             if actual_dimension_size is None: # Default dimension not already defined - create it
                                 self.dimensions[default_dimension_names] = field_dimension_size
+                                #logger.debug('Set self.dimensions[{}] = {}'.format(default_dimension_names, field_dimension_size))
                             else:
                                 assert field_dimension_size == actual_dimension_size, 'Mismatched dimension sizes'
                                 
@@ -459,25 +480,30 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         # Use dimension size values read from data file to create multiple part-arrays from a single composite
                         # N.B: This could be considered to be encouraging bad behaviour - the .dfn file should 
                         # ideally be re-written
-                        if type(default_dimension_names) == list: # Multiple part-dimensions specified
+                        elif type(default_dimension_names) == list: # Multiple part-dimensions specified
                             assert set(default_dimension_names) <= set(self.dimensions.keys()), 'Dimensions {} not all defined in {}'.format(default_dimension_names, self.dimensions.keys())
-                            assert sum([self.dimensions[key] for key in default_dimension_names]) == field_dimension_size, 'Incorrect dimension sizes'
+                            combined_dimension_size = sum([self.dimensions[key] for key in default_dimension_names])
+                            assert combined_dimension_size == field_dimension_size, 'Incorrect dimension sizes. Expected {}, found {}'.format(combined_dimension_size, field_dimension_size)
                             logger.debug('Removing original composite field definition')
                             self.field_definitions.remove(field_definition)
                             field_definition_index -= 1
                             # Create new field definitions for part dimensions
                             column_offset = 0
                             for part_dimension_name in default_dimension_names:
+                                columns = self.dimensions[part_dimension_name]
                                 new_field_definition = dict(field_definition) # Copy original field definition
+                                new_field_definition['cache_variable_name'] = field_definition['short_name']
                                 new_field_definition['short_name'] += '_x_' + part_dimension_name
                                 new_field_definition['dimensions'] = part_dimension_name
+                                new_field_definition['column_offset'] = column_offset
+                                new_field_definition['columns'] = columns
                                 new_field_definition['column_start_index'] += column_offset
                                 new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
                                 
                                 field_definition_index += 1
                                 logger.debug('Inserting new part-dimension field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
                                 self.field_definitions.insert(field_definition_index, new_field_definition)
-                                column_offset += self.dimensions[part_dimension_name] # Offset next column 
+                                column_offset += columns # Offset next column 
                             
                     else: # No default dimension name found from settings
                         match = re.match('(.+)_x_(.+)', field_name)
@@ -518,55 +544,92 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             for field_definition in self.field_definitions:
                 short_name = field_definition['short_name']
+                cache_variable_name = field_definition.get('cache_variable_name')
                 
                 # Skip dimension fields
                 if short_name in self.settings['dimension_fields']:
                     continue
                 
                 dtype = field_definition['dtype']
-                data_array = self.get_raw_data(short_name)
+                
+                if cache_variable_name: # Part dimension  - shared cache variable
+                    cache_variable = self._nc_cache_dataset.variables[cache_variable_name]
+                    data_array = cache_variable[:,field_definition['column_offset']:field_definition['columns']]
+                else: # Normal data variable
+                    cache_variable = self._nc_cache_dataset.variables[short_name]
+                    data_array = cache_variable[:]
+                
+                # Include fill value if required
+                if type(data_array) == np.ma.core.MaskedArray:
+                    logger.debug('Array is masked. Including fill value.')
+                    fill_value = data_array.fill_value # Use masked array fill value instead of any provided value
+                    no_data_mask = data_array.mask
+                    data_array = data_array.data # Include mask value
+                else:
+                    fill_value = field_definition.get('fill_value')
+                    
+                if fill_value is None:
+                    no_data_mask = []
+                else:
+                    no_data_mask = (data_array == fill_value)
+            
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
                 precision_change_result = fix_field_precision(data_array, dtype, 
                                                               field_definition['decimal_places'],
-                                                              field_definition.get('fill_value')
+                                                              no_data_mask,
+                                                              fill_value
                                                               ) 
                 # aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, modified_fill_value
                 if precision_change_result:    
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
-                    logger.debug('precision_change_result: {}'.format(precision_change_result))
+                    #logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
                     field_definition['width_specifier'] = precision_change_result[3]
                     field_definition['decimal_places'] = precision_change_result[4]
                     
-                    # Modify fill_value if required
-                    original_fill_value = field_definition.get('fill_value')
+                    # Try truncating modified fill value
                     modified_fill_value = precision_change_result[6]
-                    if (original_fill_value is not None 
-                        and modified_fill_value is not None 
-                        and (original_fill_value != modified_fill_value)): # Fill value has been modified
-                        
-                        field_definition['fill_value'] = modified_fill_value
-                        data_array[np.logical_or((data_array == original_fill_value), 
-                                                 np.isnan(data_array))] = modified_fill_value
                     
-                        logger.info('fill_value changed from {} to {}'.format(original_fill_value, 
-                                                                              modified_fill_value)
-                                                                              )
                     # Update the format string in variable attributes
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
                         field_definition['variable_attributes'] = variable_attributes
                     variable_attributes['aseg_gdf_format'] = precision_change_result[0]
-                else:
-                    logger.debug('Datatype for variable {} not changed'.format(short_name))                   
+                else: # Data type unchanged
+                    logger.debug('Datatype for variable {} not changed'.format(short_name))
+                    # Try truncating original fill value
+                    modified_fill_value = truncate(fill_value, 
+                                                   data_array, 
+                                                   no_data_mask, 
+                                                   field_definition['width_specifier'], 
+                                                   field_definition['decimal_places'])
+                    
+                #logger.debug('(fill_value: {} modified_fill_value: {}'.format(fill_value, modified_fill_value))
+                # Fill value has been modified                     
+                if (fill_value is not None 
+                    and modified_fill_value is not None 
+                    and (fill_value != modified_fill_value)): 
+                    
+                    field_definition['fill_value'] = modified_fill_value
+                    # Change fill_value in array variable
+                    data_array[np.logical_or((data_array == fill_value), 
+                                             np.isnan(data_array))] = modified_fill_value
+                    cache_variable[:] = data_array
+                
+                    logger.info('{} fill_value changed from {} to {} for format {}'.format(short_name,
+                                                                             fill_value, 
+                                                                             modified_fill_value,
+                                                                             field_definition['format'])
+                                                                             )
+            
                 
                 
         # Start of actual __init__() definition
         self.nc_cache_path = None
         self._nc_cache_dataset = None
-        self.cache_variable = None
         self.column_count = None # Number of columns in .dat file
+        self.space_delimited = space_delimited
 
         if crs_string:
             self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
@@ -622,7 +685,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('Closed temporary cache file {}'.format(self.nc_cache_path))
         except:
             pass
-        
+         
         try:
             os.remove(self.nc_cache_path) 
             logger.debug('Deleted temporary cache file {}'.format(self.nc_cache_path))
@@ -632,14 +695,21 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         ToNetCDFConverter.__del__(self)
 
     
-    def get_raw_data(self, short_name):
+    def get_raw_data(self, variable_name):
         '''
         Helper function to return array corresponding to short_name from self._nc_cache_dataset
         '''
         try:
-            return self._nc_cache_dataset.variables[short_name][:]
+            return self._nc_cache_dataset.variables[variable_name][:]
         except:
-            return None        
+            try: # Try part dimension with shared cache variable
+                field_definition = [field_definition 
+                                    for field_definition in self.field_definitions
+                                    if field_definition.get('short_name') == variable_name
+                                    ][0]
+                return self._nc_cache_dataset.variables[field_definition['cache_variable_name']][:,field_definition['column_offset']:field_definition['column_offset']+field_definition['columns']]
+            except:
+                return None        
         
         
     def get_global_attributes(self):
@@ -707,15 +777,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             # Process index variables
             try:
-                index_data = self.get_raw_data(field_definition['short_name'])
-                
-                index_values, index_start_indices, index_point_counts = np.unique(index_data, 
-                                                                                  return_index=True, 
-                                                                                  return_inverse=False, 
-                                                                                  return_counts=True
-                                                                                  )
-                logger.info('{} {} values found'.format(len(index_values), field_definition['short_name']))
-                #logger.debug('index_values: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(index_values, index_start_indices, index_point_counts))
+                logger.info('{} {} values found'.format(len(lookup_array), field_definition['short_name']))
+                #logger.debug('lookup_array: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(lookup_array, index_start_indices, index_point_counts))
             except:
                 logger.info('Unable to create {} indexing variables'.format(field_definition['short_name']))
                 return   
@@ -723,7 +786,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # This is a slightly ugly side effect
             logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
             self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
-                                                   size=len(index_values))
+                                                   size=len(lookup_array))
             
             logger.info('\tWriting {} indexing variables'.format(field_definition['short_name']))
             
@@ -734,7 +797,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
             yield NetCDFVariable(short_name=field_definition['short_name'], 
-                                 data=index_values, 
+                                 data=lookup_array, 
                                  dimensions=[field_definition['short_name']], 
                                  fill_value=-1, 
                                  attributes=variable_attributes, 
@@ -817,9 +880,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             return        
         
         
-        def scalar_variable_generator():
+        def get_scalar_variable():
             '''
-            Helper generator to yield scalar variable for single-value field
+            Helper function to return scalar variable for single-value field
             '''
             assert lookup_array.shape[0] == 1, 'lookup_array must have exactly one (i.e. unique) value'
             short_name = field_definition['short_name']
@@ -830,7 +893,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             if field_definition.get('long_name'):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
-            yield NetCDFVariable(short_name=short_name, 
+            return NetCDFVariable(short_name=short_name, 
                                  data=lookup_array, 
                                  dimensions=[], 
                                  fill_value=None, 
@@ -839,7 +902,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
-            return
+            
                         
         # Start of variable_generator function
         # Create crs variable
@@ -859,13 +922,20 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             field_attributes = OrderedDict()
             
             raw_data = self.get_raw_data(short_name)
-            lookup_array, index_array = np.unique(raw_data, return_inverse=True)
+            
+            lookup_array, index_start_indices, index_array, index_point_counts = np.unique(raw_data, 
+                                                                              return_index=True, 
+                                                                              return_inverse=True, 
+                                                                              return_counts=True
+                                                                              )            
+            
             unique_value_count = lookup_array.shape[0]
             logger.debug('{} unique values found for {}'.format(unique_value_count, short_name))
 
-            # Only one unique value in data - write to scalar variable
-            if unique_value_count == 1: 
-                yield next(scalar_variable_generator())
+            # Only one unique value in data for ALL points in a 1D variable - write to scalar variable
+            #TODO: Check what happens with masked arrays
+            if (field_definition['columns'] == 1) and (unique_value_count == 1) and (index_point_counts[0] == raw_data.shape[0]): 
+                yield get_scalar_variable()
                 continue
             
             # Process string fields or designated lookup fields as lookups
@@ -925,6 +995,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # logger.debug('{} bad conductivity values found for masking'.format(np.count_nonzero(bad_data_mask)))
             #=======================================================================
             else: # 2D variable
+                #TODO: Move this code to post-processing
                 # Convert resistivity to conductivity
                 if short_name == 'resistivity':
                     short_name = 'conductivity'
@@ -947,11 +1018,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     # data_array[bad_data_mask] = fill_value
                     #===========================================================
     
-                    logger.debug('\nresistivity_uncertainty: {}'.format(self.get_raw_data('resistivity_uncertainty')))
-                    logger.debug('\nresistivity: {}'.format(self.get_raw_data('resistivity')))
-                    logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_raw_data('resistivity') 
-                                                                               * self.get_raw_data('resistivity_uncertainty')))
-                    logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+                    #===========================================================
+                    # logger.debug('\nresistivity_uncertainty: {}'.format(self.get_raw_data('resistivity_uncertainty')))
+                    # logger.debug('\nresistivity: {}'.format(self.get_raw_data('resistivity')))
+                    # logger.debug('\nabsolute_resistivity_uncertainty: {}'.format(self.get_raw_data('resistivity') 
+                    #                                                            * self.get_raw_data('resistivity_uncertainty')))
+                    # logger.debug('\nabsolute_conductivity_uncertainty: {}\n'.format(data_array))
+                    #===========================================================
                 else:
                     # Don't mess with values
                     data_array = self.get_raw_data(short_name)
@@ -1009,9 +1082,15 @@ def main():
                             default=1024)
         parser.add_argument('-o', '--optimise', 
                             help='Optimise datatypes to reduce variable size without affecting precision. Default is True',
-                            type=bool,
+                            type=int,
                             dest='optimise',
                             default=True
+                            )
+        parser.add_argument('-a', '--space_delimited', 
+                            help='Read .dat file as space-delimited instead of fixed-length. Default is False',
+                            type=int,
+                            dest='space_delimited',
+                            default=False
                             )
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
@@ -1050,7 +1129,8 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       crs_string=args.crs,
                                       default_chunk_size=args.chunking,
                                       settings_path=args.settings_path,
-                                      fix_precision=args.optimise
+                                      fix_precision=args.optimise,
+                                      space_delimited=args.space_delimited
                                       )
         d2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))

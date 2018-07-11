@@ -112,9 +112,10 @@ class NetCDFVariable(object):
                                     for dimension_name in self.dimensions
                                     ])
             
-            assert (self.data is None) or (self.data.shape == expected_shape), 'Invalid array shape for specified dimension(s). Expected {}, got {}.'.format(expected_shape,
-                                                                                                                                    self.data.shape
-                                                                                                                                    )
+            assert (self.data is None) or (self.data.shape == expected_shape), 'Invalid {} array shape for specified dimension(s). Expected {}, got {}.'.format(self.short_name, 
+                                                                                                                                                                expected_shape,
+                                                                                                                                                                self.data.shape
+                                                                                                                                                                )
                                              
             # Ensure that chunk sizes do not exceed array dimensions
             if variable_parameters.get('chunksizes'):

@@ -126,6 +126,40 @@ def build_multiple_kmls(list_of_surveys):
 
     pass
 
+def find_subset():
+
+    lats = npu.netcdf_dataset.variables['latitude'][:]
+    longs = npu.netcdf_dataset.variables['longitude'][:]
+    print(longs)
+    latselect = np.logical_and(lats > 38.03, lats < 40)
+    print(latselect)
+    lonselect = np.logical_and(longs > 146.6, longs < 147)
+    print(lonselect)
+
+    #print([i for i in latselect if i is True])
+    data = npu.netcdf_dataset.variables['Obsno']
+    #data = npu.netcdf_dataset.variables['Obsno'][0, 0, latselect, lonselect]
+    print(data)
+
+
+    # lats = npu.netcdf_dataset.variables['latitude'][:]
+    # lons = npu.netcdf_dataset.variables['longitude'][:]
+    # latbounds = [south_extent + 0.5, north_extent - 0.5]
+    # lonbounds = [west_extent + 0.5, east_extent - 0.5]  # degrees east ?
+    #
+    # # latitude lower and upper index
+    # latli = np.argmin(np.abs(lats - latbounds[0]))
+    # latui = np.argmin(np.abs(lats - latbounds[1]))
+    #
+    # # longitude lower and upper index
+    # lonli = np.argmin(np.abs(lons - lonbounds[0]))
+    # lonui = np.argmin(np.abs(lons - lonbounds[1]))
+    #
+    # # Air (time, latitude, longitude)
+    # print(npu.netcdf_dataset.variables['Obsno'][lonli:lonui])
+    # airSubset = npu.netcdf_dataset.variables['Obsno'][:, latli:latui, lonli:lonui]
+    # print(airSubset)
+    # print([south_extent, north_extent, west_extent, east_extent])
 
 def main():
     # build the polygon, points, network link, and regions
@@ -138,7 +172,7 @@ def main():
     # structure them correctly
     polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
     dataset_points_folder.region = dataset_points_region # insert built point region into point folder
-
+    find_subset()
     print("Building kml for survey: " + survey_title)
     kml.save(survey_title + ".kml")
 

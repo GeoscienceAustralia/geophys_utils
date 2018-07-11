@@ -3,13 +3,13 @@ field_names:
   Lat: {standard_name: latitude, long_name: Latitude, database_field_name: dlat, dtype: float32, units: degrees_north, fill_value: -99999.9, axis: Y}
   Long: {standard_name: longitude, long_name: Longitude, database_field_name: dlong, dtype: float32, units: degrees_east, fill_value: -99999.9, axis: X}
   Stattype: {short_name: Stattype, long_name: Station Type, database_field_name: STATIONTYPE, dtype: int8, lookup_table: STATIONTYPES, convert_keys_and_data_to_int8: True, fill_value: -99}
-  Grav: {short_name: Grav, long_name: Gravity, database_field_name: GRAV, dtype: float32, units: um/s^2, datum: GRAVDATUM, fill_value: -99999.9} #TODO side note - out of curiosity why are these um and not um/s?
-  Gravacc: {short_name: Gravacc, long_name: Gravity Accuracy, database_field_name: GRAVACC, dtype: float32, units: um/s^2, fill_value: -99} #um may be null for some surveys...
-  Locacc: {short_name: Locacc, long_name: Location Accuracy, database_field_name: LOCACC, dtype: float32, units: m, fill_value: -99} # degrees?
+  Grav: {short_name: Grav, long_name: Gravity, database_field_name: GRAV, dtype: float32, units: um/s^2, datum: GRAVDATUM, fill_value: -99999.9}
+  Gravacc: {short_name: Gravacc, long_name: Gravity Accuracy, database_field_name: GRAVACC, dtype: float32, units: um/s^2, fill_value: -99}
+  Locacc: {short_name: Locacc, long_name: Location Accuracy, database_field_name: LOCACC, dtype: float32, units: m, fill_value: -99}
   Gndelev: {short_name: Gndelev, long_name: Ground Elevation, database_field_name: GNDELEV, dtype: float32, units: m, fill_value: -99999.9}
   Gndelevacc: {short_name: Gndelevacc, long_name: Ground Level Accuracy, database_field_name: GNDELEVACC, dtype: float32, units: m, fill_value: -99}
-  Gndelevtype: {short_name: Gndelevtype, long_name: Ground Level Type, database_field_name: GNDELEVTYPE, dtype: int8, lookup_table: GNDELEVTYPES, convert_keys_and_data_to_int8: True, fill_value: -99} # per survey
-  Gndelevdatum: {short_name: Gndelevdatum, long_name: Ground Level Datum, database_field_name: GNDELEVDATUM, dtype: int8, lookup_table: GNDELEVDATUMS, fill_value: -99} # took out convert keys
+  Gndelevtype: {short_name: Gndelevtype, long_name: Ground Level Type, database_field_name: GNDELEVTYPE, dtype: int8, lookup_table: GNDELEVTYPES, convert_keys_and_data_to_int8: True, fill_value: -99}
+  Gndelevdatum: {short_name: Gndelevdatum, long_name: Ground Level Datum, database_field_name: GNDELEVDATUM, dtype: int8, lookup_table: GNDELEVDATUMS, fill_value: -99}
   Insthgt: {short_name: Insthgt, long_name: Instrument Height, database_field_name: METERHGT, dtype: float32, units: m, fill_value: -99999.9}
   Insthgterr: {short_name: Insthgterr, long_name: Instrument Height Error, database_field_name: METERHGTERR, dtype: float32, units: m, fill_value: -99}
   Ellipsoidhgt: {short_name: Ellipsoidhgt, long_name: Ellipsoid Height, database_field_name: ELLIPSOIDHGT, dtype: float32, units: m, datum: ELLIPSOIDHGTDATUM, fill_value: -99999.9}
@@ -21,5 +21,5 @@ field_names:
   Tcerr: {short_name: Tcerr, long_name: TC Error, database_field_name: TCERR, dtype: float32, units: um/s^2, fill_value: -99999.9}
   Gridflag:  {short_name: Gridflag, long_name: Grid Flag, database_field_name: GRIDFLAG, dtype: int8, lookup_table: GRIDFLAGS, fill_value: -99}
   Reliab: {short_name: Reliab, long_name: Estimation of Station Reliability, database_field_name: reliab, dtype: int8, lookup_table: RELIABILITY, fill_value: -99}
-  Freeair: {short_name: Freeair, long_name: Free Air Anomaly, database_field_name: 'gravity.GRAV_FA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt)', dtype: float32, units: um/s^2, fill_value: -99999.9} # TODO uom?
+  Freeair: {short_name: Freeair, long_name: Free Air Anomaly, database_field_name: 'gravity.GRAV_FA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt)', dtype: float32, units: um/s^2, fill_value: -99999.9}
   Bouguer: {short_name: Bouguer, long_name: Bouguer Anomaly, database_field_name: 'gravity.grav_BA07(o1.dlat, o1.ellipsoidhgt, o1.grav, o1.ellipsoidmeterhgt, o1.gndelevtype, o1.gndelev, o1.nvalue)', dtype: float32, units: um/s^2, fill_value: -99999.9}

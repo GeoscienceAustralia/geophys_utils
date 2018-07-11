@@ -41,56 +41,49 @@ class NetCDFLineUtils(NetCDFPointUtils):
         # Start of init function - Call inherited constructor first
         NetCDFPointUtils.__init__(self, netcdf_dataset, debug)
 
-        line_dimension = self.netcdf_dataset.dimensions['line']
-        self.line_count = len(line_dimension)
+        line_variable = self.netcdf_dataset.variables.get('line')
+        assert line_variable, 'Variable "line" does not exist in netCDF file'
+        if line_variable.shape: # Multiple lines
+            line_values = self.fetch_array(line_variable)
+            self.line_count = line_variable.shape[0]
+            line_index_variable = self.netcdf_dataset.variables.get('line_index')
+            assert line_index_variable, 'Variable "line_index" does not exist in netCDF file'
+            line_indices = self.fetch_array(line_index_variable)
+            line_index_dtype = line_index_variable.dtype
+            line_index_var_options = line_index_variable.filters()
+        else:
+            line_values = line_variable[:].reshape((1,)) # Change scalar to 1D array
+            self.line_count = 1
+            line_indices = np.zeros(shape=(self.point_count,), dtype='int8') # Synthesize indices
+            line_index_dtype = 'int8'
+            line_index_var_options = {}
         
         self._nc_cache_dataset.createDimension('line', self.line_count if not self.unlimited_points else None)
         
-        var_options = self.netcdf_dataset.variables['line'].filters() or {}
-        var_options['zlib'] = False
-        if hasattr(self.netcdf_dataset.variables['line'], '_FillValue'):
-            var_options['fill_value'] = self.netcdf_dataset.variables['line']._FillValue
+        line_var_options = line_variable.filters() or {}
+        line_var_options['zlib'] = False
+        # if hasattr(self.netcdf_dataset.variables['line'], '_FillValue'):
+        #     line_var_options['fill_value'] = self.netcdf_dataset.variables['line']._FillValue
             
-        self._nc_cache_dataset.createVariable('line', 
-                                      self.netcdf_dataset.variables['line'].dtype, 
+        line_cache_variable = self._nc_cache_dataset.createVariable('line', 
+                                      line_variable.dtype, 
                                       ('line'),
-                                      **var_options
+                                      **line_var_options
                                       )
-        self.line = self._nc_cache_dataset.variables['line']
-        self.line[:] = self.fetch_array(self.netcdf_dataset.variables['line'])
+        self.line = line_cache_variable
+        self.line[:] = line_values
         
-        self._nc_cache_dataset.createDimension('start_end', 2)
-        
-        # Cater for possible variable naming conventions
-        #TODO: Remove this after the variable naming scheme has been finalised        
-        line_start_variable = None
-        line_count_variable = None
-        for line_index_naming in [{'start': 'index_line', 'count': 'index_count'},
-                                  {'start': '_index_line', 'count': '_index_count'},
-                                  {'start': 'index_line', 'count': 'index_count_line'},
-                                  ]:
-            line_start_variable = self.netcdf_dataset.variables.get(line_index_naming['start'])
-            line_count_variable = self.netcdf_dataset.variables.get(line_index_naming['count'])
-            if line_start_variable and line_count_variable:
-                break
+        line_index_var_options['zlib'] = True
+        # if hasattr(self.netcdf_dataset.variables['line'], '_FillValue'):
+        #     line_var_options['fill_value'] = self.netcdf_dataset.variables['line']._FillValue
             
-        assert line_start_variable and line_count_variable, 'Line indexing variables not found'
-            
-        var_options = line_start_variable.filters() or {}
-        
-        var_options['zlib'] = False
-        if hasattr(line_start_variable, '_FillValue'):
-            var_options['fill_value'] = line_start_variable._FillValue
-            
-        self._nc_cache_dataset.createVariable('line_start_end', 
-                                      line_start_variable.dtype, 
-                                      ('line', 'start_end'),
-                                      **var_options
+        line_index_cache_variable = self._nc_cache_dataset.createVariable('line_index', 
+                                      line_index_dtype, 
+                                      ('point'),
+                                      **line_index_var_options
                                       )
-        self.line_start_end = self._nc_cache_dataset.variables['line_start_end']
-        self.line_start_end[:,0] = self.fetch_array(line_start_variable)
-        self.line_start_end[:,1] = self.fetch_array(line_count_variable)
-        self.line_start_end[:,1] += self.line_start_end[:,0]
+        self.line_index = line_index_cache_variable
+        self.line_index[:] = line_indices
         
         self.kdtree = None
         
@@ -103,12 +96,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_mask: boolean mask for single line
 
         '''
-        line_number_array = self.line[...]
-        line_start_end_array = self.line_start_end[...]
-        
         # Yield masks for all lines if not specified
         if line_numbers is None:
-            line_numbers = line_number_array
+            line_numbers = self.line[:]
 
         # Convert single line number to single element list
         try:
@@ -118,13 +108,13 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
         for line_number in line_numbers:
             try:
-                line_index = int(np.where(line_number_array == line_number)[0])
+                line_index = int(np.where(self.line[:] == line_number)[0])
             except TypeError:
                 logger.warning('Invalid line number %d' % line_number)
                 continue # Should this be break?
             
-            line_mask = np.zeros((self.point_count,), bool)
-            line_mask[line_start_end_array[line_index,0]:line_start_end_array[line_index,1]] = True
+            line_mask = self.line_index[:] == line_index
+            logger.debug('line_mask: {}'.format(line_mask))  
             
             yield line_number, line_mask
     
@@ -142,7 +132,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         # Return all lines if not specified
         if line_numbers is None:
-            line_numbers = self.line[...]
+            line_numbers = self.line[:]
 
         # Convert single line number to single element list
         try:
@@ -170,3 +160,4 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
         
                 yield line_number, line_dict
+
