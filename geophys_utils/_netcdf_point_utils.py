@@ -421,7 +421,8 @@ class NetCDFPointUtils(NetCDFUtils):
         if lookup_variable_name:
             lookup_variable = self.netcdf_dataset.variables[lookup_variable_name]
             
-            if lookup_variable.shape == (): # Scalar
+            if (lookup_variable.shape == () 
+                or ((len(lookup_variable.shape) == 1) and (lookup_variable.dtype == '|S1'))): # Scalar or string array
                 dimension = self.netcdf_dataset.get(indexing_dimension)
                 assert dimension, 'Invalid indexing_dimension {} specified'.format(indexing_dimension)
                 # Repeat boolean value across dimension size
@@ -450,7 +451,15 @@ class NetCDFPointUtils(NetCDFUtils):
         else:
             raise BaseException('Must supply either lookup_variable_name or indexing_variable_name')
         
-        lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], np.array(lookup_value_list))]
+        # Handle special case for string arrays via OPeNDAP
+        if self.opendap and (lookup_variable.dtype == 'S1') and (len(lookup_variable.shape) == 2):
+            # Convert byte array into array of unicode strings
+            lookup_array = np.array([bytestring[bytestring != b''].tostring().decode('UTF8') for bytestring in lookup_variable[:]])
+            # OPeNDAP will truncate strings to 64 characters
+            lookup_indices = np.arange(lookup_array.shape[0])[np.in1d(lookup_array, np.array(lookup_value_list[0:64]))]
+        else:
+            lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], np.array(lookup_value_list))]
+            
         logger.debug('lookup_indices: {}'.format(lookup_indices))  
           
         lookup_mask = np.in1d(indexing_variable, lookup_indices) 
@@ -528,7 +537,7 @@ class NetCDFPointUtils(NetCDFUtils):
         except:
             raise BaseException('count_variable_name not supplied and cannot be inferred')
 
-        point_count = point_count or self.netcdf_dataset.dimension['point'].size         
+        point_count = point_count or self.netcdf_dataset.dimensions['point'].size         
 
         
         lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], lookup_value_list)]
@@ -637,7 +646,7 @@ class NetCDFPointUtils(NetCDFUtils):
         result_array = lookup_variable[:][indexing_variable[start_index:end_index][subset_mask]] # Need to index numpy array, not netCDF variable
 
         if result_array.dtype == 'S1':
-            result_array = np.array([bytestring.tostring().decode('UTF8') for bytestring in result_array])
+            result_array = np.array([bytestring[bytestring != b''].tostring().decode('UTF8') for bytestring in result_array])
             
         return result_array
                        
