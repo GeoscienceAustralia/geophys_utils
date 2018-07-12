@@ -633,9 +633,13 @@ class NetCDFPointUtils(NetCDFUtils):
             subset_mask = np.ones(shape=(index_range,), dtype='bool')
         else:
             subset_mask = mask[start_index:end_index]
-        
-        return lookup_variable[indexing_variable[start_index:end_index][subset_mask]]
+            
+        result_array = lookup_variable[:][indexing_variable[start_index:end_index][subset_mask]] # Need to index numpy array, not netCDF variable
 
+        if result_array.dtype == 'S1':
+            result_array = np.array([bytestring.tostring().decode('UTF8') for bytestring in result_array])
+            
+        return result_array
                        
     def chunk_point_data_generator(self, 
                                    start_index=0, 
