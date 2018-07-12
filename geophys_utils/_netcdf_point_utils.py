@@ -453,10 +453,11 @@ class NetCDFPointUtils(NetCDFUtils):
         
         # Handle special case for string arrays via OPeNDAP
         if self.opendap and (lookup_variable.dtype == 'S1') and (len(lookup_variable.shape) == 2):
-            # Convert byte array into array of unicode strings
+            # Convert 2D byte array into 1D array of unicode strings - needed for OPeNDAP
             lookup_array = np.array([bytestring[bytestring != b''].tostring().decode('UTF8') for bytestring in lookup_variable[:]])
-            # OPeNDAP will truncate strings to 64 characters
-            lookup_indices = np.arange(lookup_array.shape[0])[np.in1d(lookup_array, np.array(lookup_value_list[0:64]))]
+            # OPeNDAP will truncate strings to 64 characters - truncate search strings to match
+            lookup_indices = np.arange(lookup_array.shape[0])[np.in1d(lookup_array, np.array([lookup_value[0:64] 
+                                                                                              for lookup_value in lookup_value_list]))]
         else:
             lookup_indices = np.arange(lookup_variable.shape[0])[np.in1d(lookup_variable[:], np.array(lookup_value_list))]
             
@@ -645,6 +646,7 @@ class NetCDFPointUtils(NetCDFUtils):
             
         result_array = lookup_variable[:][indexing_variable[start_index:end_index][subset_mask]] # Need to index numpy array, not netCDF variable
 
+        # Convert 2D byte array into 1D array of unicode strings - needed for OPeNDAP
         if result_array.dtype == 'S1':
             result_array = np.array([bytestring[bytestring != b''].tostring().decode('UTF8') for bytestring in result_array])
             
