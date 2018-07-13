@@ -33,6 +33,7 @@ from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
 
@@ -40,7 +41,7 @@ import logging
 logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
-# Default number of points to read per chunk
+# Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
 
 # Set this to a number other than zero for testing
@@ -146,9 +147,12 @@ class NetCDFPointUtils(NetCDFUtils):
         
     def get_polygon(self):
         '''
-        Under construction - do not use except for testing
+        Returns GML representation of convex hull polygon for dataset
         '''
-        pass
+        return 'POLYGON((' + ', '.join([' '.join(
+            ['%.4f' % ordinate for ordinate in coordinates]) 
+            for coordinates in self.get_convex_hull()]) + '))'
+        
     
     def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
@@ -157,7 +161,7 @@ class NetCDFPointUtils(NetCDFUtils):
         if bounds_wkt is None:
             coordinates = self.xycoords
         else:
-            coordinates = np.array(transform_coords(self.xycoords[...], self.wkt, bounds_wkt))
+            coordinates = np.array(transform_coords(self.xycoords[:], self.wkt, bounds_wkt))
             
         return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
                               np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
@@ -253,17 +257,17 @@ class NetCDFPointUtils(NetCDFUtils):
         point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
-        coordinates = self.xycoords[...][point_subset_mask]
+        coordinates = self.xycoords[:][point_subset_mask]
         # Reproject coordinates if required
         if grid_wkt is not None:
             # N.B: Be careful about XY vs YX coordinate order         
-            coordinates = np.array(transform_coords(coordinates[...], self.wkt, grid_wkt))
+            coordinates = np.array(transform_coords(coordinates[:], self.wkt, grid_wkt))
 
         # Interpolate required values to the grid - Note YX ordering for image
         grids = {}
         for variable in [self.netcdf_dataset.variables[var_name] for var_name in variables]:
             grids[variable.name] = griddata(coordinates[:,::-1],
-                                  variable[...][point_subset_mask], #TODO: Check why this is faster than direct indexing
+                                  variable[:][point_subset_mask], #TODO: Check why this is faster than direct indexing
                                   (grid_y, grid_x), 
                                   method=resampling_method)
 
@@ -339,6 +343,13 @@ class NetCDFPointUtils(NetCDFUtils):
         return coords2distance(utm_coord_array)
 
 
+    def get_convex_hull(self):
+        '''
+        Function to return vertex coordinates of a convex hull polygon around all points
+        '''
+        return points2convex_hull(self.xycoords)
+    
+    
     def nearest_neighbours(self, coordinates, 
                            wkt=None, 
                            points_required=1, 
@@ -842,7 +853,7 @@ def main(debug=False):
     field_list = None
     #field_list = ['latitude', 'longitude', 'line'] 
     
-    point_data_generator = ncpu.all_point_data_generator(field_list, mask)
+    point_data_generator = ncpu.all_point_data_generator(field_list, None)
     
     # Retrieve point variable attributes first
     variable_attributes = next(point_data_generator)
