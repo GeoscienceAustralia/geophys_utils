@@ -38,6 +38,7 @@ import logging
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
+from geophys_utils import points2convex_hull
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -493,7 +494,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 columns = self.dimensions[part_dimension_name]
                                 new_field_definition = dict(field_definition) # Copy original field definition
                                 new_field_definition['cache_variable_name'] = field_definition['short_name']
-                                new_field_definition['short_name'] += '_x_' + part_dimension_name
+                                new_field_definition['short_name'] += '_by_' + part_dimension_name
                                 new_field_definition['dimensions'] = part_dimension_name
                                 new_field_definition['column_offset'] = column_offset
                                 new_field_definition['columns'] = columns
@@ -506,7 +507,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 column_offset += columns # Offset next column 
                             
                     else: # No default dimension name found from settings
-                        match = re.match('(.+)_x_(.+)', field_name)
+                        match = re.match('(.+)_by_(.+)', field_name)
                         if match:
                             dimension_name = match.group(2) # This probably won't happen
                         else:
@@ -743,6 +744,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 'geospatial_north_max': np.max(self.get_raw_data('northing')),
                 'geospatial_north_units': "m",
                 })
+        
+            coordinates = np.array(list(zip(self.nc_output_dataset.variables['easting'][:],
+                                            self.nc_output_dataset.variables['northing'][:]
+                                            )
+                                        )
+                                   )
         else:
             metadata_dict.update({
                 'geospatial_east_min': np.min(self.get_raw_data('longitude')),
@@ -753,6 +760,18 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 'geospatial_north_units': "degrees North",
                 })
         
+            coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
+                                            self.nc_output_dataset.variables['latitude'][:]
+                                            )
+                                        )
+                                   )
+            
+        #Compute convex hull and add GML representation to metadata
+        #logger.debug('coordinates: {}'.format(coordinates))
+        convex_hull = points2convex_hull(coordinates)        
+        metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
+            ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in convex_hull]) + '))'
+
         if self.settings.get('keywords'):
             metadata_dict['keywords'] = self.settings['keywords']
 
