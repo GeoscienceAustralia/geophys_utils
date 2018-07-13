@@ -253,16 +253,33 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             'cdm_data_type': 'Point'
             }
 
-        #Compute convex hull and add GML representation to metadata
-        coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
-                                        self.nc_output_dataset.variables['latitude'][:]
+        try:
+            #Compute convex hull and add GML representation to metadata
+            coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
+                                            self.nc_output_dataset.variables['latitude'][:]
+                                            )
                                         )
-                                    )
-                               )
-        convex_hull = points2convex_hull(coordinates)        
-        metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
-            ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in convex_hull]) + '))'
-
+                                   )
+            if len(coordinates) >=3:
+                convex_hull = points2convex_hull(coordinates)        
+                metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
+                    ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in convex_hull]) + '))'
+            if len(coordinates) == 2: # Two points - make bounding box
+                bounding_box = [[min(coordinates[:,0]), min(coordinates[:,1])],
+                                [max(coordinates[:,0]), min(coordinates[:,1])],
+                                [max(coordinates[:,0]), max(coordinates[:,1])],
+                                [min(coordinates[:,0]), max(coordinates[:,1])],
+                                [min(coordinates[:,0]), min(coordinates[:,1])]
+                                ]
+                metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
+                    ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in bounding_box]) + '))'
+            if len(coordinates) == 1: # Single point
+                #TODO: Check whether this is allowable under ACDD
+                metadata_dict['geospatial_bounds'] = 'POINT((' + ' '.join(
+                    ['%.4f' % ordinate for ordinate in coordinates[0]]) + '))'
+        except:
+            logger.warning('Unable to write global attribute "geospatial_bounds"')
+            
         return metadata_dict
 
     def get_dimensions(self):
