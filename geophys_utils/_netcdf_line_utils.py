@@ -50,7 +50,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             assert line_index_variable, 'Variable "line_index" does not exist in netCDF file'
             line_indices = self.fetch_array(line_index_variable)
             line_index_dtype = line_index_variable.dtype
-            line_index_var_options = line_index_variable.filters()
+            line_index_var_options = line_index_variable.filters() or {}
         else:
             line_values = line_variable[:].reshape((1,)) # Change scalar to 1D array
             self.line_count = 1
