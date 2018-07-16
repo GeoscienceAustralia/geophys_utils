@@ -5,9 +5,8 @@ from geophys_utils import NetCDFPointUtils, get_spatial_ref_from_wkt
 from geophys_utils import points2convex_hull
 from geophys_utils import _polygon_utils
 
-
 # Create NetCDFPointUtils object for specified netCDF dataset
-netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/195107.nc'
+netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
 #netcdf_path = 'E:\\Temp\\gravity_point_test\\195256.nc'
 #195256
 #netcdf_path = "C:\\Users\\u62231\\Desktop\\grav_netcdf_4\\201780.nc"
