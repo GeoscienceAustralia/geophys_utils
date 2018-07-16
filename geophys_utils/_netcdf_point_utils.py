@@ -695,24 +695,20 @@ class NetCDFPointUtils(NetCDFUtils):
         if not index_range:
             logger.debug('No points to retrieve for point indices {}-{}: All masked out'.format(start_index, end_index-1))            
             return
+        
+        if not field_list:
+            field_list = self.netcdf_dataset.variables.keys()
  
         logger.debug('field_list: {}'.format(field_list))
         
         variable_attributes = {}
         memory_cache = OrderedDict()
-        for variable_name, variable in iter(self.netcdf_dataset.variables.items()):
-            #logger.debug('variable_name: {}'.format(variable_name))
-            
-            # Skip fields not in field_list if field_list specified
-            #TODO: Find a better way of identifying lookup index variables
-            if (field_list 
-                and not (variable_name in field_list
-                     or (hasattr(variable, 'lookup') and variable.lookup in field_list) # Check for lookup index variables
-                     or re.sub('_index$', '', variable_name) in field_list # Check for lookup index variables
-                     )
-                ):
-                logger.debug('Ignoring variable {}'.format(variable_name))
+        for variable_name in field_list:
+            variable = self.netcdf_dataset.variables.get(variable_name)
+            if not variable:
+                logger.warning('Variable {} does not exist. Skipping.'.format(variable_name))
                 continue
+            #logger.debug('variable_name: {}'.format(variable_name))
             
             # Scalar variable
             if len(variable.shape) == 0:
@@ -850,10 +846,10 @@ def main(debug=False):
     mask[-10:] = True
     
     # Set list of fields to read
-    field_list = None
-    #field_list = ['latitude', 'longitude', 'line'] 
+    #field_list = None
+    field_list = ['latitude', 'longitude', 'obsno'] 
     
-    point_data_generator = ncpu.all_point_data_generator(field_list, None)
+    point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
     # Retrieve point variable attributes first
     variable_attributes = next(point_data_generator)
