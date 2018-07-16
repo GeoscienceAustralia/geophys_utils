@@ -181,7 +181,7 @@ class RowCache(object):
                             
             # Strip leading spaces as per ASEG practice, even though this makes the 
             # width of the first field wrong.
-            #logger.debug('line: {}'.format(line.lstrip()))
+            #logger.debug('value_list: {}'.format(value_list))
             yield value_list 
             
         if clear_cache:
@@ -286,8 +286,12 @@ class NetCDF2ASEGGDFConverter(object):
                     continue
                 
                 # Don't output CRS scalar variable - assume all other scalars are to be applied to every point
-                if not variable.shape and variable_name in ['crs', 'transverse_mercator']:
-                    continue
+                if (not variable.shape
+                    and (variable_name in ['crs', 'transverse_mercator']
+                         or re.match('ga_.+_metadata', variable_name)
+                         )
+                    ):
+                        continue
                 
                 # Resolve lookups - use lookup variable instead of index variable
                 if hasattr(variable, 'lookup'):
@@ -607,7 +611,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     for field_definition in self.field_definitions:
                         for _column_index in range(field_definition['columns']):
                             python_format_list.append(field_definition['python_format'])
-                            
+                    logger.debug('python_format_list: {}'.format(python_format_list)) 
+                           
                     value_count = len(python_format_list)
         
                     logger.debug('Reading rows {}-{}'.format(start_index+1, end_index))
@@ -615,7 +620,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     
                     logger.debug('Preparing ASEG-GDF lines for rows {}-{}'.format(start_index+1, end_index))
                     for value_list in line_cache.chunk_buffer_generator():
-                        #logger.debug('value_list: {}'.format(value_list))
+                        logger.debug('value_list: {}'.format(value_list))
                         # Turn list of values into a string using python_formats
                         yield ''.join([python_format_list[value_index].format(value_list[value_index])
                                        for value_index in range(value_count)]).lstrip()
@@ -638,7 +643,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                         if point_count == point_count // 10000 * 10000:
                             logger.info('{} points written'.format(point_count))
                         
-                        #logger.debug('line: {}'.format(line))
+                        logger.debug('line: {}'.format(line))
                         yield line
                     
                         if POINT_LIMIT and (point_count >= POINT_LIMIT):

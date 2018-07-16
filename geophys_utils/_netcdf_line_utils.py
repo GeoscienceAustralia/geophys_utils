@@ -47,14 +47,39 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_values = self.fetch_array(line_variable)
             self.line_count = line_variable.shape[0]
             line_index_variable = self.netcdf_dataset.variables.get('line_index')
-            assert line_index_variable, 'Variable "line_index" does not exist in netCDF file'
-            line_indices = self.fetch_array(line_index_variable)
-            line_index_dtype = line_index_variable.dtype
-            line_index_var_options = line_index_variable.filters()
-        else:
+            if line_index_variable: # Lookup format lines - Current format
+                logger.debug('Line data is in lookup format (current)')
+                line_indices = self.fetch_array(line_index_variable)
+                line_index_dtype = line_index_variable.dtype
+                line_index_var_options = line_index_variable.filters() or {}
+            else: # Indexing format lines - OLD FORMAT
+                #TODO: Get rid of this case when we stop using old format data
+                index_line_variable = self.netcdf_dataset.variables.get('index_line')
+                index_count_variable = self.netcdf_dataset.variables.get('index_count')
+                assert (index_line_variable.dimensions[0] == 'line'
+                        and index_count_variable.dimensions[0] == 'line'), 'Invalid line variable dimensioning'
+                logger.warning('Line data is in indexing format (deprecated)')
+                
+                # Synthesise line index array from start & count values
+                line_indices = np.zeros(shape=(self.point_count,), 
+                                        dtype=('int8' if len(line_values) <= 127
+                                            else 'int16' if len(line_values) <= 32768
+                                                else 'int32')
+                                        )
+                for line_index in range(len(line_values)):
+                    line_indices[index_line_variable[line_index]:index_line_variable[line_index]+index_count_variable[line_index]] = line_index         
+                
+                line_index_dtype = index_line_variable.dtype
+                line_index_var_options = index_line_variable.filters() or {}
+        else: # Scalar
             line_values = line_variable[:].reshape((1,)) # Change scalar to 1D array
             self.line_count = 1
-            line_indices = np.zeros(shape=(self.point_count,), dtype='int8') # Synthesize indices
+            # Synthesize line_indices array with all zeroes for single value
+            line_indices = np.zeros(shape=(self.point_count,), 
+                                    dtype=('int8' if len(line_values) <= 127
+                                            else 'int16' if len(line_values) <= 32768
+                                                else 'int32')
+                                    ) 
             line_index_dtype = 'int8'
             line_index_var_options = {}
         

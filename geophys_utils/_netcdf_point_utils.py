@@ -33,6 +33,7 @@ from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
 
@@ -40,7 +41,7 @@ import logging
 logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
-# Default number of points to read per chunk
+# Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
 
 # Set this to a number other than zero for testing
@@ -146,9 +147,12 @@ class NetCDFPointUtils(NetCDFUtils):
         
     def get_polygon(self):
         '''
-        Under construction - do not use except for testing
+        Returns GML representation of convex hull polygon for dataset
         '''
-        pass
+        return 'POLYGON((' + ', '.join([' '.join(
+            ['%.4f' % ordinate for ordinate in coordinates]) 
+            for coordinates in self.get_convex_hull()]) + '))'
+        
     
     def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
@@ -157,7 +161,7 @@ class NetCDFPointUtils(NetCDFUtils):
         if bounds_wkt is None:
             coordinates = self.xycoords
         else:
-            coordinates = np.array(transform_coords(self.xycoords[...], self.wkt, bounds_wkt))
+            coordinates = np.array(transform_coords(self.xycoords[:], self.wkt, bounds_wkt))
             
         return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
                               np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
@@ -253,17 +257,17 @@ class NetCDFPointUtils(NetCDFUtils):
         point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
-        coordinates = self.xycoords[...][point_subset_mask]
+        coordinates = self.xycoords[:][point_subset_mask]
         # Reproject coordinates if required
         if grid_wkt is not None:
             # N.B: Be careful about XY vs YX coordinate order         
-            coordinates = np.array(transform_coords(coordinates[...], self.wkt, grid_wkt))
+            coordinates = np.array(transform_coords(coordinates[:], self.wkt, grid_wkt))
 
         # Interpolate required values to the grid - Note YX ordering for image
         grids = {}
         for variable in [self.netcdf_dataset.variables[var_name] for var_name in variables]:
             grids[variable.name] = griddata(coordinates[:,::-1],
-                                  variable[...][point_subset_mask], #TODO: Check why this is faster than direct indexing
+                                  variable[:][point_subset_mask], #TODO: Check why this is faster than direct indexing
                                   (grid_y, grid_x), 
                                   method=resampling_method)
 
@@ -339,6 +343,13 @@ class NetCDFPointUtils(NetCDFUtils):
         return coords2distance(utm_coord_array)
 
 
+    def get_convex_hull(self):
+        '''
+        Function to return vertex coordinates of a convex hull polygon around all points
+        '''
+        return points2convex_hull(self.xycoords)
+    
+    
     def nearest_neighbours(self, coordinates, 
                            wkt=None, 
                            points_required=1, 
@@ -684,24 +695,20 @@ class NetCDFPointUtils(NetCDFUtils):
         if not index_range:
             logger.debug('No points to retrieve for point indices {}-{}: All masked out'.format(start_index, end_index-1))            
             return
+        
+        if not field_list:
+            field_list = self.netcdf_dataset.variables.keys()
  
         logger.debug('field_list: {}'.format(field_list))
         
         variable_attributes = {}
         memory_cache = OrderedDict()
-        for variable_name, variable in iter(self.netcdf_dataset.variables.items()):
-            #logger.debug('variable_name: {}'.format(variable_name))
-            
-            # Skip fields not in field_list if field_list specified
-            #TODO: Find a better way of identifying lookup index variables
-            if (field_list 
-                and not (variable_name in field_list
-                     or (hasattr(variable, 'lookup') and variable.lookup in field_list) # Check for lookup index variables
-                     or re.sub('_index$', '', variable_name) in field_list # Check for lookup index variables
-                     )
-                ):
-                logger.debug('Ignoring variable {}'.format(variable_name))
+        for variable_name in field_list:
+            variable = self.netcdf_dataset.variables.get(variable_name)
+            if not variable:
+                logger.warning('Variable {} does not exist. Skipping.'.format(variable_name))
                 continue
+            #logger.debug('variable_name: {}'.format(variable_name))
             
             # Scalar variable
             if len(variable.shape) == 0:
@@ -839,8 +846,8 @@ def main(debug=False):
     mask[-10:] = True
     
     # Set list of fields to read
-    field_list = None
-    #field_list = ['latitude', 'longitude', 'line'] 
+    #field_list = None
+    field_list = ['latitude', 'longitude', 'obsno'] 
     
     point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
