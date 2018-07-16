@@ -39,7 +39,7 @@ import logging
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get logger
-logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
@@ -730,8 +730,11 @@ class NetCDFPointUtils(NetCDFUtils):
                                                                                     start_index=start_index, 
                                                                                     end_index=end_index,
                                                                                     mask=mask)
-                    # else ignore any non-pointwise variables
-                     
+                    else: # Lookup array variable
+                        memory_cache[variable_name] = self.expand_lookup_variable(lookup_variable_name=variable_name, 
+                                                                                  start_index=start_index, 
+                                                                                  end_index=end_index, 
+                                                                                  mask=mask)                     
                 else: # 'point' is in variable.dimensions
                     if variable_name.endswith('_index') or hasattr(variable, 'lookup'): # Lookup indexing array variable
                         # Get attributes from lookup variable, not indexing variable
@@ -831,7 +834,7 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.info('{} points read from netCDF file'.format(point_count))
 
 
-def main(debug=False):
+def main(debug=True):
     '''
     Main function for quick and dirty testing
     '''
@@ -847,7 +850,7 @@ def main(debug=False):
     
     # Set list of fields to read
     #field_list = None
-    field_list = ['latitude', 'longitude', 'obsno'] 
+    field_list = ['latitude', 'longitude', 'obsno', 'reliab'] 
     
     point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
