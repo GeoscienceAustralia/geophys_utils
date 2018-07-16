@@ -14,6 +14,8 @@ netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground
 #195105
 #201780
 
+
+
 netcdf_dataset = netCDF4.Dataset(netcdf_path)
 npu = NetCDFPointUtils(netcdf_dataset)
 
@@ -39,6 +41,14 @@ MAX_FADE_EXTENT = 800
 # point constants
 POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
 
+# print(west_extent)
+# print("MASK")
+# mask = np.zeros(shape=(npu.point_count,), dtype='bool')
+# mask[-10:] = True
+# print(mask)
+
+# -----------------------bounds------------
+#        self.bounds = [xmin, ymin, xmax, ymax]
 
 def get_basic_density_measurement():
     """
@@ -110,6 +120,34 @@ def plot_points_in_kml():
     assert index == count
     return points_folder
 
+def plot_dynamic_points_in_kml():
+    spatial_mask = npu.get_spatial_mask(npu.bounds)
+    field_list = ['latitude', 'longitude']
+    point_data_generator = npu.all_point_data_generator(field_list, spatial_mask)
+
+    variable_attributes = next(point_data_generator)
+    # print(variable_attributes.keys())
+    # print(variable_attributes)
+
+    # Use long names instead of variable names where they exist
+    field_names = [variable_attributes[variable_name].get('long_name') or variable_name for variable_name in
+                   variable_attributes.keys()]
+    print('field_names: {}'.format(field_names))
+
+    points_folder = kml.newfolder()
+    for point_data in point_data_generator:
+        print(point_data[0])
+        # add new points with netcdf file Obsno as title and long and lat as coordinatess
+        new_point = points_folder.newpoint(name="point", coords=[(point_data[0], point_data[1])])
+        # set the point icon. Different urls can be found in point style options in google earth
+        new_point.style.iconstyle.icon.href = POINT_ICON_STYLE_LINK
+        new_point.style.iconstyle.scale = 0.7
+        new_point.labelstyle.scale = 0  # removes the label
+    print(points_folder)
+    return points_folder
+
+
+
 
 def build_dynamic_network_link(containing_folder):
     """
@@ -130,16 +168,16 @@ def find_subset():
 
     lats = npu.netcdf_dataset.variables['latitude'][:]
     longs = npu.netcdf_dataset.variables['longitude'][:]
-    print(longs)
+    #print(longs)
     latselect = np.logical_and(lats > 38.03, lats < 40)
-    print(latselect)
+    #print(latselect)
     lonselect = np.logical_and(longs > 146.6, longs < 147)
-    print(lonselect)
+    #print(lonselect)
 
     #print([i for i in latselect if i is True])
-    data = npu.netcdf_dataset.variables['Obsno']
+    data = npu.netcdf_dataset.variables['obsno']
     #data = npu.netcdf_dataset.variables['Obsno'][0, 0, latselect, lonselect]
-    print(data)
+    #print(data)
 
 
     # lats = npu.netcdf_dataset.variables['latitude'][:]
@@ -162,17 +200,25 @@ def find_subset():
     # print([south_extent, north_extent, west_extent, east_extent])
 
 def main():
+    #"Poorly controlled data which should be used cautiously."
+    #"Data with weak gravity, position and elevation control."
+    ##new_point.description = "description {0} here {1}".format(point_data[2], point_data[3])
+    #get_Var = npu.get_lookup_mask(lookup_value_list=[] ,lookup_variable_name='reliab')
+    #print(get_Var)
     # build the polygon, points, network link, and regions
     polygon_folder, polygon = build_polygon()
-    dataset_points_folder = plot_points_in_kml()
+    #dataset_points_folder = plot_points_in_kml()
+    #dataset_points_folder = plot_dynamic_points_in_kml()
     dataset_polygon_region = build_region(MAX_LOD_PIXELS, MIN_LOD_PIXELS + 400, MIN_FADE_EXTENT, MAX_FADE_EXTENT)
     dataset_points_region = build_region(MIN_LOD_PIXELS - 200, MAX_LOD_PIXELS, MIN_FADE_EXTENT, MAX_FADE_EXTENT)
-    dataset_network_link = build_dynamic_network_link(dataset_points_folder)
+    points_folder = kml.newfolder()
+    dataset_network_link = build_dynamic_network_link(points_folder)
 
     # structure them correctly
     polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-    dataset_points_folder.region = dataset_points_region # insert built point region into point folder
-    find_subset()
+    #dataset_points_folder.region = dataset_points_region  # insert built point region into point folder
+    dataset_network_link.region = dataset_points_region
+    #find_subset()
     print("Building kml for survey: " + survey_title)
     kml.save(survey_title + ".kml")
 
