@@ -4,6 +4,7 @@ import numpy as np
 from geophys_utils import NetCDFPointUtils, get_spatial_ref_from_wkt
 from geophys_utils import points2convex_hull
 from geophys_utils import _polygon_utils
+import re
 
 # Create NetCDFPointUtils object for specified netCDF dataset
 netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
@@ -12,7 +13,6 @@ netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground
 #netcdf_path = "C:\\Users\\u62231\\Desktop\\grav_netcdf_4\\201780.nc"
 #195105
 #201780
-
 
 
 netcdf_dataset = netCDF4.Dataset(netcdf_path)
@@ -86,9 +86,16 @@ def build_polygon():
     """
     polygon_folder = kml.newfolder()
 
-    # use _polygon_utils to find the convex hull of the netcdf. Use these points to generate a polygon.
+
+
+    polygon_bounds = re.sub(',\s', ',', npu.netcdf_dataset.geospatial_bounds) # cut out space after comma between coord sets
+    polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds) # cut out polygon and opening brackets
+    polygon_bounds = re.sub('\)\)', '', polygon_bounds) # cut out trailing brackets
+    polygon_bounds = polygon_bounds.split(',') # turn the string into a list, seperating on the commas
+    polygon_bounds = [tuple(p.split(' ')) for p in polygon_bounds] # within each coord set split the lat and long - group the set in a tuple
+
     pol = polygon_folder.newpolygon(name=str(survey_title),
-                         outerboundaryis=_polygon_utils.points2convex_hull(list(npu.xycoords[:])))
+                         outerboundaryis=polygon_bounds)
 
     # polygon styling
     pol.style.polystyle.color = '990000ff'  # Transparent red
