@@ -730,7 +730,7 @@ CREATE INDEX fki_distribution_protocol_id ON public.distribution USING btree (pr
 --
 
 ALTER TABLE ONLY public.dataset_keyword
-    ADD CONSTRAINT dataset_keyword_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id);
+    ADD CONSTRAINT dataset_keyword_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE ON DELETE NO ACTION;
 
 
 --
@@ -739,7 +739,7 @@ ALTER TABLE ONLY public.dataset_keyword
 --
 
 ALTER TABLE ONLY public.dataset_keyword
-    ADD CONSTRAINT dataset_keyword_keyword_id_fkey FOREIGN KEY (keyword_id) REFERENCES public.keyword(keyword_id);
+    ADD CONSTRAINT dataset_keyword_keyword_id_fkey FOREIGN KEY (keyword_id) REFERENCES public.keyword(keyword_id) ON UPDATE CASCADE ON DELETE NO ACTION;
 
 
 --
@@ -748,7 +748,7 @@ ALTER TABLE ONLY public.dataset_keyword
 --
 
 ALTER TABLE ONLY public.dataset
-    ADD CONSTRAINT dataset_survey_id_fkey FOREIGN KEY (survey_id) REFERENCES public.survey(survey_id);
+    ADD CONSTRAINT dataset_survey_id_fkey FOREIGN KEY (survey_id) REFERENCES public.survey(survey_id) ON UPDATE CASCADE ON DELETE NO ACTION;
 
 
 --
@@ -757,7 +757,7 @@ ALTER TABLE ONLY public.dataset
 --
 
 ALTER TABLE ONLY public.distribution
-    ADD CONSTRAINT distribution_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id);
+    ADD CONSTRAINT distribution_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE ON DELETE NO ACTION;
 
 
 --
@@ -766,7 +766,7 @@ ALTER TABLE ONLY public.distribution
 --
 
 ALTER TABLE ONLY public.distribution
-    ADD CONSTRAINT distribution_protocol_id_fkey FOREIGN KEY (protocol_id) REFERENCES public.protocol(protocol_id) ON UPDATE CASCADE;
+    ADD CONSTRAINT distribution_protocol_id_fkey FOREIGN KEY (protocol_id) REFERENCES public.protocol(protocol_id) ON UPDATE CASCADE ON DELETE NO ACTION;
 
 
 -- Completed on 2018-07-20 08:55:41
