@@ -6,8 +6,11 @@ Created on 19 Jul. 2018
 
 import abc
 import os
+import sys
 import logging
 import psycopg2
+import uuid
+from datetime import datetime
 from geophys_utils.dataset_metadata_cache import settings, DatasetMetadataCache, Dataset, Distribution
 
 logger = logging.getLogger(__name__)
@@ -56,7 +59,9 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
             self.db_connection.autocommit = False
             self.db_connection.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)
             
-            
+        logger.debug('Connected to database {}:{}/{}'.format(self.postgres_host, 
+                                                                       self.postgres_port, 
+                                                                       self.postgres_dbname))    
 
     def __del__(self):
         '''
@@ -69,16 +74,59 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
             self.db_connection.close()
         
         
-    def insert_or_update_dataset(self, dataset):
+    def add_dataset(self, dataset):
         '''
         Function to insert or update dataset record
         '''
+        # Assign a UUID if one doesn't exist
+        if not dataset.metadata_uuid:
+            dataset.metadata_uuid = str(uuid.uuid4())
+            logger.info('Created new UUID %s' % dataset.metadata_uuid)
+            
+        #TODO: Do something less hacky and lazy with this
+        params = dict(dataset.__dict__)
+        
+        self.add_survey(ga_survey_id=dataset.ga_survey_id,
+                        survey_name=None
+                        )
+        
         cursor = self.db_connection.cursor()
         
-        sql = ''
-        
-        cursor.execute(sql)
+        insert_dataset_sql = '''insert into dataset (
+    dataset_title,
+    survey_id,
+    longitude_min,
+    longitude_max,
+    latitude_min,
+    latitude_max,
+    convex_hull_polygon,
+    metadata_uuid
+    )
+values (
+    %(dataset_title)s,
+    (select survey_id from survey where ga_survey_id = %(ga_survey_id)s),
+    %(longitude_min)s,
+    %(longitude_max)s,
+    %(latitude_min)s,
+    %(latitude_max)s,
+    %(convex_hull_polygon)s,
+    %(metadata_uuid)s
+    )
+ON CONFLICT (metadata_uuid) DO NOTHING;
+'''
+    
+        cursor.execute(insert_dataset_sql, params)
 
+        select_dataset_sql = '''select dataset_id
+from dataset
+where metadata_uuid = %(metadata_uuid)s;
+'''
+        # Read dataset_id for newly-inserted dataset
+        cursor.execute(select_dataset_sql, params)
+        dataset_id = next(cursor)[0]
+        
+        self.add_keywords(dataset_id, dataset.keyword_list)
+        self.add_distributions(dataset_id, dataset.distribution_list)
 
 
     def add_survey(self, 
@@ -137,15 +185,16 @@ ON CONFLICT (keyword_value) DO NOTHING;
                 
         # Insert dataset_keyword records in bulk    
         params = {'dataset_id': dataset_id,
-                  'keywords': keyword_list
+#                  'keywords': keyword_list
                   }
         
-        insert_dataset_keyword_sql = '''insert into dataset_keyword(dataset_id, keyword_id)
+        insert_dataset_keyword_sql = """insert into dataset_keyword(dataset_id, keyword_id)
 select %(dataset_id)s, 
-    keyword_id from keyword
-    where keyword_value in %(keywords)s
+    keyword_id 
+    from keyword
+    where keyword_value in ('""" + "', '".join(keyword_list) + """')
 ON CONFLICT (dataset_id, keyword_id) DO NOTHING;
-'''            
+"""            
         cursor.execute(insert_dataset_keyword_sql, params)
         
 
@@ -195,34 +244,34 @@ ON CONFLICT (dataset_id, keyword_id) DO NOTHING;
         cursor = self.db_connection.cursor()
             
         # Only add each protocol once
-        for protocol in set([distribution.protocol for distribution in distribution_list]):
-            params = {'protocol_name': protocol
+        for protocol_value in set([distribution.protocol for distribution in distribution_list]):
+            params = {'protocol_value': protocol_value
                       }
             
-            insert_protocol_sql = '''insert into protocol(protocol_name)
-values(%(protocol_name)s)
-ON CONFLICT (protocol_name) DO NOTHING;
+            insert_protocol_sql = '''insert into protocol(protocol_value)
+values(%(protocol_value)s)
+ON CONFLICT (protocol_value) DO NOTHING;
 '''            
             cursor.execute(insert_protocol_sql, params)
             
             if cursor.rowcount:
-                logger.info('New protocol "{}" inserted into protocol table'.format(distribution.protocol))
+                logger.info('New protocol "{}" inserted into protocol table'.format(protocol_value))
             else:
-                logger.debug('Protocol "{}" already exists in protocol table'.format(distribution.protocol))
+                logger.debug('Protocol "{}" already exists in protocol table'.format(protocol_value))
                 
             
         for distribution in distribution_list:
             params = {'dataset_id': dataset_id,
                       'distribution_url': distribution.url,
-                      'protocol_name': distribution.protocol
+                      'protocol_value': distribution.protocol
                       }
     
             insert_distribution_sql = '''insert into distribution(dataset_id, distribution_url, protocol_id)
 values(%(dataset_id)s, 
-    %(distribution_url)s
-    (select protocol_id from protocol where protocol_name = %(protocol_name)s)
+    %(distribution_url)s,
+    (select protocol_id from protocol where protocol_value = %(protocol_value)s)
     )
-ON CONFLICT (dataset_id, distribution_url, protocol_id) DO NOTHING;
+ON CONFLICT (distribution_url) DO NOTHING;
 '''            
             cursor.execute(insert_distribution_sql, params)
             
@@ -230,3 +279,40 @@ ON CONFLICT (dataset_id, distribution_url, protocol_id) DO NOTHING;
                 logger.info('Distribution "{}" inserted into table'.format(distribution.url))
             else:
                 logger.debug('Distribution "{}" already exists in table'.format(distribution.url))
+                
+
+def main():
+    pdmc = PostgresDatasetMetadataCache(debug=True)
+    
+    dataset = Dataset(dataset_title='Test Dataset {}'.format(datetime.now().isoformat()),
+                 ga_survey_id='1',
+                 longitude_min=0,
+                 longitude_max=0,
+                 latitude_min=0,
+                 latitude_max=0,
+                 convex_hull_polygon=None, 
+                 keyword_list=['blah', 'blah blah', 'blah blah blah', 'keyword1'],
+                 distribution_list=[Distribution(url='file://dataset_path',
+                                                 protocol='file'),
+                                    Distribution(url='https://opendap_endpoint',
+                                                 protocol='opendap'),
+                                    ],
+                 metadata_uuid=None
+                 )
+    
+    pdmc.add_dataset(dataset)
+                
+if __name__ == '__main__':
+    # Setup logging handlers if required
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for logger {}'.format(logger.name))
+
+    main()
+                

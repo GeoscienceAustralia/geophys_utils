@@ -4,13 +4,11 @@ DB_ENGINE: "Postgres"
 APP_DIR: ""
 APP_PORT: 5000
 SECRET_KEY: "Geoscience Australia Rocks" # Fake key for development and testing
-IGSN_URI_BASE: "http://pid.geoscience.gov.au/samples/sample/"
-IGSN_LOG: "dataset_metadata_cache.log"
 LOGFILE: "dataset_metadata_cache.log"
 LOGLEVEL: "WARNING"
 POSTGRES_SERVER: "localhost"
 POSTGRES_PORT: 5432
 POSTGRES_DBNAME: "dataset_metadata_cache"
-POSTGRES_USER: "db_user"
-POSTGRES_PASSWORD: "s3<r3t!!"
+POSTGRES_USER: "postgres"
+POSTGRES_PASSWORD: "QH@t5r4e2n4"
 LOCAL_TIMEZONE: "AEDT"

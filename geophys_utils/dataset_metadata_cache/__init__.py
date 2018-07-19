@@ -42,9 +42,9 @@ class Dataset(object):
                  latitude_min,
                  latitude_max,
                  convex_hull_polygon, 
-                 metadata_uuid,
                  keyword_list,
-                 distribution_list                
+                 distribution_list,
+                 metadata_uuid=None
                  ):
         '''
         Dataset class Constructor
