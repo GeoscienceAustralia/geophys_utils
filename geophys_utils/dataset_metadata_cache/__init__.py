@@ -79,30 +79,53 @@ class DatasetMetadataCache(object):
         self.debug = debug
 
     @abc.abstractmethod
-    def insert_or_update_dataset(self, dataset):
+    def add_dataset(self, dataset):
         '''
         Function to insert or update dataset record
         '''
+        return
 
     @abc.abstractmethod
-    def get_keyword_id(self, 
-                       keyword):
+    def add_survey(self, 
+                      ga_survey_id,
+                      survey_name=None
+                      ):
         '''
-        DatasetMetadataCache class Constructor
+        Function to insert survey if necessary
         '''
+        return
 
     @abc.abstractmethod
-    def get_distribution_id(self, 
-                            distribution):
+    def add_keywords(self,
+                     dataset_id, 
+                     keyword_list):
         '''
-        DatasetMetadataCache class Constructor
+        Function to insert new keywords
         '''
+        return
 
     @abc.abstractmethod
-    def get_protocol_id(self, protocol_value):
+    def add_distributions(self,
+                          dataset_id, 
+                          distribution_list):
         '''
-        DatasetMetadataCache class Constructor
+        Function to insert new distributions
         '''
+        return
+
+    @abc.abstractmethod
+    def search_dataset_distributions(self,
+                                     keyword_list,
+                                     ll_ur_coords,
+                                     protocol
+                                     ):
+        '''
+        Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
+        Note that keywords are searched exclusively, i.e. using "and", not "or"
+        '''
+        return
+    
+    
     @property
     def db_engine(self):
         return type(self)._db_engine

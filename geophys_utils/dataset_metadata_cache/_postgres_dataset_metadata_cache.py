@@ -4,7 +4,6 @@ Created on 19 Jul. 2018
 @author: Alex Ip
 '''
 
-import abc
 import os
 import sys
 import logging
@@ -134,7 +133,7 @@ where metadata_uuid = %(metadata_uuid)s;
                       survey_name=None
                       ):
         '''
-        Function to insert survey if necessary
+        Function to insert survey
         '''
         if not ga_survey_id:
             return None
@@ -239,7 +238,7 @@ ON CONFLICT (dataset_id, keyword_id) DO NOTHING;
                           dataset_id, 
                           distribution_list):
         '''
-        Function to insert new distribution
+        Function to insert new distributions
         '''
         cursor = self.db_connection.cursor()
             
@@ -281,26 +280,81 @@ ON CONFLICT (distribution_url) DO NOTHING;
                 logger.debug('Distribution "{}" already exists in table'.format(distribution.url))
                 
 
+    def search_dataset_distributions(self,
+                                     keyword_list,
+                                     ll_ur_coords,
+                                     protocol
+                                     ):
+        '''
+        Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
+        Note that keywords are searched exclusively, i.e. using "and", not "or"
+        '''
+        cursor = self.db_connection.cursor()
+        
+        params = {'protocol_value': protocol,
+                  'longitude_min': ll_ur_coords[0][0],
+                  'longitude_max': ll_ur_coords[1][0],
+                  'latitude_min': ll_ur_coords[0][1],
+                  'latitude_max': ll_ur_coords[1][1],
+                  }
+
+        dataset_search_sql = """select distribution_url
+from distribution
+inner join protocol using(protocol_id)
+inner join dataset using(dataset_id)
+"""
+        for keyword_index in range(len(keyword_list)):    
+            keyword = keyword_list[keyword_index] 
+            dataset_search_sql += """inner join (select dataset_id from dataset_keyword
+    inner join keyword using(keyword_id)
+    where keyword_value = '""" + keyword + """'
+    ) keyword{} using(dataset_id)
+""".format(keyword_index+1)
+        
+        dataset_search_sql += """where
+    protocol_value = %(protocol_value)s
+    and longitude_min <= %(longitude_max)s
+    and longitude_max >= %(longitude_min)s
+    and latitude_min <= %(latitude_max)s
+    and latitude_max >= %(latitude_min)s
+"""
+
+        #logger.debug('dataset_search_sql: {}'.format(dataset_search_sql))
+        
+        cursor.execute(dataset_search_sql, params)
+        
+        # Return list of distribution_url values
+        return [row[0] for row in cursor]
+        
 def main():
     pdmc = PostgresDatasetMetadataCache(debug=True)
     
-    dataset = Dataset(dataset_title='Test Dataset {}'.format(datetime.now().isoformat()),
-                 ga_survey_id='1',
-                 longitude_min=0,
-                 longitude_max=0,
-                 latitude_min=0,
-                 latitude_max=0,
-                 convex_hull_polygon=None, 
-                 keyword_list=['blah', 'blah blah', 'blah blah blah', 'keyword1'],
-                 distribution_list=[Distribution(url='file://dataset_path',
-                                                 protocol='file'),
-                                    Distribution(url='https://opendap_endpoint',
-                                                 protocol='opendap'),
-                                    ],
-                 metadata_uuid=None
-                 )
+    #===========================================================================
+    # dataset = Dataset(dataset_title='Test Dataset {}'.format(datetime.now().isoformat()),
+    #              ga_survey_id='1',
+    #              longitude_min=0,
+    #              longitude_max=0,
+    #              latitude_min=0,
+    #              latitude_max=0,
+    #              convex_hull_polygon=None, 
+    #              keyword_list=['blah', 'blah blah', 'blah blah blah', 'keyword1'],
+    #              distribution_list=[Distribution(url='file://dataset_path',
+    #                                              protocol='file'),
+    #                                 Distribution(url='https://opendap_endpoint',
+    #                                              protocol='opendap'),
+    #                                 ],
+    #              metadata_uuid=None
+    #              )
+    # 
+    # pdmc.add_dataset(dataset)
+    #===========================================================================
     
-    pdmc.add_dataset(dataset)
+    print('Search results:')
+    for url in pdmc.search_dataset_distributions(keyword_list=['blah', 'blah blah'],
+                                                 ll_ur_coords=[[-1, -1], [1, 1]],
+                                                 protocol='file'
+                                                 ):
+        print(url)
                 
 if __name__ == '__main__':
     # Setup logging handlers if required
