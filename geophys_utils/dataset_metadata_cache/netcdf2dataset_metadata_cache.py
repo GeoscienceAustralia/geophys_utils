@@ -14,6 +14,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
+DEBUG = False
+
+DATABASE_ENGINE = 'SQLite'
+#DATABASE_ENGINE = 'Postgres'
 
 class NetCDF2DatasetMetadataCache(object):
     '''
@@ -25,7 +29,7 @@ class NetCDF2DatasetMetadataCache(object):
         '''
         Constructor
         '''
-        self.dataset_metadata_cache = get_dataset_metadata_cache(db_engine='SQLite', debug=debug)
+        self.dataset_metadata_cache = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=debug)
         
         
     def find_files(self, root_dir, file_template, extension_filter='.nc'):
@@ -70,7 +74,7 @@ class NetCDF2DatasetMetadataCache(object):
             nc_attribute = dict(nc_dataset.__dict__)
     
             #nc_attribute['nc_path'] = nc_path
-            nc_attribute['nc_path'] = nc_path.replace('D:\\Temp\\gravity point data\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/') #TODO: Remove this hack
+            nc_attribute['nc_path'] = nc_path.replace('D:\\Temp\\gravity point data\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/') #TODO: Remove this temporary hack
             
 #===============================================================================
 # // global attributes:
@@ -138,7 +142,7 @@ def main():
         nc_file_template = '*.nc'
     
 
-    nc2dmc = NetCDF2DatasetMetadataCache(debug=False)
+    nc2dmc = NetCDF2DatasetMetadataCache(debug=DEBUG)
     nc2dmc.populate_db(nc_root_dir,
                        nc_file_template=nc_file_template,
                        opendap_path_map=('/g/data2/uc0/rr2_dev/',

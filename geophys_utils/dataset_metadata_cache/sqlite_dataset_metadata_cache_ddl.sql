@@ -55,3 +55,11 @@ CREATE INDEX fki_dataset_survey_id ON dataset (survey_id);
 CREATE INDEX fki_distribution_dataset_id ON distribution (dataset_id);
 
 CREATE INDEX fki_distribution_protocol_id ON distribution (protocol_id);
+
+
+
+CREATE INDEX dataset_longitude_min_idx ON dataset (longitude_min);
+CREATE INDEX dataset_longitude_max_idx ON dataset (longitude_max);
+CREATE INDEX dataset_latitude_min_idx ON dataset (latitude_min);
+CREATE INDEX dataset_latitude_max_idx ON dataset (latitude_max);
+

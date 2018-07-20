@@ -133,7 +133,7 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
     convex_hull_polygon,
     metadata_uuid
     )
-values (
+select
     :dataset_title,
     (select survey_id from survey where ga_survey_id = :ga_survey_id),
     :longitude_min,
@@ -142,7 +142,7 @@ values (
     :latitude_max,
     :convex_hull_polygon,
     :metadata_uuid
-    )
+where not exists (select dataset_id from dataset where metadata_uuid = :metadata_uuid);
 '''
         #logger.debug('insert_dataset_sql: {}'.format(insert_dataset_sql))
         #logger.debug('params: {}'.format(params))
@@ -183,8 +183,10 @@ where metadata_uuid = :metadata_uuid;
                   'survey_name': survey_name
                   }
         
-        insert_survey_sql = '''insert or ignore into survey(ga_survey_id, survey_name)
-values(:ga_survey_id, :survey_name)
+        insert_survey_sql = '''insert into survey(ga_survey_id, survey_name)
+select :ga_survey_id, 
+    :survey_name
+where not exists (select survey_id from survey where ga_survey_id = :ga_survey_id);
 '''            
         cursor.execute(insert_survey_sql, params)
         self.db_connection.commit()
@@ -206,11 +208,12 @@ values(:ga_survey_id, :survey_name)
         # Try inserting keywords individually
         for keyword in keyword_list:
             params = {'dataset_id': dataset_id,
-                      'keyword': keyword
+                      'keyword_value': keyword
                       }
             
-            insert_keyword_sql = '''insert or ignore into keyword(keyword_value)
-values(:keyword)
+            insert_keyword_sql = '''insert into keyword(keyword_value)
+select :keyword_value
+where not exists (select keyword_id from keyword where keyword_value = :keyword_value);
 '''            
             cursor.execute(insert_keyword_sql, params)
             self.db_connection.commit()
@@ -226,11 +229,12 @@ values(:keyword)
 #                  'keywords': keyword_list
                   }
         
-        insert_dataset_keyword_sql = """insert or ignore into dataset_keyword(dataset_id, keyword_id)
+        insert_dataset_keyword_sql = """insert into dataset_keyword(dataset_id, keyword_id)
 select :dataset_id, 
     keyword_id 
     from keyword
     where keyword_value in ('""" + "', '".join(keyword_list) + """')
+        and keyword_id not in (select keyword_id from dataset_keyword where dataset_id = :dataset_id);
 """            
         cursor.execute(insert_dataset_keyword_sql, params)
         self.db_connection.commit()
@@ -288,8 +292,9 @@ select :dataset_id,
             params = {'protocol_value': protocol_value
                       }
             
-            insert_protocol_sql = '''insert or ignore into protocol(protocol_value)
-values(:protocol_value)
+            insert_protocol_sql = '''insert into protocol(protocol_value)
+select :protocol_value
+where not exists (select protocol_id from protocol where protocol_value = :protocol_value);
 '''            
             cursor.execute(insert_protocol_sql, params)
             self.db_connection.commit()
@@ -306,11 +311,11 @@ values(:protocol_value)
                       'protocol_value': distribution.protocol
                       }
     
-            insert_distribution_sql = '''insert or ignore into distribution(dataset_id, distribution_url, protocol_id)
-values(:dataset_id, 
+            insert_distribution_sql = '''insert into distribution(dataset_id, distribution_url, protocol_id)
+select :dataset_id, 
     :distribution_url,
     (select protocol_id from protocol where protocol_value = :protocol_value)
-    )
+where not exists (select distribution_id from distribution where dataset_id = :dataset_id and distribution_url = :distribution_url);
 '''            
             cursor.execute(insert_distribution_sql, params)
             self.db_connection.commit()

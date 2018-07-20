@@ -3,12 +3,17 @@ Created on 20 Jul. 2018
 
 @author: Alex
 '''
-from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
+from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
+
+DEBUG = False
+
+DATABASE_ENGINE = 'SQLite'
+#DATABASE_ENGINE = 'Postgres'
 
 def main(): 
-    sdmc = SQLiteDatasetMetadataCache(debug=True) 
+    dmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=DEBUG)
 
-    endpoint_list = sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+    endpoint_list = dmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
                                                  protocol='opendap',
                                                  #ll_ur_coords=[[-179.9, -90.0], [180.0, 90.0]]
                                                  ll_ur_coords=[[138.193588256836, -30.5767288208008], [138.480285644531, -30.1188278198242]]
