@@ -148,7 +148,7 @@ def do_everything(bounding_box):
     args = parser.parse_args()
 
     kml = simplekml.Kml()
-    points_folder = kml.newfolder()
+
 
     if len(args.netcdf_path_list) > 1:
         print("multiple surveys")
@@ -156,8 +156,9 @@ def do_everything(bounding_box):
         list_of_point_folders= []
 
 
-
+        all_the_points = ""
         for netcdf in args.netcdf_path_list:
+            points_folder = kml.newfolder()
             netcdf_file_folder = kml.newfolder()
 
             converter_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
@@ -173,11 +174,13 @@ def do_everything(bounding_box):
             # polygon_folder, polygon = converter_obj.build_polygon()
             #converter_obj.build_static_kml()
             polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
+
             points_folder.region = dataset_points_region  # insert built point region into point folder
             points_folder = converter_obj.do_the_things(netcdf, points_folder, query_string)
             #points_folder = do_the_things(netcdf, points_folder)
+            all_the_points = all_the_points + str(points_folder)
         kml.save("test.kml")
-        return str(points_folder)
+        return str(netcdf_file_folder)
             #list_of_converter_objects.append(NetCDF2kmlConverter(netcdf))
 
     # then add the network link using this args.server
@@ -185,7 +188,7 @@ def do_everything(bounding_box):
     else:
         # single
         print("single survey")
-
+        points_folder = kml.newfolder()
         folder = do_the_things(args.netcdf_path_list[0], points_folder)
         # converter_object = netcdf2kml.NetCDF2kmlConverter(args.netcdf_path_list[0])
         # converter_object.build_dynamic_kml()
