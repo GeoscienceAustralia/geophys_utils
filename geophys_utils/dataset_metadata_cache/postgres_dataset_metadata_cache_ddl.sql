@@ -5,7 +5,7 @@
 -- Dumped from database version 10.1
 -- Dumped by pg_dump version 10.4
 
--- Started on 2018-07-20 08:55:38
+-- Started on 2018-07-20 10:20:16
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -39,7 +39,7 @@ SET default_tablespace = '';
 SET default_with_oids = false;
 
 --
--- TOC entry 196 (class 1259 OID 29769)
+-- TOC entry 196 (class 1259 OID 29955)
 -- Name: dataset; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -140,7 +140,7 @@ COMMENT ON COLUMN public.dataset.convex_hull_polygon IS 'Definition of convex hu
 
 
 --
--- TOC entry 197 (class 1259 OID 29775)
+-- TOC entry 197 (class 1259 OID 29961)
 -- Name: dataset_dataset_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -155,7 +155,7 @@ CREATE SEQUENCE public.dataset_dataset_id_seq
 ALTER TABLE public.dataset_dataset_id_seq OWNER TO postgres;
 
 --
--- TOC entry 2878 (class 0 OID 0)
+-- TOC entry 2879 (class 0 OID 0)
 -- Dependencies: 197
 -- Name: dataset_dataset_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -164,7 +164,7 @@ ALTER SEQUENCE public.dataset_dataset_id_seq OWNED BY public.dataset.dataset_id;
 
 
 --
--- TOC entry 198 (class 1259 OID 29777)
+-- TOC entry 198 (class 1259 OID 29963)
 -- Name: dataset_keyword; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -177,7 +177,7 @@ CREATE TABLE public.dataset_keyword (
 ALTER TABLE public.dataset_keyword OWNER TO postgres;
 
 --
--- TOC entry 2879 (class 0 OID 0)
+-- TOC entry 2881 (class 0 OID 0)
 -- Dependencies: 198
 -- Name: TABLE dataset_keyword; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -186,7 +186,7 @@ COMMENT ON TABLE public.dataset_keyword IS 'Table expressing many-many relations
 
 
 --
--- TOC entry 2880 (class 0 OID 0)
+-- TOC entry 2882 (class 0 OID 0)
 -- Dependencies: 198
 -- Name: COLUMN dataset_keyword.dataset_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -195,7 +195,7 @@ COMMENT ON COLUMN public.dataset_keyword.dataset_id IS 'Foreign key to dataset';
 
 
 --
--- TOC entry 2881 (class 0 OID 0)
+-- TOC entry 2883 (class 0 OID 0)
 -- Dependencies: 198
 -- Name: COLUMN dataset_keyword.keyword_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -204,7 +204,7 @@ COMMENT ON COLUMN public.dataset_keyword.keyword_id IS 'Foreign key to keyword';
 
 
 --
--- TOC entry 199 (class 1259 OID 29780)
+-- TOC entry 199 (class 1259 OID 29966)
 -- Name: distribution; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -219,7 +219,7 @@ CREATE TABLE public.distribution (
 ALTER TABLE public.distribution OWNER TO postgres;
 
 --
--- TOC entry 2882 (class 0 OID 0)
+-- TOC entry 2885 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: TABLE distribution; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -228,7 +228,7 @@ COMMENT ON TABLE public.distribution IS 'Table of online distributions';
 
 
 --
--- TOC entry 2883 (class 0 OID 0)
+-- TOC entry 2886 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: COLUMN distribution.distribution_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -237,7 +237,7 @@ COMMENT ON COLUMN public.distribution.distribution_id IS 'Numeric primary key fo
 
 
 --
--- TOC entry 2884 (class 0 OID 0)
+-- TOC entry 2887 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: COLUMN distribution.dataset_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -246,7 +246,7 @@ COMMENT ON COLUMN public.distribution.dataset_id IS 'Foreign key to dataset';
 
 
 --
--- TOC entry 2885 (class 0 OID 0)
+-- TOC entry 2888 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: COLUMN distribution.distribution_url; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -255,7 +255,7 @@ COMMENT ON COLUMN public.distribution.distribution_url IS 'URL of distribution';
 
 
 --
--- TOC entry 2886 (class 0 OID 0)
+-- TOC entry 2889 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: COLUMN distribution.protocol_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -264,7 +264,7 @@ COMMENT ON COLUMN public.distribution.protocol_id IS 'Foreign key to protocol';
 
 
 --
--- TOC entry 200 (class 1259 OID 29783)
+-- TOC entry 200 (class 1259 OID 29969)
 -- Name: distribution_distribution_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -279,7 +279,7 @@ CREATE SEQUENCE public.distribution_distribution_id_seq
 ALTER TABLE public.distribution_distribution_id_seq OWNER TO postgres;
 
 --
--- TOC entry 2887 (class 0 OID 0)
+-- TOC entry 2891 (class 0 OID 0)
 -- Dependencies: 200
 -- Name: distribution_distribution_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -288,7 +288,7 @@ ALTER SEQUENCE public.distribution_distribution_id_seq OWNED BY public.distribut
 
 
 --
--- TOC entry 201 (class 1259 OID 29785)
+-- TOC entry 201 (class 1259 OID 29971)
 -- Name: keyword_keyword_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -303,7 +303,7 @@ CREATE SEQUENCE public.keyword_keyword_id_seq
 ALTER TABLE public.keyword_keyword_id_seq OWNER TO postgres;
 
 --
--- TOC entry 202 (class 1259 OID 29787)
+-- TOC entry 202 (class 1259 OID 29973)
 -- Name: keyword; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -317,7 +317,7 @@ CREATE TABLE public.keyword (
 ALTER TABLE public.keyword OWNER TO postgres;
 
 --
--- TOC entry 2888 (class 0 OID 0)
+-- TOC entry 2894 (class 0 OID 0)
 -- Dependencies: 202
 -- Name: TABLE keyword; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -326,7 +326,7 @@ COMMENT ON TABLE public.keyword IS 'Table of keywords for datasets';
 
 
 --
--- TOC entry 2889 (class 0 OID 0)
+-- TOC entry 2895 (class 0 OID 0)
 -- Dependencies: 202
 -- Name: COLUMN keyword.keyword_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -335,7 +335,7 @@ COMMENT ON COLUMN public.keyword.keyword_id IS 'Numeric primary key for keyword'
 
 
 --
--- TOC entry 2890 (class 0 OID 0)
+-- TOC entry 2896 (class 0 OID 0)
 -- Dependencies: 202
 -- Name: COLUMN keyword.keyword_value; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -344,7 +344,7 @@ COMMENT ON COLUMN public.keyword.keyword_value IS 'Keyword string';
 
 
 --
--- TOC entry 2891 (class 0 OID 0)
+-- TOC entry 2897 (class 0 OID 0)
 -- Dependencies: 202
 -- Name: COLUMN keyword.keyword_url; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -353,7 +353,7 @@ COMMENT ON COLUMN public.keyword.keyword_url IS 'URL of keyword (if known)';
 
 
 --
--- TOC entry 203 (class 1259 OID 29791)
+-- TOC entry 203 (class 1259 OID 29977)
 -- Name: protocol; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -366,7 +366,7 @@ CREATE TABLE public.protocol (
 ALTER TABLE public.protocol OWNER TO postgres;
 
 --
--- TOC entry 2892 (class 0 OID 0)
+-- TOC entry 2899 (class 0 OID 0)
 -- Dependencies: 203
 -- Name: COLUMN protocol.protocol_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -375,7 +375,7 @@ COMMENT ON COLUMN public.protocol.protocol_id IS 'Numeric primary key for distri
 
 
 --
--- TOC entry 2893 (class 0 OID 0)
+-- TOC entry 2900 (class 0 OID 0)
 -- Dependencies: 203
 -- Name: COLUMN protocol.protocol_value; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -384,7 +384,7 @@ COMMENT ON COLUMN public.protocol.protocol_value IS 'Protocol value string';
 
 
 --
--- TOC entry 204 (class 1259 OID 29794)
+-- TOC entry 204 (class 1259 OID 29980)
 -- Name: protocol_protocol_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -399,7 +399,7 @@ CREATE SEQUENCE public.protocol_protocol_id_seq
 ALTER TABLE public.protocol_protocol_id_seq OWNER TO postgres;
 
 --
--- TOC entry 2894 (class 0 OID 0)
+-- TOC entry 2902 (class 0 OID 0)
 -- Dependencies: 204
 -- Name: protocol_protocol_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -408,7 +408,7 @@ ALTER SEQUENCE public.protocol_protocol_id_seq OWNED BY public.protocol.protocol
 
 
 --
--- TOC entry 205 (class 1259 OID 29796)
+-- TOC entry 205 (class 1259 OID 29982)
 -- Name: survey; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -422,7 +422,7 @@ CREATE TABLE public.survey (
 ALTER TABLE public.survey OWNER TO postgres;
 
 --
--- TOC entry 2895 (class 0 OID 0)
+-- TOC entry 2904 (class 0 OID 0)
 -- Dependencies: 205
 -- Name: TABLE survey; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -431,7 +431,7 @@ COMMENT ON TABLE public.survey IS 'Table of survey metadata';
 
 
 --
--- TOC entry 2896 (class 0 OID 0)
+-- TOC entry 2905 (class 0 OID 0)
 -- Dependencies: 205
 -- Name: COLUMN survey.survey_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -440,7 +440,7 @@ COMMENT ON COLUMN public.survey.survey_id IS 'Numeric primary key for survey ent
 
 
 --
--- TOC entry 2897 (class 0 OID 0)
+-- TOC entry 2906 (class 0 OID 0)
 -- Dependencies: 205
 -- Name: COLUMN survey.ga_survey_id; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -449,7 +449,7 @@ COMMENT ON COLUMN public.survey.ga_survey_id IS 'GA survey ID string';
 
 
 --
--- TOC entry 2898 (class 0 OID 0)
+-- TOC entry 2907 (class 0 OID 0)
 -- Dependencies: 205
 -- Name: COLUMN survey.survey_name; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -458,7 +458,7 @@ COMMENT ON COLUMN public.survey.survey_name IS 'Survey name string';
 
 
 --
--- TOC entry 206 (class 1259 OID 29799)
+-- TOC entry 206 (class 1259 OID 29985)
 -- Name: survey_survey_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
 --
 
@@ -473,7 +473,7 @@ CREATE SEQUENCE public.survey_survey_id_seq
 ALTER TABLE public.survey_survey_id_seq OWNER TO postgres;
 
 --
--- TOC entry 2899 (class 0 OID 0)
+-- TOC entry 2909 (class 0 OID 0)
 -- Dependencies: 206
 -- Name: survey_survey_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
 --
@@ -482,7 +482,7 @@ ALTER SEQUENCE public.survey_survey_id_seq OWNED BY public.survey.survey_id;
 
 
 --
--- TOC entry 2699 (class 2604 OID 29801)
+-- TOC entry 2699 (class 2604 OID 29987)
 -- Name: dataset dataset_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -490,7 +490,7 @@ ALTER TABLE ONLY public.dataset ALTER COLUMN dataset_id SET DEFAULT nextval('pub
 
 
 --
--- TOC entry 2704 (class 2604 OID 29802)
+-- TOC entry 2704 (class 2604 OID 29988)
 -- Name: distribution distribution_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -498,7 +498,7 @@ ALTER TABLE ONLY public.distribution ALTER COLUMN distribution_id SET DEFAULT ne
 
 
 --
--- TOC entry 2706 (class 2604 OID 29803)
+-- TOC entry 2706 (class 2604 OID 29989)
 -- Name: protocol protocol_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -506,7 +506,7 @@ ALTER TABLE ONLY public.protocol ALTER COLUMN protocol_id SET DEFAULT nextval('p
 
 
 --
--- TOC entry 2707 (class 2604 OID 29804)
+-- TOC entry 2707 (class 2604 OID 29990)
 -- Name: survey survey_id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -514,7 +514,7 @@ ALTER TABLE ONLY public.survey ALTER COLUMN survey_id SET DEFAULT nextval('publi
 
 
 --
--- TOC entry 2714 (class 2606 OID 29806)
+-- TOC entry 2714 (class 2606 OID 29992)
 -- Name: dataset_keyword dataset_keyword_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -523,7 +523,7 @@ ALTER TABLE ONLY public.dataset_keyword
 
 
 --
--- TOC entry 2709 (class 2606 OID 29858)
+-- TOC entry 2709 (class 2606 OID 29994)
 -- Name: dataset dataset_metadata_uuid_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -532,7 +532,7 @@ ALTER TABLE ONLY public.dataset
 
 
 --
--- TOC entry 2711 (class 2606 OID 29808)
+-- TOC entry 2711 (class 2606 OID 29996)
 -- Name: dataset dataset_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -541,7 +541,7 @@ ALTER TABLE ONLY public.dataset
 
 
 --
--- TOC entry 2718 (class 2606 OID 29860)
+-- TOC entry 2718 (class 2606 OID 29998)
 -- Name: distribution distribution_distribution_url_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -550,7 +550,7 @@ ALTER TABLE ONLY public.distribution
 
 
 --
--- TOC entry 2720 (class 2606 OID 29810)
+-- TOC entry 2720 (class 2606 OID 30000)
 -- Name: distribution distribution_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -559,7 +559,7 @@ ALTER TABLE ONLY public.distribution
 
 
 --
--- TOC entry 2724 (class 2606 OID 29812)
+-- TOC entry 2724 (class 2606 OID 30002)
 -- Name: keyword keyword_keyword_value_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -568,7 +568,7 @@ ALTER TABLE ONLY public.keyword
 
 
 --
--- TOC entry 2726 (class 2606 OID 29814)
+-- TOC entry 2726 (class 2606 OID 30004)
 -- Name: keyword keyword_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -577,7 +577,7 @@ ALTER TABLE ONLY public.keyword
 
 
 --
--- TOC entry 2700 (class 2606 OID 29815)
+-- TOC entry 2700 (class 2606 OID 30005)
 -- Name: dataset latitude_max_constraint; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -586,7 +586,7 @@ ALTER TABLE public.dataset
 
 
 --
--- TOC entry 2900 (class 0 OID 0)
+-- TOC entry 2911 (class 0 OID 0)
 -- Dependencies: 2700
 -- Name: CONSTRAINT latitude_max_constraint ON dataset; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -595,7 +595,7 @@ COMMENT ON CONSTRAINT latitude_max_constraint ON public.dataset IS 'Range check 
 
 
 --
--- TOC entry 2701 (class 2606 OID 29816)
+-- TOC entry 2701 (class 2606 OID 30006)
 -- Name: dataset latitude_min_constraint; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -604,7 +604,7 @@ ALTER TABLE public.dataset
 
 
 --
--- TOC entry 2901 (class 0 OID 0)
+-- TOC entry 2912 (class 0 OID 0)
 -- Dependencies: 2701
 -- Name: CONSTRAINT latitude_min_constraint ON dataset; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -613,7 +613,7 @@ COMMENT ON CONSTRAINT latitude_min_constraint ON public.dataset IS 'Range check 
 
 
 --
--- TOC entry 2702 (class 2606 OID 29817)
+-- TOC entry 2702 (class 2606 OID 30007)
 -- Name: dataset longitude_max_constraint; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -622,7 +622,7 @@ ALTER TABLE public.dataset
 
 
 --
--- TOC entry 2902 (class 0 OID 0)
+-- TOC entry 2913 (class 0 OID 0)
 -- Dependencies: 2702
 -- Name: CONSTRAINT longitude_max_constraint ON dataset; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -631,7 +631,7 @@ COMMENT ON CONSTRAINT longitude_max_constraint ON public.dataset IS 'Range check
 
 
 --
--- TOC entry 2703 (class 2606 OID 29818)
+-- TOC entry 2703 (class 2606 OID 30008)
 -- Name: dataset longitude_min_constraint; Type: CHECK CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -640,7 +640,7 @@ ALTER TABLE public.dataset
 
 
 --
--- TOC entry 2903 (class 0 OID 0)
+-- TOC entry 2914 (class 0 OID 0)
 -- Dependencies: 2703
 -- Name: CONSTRAINT longitude_min_constraint ON dataset; Type: COMMENT; Schema: public; Owner: postgres
 --
@@ -649,7 +649,7 @@ COMMENT ON CONSTRAINT longitude_min_constraint ON public.dataset IS 'Range check
 
 
 --
--- TOC entry 2728 (class 2606 OID 29820)
+-- TOC entry 2728 (class 2606 OID 30010)
 -- Name: protocol protocol_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -658,7 +658,7 @@ ALTER TABLE ONLY public.protocol
 
 
 --
--- TOC entry 2730 (class 2606 OID 29822)
+-- TOC entry 2730 (class 2606 OID 30012)
 -- Name: protocol protocol_protocol_value_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -667,7 +667,7 @@ ALTER TABLE ONLY public.protocol
 
 
 --
--- TOC entry 2732 (class 2606 OID 29824)
+-- TOC entry 2732 (class 2606 OID 30014)
 -- Name: survey survey_ga_survey_id_key; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -676,7 +676,7 @@ ALTER TABLE ONLY public.survey
 
 
 --
--- TOC entry 2734 (class 2606 OID 29826)
+-- TOC entry 2734 (class 2606 OID 30016)
 -- Name: survey survey_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
@@ -685,7 +685,7 @@ ALTER TABLE ONLY public.survey
 
 
 --
--- TOC entry 2715 (class 1259 OID 29827)
+-- TOC entry 2715 (class 1259 OID 30017)
 -- Name: fki_dataset_keyword_dataset_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -693,7 +693,7 @@ CREATE INDEX fki_dataset_keyword_dataset_id ON public.dataset_keyword USING btre
 
 
 --
--- TOC entry 2716 (class 1259 OID 29828)
+-- TOC entry 2716 (class 1259 OID 30018)
 -- Name: fki_dataset_keyword_keyword_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -701,7 +701,7 @@ CREATE INDEX fki_dataset_keyword_keyword_id ON public.dataset_keyword USING btre
 
 
 --
--- TOC entry 2712 (class 1259 OID 29829)
+-- TOC entry 2712 (class 1259 OID 30019)
 -- Name: fki_dataset_survey_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -709,7 +709,7 @@ CREATE INDEX fki_dataset_survey_id ON public.dataset USING btree (survey_id);
 
 
 --
--- TOC entry 2721 (class 1259 OID 29830)
+-- TOC entry 2721 (class 1259 OID 30020)
 -- Name: fki_distribution_dataset_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -717,7 +717,7 @@ CREATE INDEX fki_distribution_dataset_id ON public.distribution USING btree (dat
 
 
 --
--- TOC entry 2722 (class 1259 OID 29831)
+-- TOC entry 2722 (class 1259 OID 30021)
 -- Name: fki_distribution_protocol_id; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -725,51 +725,150 @@ CREATE INDEX fki_distribution_protocol_id ON public.distribution USING btree (pr
 
 
 --
--- TOC entry 2736 (class 2606 OID 29832)
+-- TOC entry 2736 (class 2606 OID 30022)
 -- Name: dataset_keyword dataset_keyword_dataset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.dataset_keyword
-    ADD CONSTRAINT dataset_keyword_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE ON DELETE NO ACTION;
+    ADD CONSTRAINT dataset_keyword_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE;
 
 
 --
--- TOC entry 2737 (class 2606 OID 29837)
+-- TOC entry 2737 (class 2606 OID 30027)
 -- Name: dataset_keyword dataset_keyword_keyword_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.dataset_keyword
-    ADD CONSTRAINT dataset_keyword_keyword_id_fkey FOREIGN KEY (keyword_id) REFERENCES public.keyword(keyword_id) ON UPDATE CASCADE ON DELETE NO ACTION;
+    ADD CONSTRAINT dataset_keyword_keyword_id_fkey FOREIGN KEY (keyword_id) REFERENCES public.keyword(keyword_id) ON UPDATE CASCADE;
 
 
 --
--- TOC entry 2735 (class 2606 OID 29842)
+-- TOC entry 2735 (class 2606 OID 30032)
 -- Name: dataset dataset_survey_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.dataset
-    ADD CONSTRAINT dataset_survey_id_fkey FOREIGN KEY (survey_id) REFERENCES public.survey(survey_id) ON UPDATE CASCADE ON DELETE NO ACTION;
+    ADD CONSTRAINT dataset_survey_id_fkey FOREIGN KEY (survey_id) REFERENCES public.survey(survey_id) ON UPDATE CASCADE;
 
 
 --
--- TOC entry 2738 (class 2606 OID 29847)
+-- TOC entry 2738 (class 2606 OID 30037)
 -- Name: distribution distribution_dataset_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.distribution
-    ADD CONSTRAINT distribution_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE ON DELETE NO ACTION;
+    ADD CONSTRAINT distribution_dataset_id_fkey FOREIGN KEY (dataset_id) REFERENCES public.dataset(dataset_id) ON UPDATE CASCADE;
 
 
 --
--- TOC entry 2739 (class 2606 OID 29852)
+-- TOC entry 2739 (class 2606 OID 30042)
 -- Name: distribution distribution_protocol_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.distribution
-    ADD CONSTRAINT distribution_protocol_id_fkey FOREIGN KEY (protocol_id) REFERENCES public.protocol(protocol_id) ON UPDATE CASCADE ON DELETE NO ACTION;
+    ADD CONSTRAINT distribution_protocol_id_fkey FOREIGN KEY (protocol_id) REFERENCES public.protocol(protocol_id) ON UPDATE CASCADE;
 
 
--- Completed on 2018-07-20 08:55:41
+--
+-- TOC entry 2878 (class 0 OID 0)
+-- Dependencies: 196
+-- Name: TABLE dataset; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.dataset TO db_users;
+
+
+--
+-- TOC entry 2880 (class 0 OID 0)
+-- Dependencies: 197
+-- Name: SEQUENCE dataset_dataset_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.dataset_dataset_id_seq TO db_users;
+
+
+--
+-- TOC entry 2884 (class 0 OID 0)
+-- Dependencies: 198
+-- Name: TABLE dataset_keyword; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.dataset_keyword TO db_users;
+
+
+--
+-- TOC entry 2890 (class 0 OID 0)
+-- Dependencies: 199
+-- Name: TABLE distribution; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.distribution TO db_users;
+
+
+--
+-- TOC entry 2892 (class 0 OID 0)
+-- Dependencies: 200
+-- Name: SEQUENCE distribution_distribution_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.distribution_distribution_id_seq TO db_users;
+
+
+--
+-- TOC entry 2893 (class 0 OID 0)
+-- Dependencies: 201
+-- Name: SEQUENCE keyword_keyword_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.keyword_keyword_id_seq TO db_users;
+
+
+--
+-- TOC entry 2898 (class 0 OID 0)
+-- Dependencies: 202
+-- Name: TABLE keyword; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.keyword TO db_users;
+
+
+--
+-- TOC entry 2901 (class 0 OID 0)
+-- Dependencies: 203
+-- Name: TABLE protocol; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.protocol TO db_users;
+
+
+--
+-- TOC entry 2903 (class 0 OID 0)
+-- Dependencies: 204
+-- Name: SEQUENCE protocol_protocol_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.protocol_protocol_id_seq TO db_users;
+
+
+--
+-- TOC entry 2908 (class 0 OID 0)
+-- Dependencies: 205
+-- Name: TABLE survey; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.survey TO db_users;
+
+
+--
+-- TOC entry 2910 (class 0 OID 0)
+-- Dependencies: 206
+-- Name: SEQUENCE survey_survey_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.survey_survey_id_seq TO db_users;
+
+
+-- Completed on 2018-07-20 10:20:16
 
 --
 -- PostgreSQL database dump complete
