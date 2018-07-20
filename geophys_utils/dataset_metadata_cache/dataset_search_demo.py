@@ -11,6 +11,8 @@ def main():
     endpoint_list = sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
                                                  protocol='opendap',
                                                  #ll_ur_coords=[[-179.9, -90.0], [180.0, 90.0]]
+                                                      # if search with no paramters reutrns everything.
+                                                      #ll lower left, upper right
                                                  ll_ur_coords=[[138.193588256836, -30.5767288208008], [138.480285644531, -30.1188278198242]]
                                                  )
     
@@ -21,3 +23,5 @@ def main():
     print('{} endpoints found.'.format(len(endpoint_list)))
 if __name__ == '__main__':
     main()
+
+    
