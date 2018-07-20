@@ -123,7 +123,7 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
         
         cursor = self.db_connection.cursor()
         
-        insert_dataset_sql = '''insert or ignore into dataset (
+        insert_dataset_sql = '''insert into dataset (
     dataset_title,
     survey_id,
     longitude_min,
@@ -144,7 +144,9 @@ values (
     :metadata_uuid
     )
 '''
-    
+        #logger.debug('insert_dataset_sql: {}'.format(insert_dataset_sql))
+        #logger.debug('params: {}'.format(params))
+        
         cursor.execute(insert_dataset_sql, params)
         self.db_connection.commit()
 
@@ -368,23 +370,25 @@ inner join dataset using(dataset_id)
 def main():
     sdmc = SQLiteDatasetMetadataCache(debug=True)
     
-    dataset = Dataset(dataset_title='Test Dataset {}'.format(datetime.now().isoformat()),
-                 ga_survey_id='1',
-                 longitude_min=0,
-                 longitude_max=0,
-                 latitude_min=0,
-                 latitude_max=0,
-                 convex_hull_polygon=None, 
-                 keyword_list=['blah', 'blah blah', 'blah blah blah', 'keyword1'],
-                 distribution_list=[Distribution(url='file://dataset_path',
-                                                 protocol='file'),
-                                    Distribution(url='https://opendap_endpoint',
-                                                 protocol='opendap'),
-                                    ],
-                 metadata_uuid=None
-                 )
-     
-    sdmc.add_dataset(dataset)
+    #===========================================================================
+    # dataset = Dataset(dataset_title='Test Dataset {}'.format(datetime.now().isoformat()),
+    #              ga_survey_id='1',
+    #              longitude_min=0,
+    #              longitude_max=0,
+    #              latitude_min=0,
+    #              latitude_max=0,
+    #              convex_hull_polygon=None, 
+    #              keyword_list=['blah', 'blah blah', 'blah blah blah', 'keyword1'],
+    #              distribution_list=[Distribution(url='file://dataset_path',
+    #                                              protocol='file'),
+    #                                 Distribution(url='https://opendap_endpoint',
+    #                                              protocol='opendap'),
+    #                                 ],
+    #              metadata_uuid=None
+    #              )
+    #  
+    # sdmc.add_dataset(dataset)
+    #===========================================================================
     
     print('Search results:')
     for url in sdmc.search_dataset_distributions(keyword_list=['blah', 'blah blah'],
