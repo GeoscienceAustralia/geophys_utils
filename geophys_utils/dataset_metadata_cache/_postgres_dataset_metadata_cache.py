@@ -58,9 +58,10 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
             self.db_connection.autocommit = False
             self.db_connection.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_READ_COMMITTED)
             
-        logger.debug('Connected to database {}:{}/{}'.format(self.postgres_host, 
+        logger.debug('Connected to database {}:{}/{} as {}'.format(self.postgres_host, 
                                                                        self.postgres_port, 
-                                                                       self.postgres_dbname))    
+                                                                       self.postgres_dbname,
+                                                                       self.postgres_user))    
 
     def __del__(self):
         '''
