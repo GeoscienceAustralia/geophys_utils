@@ -283,8 +283,8 @@ ON CONFLICT (distribution_url) DO NOTHING;
 
     def search_dataset_distributions(self,
                                      keyword_list,
-                                     ll_ur_coords,
-                                     protocol
+                                     protocol,
+                                     ll_ur_coords=None
                                      ):
         '''
         Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
@@ -292,12 +292,14 @@ ON CONFLICT (distribution_url) DO NOTHING;
         '''
         cursor = self.db_connection.cursor()
         
-        params = {'protocol_value': protocol,
-                  'longitude_min': ll_ur_coords[0][0],
+        params = {'protocol_value': protocol}
+
+        if ll_ur_coords:
+            params.update({'longitude_min': ll_ur_coords[0][0],
                   'longitude_max': ll_ur_coords[1][0],
                   'latitude_min': ll_ur_coords[0][1],
                   'latitude_max': ll_ur_coords[1][1],
-                  }
+                  })
 
         dataset_search_sql = """select distribution_url
 from distribution
@@ -314,11 +316,15 @@ inner join dataset using(dataset_id)
         
         dataset_search_sql += """where
     protocol_value = %(protocol_value)s
-    and longitude_min <= %(longitude_max)s
+"""
+        if ll_ur_coords:
+            dataset_search_sql += """    and longitude_min <= %(longitude_max)s
     and longitude_max >= %(longitude_min)s
     and latitude_min <= %(latitude_max)s
     and latitude_max >= %(latitude_min)s
 """
+        dataset_search_sql += """order by 1"""
+
 
         #logger.debug('dataset_search_sql: {}'.format(dataset_search_sql))
         

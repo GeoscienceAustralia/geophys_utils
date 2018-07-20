@@ -138,7 +138,7 @@ def main():
         nc_file_template = '*.nc'
     
 
-    nc2dmc = NetCDF2DatasetMetadataCache(debug=True)
+    nc2dmc = NetCDF2DatasetMetadataCache(debug=False)
     nc2dmc.populate_db(nc_root_dir,
                        nc_file_template=nc_file_template,
                        opendap_path_map=('/g/data2/uc0/rr2_dev/',
@@ -160,4 +160,3 @@ if __name__ == '__main__':
         logger.debug('Logging handlers set up for logger {}'.format(logger.name))
 
     main()
-           

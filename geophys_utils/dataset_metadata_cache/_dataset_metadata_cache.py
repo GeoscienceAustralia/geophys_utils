@@ -116,8 +116,8 @@ class DatasetMetadataCache(object):
     @abc.abstractmethod
     def search_dataset_distributions(self,
                                      keyword_list,
-                                     ll_ur_coords,
-                                     protocol
+                                     protocol,
+                                     ll_ur_coords=None
                                      ):
         '''
         Function to return URLs of specified distribution for all datasets with specified keywords and bounding box

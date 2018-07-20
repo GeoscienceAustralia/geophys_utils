@@ -323,8 +323,8 @@ values(:dataset_id,
 
     def search_dataset_distributions(self,
                                      keyword_list,
-                                     ll_ur_coords,
-                                     protocol
+                                     protocol,
+                                     ll_ur_coords=None # 
                                      ):
         '''
         Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
@@ -332,12 +332,14 @@ values(:dataset_id,
         '''
         cursor = self.db_connection.cursor()
         
-        params = {'protocol_value': protocol,
-                  'longitude_min': ll_ur_coords[0][0],
+        params = {'protocol_value': protocol}
+
+        if ll_ur_coords:
+            params.update({'longitude_min': ll_ur_coords[0][0],
                   'longitude_max': ll_ur_coords[1][0],
                   'latitude_min': ll_ur_coords[0][1],
                   'latitude_max': ll_ur_coords[1][1],
-                  }
+                  })
 
         dataset_search_sql = """select distribution_url
 from distribution
@@ -354,11 +356,14 @@ inner join dataset using(dataset_id)
         
         dataset_search_sql += """where
     protocol_value = :protocol_value
-    and longitude_min <= :longitude_max
+"""
+        if ll_ur_coords:
+            dataset_search_sql += """    and longitude_min <= :longitude_max
     and longitude_max >= :longitude_min
     and latitude_min <= :latitude_max
     and latitude_max >= :latitude_min
 """
+        dataset_search_sql += """order by 1"""
 
         #logger.debug('dataset_search_sql: {}'.format(dataset_search_sql))
         
@@ -391,9 +396,9 @@ def main():
     #===========================================================================
     
     print('Search results:')
-    for url in sdmc.search_dataset_distributions(keyword_list=['blah', 'blah blah'],
-                                                 ll_ur_coords=[[-1, -1], [1, 1]],
-                                                 protocol='file'
+    for url in sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+                                                 protocol='opendap',
+                                                 ll_ur_coords=None
                                                  ):
         print(url)
                 
