@@ -383,8 +383,8 @@ class NetCDF2kmlConverter(object):
 
             return points_folder
         else:
-            print("no points in view")
-            return points_folder
+            #print("no points in view")
+            return None
             #return "<Folder><name>No points in view</name></Folder>"
 
 
