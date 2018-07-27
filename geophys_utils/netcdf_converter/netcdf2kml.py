@@ -266,12 +266,6 @@ class NetCDF2kmlConverter(object):
                 if points_read % skip_points != 0:
                     continue
 
-                # <b>Observation Number: </b><br>
-                # key long name: value <br>
-                #
-
-                # print(point_data[0])
-                # add new points with netcdf file Obsno as title and long and lat as coordinatess
 
                 new_point = points_folder.newpoint(name="Point no. " + str(point_data[0]),
                                                    coords=[(point_data[2], point_data[1])])
@@ -294,17 +288,17 @@ class NetCDF2kmlConverter(object):
 
                 new_point.description = description_string
 
-                # set the point icon. Different urls can be found in point style options in google earth
-                new_point.style.iconstyle.icon.href = self.POINT_ICON_STYLE_LINK
-                new_point.style.iconstyle.scale = 0.7
-                new_point.labelstyle.scale = 0  # removes the label
+                # # set the point icon. Different urls can be found in point style options in google earth
+                # new_point.style.iconstyle.icon.href = self.POINT_ICON_STYLE_LINK
+                # new_point.style.iconstyle.scale = 0.7
+                # new_point.labelstyle.scale = 0  # removes the label
         else:
             print("no points in view")
             points_folder = None
 
         return points_folder
 
-    def do_the_things(self, points_folder, kml, bounding_box):
+    def do_the_things(self, points_folder, bounding_box, point_style):
 
         t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
         # netcdf_path = "http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc"
@@ -320,16 +314,13 @@ class NetCDF2kmlConverter(object):
         print(bounding_box)
 
         t2 = time.time()  # create the spatial mask
-        bounding_box3 = [float(coord) for coord in bounding_box]
-        print('bounding_box3')
-        print(bounding_box3)
-        spatial_mask = self.npu.get_spatial_mask(bounding_box3)
-        print(spatial_mask)
+        bounding_box_floats = [float(coord) for coord in bounding_box]
+        spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
         t3 = time.time()  # get the points and variable info from point generator
         if True in spatial_mask:
             # when ordered through the all_point_data_generator it appears to come out as [obsno, lat, long, then everything else as in field_list]
             field_list = ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype',
-                          'reliab']  # , 'freeair', '', '']
+                          'reliab', 'gridflag']  # , 'freeair', '', '']
 
             point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
             variable_attributes = next(point_data_generator)
@@ -346,7 +337,7 @@ class NetCDF2kmlConverter(object):
 
                 # add new points with netcdf file Obsno as title and long and lat as coordinatess
 
-                new_point = points_folder.newpoint(name="Point no. " + str(point_data[0]),
+                new_point = points_folder.newpoint(name="Observation no. " + str(point_data[0]),
                                                    coords=[(point_data[2], point_data[1])])
 
                 description_string = '<![CDATA[' \
@@ -355,6 +346,7 @@ class NetCDF2kmlConverter(object):
                                      '<p><b>{6}: </b>{7} {8}</p>' \
                                      '<p><b>{9}: </b>{10}</p> ' \
                                      '<p><b>{11}: </b>{12}</p>' \
+                                     '<p><b>{13}: </b>{14}</p>' \
                                      ']]>'.format(
                     variable_attributes['grav'].get('long_name'), point_data[3],
                     variable_attributes['grav'].get('units'),
@@ -363,15 +355,17 @@ class NetCDF2kmlConverter(object):
                     variable_attributes['bouguer'].get('long_name'), point_data[5],
                     variable_attributes['bouguer'].get('units'),  # bouguer
                     variable_attributes['stattype'].get('long_name'), point_data[6],  # station type
-                    variable_attributes['reliab'].get('long_name'), point_data[7]  # reliability
+                    variable_attributes['reliab'].get('long_name'), point_data[7],  # reliability
+                    variable_attributes['gridflag'].get('long_name'), point_data[8]  # Gridflag
                 )
 
                 new_point.description = description_string
 
-                # set the point icon. Different urls can be found in point style options in google earth
-                new_point.style.iconstyle.icon.href = POINT_ICON_STYLE_LINK
-                new_point.style.iconstyle.scale = 0.7
-                new_point.labelstyle.scale = 0  # removes the label
+                new_point.style = point_style
+                # # set the point icon. Different urls can be found in point style options in google earth
+                # new_point.style.iconstyle.icon.href = POINT_ICON_STYLE_LINK
+                # new_point.style.iconstyle.scale = 0.7
+                # new_point.labelstyle.scale = 0  # removes the label
 
             t5 = time.time()
 

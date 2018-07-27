@@ -46,6 +46,13 @@ def do_everything(bounding_box):
         # ll lower left, upper right
         ll_ur_coords=[[west, south], [east, north]]
         )
+
+    # set style
+    point_style = simplekml.Style()
+    point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+    point_style.iconstyle.scale = 0.7
+    point_style.labelstyle.scale = 0  # removes the label
+
     t2 = time.time()
     print("ENDPOINT LIST" + str(endpoint_list))
     kml = simplekml.Kml()
@@ -56,7 +63,6 @@ def do_everything(bounding_box):
         if len(endpoint_list) > 0:
             netcdf_file_folder = kml.newfolder()
             for netcdf in endpoint_list:
-
 
                 print("NETCDF: " + str(netcdf))
 
@@ -71,24 +77,19 @@ def do_everything(bounding_box):
 
                     dataset_points_region = converter_obj.build_region(100, -1,
                                                                        converter_obj.MIN_FADE_EXTENT, converter_obj.MAX_FADE_EXTENT)
-
                     netcdf_file_folder.region = dataset_points_region
 
-
                     ta = time.time()
-                    converter_obj.do_the_things(netcdf_file_folder, kml, bbox_list)
-
+                    new_survey_folder = netcdf_file_folder.newfolder(name=converter_obj.survey_title + " " + converter_obj.survey_id)
+                    new_survey_folder = converter_obj.do_the_things(new_survey_folder, bbox_list, point_style)
 
                     tb = time.time()
                     print("do the things time: " + str(tb-ta))
 
-
-
                     print(netcdf_file_folder)
-
-                    #all_points_folder = all_points_folder.survey_points_folder
+                    # all_points_folder = all_points_folder.survey_points_folder
                     # insert built point region into point folder
-                    #points_folder = converter_obj.do_the_things(netcdf, points_folder, query_string)
+                    # points_folder = converter_obj.do_the_things(netcdf, points_folder, query_string)
 
                     #all_the_points = all_the_points + str(points_folder)
 
