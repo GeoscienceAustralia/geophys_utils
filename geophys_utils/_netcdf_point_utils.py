@@ -97,13 +97,13 @@ class NetCDFPointUtils(NetCDFUtils):
         self.xycoords = self._nc_cache_dataset.variables['xycoords']
         self.xycoords[:,0] = self.fetch_array(x_variable)
         self.xycoords[:,1] = self.fetch_array(y_variable)
- 
+
         # Determine exact spatial bounds
         xmin = np.nanmin(self.xycoords[:,0])
         xmax = np.nanmax(self.xycoords[:,0])
         ymin = np.nanmin(self.xycoords[:,1])
         ymax = np.nanmax(self.xycoords[:,1])
-        
+
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
         self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
@@ -160,9 +160,10 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         if bounds_wkt is None:
             coordinates = self.xycoords
+
         else:
             coordinates = np.array(transform_coords(self.xycoords[:], self.wkt, bounds_wkt))
-            
+
         return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
                               np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
                               )

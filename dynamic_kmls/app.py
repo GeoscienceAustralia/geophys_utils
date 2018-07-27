@@ -47,11 +47,13 @@ def do_everything(bounding_box):
         ll_ur_coords=[[west, south], [east, north]]
         )
 
-    # set style
+    # set point style
     point_style = simplekml.Style()
     point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
     point_style.iconstyle.scale = 0.7
     point_style.labelstyle.scale = 0  # removes the label
+
+
 
     t2 = time.time()
     print("ENDPOINT LIST" + str(endpoint_list))
@@ -129,6 +131,11 @@ def do_everything(bounding_box):
 
     else:  # polygons only
 
+        # set polygon style
+        polygon_style = simplekml.Style()
+        polygon_style.polystyle.color = '990000ff'  # Transparent red
+        polygon_style.polystyle.outline = 1
+
         if len(endpoint_list) > 0:
              netcdf_file_folder = kml.newfolder()
              for netcdf in endpoint_list:
@@ -137,7 +144,7 @@ def do_everything(bounding_box):
                 converter_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
                 print(converter_obj.npu.point_count)
                 if converter_obj.npu.point_count > 2:
-                    polygon_folder, polygon = converter_obj.build_polygon(netcdf_file_folder)
+                    polygon_folder, polygon = converter_obj.build_polygon(netcdf_file_folder, polygon_style)
                     dataset_polygon_region = converter_obj.build_region(converter_obj.MAX_LOD_PIXELS, -1,
                                                                converter_obj.MIN_FADE_EXTENT, converter_obj.MAX_FADE_EXTENT)
                     polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
@@ -146,6 +153,7 @@ def do_everything(bounding_box):
                     print("not enough points")
                     #empty_folder = kml.newfolder(name="no points in view")
                     #return str(empty_folder)
+             neww = kml.save("test_polygon.kml")
              return str(netcdf_file_folder)
 
         else:
