@@ -15,18 +15,12 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 app = Flask(__name__)
 api = Api(app)
 
-
-
-
-
 @app.route('/<bounding_box>',methods=['GET'])
 def do_everything(bounding_box):
 
-
     t0 = time.time()  # retrieve coordinates from query
+
     query_string = request.args
-    # print('query done!')
-    # print(time.time())
     bbox = query_string['BBOX']
     bbox_list = bbox.split(',')
     west = float(bbox_list[0])
@@ -34,70 +28,70 @@ def do_everything(bounding_box):
     east = float(bbox_list[2])
     north = float(bbox_list[3])
 
-    print("GET POINTS")
     t1 = time.time()
-    sdmc = SQLiteDatasetMetadataCache(debug=True)
+    print("Retrieve bbox values from get request...")
+    print("Time: " + str(t1-t0))
 
+    # Get the netcdf surveys from the database that are within the bbox
+    sdmc = SQLiteDatasetMetadataCache(debug=True)
     endpoint_list = sdmc.search_dataset_distributions(
         keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
         protocol='opendap',
-        # ll_ur_coords=[[-179.9, -90.0], [180.0, 90.0]]
-        # if search with no paramters reutrns everything.
-        # ll lower left, upper right
         ll_ur_coords=[[west, south], [east, north]]
         )
-
-    # set point style
-    point_style = simplekml.Style()
-    point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
-    point_style.iconstyle.scale = 0.7
-    point_style.labelstyle.scale = 0  # removes the label
-
-
-
     t2 = time.time()
+    print("Retrieve netcdf strings from database...")
+    print("Time: " + str(t2-t1))
     print("ENDPOINT LIST" + str(endpoint_list))
-    kml = simplekml.Kml()
 
-    # low zoom, show polygons only. High zoom show points
+
+    kml = simplekml.Kml()
+    # ----------------------------------------------------------------------------------------------------------------
+    # low zoom, show points only.
     if east - west < 1:
 
         if len(endpoint_list) > 0:
+
+            # set point style
+            point_style = simplekml.Style()
+            point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+            point_style.iconstyle.scale = 0.7
+            point_style.labelstyle.scale = 0  # removes the label
+
             netcdf_file_folder = kml.newfolder()
+
             for netcdf in endpoint_list:
 
-                print("NETCDF: " + str(netcdf))
+                print("Building NETCDF: " + str(netcdf))
 
-                converter_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
-                print(converter_obj.npu.point_count)
-                if converter_obj.npu.point_count > 2:
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
 
-#                    polygon_folder, polygon = converter_obj.build_polygon(netcdf_file_folder)
+                t3 = time.time()
+                print("set style and create netcdf2kmlconverter instance of netcdf file ...")
+                print("Time: " + str(t3 - t2))
+                print("ENDPOINT LIST" + str(endpoint_list))
 
-                    #dataset_polygon_region = converter_obj.build_region(converter_obj.MAX_LOD_PIXELS, -1,
-                                                           #    converter_obj.MIN_FADE_EXTENT, converter_obj.MAX_FADE_EXTENT)
+                print("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
+                if netcdf2kml_obj.npu.point_count > 2:
 
-                    dataset_points_region = converter_obj.build_region(100, -1,
-                                                                       converter_obj.MIN_FADE_EXTENT, converter_obj.MAX_FADE_EXTENT)
+                    dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
                     netcdf_file_folder.region = dataset_points_region
 
                     ta = time.time()
-                    new_survey_folder = netcdf_file_folder.newfolder(name=converter_obj.survey_title + " " + converter_obj.survey_id)
-                    new_survey_folder = converter_obj.do_the_things(new_survey_folder, bbox_list, point_style)
+                    new_survey_folder = netcdf_file_folder.newfolder(name=netcdf2kml_obj.survey_title + " " +
+                                                                          netcdf2kml_obj.survey_id)
+                    new_survey_folder = netcdf2kml_obj.build_points(new_survey_folder, bbox_list, point_style)
 
                     tb = time.time()
                     print("do the things time: " + str(tb-ta))
 
                     print(netcdf_file_folder)
-                    # all_points_folder = all_points_folder.survey_points_folder
-                    # insert built point region into point folder
-                    # points_folder = converter_obj.do_the_things(netcdf, points_folder, query_string)
+                    print("Build the point ...")
+                    print("Time: " + str(t4 - t3))
+                    print("ENDPOINT LIST" + str(endpoint_list))
 
-                    #all_the_points = all_the_points + str(points_folder)
+                elif netcdf2kml_obj.npu.point_count == 0:
 
-                elif converter_obj.npu.point_count == 0:
-                    #empty_folder = kml.newfolder(name="no points in view")
-                    #return str(empty_folder)
                     print('nada')
 
                 # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
@@ -106,30 +100,20 @@ def do_everything(bounding_box):
                     #empty_folder = kml.newfolder(name="no points in view")
                     #return str(empty_folder)
 
-            new = kml.save("testtt.kml")
-            print("saved: " + str(new))
-            t3 = time.time()
-            print("query time: " + str(t1 - t0))
-            print("database search time: " + str(t2 - t1))
-            print("the rest time: " + str(t3 - t2))
+
+            t4 = time.time()
+
+
             return str(netcdf_file_folder)
-                #list_of_converter_objects.append(NetCDF2kmlConverter(netcdf))
 
-        # then add the network link using this args.server
-        elif len(endpoint_list) == 0:
-            #empty_folder = kml.newfolder(name="no points in view")
-            #return str(empty_folder)
-            pass
-        # for surveys with 1 or 2 points. Can't make a polygon.
+
         else:
-            print("not enough points")
-            #empty_folder = kml.newfolder(name="no points in view")
-            #return str(empty_folder)
-            # single
-            #print("single survey")
+            print("No surveys in view")
 
-
-    else:  # polygons only
+    # ----------------------------------------------------------------------------------------------------------------
+    # Zoomed in, show polygons only.
+    else:
+        t_polygon_1 = time.time()
 
         # set polygon style
         polygon_style = simplekml.Style()
@@ -141,25 +125,28 @@ def do_everything(bounding_box):
              for netcdf in endpoint_list:
                 print("NETCDF: " + str(netcdf))
 
-                converter_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
-                print(converter_obj.npu.point_count)
-                if converter_obj.npu.point_count > 2:
-                    polygon_folder, polygon = converter_obj.build_polygon(netcdf_file_folder, polygon_style)
-                    dataset_polygon_region = converter_obj.build_region(converter_obj.MAX_LOD_PIXELS, -1,
-                                                               converter_obj.MIN_FADE_EXTENT, converter_obj.MAX_FADE_EXTENT)
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
+                t_polygon_2 = time.time()
+                print("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
+                print("Time: " + str(t_polygon_2 - t_polygon_1))
+                print("ENDPOINT LIST" + str(endpoint_list))
+
+                print(netcdf2kml_obj.npu.point_count)
+                if netcdf2kml_obj.npu.point_count > 2:
+                    polygon_folder, polygon = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
+                    dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
                     polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
 
                 else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
                     print("not enough points")
                     #empty_folder = kml.newfolder(name="no points in view")
                     #return str(empty_folder)
-             neww = kml.save("test_polygon.kml")
+            # neww = kml.save("test_polygon.kml")
              return str(netcdf_file_folder)
 
         else:
             empty_folder = kml.newfolder(name="no points in view")
             return str(empty_folder)
-
 
 app.run(debug=True)
 

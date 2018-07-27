@@ -41,8 +41,7 @@ class NetCDF2kmlConverter(object):
 
         # Distance over which the geometry fades, from fully opaque to fully transparent.
         # This ramp value, expressed in screen pixels, is applied at the minimum end of the LOD (visibility) limits.
-        self.MIN_FADE_EXTENT = 200
-        self.MAX_FADE_EXTENT = 800
+
 
         # point constants
         self.POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
@@ -61,18 +60,25 @@ class NetCDF2kmlConverter(object):
         Basic calculation to get an idea of the dataset point density. This could be used to dynamically set the
         min_lod_pixels, max_lod_pixels, and point scale to get the best visual outcome. A higher density may need a smaller
         point scale or even an additional region.
-        :return:
+        :return: Currently just prints to output
         """
         print("Point Count: {}".format(self.npu.point_count))
         print("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
         print("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
 
 
-    def build_region(self, min_lod_pixels, max_lod_pixels, min_fade_extent, max_fade_extent):
+    def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
-        Builds a kml region based on the input parameters.
-        :return: the region object.
+        Builds a kml region.
+        lod parameters are the measurements in screen pixels that represents the maximum limit of the visibility range
+        for a given Region.
+        :param min_lod_pixels:
+        :param max_lod_pixels: -1 the default, indicates "active to infinite size."
+        :param min_fade_extent:
+        :param max_fade_extent:
+        :return: region object in simplekml
         """
+
         region = simplekml.Region(latlonaltbox="<north>" + str(self.north_extent) + "</north>" +
                                                "<south>" + str(self.south_extent) + "</south>" +
                                                "<east>" + str(self.east_extent) + "</east>" +
@@ -85,13 +91,13 @@ class NetCDF2kmlConverter(object):
         return region
 
 
-    def build_polygon(self, parent_folder):
+    def build_polygon(self, parent_folder, polygon_style):
         """
-        Sets a containing folder for the polygon, builds a new convex hull polygon, and styles the polygon.
-        This polygon is the
-        :return: the folder containing the polygon, and the polygon object.
+        Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
+        :param parent_folder:
+        :param polygon_style:
+        :return: the input parent folder now containig the polygon and the polygon itself if that is desired instead.
         """
-        #polygon_folder = self.kml.newfolder()
 
         # get the polygon points from the netcdf global attributes
         polygon_bounds = re.sub(',\s', ',', self.npu.netcdf_dataset.geospatial_bounds) # cut out space after comma between coord sets
@@ -100,12 +106,11 @@ class NetCDF2kmlConverter(object):
         polygon_bounds = polygon_bounds.split(',') # turn the string into a list, seperating on the commas
         polygon_bounds = [tuple(p.split(' ')) for p in polygon_bounds] # within each coord set split the lat and long - group the set in a tuple
 
+        # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
         pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id),
                              outerboundaryis=polygon_bounds)
 
-        # polygon styling
-        pol.style.polystyle.color = '990000ff'  # Transparent red
-        pol.style.polystyle.outline = 1
+        pol.style = polygon_style
 
         return parent_folder, pol
 
@@ -132,49 +137,22 @@ class NetCDF2kmlConverter(object):
         assert index == count
         return points_folder
 
-    # def plot_dynamic_points_in_kml(self):
-    #     spatial_mask = self.npu.get_spatial_mask(self.npu.bounds)
-    #     field_list = ['latitude', 'longitude']
-    #     point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
-    #
-    #     variable_attributes = next(point_data_generator)
-    #     # print(variable_attributes.keys())
-    #     # print(variable_attributes)
-    #
-    #     # Use long names instead of variable names where they exist
-    #     field_names = [variable_attributes[variable_name].get('long_name') or variable_name for variable_name in
-    #                    variable_attributes.keys()]
-    #     print('field_names: {}'.format(field_names))
-    #
-    #     points_folder = self.kml.newfolder()
-    #     for point_data in point_data_generator:
-    #         print(point_data[0])
-    #         # add new points with netcdf file Obsno as title and long and lat as coordinatess
-    #         new_point = points_folder.newpoint(name="point", coords=[(point_data[0], point_data[1])])
-    #         # set the point icon. Different urls can be found in point style options in google earth
-    #         new_point.style.iconstyle.icon.href = self.POINT_ICON_STYLE_LINK
-    #         new_point.style.iconstyle.scale = 0.7
-    #         new_point.labelstyle.scale = 0  # removes the label
-    #     print(points_folder)
-    #     return points_folder
-
 
     def build_dynamic_network_link(self, containing_folder):
         """
-        Build a network link, set the parameters, and place in the specified folder.
+        Build a network link, set the parameters, and inserts into the specified containing folder.
         """
         net_link = containing_folder.newnetworklink(name="Network Link")
         net_link.link.href = "http://127.0.0.1:5000/query"
         net_link.link.viewrefreshmode = simplekml.ViewRefreshMode.onstop
         net_link.link.viewrefreshtime = 1
         net_link.link.refreshinterval = 2
+
         return net_link
 
-    def build_multiple_kmls(self, list_of_surveys):
 
-        pass
 
-    def find_subset(self):
+       def find_subset(self):
 
         lats = self.npu.netcdf_dataset.variables['latitude'][:]
         longs = self.npu.netcdf_dataset.variables['longitude'][:]
@@ -190,124 +168,26 @@ class NetCDF2kmlConverter(object):
         #print(data)
 
 
-        # lats = npu.netcdf_dataset.variables['latitude'][:]
-        # lons = npu.netcdf_dataset.variables['longitude'][:]
-        # latbounds = [south_extent + 0.5, north_extent - 0.5]
-        # lonbounds = [west_extent + 0.5, east_extent - 0.5]  # degrees east ?
-        #
-        # # latitude lower and upper index
-        # latli = np.argmin(np.abs(lats - latbounds[0]))
-        # latui = np.argmin(np.abs(lats - latbounds[1]))
-        #
-        # # longitude lower and upper index
-        # lonli = np.argmin(np.abs(lons - lonbounds[0]))
-        # lonui = np.argmin(np.abs(lons - lonbounds[1]))
-        #
-        # # Air (time, latitude, longitude)
-        # print(npu.netcdf_dataset.variables['Obsno'][lonli:lonui])
-        # airSubset = npu.netcdf_dataset.variables['Obsno'][:, latli:latui, lonli:lonui]
-        # print(airSubset)
-        # print([south_extent, north_extent, west_extent, east_extent])
-
     def build_static_kml(self):
         polygon_folder = self.kml.newfolder()
         polygon_folder, polygon = self.build_polygon(polygon_folder)
-        #dataset_points_folder = plot_points_in_kml()
-        #dataset_points_folder = plot_dynamic_points_in_kml()
-        dataset_polygon_region = self.build_region(self.MAX_LOD_PIXELS, self.MIN_LOD_PIXELS + 400, self.MIN_FADE_EXTENT, self.MAX_FADE_EXTENT)
-        dataset_points_region = self.build_region(self.MIN_LOD_PIXELS - 200, self.MAX_LOD_PIXELS, self.MIN_FADE_EXTENT, self.MAX_FADE_EXTENT)
+        dataset_polygon_region = self.build_region(-2, 600, 200, 800)
+        dataset_points_region = self.build_region(0, -1, 200, 800)
 
         points_folder = self.build_points_2()
+
         # structure them correctly
         polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-
         points_folder.region = dataset_points_region  # insert built point region into point folder
 
         return self.kml
 
-    def build_dynamic_kml(self):
 
-        polygon_folder, polygon = self.build_polygon()
-        dataset_polygon_region = self.build_region(self.MAX_LOD_PIXELS, self.MIN_LOD_PIXELS + 400, self.MIN_FADE_EXTENT, self.MAX_FADE_EXTENT)
-        dataset_points_region = self.build_region(self.MIN_LOD_PIXELS - 200, self.MAX_LOD_PIXELS, self.MIN_FADE_EXTENT, self.MAX_FADE_EXTENT)
-        points_folder = self.kml.newfolder()
-        dataset_network_link = self.build_dynamic_network_link(points_folder)
-
-        # structure them correctly
-        polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-        #dataset_points_folder.region = dataset_points_region  # insert built point region into point folder
-        dataset_network_link.region = dataset_points_region
-        #find_subset()
-
-        return self.kml
-
-    def build_points_2(self):
-
-        spatial_mask = self.npu.get_spatial_mask([130, -40, 150, -5])
-        print(spatial_mask)
-        if True in spatial_mask:
-            points_folder = self.kml.newfolder()
-            field_list = ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype',
-                          'reliab']  # , 'freeair', '', '']
-            print("before point gen")
-            point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
-            variable_attributes = next(point_data_generator)
-            print(point_data_generator)
-            # Use long names instead of variable names where they exist
-            # field_names = [variable_attributes[variable_name].get('long_name') or variable_name for variable_name in
-            #                variable_attributes.keys()]
-
-            skip_points = 3
-            points_read = 0
-            for point_data in point_data_generator:
-                points_read += 1
-
-                # ignore points between skip_points
-                if points_read % skip_points != 0:
-                    continue
-
-
-                new_point = points_folder.newpoint(name="Point no. " + str(point_data[0]),
-                                                   coords=[(point_data[2], point_data[1])])
-
-                description_string = '<![CDATA[' \
-                                     '<p><b>{0}: </b>{1} {2}</p>' \
-                                     '<p><b>{3}: </b>{4} {5}</p> ' \
-                                     '<p><b>{6}: </b>{7} {8}</p>' \
-                                     '<p><b>{9}: </b>{10}</p> ' \
-                                     '<p><b>{11}: </b>{12}</p>' \
-                                     ']]>'.format(
-                    variable_attributes['grav'].get('long_name'), point_data[3], variable_attributes['grav'].get('units'),
-                    variable_attributes['freeair'].get('long_name'), point_data[4],
-                    variable_attributes['freeair'].get('units'),  # free air
-                    variable_attributes['bouguer'].get('long_name'), point_data[5],
-                    variable_attributes['bouguer'].get('units'),  # bouguer
-                    variable_attributes['stattype'].get('long_name'), point_data[6],  # station type
-                    variable_attributes['reliab'].get('long_name'), point_data[7]  # reliability
-                )
-
-                new_point.description = description_string
-
-                # # set the point icon. Different urls can be found in point style options in google earth
-                # new_point.style.iconstyle.icon.href = self.POINT_ICON_STYLE_LINK
-                # new_point.style.iconstyle.scale = 0.7
-                # new_point.labelstyle.scale = 0  # removes the label
-        else:
-            print("no points in view")
-            points_folder = None
-
-        return points_folder
-
-    def do_the_things(self, points_folder, bounding_box, point_style):
+    def build_points(self, points_folder, bounding_box, point_style):
 
         t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
-        # netcdf_path = "http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc"
-        # 195256
-        # netcdf_path = "C:\\Users\\u62231\\Desktop\\grav_data_10_july\\201780.nc"
-        # 195105
-        # 201780
 
-        POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+        #POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
         survey_title = str(self.npu.netcdf_dataset.getncattr('title'))
         print('bounding_box')
@@ -336,10 +216,9 @@ class NetCDF2kmlConverter(object):
                     continue
 
                 # add new points with netcdf file Obsno as title and long and lat as coordinatess
-
                 new_point = points_folder.newpoint(name="Observation no. " + str(point_data[0]),
                                                    coords=[(point_data[2], point_data[1])])
-
+                # set point html for pop up description.
                 description_string = '<![CDATA[' \
                                      '<p><b>{0}: </b>{1} {2}</p>' \
                                      '<p><b>{3}: </b>{4} {5}</p> ' \
@@ -359,28 +238,20 @@ class NetCDF2kmlConverter(object):
                     variable_attributes['gridflag'].get('long_name'), point_data[8]  # Gridflag
                 )
 
-                new_point.description = description_string
-
-                new_point.style = point_style
-                # # set the point icon. Different urls can be found in point style options in google earth
-                # new_point.style.iconstyle.icon.href = POINT_ICON_STYLE_LINK
-                # new_point.style.iconstyle.scale = 0.7
-                # new_point.labelstyle.scale = 0  # removes the label
+                new_point.description = description_string  # set description to point
+                new_point.style = point_style  # set style to point
 
             t5 = time.time()
 
-            # time_get_query_points = t1 - t0
-            # time_create_netcdf_object = t2 - t1
-            # time_create_spatial_mask = t3 - t2
-            # time_point_gen = t4 - t3
-            # time_create_points = t5 - t4
 
             return points_folder
         else:
             #print("no points in view")
             return None
-            #return "<Folder><name>No points in view</name></Folder>"
-
+    # def build_html_description_string(self, field_list, point_data_generator):
+    #
+    #     for field in field_list:
+    #         if variable_attributes
 
 def main():
 
