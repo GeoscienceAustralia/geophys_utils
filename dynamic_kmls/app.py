@@ -87,7 +87,7 @@ def do_everything(bounding_box):
 
                     print(netcdf_file_folder)
                     print("Build the point ...")
-                    print("Time: " + str(t4 - t3))
+                    #print("Time: " + str(t4 - t3))
                     print("ENDPOINT LIST" + str(endpoint_list))
 
                 elif netcdf2kml_obj.npu.point_count == 0:
