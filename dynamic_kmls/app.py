@@ -67,44 +67,34 @@ def do_everything(bounding_box):
 
                 print("Building NETCDF: " + str(netcdf[2]))
 
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf[2])
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
 
                 t3 = time.time()
                 print("set style and create netcdf2kmlconverter instance of netcdf file ...")
                 print("Time: " + str(t3 - t2))
 
                 #print("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
-                if netcdf2kml_obj.npu.point_count > 2:
 
-                    dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
-                    netcdf_file_folder.region = dataset_points_region
 
-                    ta = time.time()
-                    new_survey_folder = netcdf_file_folder.newfolder(name=netcdf2kml_obj.survey_title + " " +
-                                                                          netcdf2kml_obj.survey_id)
-                    print(new_survey_folder)
-                    print(bbox_list)
-                    print(point_style)
-                    new_survey_folder = netcdf2kml_obj.build_points(new_survey_folder, bbox_list, point_style)
+                dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
+                netcdf_file_folder.region = dataset_points_region
+                print("HERE")
+                print(netcdf2kml_obj.survey_title)
+                ta = time.time()
+                new_survey_folder = netcdf_file_folder.newfolder(name=str(netcdf2kml_obj.survey_title) + " " +
+                                                                          str(netcdf2kml_obj.survey_id))
+                print(new_survey_folder)
+                print(bbox_list)
+                print(point_style)
+                new_survey_folder = netcdf2kml_obj.build_points(new_survey_folder, bbox_list, point_style)
 
-                    tb = time.time()
-                    print("do the things time: " + str(tb-ta))
+                tb = time.time()
+                print("do the things time: " + str(tb-ta))
 
-                    #print(netcdf_file_folder)
-                    print("Build the point ...")
-                    #print("Time: " + str(t4 - t3))
-                    #print("ENDPOINT LIST" + str(endpoint_list))
-
-                elif netcdf2kml_obj.npu.point_count == 0:
-
-                    print('nada')
-
-                # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
-                else:
-                    print("not enough points")
-                    #empty_folder = kml.newfolder(name="no points in view")
-                    #return str(empty_folder)
-
+                #print(netcdf_file_folder)
+                print("Build the point ...")
+                #print("Time: " + str(t4 - t3))
+                #print("ENDPOINT LIST" + str(endpoint_list))
 
             t4 = time.time()
 
@@ -120,13 +110,21 @@ def do_everything(bounding_box):
 
         # set polygon style
         polygon_style = simplekml.Style()
-        polygon_style.polystyle.color = '990000ff'  # Transparent red
+        polygon_style.polystyle.color = 'B30000ff'  # Transparent red
+        #polygon_style.polystyle.color = 'ff4545'
         polygon_style.polystyle.outline = 1
+
+
+        polygon_style_background = simplekml.Style()
+        polygon_style_background.polystyle.color = '7FFFFFFF'  # Transparent white
+        polygon_style_background.polystyle.outline = 1
 
         if len(endpoint_list) > 0:
              netcdf_file_folder = kml.newfolder()
              for netcdf in endpoint_list:
                  print("NETCDF: " + str(netcdf))
+
+
 
                  netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
                  t_polygon_2 = time.time()
@@ -136,7 +134,11 @@ def do_everything(bounding_box):
 
                  #if netcdf2kml_obj.npu.point_count > 2:
                  #if netcdf[4]: # if gridflag is 1 (true)
-                 polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
+                 if netcdf[8]:
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
+                 else:
+                     polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style, False)
+
                  dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
                  polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
 
