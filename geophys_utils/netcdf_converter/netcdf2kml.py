@@ -1,12 +1,9 @@
 import simplekml
 import netCDF4
-import numpy as np
 from geophys_utils import NetCDFPointUtils
 import re
-import sys
-import argparse
 import time
-
+from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 
 class NetCDF2kmlConverter(object):
 
@@ -32,40 +29,13 @@ class NetCDF2kmlConverter(object):
         self.east_extent = self.npu.netcdf_dataset.getncattr('geospatial_lon_max')
         self.south_extent = self.npu.netcdf_dataset.getncattr('geospatial_lat_min')
         self.north_extent = self.npu.netcdf_dataset.getncattr('geospatial_lat_max')
-        print("WEST EXTENT")
-        print(self.west_extent)
-        # set kml region constants
-        # Measurement in screen pixels that represents the maximum limit of the visibility range for a given Region.
-        self.MIN_LOD_PIXELS = 1200
-        self.MAX_LOD_PIXELS = -1  # -1 the default, indicates "active to infinite size."
-
-        # Distance over which the geometry fades, from fully opaque to fully transparent.
-        # This ramp value, expressed in screen pixels, is applied at the minimum end of the LOD (visibility) limits.
 
 
-        # point constants
-        self.POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
 
-        # print(west_extent)
-        # print("MASK")
-        # mask = np.zeros(shape=(npu.point_count,), dtype='bool')
-        # mask[-10:] = True
-        # print(mask)
+        self.point_icon_style_link = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
 
     # -----------------------bounds------------
     #        self.bounds = [xmin, ymin, xmax, ymax]
-
-    def get_basic_density_measurement(self):
-        """
-        Basic calculation to get an idea of the dataset point density. This could be used to dynamically set the
-        min_lod_pixels, max_lod_pixels, and point scale to get the best visual outcome. A higher density may need a smaller
-        point scale or even an additional region.
-        :return: Currently just prints to output
-        """
-        print("Point Count: {}".format(self.npu.point_count))
-        print("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
-        print("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
-
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
@@ -115,79 +85,11 @@ class NetCDF2kmlConverter(object):
         return parent_folder, pol
 
 
-    def plot_points_in_kml(self):
-        """
-        Loop through points in the netcdf file, and build and style each point as a kml place mark point.
-        :return: The point folder. This folder is called to insert the corresponding region
-        """
-        index = 0
-        count = self.npu.point_count
-        points_folder = self.kml.newfolder()
-        while index < count:
-            # add new points with netcdf file Obsno as title and long and lat as coordinatess
-            new_point = points_folder.newpoint(name=str(self.npu.netcdf_dataset.variables["obsno"][index]),
-            coords=[(self.npu.netcdf_dataset.variables["longitude"][index], self.npu.netcdf_dataset.variables["latitude"][index])])
-
-            # set the point icon. Different urls can be found in point style options in google earth
-            new_point.style.iconstyle.icon.href = self.POINT_ICON_STYLE_LINK
-            new_point.style.iconstyle.scale = 0.7
-            new_point.labelstyle.scale = 0  # removes the label
-
-            index = index + 1
-        assert index == count
-        return points_folder
-
-
-    def build_dynamic_network_link(self, containing_folder):
-        """
-        Build a network link, set the parameters, and inserts into the specified containing folder.
-        """
-        net_link = containing_folder.newnetworklink(name="Network Link")
-        net_link.link.href = "http://127.0.0.1:5000/query"
-        net_link.link.viewrefreshmode = simplekml.ViewRefreshMode.onstop
-        net_link.link.viewrefreshtime = 1
-        net_link.link.refreshinterval = 2
-
-        return net_link
-
-
-
-       def find_subset(self):
-
-        lats = self.npu.netcdf_dataset.variables['latitude'][:]
-        longs = self.npu.netcdf_dataset.variables['longitude'][:]
-        #print(longs)
-        latselect = np.logical_and(lats > 38.03, lats < 40)
-        #print(latselect)
-        lonselect = np.logical_and(longs > 146.6, longs < 147)
-        #print(lonselect)
-
-        #print([i for i in latselect if i is True])
-        data = self.npu.netcdf_dataset.variables['obsno']
-        #data = npu.netcdf_dataset.variables['Obsno'][0, 0, latselect, lonselect]
-        #print(data)
-
-
-    def build_static_kml(self):
-        polygon_folder = self.kml.newfolder()
-        polygon_folder, polygon = self.build_polygon(polygon_folder)
-        dataset_polygon_region = self.build_region(-2, 600, 200, 800)
-        dataset_points_region = self.build_region(0, -1, 200, 800)
-
-        points_folder = self.build_points_2()
-
-        # structure them correctly
-        polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-        points_folder.region = dataset_points_region  # insert built point region into point folder
-
-        return self.kml
-
-
     def build_points(self, points_folder, bounding_box, point_style):
 
         t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
 
-        #POINT_ICON_STYLE_LINK = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+        #point_icon_style_link = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
         survey_title = str(self.npu.netcdf_dataset.getncattr('title'))
         print('bounding_box')
@@ -196,6 +98,7 @@ class NetCDF2kmlConverter(object):
         t2 = time.time()  # create the spatial mask
         bounding_box_floats = [float(coord) for coord in bounding_box]
         spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
+        print(spatial_mask)
         t3 = time.time()  # get the points and variable info from point generator
         if True in spatial_mask:
             # when ordered through the all_point_data_generator it appears to come out as [obsno, lat, long, then everything else as in field_list]
@@ -203,8 +106,9 @@ class NetCDF2kmlConverter(object):
                           'reliab', 'gridflag']  # , 'freeair', '', '']
 
             point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
+            print(point_data_generator)
             variable_attributes = next(point_data_generator)
-
+            print(variable_attributes)
             skip_points = 1
             points_read = 0
             t4 = time.time()  # loop through the points and create them.
@@ -218,58 +122,136 @@ class NetCDF2kmlConverter(object):
                 # add new points with netcdf file Obsno as title and long and lat as coordinatess
                 new_point = points_folder.newpoint(name="Observation no. " + str(point_data[0]),
                                                    coords=[(point_data[2], point_data[1])])
-                # set point html for pop up description.
-                description_string = '<![CDATA[' \
-                                     '<p><b>{0}: </b>{1} {2}</p>' \
-                                     '<p><b>{3}: </b>{4} {5}</p> ' \
-                                     '<p><b>{6}: </b>{7} {8}</p>' \
-                                     '<p><b>{9}: </b>{10}</p> ' \
-                                     '<p><b>{11}: </b>{12}</p>' \
-                                     '<p><b>{13}: </b>{14}</p>' \
-                                     ']]>'.format(
-                    variable_attributes['grav'].get('long_name'), point_data[3],
-                    variable_attributes['grav'].get('units'),
-                    variable_attributes['freeair'].get('long_name'), point_data[4],
-                    variable_attributes['freeair'].get('units'),  # free air
-                    variable_attributes['bouguer'].get('long_name'), point_data[5],
-                    variable_attributes['bouguer'].get('units'),  # bouguer
-                    variable_attributes['stattype'].get('long_name'), point_data[6],  # station type
-                    variable_attributes['reliab'].get('long_name'), point_data[7],  # reliability
-                    variable_attributes['gridflag'].get('long_name'), point_data[8]  # Gridflag
-                )
 
+                description_string = self.build_html_description_string(field_list, variable_attributes, point_data)
                 new_point.description = description_string  # set description to point
+
                 new_point.style = point_style  # set style to point
 
             t5 = time.time()
-
-
             return points_folder
         else:
             #print("no points in view")
             return None
-    # def build_html_description_string(self, field_list, point_data_generator):
-    #
-    #     for field in field_list:
-    #         if variable_attributes
+
+
+    def build_html_description_string(self, field_list, variable_attributes, point_data):
+        """
+            Helper function to build the description string automatically based on how many fields are in the field list.
+            It will take into account if a unit of measure needs to be specificed or not.
+            :param field_list: The fields to be included in the description.
+            :param variable_attributes: a list of lists? Matching point_data.
+            :param point_data: A list of the actual data of each point
+            :return: return the description string html ready to be attached to a kml point.
+        """
+        description_string = '<![CDATA['
+        i = 3  # skip obsno, lat, long in field_list
+        while i < len(field_list):
+            if variable_attributes[field_list[i]].get('units'):
+                description_string = description_string + '<p><b>{0}: </b>{1} {2}</p>'.format(
+                    variable_attributes[field_list[i]].get('long_name'),
+                    point_data[i],
+                    variable_attributes[field_list[i]].get('units'))
+            else:
+                description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format(
+                    variable_attributes[field_list[i]].get('long_name'),
+                    point_data[i])
+            i += 1
+        description_string = description_string + ']]>'
+        return description_string
+
+
+
+    def get_basic_density_measurement(self):
+        """
+        Basic calculation to get an idea of the dataset point density. This could be used to dynamically set the
+        min_lod_pixels, max_lod_pixels, and point scale to get the best visual outcome. A higher density may need a smaller
+        point scale or even an additional region.
+        :return: Currently just prints to output
+        """
+        print("Point Count: {}".format(self.npu.point_count))
+        print("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
+        print("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
+
+
+    def build_static_kml(self):
+
+        point_style = simplekml.Style()
+        point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+        point_style.iconstyle.scale = 0.7
+        point_style.labelstyle.scale = 0  # removes the label
+
+        bbox = ['115.6900403947253', '-80.3741299166767', '165.9763920890655', '-7.21307533348337']
+        # polygon style
+        polygon_style = simplekml.Style()
+        polygon_style.polystyle.color = '990000ff'  # Transparent red
+        polygon_style.polystyle.outline = 1
+
+        kml = simplekml.Kml()
+        netcdf_file_folder = kml.newfolder(name=self.survey_title + " " + self.survey_id)
+
+        #spatial_mask = self.npu.get_spatial_mask([130, -40, 150, -5])
+
+        polygon_folder = self.kml.newfolder(name="polygon")
+        polygon_folder, polygon = self.build_polygon(polygon_folder, polygon_style)
+        dataset_polygon_region = self.build_region(-1, 600, 200, 800)
+        dataset_points_region = self.build_region(0, -1, 200, 800)
+
+        points_folder = self.kml.newfolder(name="points")
+        print(bbox)
+        print(point_style)
+        print(points_folder)
+        points_folder = self.build_points(points_folder, bbox, point_style)
+
+        # structure them correctly
+        polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
+        points_folder.region = dataset_points_region  # insert built point region into point folder
+        print(points_folder)
+        print(netcdf_file_folder)
+        return self.kml
+
+
+def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
+    """
+    Build a network link, set the parameters, and inserts into the specified containing folder.
+    """
+    net_link = containing_folder.newnetworklink(name="Network Link")
+    net_link.link.href = link
+    net_link.link.viewrefreshmode = simplekml.ViewRefreshMode.onstop
+    net_link.link.viewrefreshtime = 1
+    net_link.link.refreshinterval = 2
+
+    return net_link
+
 
 def main():
-
+    # --------------------------------
+    #   build dynamic_grav kml
+    # --------------------------------
     # kml = simplekml.Kml()
-    # points_folder = kml.newfolder()
-    # #dataset_network_link = NetCDF2kmlConverter.build_dynamic_network_link(points_folder)
-    #
-    # net_link = points_folder.newnetworklink(name="Network Link")
-    # net_link.link.href = "http://127.0.0.1:5000/query"
-    # net_link.link.viewrefreshmode = simplekml.ViewRefreshMode.onstop
-    # net_link.link.viewrefreshtime = 1
-    # net_link.link.refreshinterval = 2
-    # kml.save("dynamic points.kml")
+    # new_folder = kml.newfolder()
+    # build_dynamic_network_link(new_folder)
+    # kml.save("dynamic_grav_surveys.kml")
 
-    netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
-    static = NetCDF2kmlConverter(netcdf_path)
-    static_kml = static.build_static_kml()
-    static_kml.save("static_points.kml")
+    # --------------------------------
+    # build static kml
+    # --------------------------------
+    #netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/195110.nc'
+    #static = NetCDF2kmlConverter(netcdf_path)
+    sdmc = SQLiteDatasetMetadataCache(debug=True)
+    endpoint_list = sdmc.search_dataset_distributions(
+        keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+        protocol='opendap',
+        ll_ur_coords=[[100, -50], [159, -5]]
+        )
+    print("do something?")
+    for survey in endpoint_list:
+        print("do something?")
+        netcdf2kml_obj = NetCDF2kmlConverter(survey)
+        if netcdf2kml_obj.npu.point_count > 2:
+            static_kml = netcdf2kml_obj.build_static_kml()
+            static_kml.save("C:\\Users\\u62231\\Desktop\\grav_kmls\\" + netcdf2kml_obj.survey_title + " " + netcdf2kml_obj.survey_id + ".kml")
+
 
 
 
@@ -282,13 +264,6 @@ def main():
     #network_link = NetCDF2kmlConverter.build_dynamic_network_link(points_folder)
 
 
-
-
-    #"Poorly controlled data which should be used cautiously."
-    #"Data with weak gravity, position and elevation control."
-    ##new_point.description = "description {0} here {1}".format(point_data[2], point_data[3])
-    #get_Var = npu.get_lookup_mask(lookup_value_list=[] ,lookup_variable_name='reliab')
-    #print(get_Var)
     # build the polygon, points, network link, and regions
     #build_dynamic_kml()
     # server_url_for_dynamic_kml_generation = sys.argv[1]
@@ -297,8 +272,7 @@ def main():
     # print(server_url_for_dynamic_kml_generation)
     # print(netcdf_path)
     # print(sys.argv)
-    #
-    #
+
     # netcdf_path_list = []
     # i = 2
     # while i < len(sys.argv):
@@ -306,7 +280,6 @@ def main():
     #     netcdf_path_list.append(sys.argv[i])
     #     i += 1
     # print(netcdf_path_list)
-
 
     # parser = argparse.ArgumentParser()
     #
@@ -320,7 +293,7 @@ def main():
     #
     # print(args.server)
     # print(args.netcdf_path_list)
-    #
+
     # if args.server:
     #     # dynamic build
     #     print("dynamic build")
@@ -333,7 +306,7 @@ def main():
     #             pass
     #
     #         # then add the network link using this args.server
-    #
+
     #     else:
     #         # single
     #         print("single survey")
@@ -357,8 +330,7 @@ def main():
             # single
 
     #modified_server_url_for_dynamic_kml_generation = args.server + 'query'
-
     #NetCDF2kmlConverter(args.netcdf_path_list)
+
 if __name__ == '__main__':
     main()
-
