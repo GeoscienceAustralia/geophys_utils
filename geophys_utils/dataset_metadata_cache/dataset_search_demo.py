@@ -16,9 +16,7 @@ def main():
     endpoint_list = dmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
                                                  protocol='opendap',
                                                  #ll_ur_coords=[[-179.9, -90.0], [180.0, 90.0]]
-                                                 ll_ur_coords=[[138.193588256836, -30.5767288208008], [138.480285644531, -30.1188278198242]],
-                                                 get_title=True,
-                                                 get_polygon=True
+                                                 ll_ur_coords=[[138.193588256836, -30.5767288208008], [138.480285644531, -30.1188278198242]]
                                                  )
     
     print('Search results:')
