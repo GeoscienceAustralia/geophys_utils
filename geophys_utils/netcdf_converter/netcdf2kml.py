@@ -7,7 +7,7 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 
 class NetCDF2kmlConverter(object):
 
-    def __init__(self, netcdf_path):
+    def __init__(self, metadata_tuple=None):
         self.netcdf_path = netcdf_path
 
         # Create NetCDFPointUtils object for specified netCDF dataset
@@ -18,17 +18,24 @@ class NetCDF2kmlConverter(object):
         #195105
         #201780
 
-        self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
-        self.npu = NetCDFPointUtils(self.netcdf_dataset)
-        self.survey_id = str(self.npu.netcdf_dataset.getncattr('survey_id'))
-        self.survey_title = str(self.npu.netcdf_dataset.getncattr('title'))
+        self.npu = None
+        if metadata_tuple:
+            self.survey_id = metadata_tuple[0]
+            self.survey_title = metadata_tuple[1]
+            self.netcdf_path = metadata_tuple[2]
+            self.polygon = metadata_tuple[3]
+        else:
+
+            self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+            self.survey_id = str(self.netcdf_dataset.getncattr('survey_id'))
+            self.survey_title = str(self.netcdf_dataset.getncattr('title'))
         self.kml = simplekml.Kml()
 
         # Store dataset spatial extents as python variables
-        self.west_extent = self.npu.netcdf_dataset.getncattr('geospatial_lon_min')
-        self.east_extent = self.npu.netcdf_dataset.getncattr('geospatial_lon_max')
-        self.south_extent = self.npu.netcdf_dataset.getncattr('geospatial_lat_min')
-        self.north_extent = self.npu.netcdf_dataset.getncattr('geospatial_lat_max')
+        self.west_extent = self.netcdf_dataset.getncattr('geospatial_lon_min')
+        self.east_extent = self.netcdf_dataset.getncattr('geospatial_lon_max')
+        self.south_extent = self.netcdf_dataset.getncattr('geospatial_lat_min')
+        self.north_extent = self.netcdf_dataset.getncattr('geospatial_lat_max')
 
 
 
@@ -60,7 +67,6 @@ class NetCDF2kmlConverter(object):
 
         return region
 
-
     def build_polygon(self, parent_folder, polygon_style):
         """
         Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
@@ -70,23 +76,30 @@ class NetCDF2kmlConverter(object):
         """
 
         # get the polygon points from the netcdf global attributes
-        polygon_bounds = re.sub(',\s', ',', self.npu.netcdf_dataset.geospatial_bounds) # cut out space after comma between coord sets
-        polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds) # cut out polygon and opening brackets
-        polygon_bounds = re.sub('\)\)', '', polygon_bounds) # cut out trailing brackets
-        polygon_bounds = polygon_bounds.split(',') # turn the string into a list, seperating on the commas
-        polygon_bounds = [tuple(p.split(' ')) for p in polygon_bounds] # within each coord set split the lat and long - group the set in a tuple
+        try:
+            polygon_bounds = re.sub(',\s', ',',
+                                self.netcdf_dataset.geospatial_bounds)  # cut out space after comma between coord sets
+        except:
+            return parent_folder
+
+        polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
+        polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
+        polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
+        polygon_bounds = [tuple(p.split(' ')) for p in
+                          polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
 
         # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
         pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id),
-                             outerboundaryis=polygon_bounds)
+                                       outerboundaryis=polygon_bounds)
 
         pol.style = polygon_style
 
-        return parent_folder, pol
-
+        return parent_folder
 
     def build_points(self, points_folder, bounding_box, point_style):
 
+
+        self.npu = NetCDFPointUtils(self.netcdf_dataset)
         t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
 
         #point_icon_style_link = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
@@ -222,6 +235,7 @@ def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/qu
     net_link.link.refreshinterval = 2
 
     return net_link
+
 
 
 def main():

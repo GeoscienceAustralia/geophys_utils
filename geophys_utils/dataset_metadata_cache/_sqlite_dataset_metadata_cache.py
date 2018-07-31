@@ -329,13 +329,13 @@ where not exists (select distribution_id from distribution where dataset_id = :d
     def search_dataset_distributions(self,
                                      keyword_list,
                                      protocol,
-                                     ll_ur_coords=None,
-                                     get_title=False,
-                                     get_polygon=False
+                                     ll_ur_coords=None
                                      ):
         '''
-        Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
+        Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
+        Tuples returned are as follows:
+            (survey_id, dataset_title,  distribution_url, convex_hull_polygon, is_exclusive)
         '''
         cursor = self.db_connection.cursor()
         
@@ -348,17 +348,14 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                   'latitude_max': ll_ur_coords[1][1],
                   })
 
-        dataset_search_sql = """select distribution_url"""
-        
-        if get_title:
-            dataset_search_sql += """,
-    dataset_title"""
-    
-        if get_polygon:
-            dataset_search_sql += """,
-    convex_hull_polygon"""
-    
-        dataset_search_sql += """
+        dataset_search_sql = """select survey_id,
+    dataset_title,
+    distribution_url,
+    convex_hull_polygon,
+    (longitude_min <= :longitude_min
+    and longitude_max >= :longitude_max
+    and latitude_min <= :latitude_min
+    and latitude_max >= :latitude_max) as is_exclusive
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
@@ -384,14 +381,11 @@ inner join dataset using(dataset_id)
 
         #logger.debug('dataset_search_sql: {}'.format(dataset_search_sql))
         
+        logger.debug('dataset_search_sql: {}'.format(dataset_search_sql))
+        logger.debug('params: {}'.format(params))
         cursor.execute(dataset_search_sql, params)
         
-        if get_polygon:
-            # Return list of tuples containing distribution_url value and polygon
-            return [tuple(row) for row in cursor]
-        else:
-            # Return list of distribution_url values
-            return [row[0] for row in cursor]
+        return [tuple(row) for row in cursor]
         
 def main():
     sdmc = SQLiteDatasetMetadataCache(debug=True)

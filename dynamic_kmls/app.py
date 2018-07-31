@@ -65,9 +65,9 @@ def do_everything(bounding_box):
 
             for netcdf in endpoint_list:
 
-                print("Building NETCDF: " + str(netcdf))
+                print("Building NETCDF: " + str(netcdf[2]))
 
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf[2])
 
                 t3 = time.time()
                 print("set style and create netcdf2kmlconverter instance of netcdf file ...")
@@ -126,21 +126,22 @@ def do_everything(bounding_box):
         if len(endpoint_list) > 0:
              netcdf_file_folder = kml.newfolder()
              for netcdf in endpoint_list:
-                print("NETCDF: " + str(netcdf))
+                 print("NETCDF: " + str(netcdf))
 
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
-                t_polygon_2 = time.time()
-                print("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
-                print("Time: " + str(t_polygon_2 - t_polygon_1))
+                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf[2])
+                 t_polygon_2 = time.time()
+                 print("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
+                 print("Time: " + str(t_polygon_2 - t_polygon_1))
 
-                print(netcdf2kml_obj.npu.point_count)
-                if netcdf2kml_obj.npu.point_count > 2:
-                    polygon_folder, polygon = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
-                    dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
-                    polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
 
-                else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
-                    print("not enough points")
+                 #if netcdf2kml_obj.npu.point_count > 2:
+                 #if netcdf[4]: # if gridflag is 1 (true)
+                 polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
+                 dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
+                 polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
+
+                 #else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
+                  #  print("not enough points")
 
             # neww = kml.save("test_polygon.kml")
              return str(netcdf_file_folder)
