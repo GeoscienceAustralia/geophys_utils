@@ -102,7 +102,7 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
     convex_hull_polygon,
     metadata_uuid
     )
-values (
+select
     %(dataset_title)s,
     (select survey_id from survey where ga_survey_id = %(ga_survey_id)s),
     %(longitude_min)s,
@@ -111,8 +111,7 @@ values (
     %(latitude_max)s,
     %(convex_hull_polygon)s,
     %(metadata_uuid)s
-    )
-ON CONFLICT (metadata_uuid) DO NOTHING;
+where not exists (select dataset_id from dataset where metadata_uuid = %(metadata_uuid)s);
 '''
     
         cursor.execute(insert_dataset_sql, params)
@@ -146,8 +145,8 @@ where metadata_uuid = %(metadata_uuid)s;
                   }
         
         insert_survey_sql = '''insert into survey(ga_survey_id, survey_name)
-values(%(ga_survey_id)s, %(survey_name)s)
-ON CONFLICT (ga_survey_id) DO NOTHING;
+select %(ga_survey_id)s, %(survey_name)s
+where not exists (select survey_id from survey where ga_survey_id = %(ga_survey_id)s);
 '''            
         cursor.execute(insert_survey_sql, params)
     
@@ -168,12 +167,12 @@ ON CONFLICT (ga_survey_id) DO NOTHING;
         # Try inserting keywords individually
         for keyword in keyword_list:
             params = {'dataset_id': dataset_id,
-                      'keyword': keyword
+                      'keyword_value': keyword
                       }
             
             insert_keyword_sql = '''insert into keyword(keyword_value)
-values(%(keyword)s)
-ON CONFLICT (keyword_value) DO NOTHING;
+select %(keyword_value)s
+where not exists (select keyword_id from keyword where keyword_value = %(keyword_value)s);
 '''            
             cursor.execute(insert_keyword_sql, params)
         
@@ -193,7 +192,7 @@ select %(dataset_id)s,
     keyword_id 
     from keyword
     where keyword_value in ('""" + "', '".join(keyword_list) + """')
-ON CONFLICT (dataset_id, keyword_id) DO NOTHING;
+        and keyword_id not in (select keyword_id from dataset_keyword where dataset_id = %(dataset_id)s);
 """            
         cursor.execute(insert_dataset_keyword_sql, params)
         
@@ -249,8 +248,8 @@ ON CONFLICT (dataset_id, keyword_id) DO NOTHING;
                       }
             
             insert_protocol_sql = '''insert into protocol(protocol_value)
-values(%(protocol_value)s)
-ON CONFLICT (protocol_value) DO NOTHING;
+select %(protocol_value)s
+where not exists (select protocol_id from protocol where protocol_value = %(protocol_value)s);
 '''            
             cursor.execute(insert_protocol_sql, params)
             
@@ -267,11 +266,10 @@ ON CONFLICT (protocol_value) DO NOTHING;
                       }
     
             insert_distribution_sql = '''insert into distribution(dataset_id, distribution_url, protocol_id)
-values(%(dataset_id)s, 
+select %(dataset_id)s, 
     %(distribution_url)s,
     (select protocol_id from protocol where protocol_value = %(protocol_value)s)
-    )
-ON CONFLICT (distribution_url) DO NOTHING;
+where not exists (select distribution_id from distribution where dataset_id = %(dataset_id)s and distribution_url = %(distribution_url)s);
 '''            
             cursor.execute(insert_distribution_sql, params)
             
@@ -357,9 +355,9 @@ def main():
     #===========================================================================
     
     print('Search results:')
-    for url in pdmc.search_dataset_distributions(keyword_list=['blah', 'blah blah'],
-                                                 ll_ur_coords=[[-1, -1], [1, 1]],
-                                                 protocol='file'
+    for url in pdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+                                                 protocol='opendap',
+                                                 ll_ur_coords=None
                                                  ):
         print(url)
                 
