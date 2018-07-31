@@ -128,7 +128,7 @@ def do_everything(bounding_box):
              for netcdf in endpoint_list:
                  print("NETCDF: " + str(netcdf))
 
-                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf[2])
+                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
                  t_polygon_2 = time.time()
                  print("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
                  print("Time: " + str(t_polygon_2 - t_polygon_1))

@@ -8,7 +8,7 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 class NetCDF2kmlConverter(object):
 
     def __init__(self, metadata_tuple=None):
-        self.netcdf_path = netcdf_path
+
 
         # Create NetCDFPointUtils object for specified netCDF dataset
         #netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
@@ -19,23 +19,18 @@ class NetCDF2kmlConverter(object):
         #201780
 
         self.npu = None
-        if metadata_tuple:
-            self.survey_id = metadata_tuple[0]
-            self.survey_title = metadata_tuple[1]
-            self.netcdf_path = metadata_tuple[2]
-            self.polygon = metadata_tuple[3]
-        else:
+        self.survey_id = metadata_tuple[0]
+        self.survey_title = metadata_tuple[1]
+        self.netcdf_path = metadata_tuple[2]
+        self.polygon = metadata_tuple[3]
 
-            self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
-            self.survey_id = str(self.netcdf_dataset.getncattr('survey_id'))
-            self.survey_title = str(self.netcdf_dataset.getncattr('title'))
         self.kml = simplekml.Kml()
 
         # Store dataset spatial extents as python variables
-        self.west_extent = self.netcdf_dataset.getncattr('geospatial_lon_min')
-        self.east_extent = self.netcdf_dataset.getncattr('geospatial_lon_max')
-        self.south_extent = self.netcdf_dataset.getncattr('geospatial_lat_min')
-        self.north_extent = self.netcdf_dataset.getncattr('geospatial_lat_max')
+        self.west_extent = metadata_tuple[4]
+        self.east_extent = metadata_tuple[5]
+        self.south_extent = metadata_tuple[6]
+        self.north_extent = metadata_tuple[7]
 
 
 
@@ -77,28 +72,29 @@ class NetCDF2kmlConverter(object):
 
         # get the polygon points from the netcdf global attributes
         try:
-            polygon_bounds = re.sub(',\s', ',',
-                                self.netcdf_dataset.geospatial_bounds)  # cut out space after comma between coord sets
+            polygon_bounds = self.polygon
+            print("POLYGON BOUNDS")
+            print(polygon_bounds)
+            polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
+            polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
+            polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
+            polygon_bounds = [tuple(p.split(' ')) for p in
+                              polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
+
+            # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
+            pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id),
+                                           outerboundaryis=polygon_bounds)
+
+            pol.style = polygon_style
         except:
-            return parent_folder
-
-        polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
-        polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
-        polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
-        polygon_bounds = [tuple(p.split(' ')) for p in
-                          polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
-
-        # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
-        pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id),
-                                       outerboundaryis=polygon_bounds)
-
-        pol.style = polygon_style
+            print("No polygon data found.")
 
         return parent_folder
 
+
     def build_points(self, points_folder, bounding_box, point_style):
 
-
+        self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
         self.npu = NetCDFPointUtils(self.netcdf_dataset)
         t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
 
