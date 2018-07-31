@@ -364,10 +364,10 @@ where not exists (select distribution_id from distribution where dataset_id = :d
     longitude_max,
     latitude_min,
     latitude_max,
-    (longitude_min <= :longitude_min
-    and longitude_max >= :longitude_max
-    and latitude_min <= :latitude_min
-    and latitude_max >= :latitude_max) as is_exclusive
+    (longitude_min >= :longitude_min
+    and longitude_max <= :longitude_max
+    and latitude_min >= :latitude_min
+    and latitude_max <= :latitude_max) as is_exclusive
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
