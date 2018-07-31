@@ -28,6 +28,8 @@ def do_everything(bounding_box):
     east = float(bbox_list[2])
     north = float(bbox_list[3])
 
+
+
     t1 = time.time()
     print("Retrieve bbox values from get request...")
     print("Time: " + str(t1-t0))
@@ -39,10 +41,11 @@ def do_everything(bounding_box):
         protocol='opendap',
         ll_ur_coords=[[west, south], [east, north]]
         )
+    print([[west, south], [east, north]])
     t2 = time.time()
     print("Retrieve netcdf strings from database...")
     print("Time: " + str(t2-t1))
-    print("ENDPOINT LIST" + str(endpoint_list))
+    #print("ENDPOINT LIST" + str(endpoint_list))
 
 
     kml = simplekml.Kml()
@@ -69,9 +72,8 @@ def do_everything(bounding_box):
                 t3 = time.time()
                 print("set style and create netcdf2kmlconverter instance of netcdf file ...")
                 print("Time: " + str(t3 - t2))
-                print("ENDPOINT LIST" + str(endpoint_list))
 
-                print("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
+                #print("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
                 if netcdf2kml_obj.npu.point_count > 2:
 
                     dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
@@ -80,15 +82,18 @@ def do_everything(bounding_box):
                     ta = time.time()
                     new_survey_folder = netcdf_file_folder.newfolder(name=netcdf2kml_obj.survey_title + " " +
                                                                           netcdf2kml_obj.survey_id)
+                    print(new_survey_folder)
+                    print(bbox_list)
+                    print(point_style)
                     new_survey_folder = netcdf2kml_obj.build_points(new_survey_folder, bbox_list, point_style)
 
                     tb = time.time()
                     print("do the things time: " + str(tb-ta))
 
-                    print(netcdf_file_folder)
+                    #print(netcdf_file_folder)
                     print("Build the point ...")
                     #print("Time: " + str(t4 - t3))
-                    print("ENDPOINT LIST" + str(endpoint_list))
+                    #print("ENDPOINT LIST" + str(endpoint_list))
 
                 elif netcdf2kml_obj.npu.point_count == 0:
 
@@ -103,9 +108,7 @@ def do_everything(bounding_box):
 
             t4 = time.time()
 
-
             return str(netcdf_file_folder)
-
 
         else:
             print("No surveys in view")
@@ -129,7 +132,6 @@ def do_everything(bounding_box):
                 t_polygon_2 = time.time()
                 print("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
                 print("Time: " + str(t_polygon_2 - t_polygon_1))
-                print("ENDPOINT LIST" + str(endpoint_list))
 
                 print(netcdf2kml_obj.npu.point_count)
                 if netcdf2kml_obj.npu.point_count > 2:
@@ -139,8 +141,7 @@ def do_everything(bounding_box):
 
                 else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
                     print("not enough points")
-                    #empty_folder = kml.newfolder(name="no points in view")
-                    #return str(empty_folder)
+
             # neww = kml.save("test_polygon.kml")
              return str(netcdf_file_folder)
 
