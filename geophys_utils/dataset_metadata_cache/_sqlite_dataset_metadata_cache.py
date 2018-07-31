@@ -330,6 +330,7 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                                      keyword_list,
                                      protocol,
                                      ll_ur_coords=None,
+                                     get_title=False,
                                      get_polygon=False
                                      ):
         '''
@@ -348,9 +349,15 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                   })
 
         dataset_search_sql = """select distribution_url"""
+        
+        if get_title:
+            dataset_search_sql += """,
+    dataset_title"""
+    
         if get_polygon:
             dataset_search_sql += """,
     convex_hull_polygon"""
+    
         dataset_search_sql += """
 from distribution
 inner join protocol using(protocol_id)
@@ -381,7 +388,7 @@ inner join dataset using(dataset_id)
         
         if get_polygon:
             # Return list of tuples containing distribution_url value and polygon
-            return [(row[0], row[1]) for row in cursor]
+            return [tuple(row) for row in cursor]
         else:
             # Return list of distribution_url values
             return [row[0] for row in cursor]
