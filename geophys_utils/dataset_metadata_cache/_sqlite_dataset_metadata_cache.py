@@ -329,7 +329,8 @@ where not exists (select distribution_id from distribution where dataset_id = :d
     def search_dataset_distributions(self,
                                      keyword_list,
                                      protocol,
-                                     ll_ur_coords=None # 
+                                     ll_ur_coords=None,
+                                     get_polygon=False
                                      ):
         '''
         Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
@@ -346,7 +347,11 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                   'latitude_max': ll_ur_coords[1][1],
                   })
 
-        dataset_search_sql = """select distribution_url
+        dataset_search_sql = """select distribution_url"""
+        if get_polygon:
+            dataset_search_sql += """,
+    convex_hull_polygon"""
+        dataset_search_sql += """
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
@@ -374,8 +379,12 @@ inner join dataset using(dataset_id)
         
         cursor.execute(dataset_search_sql, params)
         
-        # Return list of distribution_url values
-        return [row[0] for row in cursor]
+        if get_polygon:
+            # Return list of tuples containing distribution_url value and polygon
+            return [(row[0], row[1]) for row in cursor]
+        else:
+            # Return list of distribution_url values
+            return [row[0] for row in cursor]
         
 def main():
     sdmc = SQLiteDatasetMetadataCache(debug=True)
