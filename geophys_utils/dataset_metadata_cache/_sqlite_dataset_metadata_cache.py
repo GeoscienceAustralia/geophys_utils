@@ -335,7 +335,15 @@ where not exists (select distribution_id from distribution where dataset_id = :d
         Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
         Tuples returned are as follows:
-            (survey_id, dataset_title,  distribution_url, convex_hull_polygon, is_exclusive)
+            (survey_id, 
+            dataset_title,  
+            distribution_url, 
+            convex_hull_polygon, 
+            longitude_min,
+            longitude_max,
+            latitude_min,
+            latitude_max,
+            is_exclusive)
         '''
         cursor = self.db_connection.cursor()
         
@@ -352,6 +360,10 @@ where not exists (select distribution_id from distribution where dataset_id = :d
     dataset_title,
     distribution_url,
     convex_hull_polygon,
+    longitude_min,
+    longitude_max,
+    latitude_min,
+    latitude_max,
     (longitude_min <= :longitude_min
     and longitude_max >= :longitude_max
     and latitude_min <= :latitude_min
