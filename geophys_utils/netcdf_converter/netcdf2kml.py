@@ -20,6 +20,7 @@ class NetCDF2kmlConverter(object):
 
         self.npu = None
         self.survey_id = metadata_tuple[0]
+        print("SRUVEY ID" + str(self.survey_id))
         self.survey_title = metadata_tuple[1]
         self.netcdf_path = metadata_tuple[2]
         self.polygon = metadata_tuple[3]
@@ -82,10 +83,13 @@ class NetCDF2kmlConverter(object):
             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
             pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id), outerboundaryis=polygon_bounds, visibility=visibility)
 
-            #description_string = '<![CDATA['
-           # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', self.survey_title)
+            description_string = '<![CDATA['
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', str(self.survey_title))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.survey_id))
+            description_string = description_string + ']]>'
 
             pol.description = description_string
+            print(description_string)
 
             pol.style = polygon_style
         except:
