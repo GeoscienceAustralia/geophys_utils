@@ -335,7 +335,7 @@ where not exists (select distribution_id from distribution where dataset_id = :d
         Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
         Tuples returned are as follows:
-            (survey_id, 
+            (ga_survey_id, 
             dataset_title,  
             distribution_url, 
             convex_hull_polygon, 
@@ -356,7 +356,7 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                   'latitude_max': ll_ur_coords[1][1],
                   })
 
-        dataset_search_sql = """select survey_id,
+        dataset_search_sql = """select ga_survey_id,
     dataset_title,
     distribution_url,
     convex_hull_polygon,
@@ -371,6 +371,7 @@ where not exists (select distribution_id from distribution where dataset_id = :d
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
+inner join survey using(survey_id)
 """
         for keyword_index in range(len(keyword_list)):    
             keyword = keyword_list[keyword_index] 
