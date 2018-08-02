@@ -4,6 +4,13 @@ from geophys_utils import NetCDFPointUtils
 import re
 import time
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
+import logging
+
+# Setup logging handlers if required
+logger = logging.getLogger(__name__)  # Get logger
+logger.setLevel(logging.INFO)  # Initial logging level for this module
+
+
 
 class NetCDF2kmlConverter(object):
 
@@ -20,7 +27,6 @@ class NetCDF2kmlConverter(object):
 
         self.npu = None
         self.survey_id = metadata_tuple[0]
-        print("SRUVEY ID" + str(self.survey_id))
         self.survey_title = metadata_tuple[1]
         self.netcdf_path = metadata_tuple[2]
         self.polygon = metadata_tuple[3]
@@ -68,12 +74,11 @@ class NetCDF2kmlConverter(object):
         :param polygon_style:
         :return: the input parent folder now containig the polygon and the polygon itself if that is desired instead.
         """
-
+        logger.debug("Building polygon...")
         # get the polygon points from the netcdf global attributes
         try:
             polygon_bounds = self.polygon
-            print("POLYGON BOUNDS")
-            print(polygon_bounds)
+            logger.debug(polygon_bounds)
             polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
             polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
             polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
@@ -83,75 +88,84 @@ class NetCDF2kmlConverter(object):
             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
             pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id), outerboundaryis=polygon_bounds, visibility=visibility)
 
+
+            thredds_metadata_link = "http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/"
             description_string = '<![CDATA['
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', str(self.survey_title))
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.survey_id))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(thredds_metadata_link) + str(self.survey_id) + '.nc')
             description_string = description_string + ']]>'
 
             pol.description = description_string
-            print(description_string)
 
             pol.style = polygon_style
         except:
-            print("No polygon data found.")
+            logger.debug("No polygon data found.")
 
         return parent_folder
 
 
     def build_points(self, points_folder, bounding_box, point_style):
-        print(self.netcdf_path)
-        self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
-        self.npu = NetCDFPointUtils(self.netcdf_dataset)
 
-        if self.npu.point_count > 2:
-            t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
+        logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
 
-            #point_icon_style_link = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+        #self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+        t1 = time.time()  # Create NetCDFPointUtils object for specified netCDF dataset
 
-            survey_title = str(self.npu.netcdf_dataset.getncattr('title'))
-            print('bounding_box')
-            print(bounding_box)
+        logger.debug('bounding_box')
+        logger.debug(bounding_box)
 
-            t2 = time.time()  # create the spatial mask
-            bounding_box_floats = [float(coord) for coord in bounding_box]
-            spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
-            print(spatial_mask)
-            t3 = time.time()  # get the points and variable info from point generator
-            if True in spatial_mask:
-                # when ordered through the all_point_data_generator it appears to come out as [obsno, lat, long, then everything else as in field_list]
-                field_list = ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype',
-                              'reliab', 'gridflag']  # , 'freeair', '', '']
+        t2 = time.time()  # create the spatial mask
+        bounding_box_floats = [float(coord) for coord in bounding_box]
+        spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
+        logger.debug(spatial_mask)
+        t3 = time.time()  # get the points and variable info from point generator
+        if True in spatial_mask:
+            # when ordered through the all_point_data_generator it appears to come out as [obsno, lat, long, then everything else as in field_list]
+            field_list = ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype',
+                          'reliab', 'gridflag']  # , 'freeair', '', '']
 
-                point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
-                print(point_data_generator)
-                variable_attributes = next(point_data_generator)
-                print(variable_attributes)
-                skip_points = 1
-                points_read = 0
-                t4 = time.time()  # loop through the points and create them.
-                for point_data in point_data_generator:
-                    points_read += 1
+            new_survey_folder = points_folder.newfolder(name=str(self.survey_title) + " " +
+                                                                  str(self.survey_id))
 
-                    # ignore points between skip_points
-                    if points_read % skip_points != 0:
-                        continue
+            point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
+            logger.debug(point_data_generator)
+            variable_attributes = next(point_data_generator)
+            logger.debug(variable_attributes)
+            skip_points = 1
+            points_read = 0
+            t4 = time.time()  # loop through the points and create them.
+            for point_data in point_data_generator:
+                points_read += 1
 
-                    # add new points with netcdf file Obsno as title and long and lat as coordinatess
-                    new_point = points_folder.newpoint(name="Observation no. " + str(point_data[0]),
-                                                       coords=[(point_data[2], point_data[1])])
+                # ignore points between skip_points
+                if points_read % skip_points != 0:
+                    continue
 
-                    description_string = self.build_html_description_string(field_list, variable_attributes, point_data)
-                    new_point.description = description_string  # set description to point
+                # add new points with netcdf file Obsno as title and long and lat as coordinatess
+                new_point = new_survey_folder.newpoint(name="Observation no. " + str(point_data[0]),
+                                                   coords=[(point_data[2], point_data[1])])
 
+                description_string = self.build_html_description_string(field_list, variable_attributes, point_data)
+                logger.debug(description_string)
+                new_point.description = description_string  # set description to point
+
+                if point_data[8] == "Station not used in the production of GA grids.":  # if gridflag equals 2
+                    new_point.style.iconstyle.color = 'ff0000ff'
+                    new_point.style.iconstyle.scale = 0.7
+                    new_point.style.labelstyle.scale = 0  # removes the label
+                    new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+
+                else:
                     new_point.style = point_style  # set style to point
 
-                t5 = time.time()
-                return points_folder
-            else:
-                #print("no points in view")
-                return None
+            t5 = time.time()
+
+            return new_survey_folder
         else:
-            return points_folder
+            #logger.debug("no points in view")
+            return None
+
 
     def build_html_description_string(self, field_list, variable_attributes, point_data):
         """
@@ -165,8 +179,7 @@ class NetCDF2kmlConverter(object):
         description_string = '<![CDATA['
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', self.survey_title)
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', self.survey_id)
-        print('here')
-        print(description_string)
+
         i = 3  # skip obsno, lat, long in field_list
         while i < len(field_list):
             if variable_attributes[field_list[i]].get('units'):
@@ -180,9 +193,7 @@ class NetCDF2kmlConverter(object):
                     point_data[i])
             i += 1
         description_string = description_string + ']]>'
-        print(description_string)
         return description_string
-
 
     def get_basic_density_measurement(self):
         """
@@ -191,9 +202,9 @@ class NetCDF2kmlConverter(object):
         point scale or even an additional region.
         :return: Currently just prints to output
         """
-        print("Point Count: {}".format(self.npu.point_count))
-        print("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
-        print("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
+        logger.debug("Point Count: {}".format(self.npu.point_count))
+        logger.debug("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
+        logger.debug("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
 
 
     def build_static_kml(self):
@@ -220,16 +231,11 @@ class NetCDF2kmlConverter(object):
         dataset_points_region = self.build_region(0, -1, 200, 800)
 
         points_folder = self.kml.newfolder(name="points")
-        print(bbox)
-        print(point_style)
-        print(points_folder)
         points_folder = self.build_points(points_folder, bbox, point_style)
 
         # structure them correctly
         polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
         points_folder.region = dataset_points_region  # insert built point region into point folder
-        print(points_folder)
-        print(netcdf_file_folder)
         return self.kml
 
 
@@ -251,29 +257,26 @@ def main():
     # --------------------------------
     #   build dynamic_grav kml
     # --------------------------------
-    # kml = simplekml.Kml()
-    # new_folder = kml.newfolder()
-    # build_dynamic_network_link(new_folder)
-    # kml.save("dynamic_grav_surveys.kml")
+    kml = simplekml.Kml()
+    new_folder = kml.newfolder()
+    build_dynamic_network_link(new_folder)
+    kml.save("dynamic_grav_surveys.kml")
 
     # --------------------------------
     # build static kml
     # --------------------------------
-    #netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/195110.nc'
-    #static = NetCDF2kmlConverter(netcdf_path)
-    sdmc = SQLiteDatasetMetadataCache(debug=True)
-    endpoint_list = sdmc.search_dataset_distributions(
-        keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
-        protocol='opendap',
-        ll_ur_coords=[[100, -50], [159, -5]]
-        )
-    print("do something?")
-    for survey in endpoint_list:
-        print("do something?")
-        netcdf2kml_obj = NetCDF2kmlConverter(survey)
-        if netcdf2kml_obj.npu.point_count > 2:
-            static_kml = netcdf2kml_obj.build_static_kml()
-            static_kml.save("C:\\Users\\u62231\\Desktop\\grav_kmls\\" + netcdf2kml_obj.survey_title + " " + netcdf2kml_obj.survey_id + ".kml")
+    # sdmc = SQLiteDatasetMetadataCache(debug=False)
+    # endpoint_list = sdmc.search_dataset_distributions(
+    #     keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+    #     protocol='opendap',
+    #     ll_ur_coords=[[100, -50], [159, -5]]
+    #     )
+    #
+    # for survey in endpoint_list:
+    #     netcdf2kml_obj = NetCDF2kmlConverter(survey)
+    #     if netcdf2kml_obj.npu.point_count > 2:
+    #         static_kml = netcdf2kml_obj.build_static_kml()
+    #         static_kml.save("C:\\Users\\u62231\\Desktop\\grav_kmls\\" + netcdf2kml_obj.survey_title + " " + netcdf2kml_obj.survey_id + ".kml")
 
 
 
