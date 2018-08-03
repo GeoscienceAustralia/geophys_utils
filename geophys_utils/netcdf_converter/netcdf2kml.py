@@ -11,6 +11,21 @@ logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
 
+def rgb2hex(r,g,b):
+    hex = "ff{:02x}{:02x}{:02x}".format(r,g,b)
+    return hex
+
+
+def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
+# converts a value from a np array to a value within a desired range. Essentially it converts a number in one
+# range to a number in another range, while maintaining the ratio.
+    old_min = old_range_min
+    old_range = old_range_max - old_range_min
+    new_range = new_range_max - new_range_min
+
+    new_value = (((value_to_convert - old_min) * new_range) / old_range) + 0
+
+    return new_value
 
 class NetCDF2kmlConverter(object):
 
@@ -150,14 +165,23 @@ class NetCDF2kmlConverter(object):
                 logger.debug(description_string)
                 new_point.description = description_string  # set description to point
 
+                rgb_value = int(convert_value_from_old_to_new_range(point_data[5], -500, 500, 0, 255))
+                #print(rgb_value)
+                #print(str(rgb2hex(rgb_value, rgb_value, rgb_value)))
+
+
+
                 if point_data[8] == "Station not used in the production of GA grids.":  # if gridflag equals 2
-                    new_point.style.iconstyle.color = 'ff0000ff'
+                    new_point.style.iconstyle.color = 'ff000000'
                     new_point.style.iconstyle.scale = 0.7
                     new_point.style.labelstyle.scale = 0  # removes the label
                     new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
                 else:
-                    new_point.style = point_style  # set style to point
+                    new_point.style.iconstyle.color = str(rgb2hex(rgb_value, rgb_value, rgb_value))
+                    new_point.style.iconstyle.scale = 0.7
+                    new_point.style.labelstyle.scale = 0  # removes the label
+                    new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
             t5 = time.time()
 
