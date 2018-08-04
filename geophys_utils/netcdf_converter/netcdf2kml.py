@@ -1,11 +1,8 @@
 import simplekml
-import netCDF4
-from geophys_utils import NetCDFPointUtils
 import re
 import time
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import logging
 
 COLORMAP_NAME='rainbow'
