@@ -174,7 +174,7 @@ class NetCDF2kmlConverter(object):
                     new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
                 else:
-                    new_point.style.iconstyle.color = self.rgb2hexstring(point_data[5])
+                    new_point.style.iconstyle.color = self.value2colourhex(point_data[5])
                     new_point.style.iconstyle.scale = 0.7
                     new_point.style.labelstyle.scale = 0  # removes the label
                     new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
@@ -259,7 +259,7 @@ class NetCDF2kmlConverter(object):
         return self.kml
 
 
-    def rgb2hexstring(self, data_value):
+    def value2colourhex(self, data_value):
         '''
         Function to convert data value to hex string for color in self.colormap
         '''
