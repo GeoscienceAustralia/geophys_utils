@@ -819,9 +819,6 @@ class NetCDFPointUtils(NetCDFUtils):
                 
                 yield_variable_attributes_first = False # Only yield variable attributes from the first chunk
 
-                if point_count and point_count == point_count // 10000 * 10000:
-                    logger.info('{} points read from netCDF file'.format(point_count))
-                
                 #logger.debug('line: {}'.format(line))
                 yield line
             
@@ -831,7 +828,7 @@ class NetCDFPointUtils(NetCDFUtils):
             if POINT_LIMIT and (point_count >= POINT_LIMIT):
                 break
         
-        logger.info('{} points read from netCDF file'.format(point_count))
+        logger.debug('{} points read from netCDF file {}'.format(point_count, self.nc_path))
 
     def get_xy_coord_values(self):
         '''
