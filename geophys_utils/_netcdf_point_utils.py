@@ -76,27 +76,25 @@ class NetCDFPointUtils(NetCDFUtils):
         self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
         self._nc_cache_dataset.createDimension('xy', 2)
         
-        try:
-            x_variable = self.netcdf_dataset.variables['longitude']
-            y_variable = self.netcdf_dataset.variables['latitude']
-        except:
-            x_variable = self.netcdf_dataset.variables['easting']
-            y_variable = self.netcdf_dataset.variables['northing']
+        if self.opendap: # Create and populate xycoords variable in cache dataset
+            try:
+                x_variable = self.netcdf_dataset.variables['longitude']
+            except:
+                x_variable = self.netcdf_dataset.variables['easting']
+                
+                
+            var_options = x_variable.filters() or {}
+            var_options['zlib'] = False
+            if hasattr(x_variable, '_FillValue'):
+                var_options['fill_value'] = x_variable._FillValue
+    
+            self._nc_cache_dataset.createVariable('xycoords', 
+                                          x_variable.dtype, 
+                                          ('point', 'xy'),
+                                          **var_options
+                                          )
             
-            
-        var_options = x_variable.filters() or {}
-        var_options['zlib'] = False
-        if hasattr(x_variable, '_FillValue'):
-            var_options['fill_value'] = x_variable._FillValue
-
-        self._nc_cache_dataset.createVariable('xycoords', 
-                                      x_variable.dtype, 
-                                      ('point', 'xy'),
-                                      **var_options
-                                      )
-        self.xycoords = self._nc_cache_dataset.variables['xycoords']
-        self.xycoords[:,0] = self.fetch_array(x_variable)
-        self.xycoords[:,1] = self.fetch_array(y_variable)
+            self._nc_cache_dataset.variables['xycoords'] = self.get_xy_coords()
 
         # Determine exact spatial bounds
         xmin = np.nanmin(self.xycoords[:,0])
@@ -834,6 +832,30 @@ class NetCDFPointUtils(NetCDFUtils):
         
         logger.info('{} points read from netCDF file'.format(point_count))
 
+    def get_xy_coords(self):
+        '''
+        Function to return a full in-memory coordinate array
+        '''
+        try:
+            x_variable = self.netcdf_dataset.variables['longitude']
+            y_variable = self.netcdf_dataset.variables['latitude']
+        except:
+            x_variable = self.netcdf_dataset.variables['easting']
+            y_variable = self.netcdf_dataset.variables['northing']
+            
+        xycoords = np.zeros(shape=(self.point_count, 2), dtype=x_variable.dtype)
+        xycoords[:,0] = self.fetch_array(x_variable)
+        xycoords[:,1] = self.fetch_array(y_variable)
+        
+        return xycoords    
+
+    @property
+    def xycoords(self):
+        if self.opendap:
+            return self._nc_cache_dataset.variables['xycoords'][:]
+        else:
+            return self.get_xy_coords()
+        
 
 def main(debug=True):
     '''
