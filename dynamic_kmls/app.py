@@ -10,6 +10,9 @@ from geophys_utils.netcdf_converter import netcdf2kml
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import logging
 
+# Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
+MAX_BOX_WIDTH_FOR_POINTS = 2.0
+
 # Set the following to None or empty string to use OPeNDAP endpoints
 LOCAL_FILE_LOCATION = None
 #LOCAL_FILE_LOCATION = 'D:\Temp\gravity point_datasets'
@@ -55,8 +58,8 @@ def do_everything(bounding_box):
     kml = simplekml.Kml()
 
     # ----------------------------------------------------------------------------------------------------------------
-    # low zoom, show points only.
-    if east - west < 1:
+    # High zoom: show points rather than polygons.
+    if east - west < MAX_BOX_WIDTH_FOR_POINTS:
 
         if len(endpoint_list) > 0:
             # set point style
@@ -103,7 +106,7 @@ def do_everything(bounding_box):
             logger.debug("No surveys in view")
 
     # ----------------------------------------------------------------------------------------------------------------
-    # Zoomed in, show polygons only.
+    # Low zoom: show polygons and not points.
     else:
         t_polygon_1 = time.time()
 
