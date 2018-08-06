@@ -42,9 +42,9 @@ def do_everything(bounding_box):
     logger.debug("Retrieve bbox values from get request...")
     logger.debug("Time: " + str(t1-t0))
 
-    # Get the netcdf surveys from the database that are within the bbox
+    # Get the point_data_tuple surveys from the database that are within the bbox
     sdmc = SQLiteDatasetMetadataCache(debug=False)
-    endpoint_list = sdmc.search_dataset_distributions(
+    point_data_tuple_list = sdmc.search_dataset_distributions(
         keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
         protocol='opendap',
         ll_ur_coords=[[west, south], [east, north]]
@@ -52,7 +52,7 @@ def do_everything(bounding_box):
 
     logger.debug([[west, south], [east, north]])
     t2 = time.time()
-    logger.debug("Retrieve netcdf strings from database...")
+    logger.debug("Retrieve point_data_tuple strings from database...")
     logger.debug("Time: " + str(t2-t1))
 
     kml = simplekml.Kml()
@@ -61,7 +61,7 @@ def do_everything(bounding_box):
     # High zoom: show points rather than polygons.
     if east - west < MAX_BOX_WIDTH_FOR_POINTS:
 
-        if len(endpoint_list) > 0:
+        if len(point_data_tuple_list) > 0:
             # set point style
             point_style = simplekml.Style()
             point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
@@ -70,11 +70,11 @@ def do_everything(bounding_box):
 
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Observations")
 
-            for netcdf in endpoint_list:
-                logger.debug("Building NETCDF: " + str(netcdf[2]))
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
+            for point_data_tuple in point_data_tuple_list:
+                logger.debug("Building NETCDF: " + str(point_data_tuple[2]))
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t3 = time.time()
-                logger.debug("set style and create netcdf2kmlconverter instance of netcdf file ...")
+                logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file ...")
                 logger.debug("Time: " + str(t3 - t2))
 
                 #logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
@@ -121,17 +121,17 @@ def do_everything(bounding_box):
         polygon_style_background.polystyle.color = '7FFFFFFF'  # Transparent white
         polygon_style_background.polystyle.outline = 1
 
-        if len(endpoint_list) > 0:
+        if len(point_data_tuple_list) > 0:
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Extents")
-            for netcdf in endpoint_list:
-                logger.debug("NETCDF: " + str(netcdf))
+            for point_data_tuple in point_data_tuple_list:
+                logger.debug("NETCDF: " + str(point_data_tuple))
             
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf)
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()
-                logger.debug("set style and create netcdf2kmlconverter instance of netcdf file for polygon ...")
+                logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
             
-                if netcdf[8]:
+                if point_data_tuple[8]:
                     polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
                 else:
                     polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style, False)
