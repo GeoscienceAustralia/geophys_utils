@@ -74,9 +74,10 @@ class NetCDFPointUtils(NetCDFUtils):
         self.unlimited_points = point_dimension.isunlimited()
         
         self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
-        self._nc_cache_dataset.createDimension('xy', 2)
+
+        if self.opendap: # Create and populate xycoords variable in cache dataset if OPeNDAP
+            self._nc_cache_dataset.createDimension('xy', 2)
         
-        if self.opendap: # Create and populate xycoords variable in cache dataset
             try:
                 x_variable = self.netcdf_dataset.variables['longitude']
             except:
@@ -94,13 +95,14 @@ class NetCDFPointUtils(NetCDFUtils):
                                           **var_options
                                           )
             
-            self._nc_cache_dataset.variables['xycoords'] = self.get_xy_coords()
+            self._nc_cache_dataset.variables['xycoords'] = self.get_xy_coord_values()
 
         # Determine exact spatial bounds
-        xmin = np.nanmin(self.xycoords[:,0])
-        xmax = np.nanmax(self.xycoords[:,0])
-        ymin = np.nanmin(self.xycoords[:,1])
-        ymax = np.nanmax(self.xycoords[:,1])
+        xycoords = self.xycoords
+        xmin = np.nanmin(xycoords[:,0])
+        xmax = np.nanmax(xycoords[:,0])
+        ymin = np.nanmin(xycoords[:,1])
+        ymax = np.nanmax(xycoords[:,1])
 
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
@@ -156,11 +158,10 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
         '''
-        if bounds_wkt is None:
-            coordinates = self.xycoords
-
-        else:
-            coordinates = np.array(transform_coords(self.xycoords[:], self.wkt, bounds_wkt))
+        coordinates = self.xycoords
+        
+        if bounds_wkt is not None:
+            coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
 
         return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
                               np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
@@ -256,7 +257,7 @@ class NetCDFPointUtils(NetCDFUtils):
         point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
-        coordinates = self.xycoords[:][point_subset_mask]
+        coordinates = self.xycoords[point_subset_mask]
         # Reproject coordinates if required
         if grid_wkt is not None:
             # N.B: Be careful about XY vs YX coordinate order         
@@ -832,7 +833,7 @@ class NetCDFPointUtils(NetCDFUtils):
         
         logger.info('{} points read from netCDF file'.format(point_count))
 
-    def get_xy_coords(self):
+    def get_xy_coord_values(self):
         '''
         Function to return a full in-memory coordinate array
         '''
@@ -843,18 +844,18 @@ class NetCDFPointUtils(NetCDFUtils):
             x_variable = self.netcdf_dataset.variables['easting']
             y_variable = self.netcdf_dataset.variables['northing']
             
-        xycoords = np.zeros(shape=(self.point_count, 2), dtype=x_variable.dtype)
-        xycoords[:,0] = self.fetch_array(x_variable)
-        xycoords[:,1] = self.fetch_array(y_variable)
+        xycoord_values = np.zeros(shape=(self.point_count, 2), dtype=x_variable.dtype)
+        xycoord_values[:,0] = self.fetch_array(x_variable)
+        xycoord_values[:,1] = self.fetch_array(y_variable)
         
-        return xycoords    
+        return xycoord_values    
 
     @property
     def xycoords(self):
         if self.opendap:
             return self._nc_cache_dataset.variables['xycoords'][:]
         else:
-            return self.get_xy_coords()
+            return self.get_xy_coord_values()
         
 
 def main(debug=True):
