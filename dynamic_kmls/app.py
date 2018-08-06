@@ -11,7 +11,7 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import logging
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
-MAX_BOX_WIDTH_FOR_POINTS = 2.0
+MAX_BOX_WIDTH_FOR_POINTS = 1.5
 
 # Set the following to None or empty string to use OPeNDAP endpoints
 LOCAL_FILE_LOCATION = None
@@ -98,6 +98,7 @@ def do_everything(bounding_box):
                 dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
                 netcdf_file_folder.region = dataset_points_region
                 netcdf2kml_obj.netcdf_dataset.close() # file must be closed after use to avoid errors when accessed again.
+                del netcdf2kml_obj # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
                 t4 = time.time()
 
             return str(netcdf_file_folder)
