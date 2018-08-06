@@ -11,8 +11,8 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import logging
 
 # Set the following to None or empty string to use OPeNDAP endpoints
-#LOCAL_FILE_LOCATION = None
-LOCAL_FILE_LOCATION = 'D:\Temp\gravity point_datasets'
+LOCAL_FILE_LOCATION = None
+#LOCAL_FILE_LOCATION = 'D:\Temp\gravity point_datasets'
 
 app = Flask(__name__)
 api = Api(app)
