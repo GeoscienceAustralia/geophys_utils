@@ -46,7 +46,9 @@ CREATE TABLE public.dataset (
     latitude_min double precision NOT NULL,
     latitude_max double precision NOT NULL,
     convex_hull_polygon text,
-    metadata_uuid character(36)
+    metadata_uuid character(36),
+    point_count bigint,
+    completion_date date
 );
 
 
@@ -113,6 +115,13 @@ COMMENT ON COLUMN public.dataset.latitude_max IS 'Maximum latitude';
 --
 
 COMMENT ON COLUMN public.dataset.convex_hull_polygon IS 'Definition of convex hull polygon for dataset';
+
+
+--
+-- Name: COLUMN dataset.point_count; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.dataset.point_count IS 'Number of points in dataset';
 
 
 --
