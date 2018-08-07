@@ -88,8 +88,8 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
         
         self.add_survey(ga_survey_id=dataset.ga_survey_id,
                         survey_name=None, # TODO: Need to fill this in at some stage
-                        dataset.start_date,
-                        dataset.end_date
+                        start_date=dataset.start_date,
+                        end_date=dataset.end_date
                         )
         
         cursor = self.db_connection.cursor()

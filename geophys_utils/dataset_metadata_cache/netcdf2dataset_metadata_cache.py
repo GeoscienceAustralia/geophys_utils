@@ -15,10 +15,14 @@ from datetime import datetime, date
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
-DEBUG = False
+DEBUG = True
 
 DATABASE_ENGINE = 'SQLite'
 #DATABASE_ENGINE = 'Postgres'
+
+# Set this to change file path
+#FILE_PATH_MAP = None
+FILE_PATH_MAP = ('D:\\Temp\\gravity point_datasets\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/')
 
 class NetCDF2DatasetMetadataCache(object):
     '''
@@ -73,8 +77,13 @@ class NetCDF2DatasetMetadataCache(object):
             '''
             result = None
             
+            #logger.debug('datetime_string: {}'.format(datetime_string))
+            
             if datetime_string:
-                result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S').date()
+                try:
+                    result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S').date()
+                except ValueError:
+                    pass
             
             return result
         
@@ -87,9 +96,10 @@ class NetCDF2DatasetMetadataCache(object):
             
             nc_attribute = dict(nc_dataset.__dict__)
     
-            #TODO: REMOVE THIS HACK
-            #nc_attribute['nc_path'] = nc_path
-            nc_attribute['nc_path'] = nc_path.replace('D:\\Temp\\gravity point data\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/') #TODO: Remove this temporary hack
+            if FILE_PATH_MAP:
+                nc_path = nc_path.replace(*FILE_PATH_MAP)
+                
+            nc_attribute['nc_path'] = nc_path
             
 #===============================================================================
 # // global attributes:

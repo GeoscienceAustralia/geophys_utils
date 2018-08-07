@@ -62,6 +62,9 @@ class Dataset(object):
         self.metadata_uuid = metadata_uuid
         self.keyword_list = keyword_list
         self.distribution_list = distribution_list   
+        self.point_count = point_count
+        self.start_date = start_date
+        self.end_date = end_date
 
 
 
