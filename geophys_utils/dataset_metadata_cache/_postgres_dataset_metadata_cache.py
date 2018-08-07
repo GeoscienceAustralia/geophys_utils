@@ -152,7 +152,7 @@ where metadata_uuid = %(metadata_uuid)s;
                   'end_date': end_date
                   }
         
-        insert_survey_sql = '''insert into survey(ga_survey_id, survey_name)
+        insert_survey_sql = '''insert into survey(ga_survey_id, survey_name, start_date, end_date)
 select %(ga_survey_id)s, %(survey_name)s, %(start_date)s, %(end_date)s
 where not exists (select survey_id from survey where ga_survey_id = %(ga_survey_id)s);
 '''            

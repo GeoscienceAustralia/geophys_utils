@@ -17,8 +17,8 @@ logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
 DEBUG = True
 
-DATABASE_ENGINE = 'SQLite'
-#DATABASE_ENGINE = 'Postgres'
+#DATABASE_ENGINE = 'SQLite'
+DATABASE_ENGINE = 'Postgres'
 
 # Set this to change file path
 #FILE_PATH_MAP = None

@@ -10,8 +10,11 @@ from shapely.geometry import Polygon
 from shapely import wkt
 from geophys_utils import NetCDFPointUtils
 from geophys_utils.netcdf_converter import netcdf2kml
-from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
+from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
+
+DATABASE_ENGINE = 'SQLite'
+#DATABASE_ENGINE = 'Postgres'
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
 MAX_BOX_WIDTH_FOR_POINTS = 1.5
@@ -53,7 +56,7 @@ def do_everything(bounding_box):
     logger.debug("Time: " + str(t1-t0))
 
     # Get the point_data_tuple surveys from the database that are within the bbox
-    sdmc = SQLiteDatasetMetadataCache(debug=False)
+    sdmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=False)
     point_data_tuple_list = sdmc.search_dataset_distributions(
         keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
         protocol='opendap',

@@ -7,8 +7,8 @@ from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 
 DEBUG = False
 
-DATABASE_ENGINE = 'SQLite'
-#DATABASE_ENGINE = 'Postgres'
+#DATABASE_ENGINE = 'SQLite'
+DATABASE_ENGINE = 'Postgres'
 
 def main(): 
     dmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=DEBUG)
@@ -21,7 +21,7 @@ def main():
     
     print('Search results:')
     for metadata in metadata_list:
-        print(', '.join(metadata)) # You would do your own thing here.
+        print(', '.join([str(element) for element in metadata])) # You would do your own thing here.
 
     print('{} datasets found.'.format(len(metadata_list)))
 if __name__ == '__main__':
