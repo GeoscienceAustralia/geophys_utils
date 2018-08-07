@@ -410,17 +410,19 @@ inner join survey using(survey_id)
         cursor.execute(dataset_search_sql, params)
         
         # Convert date strings to Python date objects
-        #return [tuple(row) for row in cursor]
-        row_list = []
-        for row in cursor:
-            row = list(row)
-            for datetime_index in [9, 10]:
-                try:
-                    row[datetime_index] = datetime.strptime(row[datetime_index], '%Y-%m-%d').date()
-                except TypeError:
-                    row[datetime_index] = None
-            row_list.append(row)
-        return row_list
+        return [tuple(row) for row in cursor]
+        #=======================================================================
+        # row_list = []
+        # for row in cursor:
+        #     row = list(row)
+        #     for datetime_index in [9, 10]:
+        #         try:
+        #             row[datetime_index] = datetime.strptime(row[datetime_index], '%Y-%m-%d').date()
+        #         except TypeError:
+        #             row[datetime_index] = None
+        #     row_list.append(row)
+        # return row_list
+        #=======================================================================
         
 def main():
     sdmc = SQLiteDatasetMetadataCache(debug=True)

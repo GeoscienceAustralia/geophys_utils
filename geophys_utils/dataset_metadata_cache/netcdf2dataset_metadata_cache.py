@@ -71,7 +71,7 @@ class NetCDF2DatasetMetadataCache(object):
         Function to populate DB with metadata from netCDF files
         '''
         
-        def datetimestring2date(datetime_string):
+        def datetimestring2datetime(datetime_string):
             '''
             Function to return Python date object from a datetime string
             '''
@@ -81,7 +81,7 @@ class NetCDF2DatasetMetadataCache(object):
             
             if datetime_string:
                 try:
-                    result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S').date()
+                    result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S')
                 except ValueError:
                     pass
             
@@ -158,8 +158,8 @@ class NetCDF2DatasetMetadataCache(object):
                               distribution_list=distribution_list,
                               point_count=point_count,
                               metadata_uuid=nc_attribute.get('uuid'), # Could be None
-                              start_date=datetimestring2date(nc_attribute.get('time_coverage_start')),
-                              end_date=datetimestring2date(nc_attribute.get('time_coverage_end'))
+                              start_date=datetimestring2datetime(nc_attribute.get('time_coverage_start')),
+                              end_date=datetimestring2datetime(nc_attribute.get('time_coverage_end'))
                               )
 
             #logger.debug('dataset: {}'.format(dataset.__dict__))
