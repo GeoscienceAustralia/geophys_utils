@@ -112,6 +112,10 @@ class NetCDF2kmlConverter(object):
             description_string = description_string + ']]>'
 
             pol.description = description_string
+            start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
+            print(start_date)
+            pol.timespan.begin = str(start_date) + "-01-01"
+            pol.timespan.end = str(start_date) + "-01-01"
 
             pol.style = polygon_style
         except:
