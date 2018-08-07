@@ -138,7 +138,6 @@ def do_everything(bounding_box):
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Extents")
             for point_data_tuple in point_data_tuple_list:
                 logger.debug("point_data_tuple: " + str(point_data_tuple))
-            
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
