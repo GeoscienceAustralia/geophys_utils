@@ -138,7 +138,7 @@ def do_everything(bounding_box):
             
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()
-                logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file for polygon ...")
+                logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
             
                 try:
