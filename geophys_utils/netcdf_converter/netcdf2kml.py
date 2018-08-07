@@ -43,6 +43,12 @@ class NetCDF2kmlConverter(object):
         self.south_extent = metadata_tuple[6]
         self.north_extent = metadata_tuple[7]
 
+        self.point_count = metadata_tuple[8]
+
+        self.start_date = metadata_tuple[9]
+        self.end_date = metadata_tuple[10]
+        print(self.start_date)
+        print(self.end_date)
         self.point_icon_style_link = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
 
@@ -87,7 +93,8 @@ class NetCDF2kmlConverter(object):
             # polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
             # polygon_bounds = [tuple(p.split(' ')) for p in
             #                   polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
-            print(self.polygon)
+
+
             polygon_bounds = [[float(ordinate)
                                for ordinate in coord_pair.strip().split(' ')
                                ]
@@ -97,10 +104,6 @@ class NetCDF2kmlConverter(object):
                                         ).group(1).split(',')
                               ]
 
-            print("POLYGON BOUNDS")
-            print(polygon_bounds)
-
-
                 # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
             pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id), outerboundaryis=polygon_bounds, visibility=visibility)
 
@@ -109,17 +112,25 @@ class NetCDF2kmlConverter(object):
             description_string = '<![CDATA['
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', str(self.survey_title))
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.survey_id))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date', str(self.start_date))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date', str(self.end_date))
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(thredds_metadata_link) + str(self.survey_id) + '.nc')
             description_string = description_string + ']]>'
 
             pol.description = description_string
 
-            # rough timestamp
-            start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
-            pol.timespan.begin = str(start_date) + "-01-01"
-            pol.timespan.end = str(start_date) + "-01-01"
-
+            # Add timestamp
+            if self.start_date is not None and self.end_date is not None:
+                pol.timespan.begin = str(self.start_date)
+                pol.timespan.end = str(self.end_date)
+            else:  # if survey does not contain start/end date information, use survey id as start/end date year.
+                start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
+                assert int(start_date) > 1900
+                pol.timespan.begin = str(start_date) + "-06-01"
+                pol.timespan.end = str(start_date) + "-07-01"
+                print("none: " + str(start_date) + "-06-01")
             pol.style = polygon_style
+
         except:
             logger.debug("No polygon data found.")
 
