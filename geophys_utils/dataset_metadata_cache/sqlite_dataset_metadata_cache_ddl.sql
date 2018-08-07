@@ -8,6 +8,8 @@ CREATE TABLE dataset (
     latitude_max double precision NOT NULL CHECK((-90 <= latitude_max) AND (latitude_max <= 90)),
     convex_hull_polygon text,
     metadata_uuid character(36) NOT NULL UNIQUE,
+    point_count INTEGER,
+    completion_date date,
     FOREIGN KEY (survey_id) REFERENCES survey(survey_id) ON UPDATE CASCADE
 );
 
