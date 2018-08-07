@@ -1,19 +1,16 @@
 import simplekml
-import netCDF4
-from geophys_utils import NetCDFPointUtils
 import re
 import time
-from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
+import matplotlib.pyplot as plt
+import matplotlib as mpl
 import logging
+
+COLORMAP_NAME='rainbow'
+COLOUR_STRETCH_RANGE=(-500, 500) # min/max tuple for colour stretch range
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
-
-
-def rgb2hex(r,g,b):
-    hex = "ff{:02x}{:02x}{:02x}".format(r,g,b)
-    return hex
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
@@ -55,6 +52,8 @@ class NetCDF2kmlConverter(object):
         self.north_extent = metadata_tuple[7]
 
         self.point_icon_style_link = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
+        
+        self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
 
     # -----------------------bounds------------
     #        self.bounds = [xmin, ymin, xmax, ymax]
@@ -169,12 +168,6 @@ class NetCDF2kmlConverter(object):
                 logger.debug(description_string)
                 new_point.description = description_string  # set description to point
 
-                rgb_value = int(convert_value_from_old_to_new_range(point_data[5], -500, 500, 0, 255))
-                #print(rgb_value)
-                #print(str(rgb2hex(rgb_value, rgb_value, rgb_value)))
-
-
-
                 if point_data[8] == "Station not used in the production of GA grids.":  # if gridflag equals 2
                     new_point.style.iconstyle.color = 'ff000000'
                     new_point.style.iconstyle.scale = 0.7
@@ -182,7 +175,7 @@ class NetCDF2kmlConverter(object):
                     new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
 
                 else:
-                    new_point.style.iconstyle.color = str(rgb2hex(rgb_value, rgb_value, rgb_value))
+                    new_point.style.iconstyle.color = self.value2colourhex(point_data[5])
                     new_point.style.iconstyle.scale = 0.7
                     new_point.style.labelstyle.scale = 0  # removes the label
                     new_point.style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
@@ -265,6 +258,20 @@ class NetCDF2kmlConverter(object):
         polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
         points_folder.region = dataset_points_region  # insert built point region into point folder
         return self.kml
+
+
+    def value2colourhex(self, data_value):
+        '''
+        Function to convert data value to hex string for color in self.colormap
+        '''
+        cmap_value = int(convert_value_from_old_to_new_range(data_value, *COLOUR_STRETCH_RANGE, 0, 255))
+        #print(cmap_value)
+        #print(str(self.colormap(cmap_value)[:3]))
+        #print(str(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3])))
+        #print(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]))
+        
+        return mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]).replace('#', 'ff')
+
 
 
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):

@@ -1,16 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2" xmlns:gx="http://www.google.com/kml/ext/2.2">
     <Document id="feat_1">
-        <Folder id="feat_2">
-            <NetworkLink id="feat_3">
-                <name>Network Link</name>
-                <Link id="link_0">
-                    <href>http://127.0.0.1:5000/query</href>
-                    <refreshInterval>2</refreshInterval>
-                    <viewRefreshMode>onStop</viewRefreshMode>
-                    <viewRefreshTime>1</viewRefreshTime>
-                </Link>
-            </NetworkLink>
-        </Folder>
-    </Document>
+        <NetworkLink id="feat_3">
+            <name>Local KML Server Test</name>
+            <Link id="link_0">
+                <href>http://127.0.0.1:5000/query</href>
+                <refreshInterval>2</refreshInterval>
+                <viewRefreshMode>onStop</viewRefreshMode>
+                <viewRefreshTime>1</viewRefreshTime>
+            </Link>
+        </NetworkLink>
+     </Document>
 </kml>
