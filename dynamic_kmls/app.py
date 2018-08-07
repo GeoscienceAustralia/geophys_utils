@@ -134,7 +134,7 @@ def do_everything(bounding_box):
         if len(point_data_tuple_list) > 0:
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Extents")
             for point_data_tuple in point_data_tuple_list:
-                print("point_data_tuple: " + str(point_data_tuple))
+                logger.debug("point_data_tuple: " + str(point_data_tuple))
             
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()

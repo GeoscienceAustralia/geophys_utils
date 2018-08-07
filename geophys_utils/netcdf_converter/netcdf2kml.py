@@ -87,7 +87,7 @@ class NetCDF2kmlConverter(object):
             # polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
             # polygon_bounds = [tuple(p.split(' ')) for p in
             #                   polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
-            print(self.polygon)
+            #print(self.polygon)
             polygon_bounds = [[float(ordinate)
                                for ordinate in coord_pair.strip().split(' ')
                                ]
@@ -97,8 +97,8 @@ class NetCDF2kmlConverter(object):
                                         ).group(1).split(',')
                               ]
 
-            print("POLYGON BOUNDS")
-            print(polygon_bounds)
+            #print("POLYGON BOUNDS")
+            #print(polygon_bounds)
 
 
                 # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
