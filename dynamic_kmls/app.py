@@ -5,6 +5,9 @@ import simplekml
 import netCDF4
 import time
 import os
+import re
+from shapely.geometry import Polygon
+from shapely import wkt
 from geophys_utils import NetCDFPointUtils
 from geophys_utils.netcdf_converter import netcdf2kml
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
@@ -37,6 +40,13 @@ def do_everything(bounding_box):
     south = float(bbox_list[1])
     east = float(bbox_list[2])
     north = float(bbox_list[3])
+    
+    bbox_polygon = Polygon(((west, south),
+                           (east, south),
+                           (east, north),
+                           (west, north),
+                           (west, south)
+                           ))
 
     t1 = time.time()
     logger.debug("Retrieve bbox values from get request...")
@@ -124,14 +134,24 @@ def do_everything(bounding_box):
         if len(point_data_tuple_list) > 0:
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Extents")
             for point_data_tuple in point_data_tuple_list:
-                logger.debug("NETCDF: " + str(point_data_tuple))
+                print("point_data_tuple: " + str(point_data_tuple))
             
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
             
-                if point_data_tuple[8]:
+                try:
+                    survey_polygon = wkt.loads(point_data_tuple[3])
+                except Exception as e:
+                    #print(e)
+                    continue # Skip this polygon
+                    
+                if survey_polygon.within(bbox_polygon):
+                #if not survey_polygon.contains(bbox_polygon):
+                #if survey_polygon.centroid.within(bbox_polygon):
+                #if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+                    
                     polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
                 else:
                     polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style, False)

@@ -44,7 +44,10 @@ class Dataset(object):
                  convex_hull_polygon, 
                  keyword_list,
                  distribution_list,
-                 metadata_uuid=None
+                 point_count,
+                 metadata_uuid=None,
+                 start_date=None,
+                 end_date=None
                  ):
         '''
         Dataset class Constructor
@@ -59,6 +62,9 @@ class Dataset(object):
         self.metadata_uuid = metadata_uuid
         self.keyword_list = keyword_list
         self.distribution_list = distribution_list   
+        self.point_count = point_count
+        self.start_date = start_date
+        self.end_date = end_date
 
 
 

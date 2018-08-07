@@ -10,14 +10,19 @@ from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache, Dat
 import logging
 import netCDF4
 import numpy as np
+from datetime import datetime, date
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG) # Initial logging level for this module
 
-DEBUG = False
+DEBUG = True
 
 DATABASE_ENGINE = 'SQLite'
 #DATABASE_ENGINE = 'Postgres'
+
+# Set this to change file path
+#FILE_PATH_MAP = None
+FILE_PATH_MAP = ('D:\\Temp\\gravity point_datasets\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/')
 
 class NetCDF2DatasetMetadataCache(object):
     '''
@@ -65,6 +70,24 @@ class NetCDF2DatasetMetadataCache(object):
         '''
         Function to populate DB with metadata from netCDF files
         '''
+        
+        def datetimestring2date(datetime_string):
+            '''
+            Function to return Python date object from a datetime string
+            '''
+            result = None
+            
+            #logger.debug('datetime_string: {}'.format(datetime_string))
+            
+            if datetime_string:
+                try:
+                    result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S').date()
+                except ValueError:
+                    pass
+            
+            return result
+        
+            
         nc_file_template = nc_file_template or '*.nc'
         
         for nc_path in self.find_files(nc_root_dir, file_template=nc_file_template):
@@ -73,8 +96,10 @@ class NetCDF2DatasetMetadataCache(object):
             
             nc_attribute = dict(nc_dataset.__dict__)
     
-            #nc_attribute['nc_path'] = nc_path
-            nc_attribute['nc_path'] = nc_path.replace('D:\\Temp\\gravity point data\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/') #TODO: Remove this temporary hack
+            if FILE_PATH_MAP:
+                nc_path = nc_path.replace(*FILE_PATH_MAP)
+                
+            nc_attribute['nc_path'] = nc_path
             
 #===============================================================================
 # // global attributes:
@@ -117,6 +142,11 @@ class NetCDF2DatasetMetadataCache(object):
                                                       )
                                          )
                 
+            try:
+                point_count = nc_dataset.dimensions['point'].size
+            except:
+                point_count = None
+            
             dataset = Dataset(dataset_title=nc_attribute['title'],
                               ga_survey_id=nc_attribute['survey_id'],
                               longitude_min=np.asscalar(nc_attribute['geospatial_lon_min']),
@@ -126,7 +156,10 @@ class NetCDF2DatasetMetadataCache(object):
                               convex_hull_polygon=nc_attribute.get('geospatial_bounds'), 
                               keyword_list=[keyword.strip() for keyword in nc_attribute['keywords'].split(',')],
                               distribution_list=distribution_list,
-                              metadata_uuid=nc_attribute.get('uuid') # Could be None
+                              point_count=point_count,
+                              metadata_uuid=nc_attribute.get('uuid'), # Could be None
+                              start_date=datetimestring2date(nc_attribute.get('time_coverage_start')),
+                              end_date=datetimestring2date(nc_attribute.get('time_coverage_end'))
                               )
 
             #logger.debug('dataset: {}'.format(dataset.__dict__))

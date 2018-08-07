@@ -46,7 +46,8 @@ CREATE TABLE public.dataset (
     latitude_min double precision NOT NULL,
     latitude_max double precision NOT NULL,
     convex_hull_polygon text,
-    metadata_uuid character(36)
+    metadata_uuid character(36),
+    point_count bigint
 );
 
 
@@ -113,6 +114,13 @@ COMMENT ON COLUMN public.dataset.latitude_max IS 'Maximum latitude';
 --
 
 COMMENT ON COLUMN public.dataset.convex_hull_polygon IS 'Definition of convex hull polygon for dataset';
+
+
+--
+-- Name: COLUMN dataset.point_count; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.dataset.point_count IS 'Number of points in dataset';
 
 
 --
@@ -348,7 +356,9 @@ ALTER SEQUENCE public.protocol_protocol_id_seq OWNED BY public.protocol.protocol
 CREATE TABLE public.survey (
     survey_id bigint NOT NULL,
     ga_survey_id character varying(16) NOT NULL,
-    survey_name character varying(128)
+    survey_name character varying(128),
+    start_date date,
+    end_date date
 );
 
 
@@ -380,6 +390,20 @@ COMMENT ON COLUMN public.survey.ga_survey_id IS 'GA survey ID string';
 --
 
 COMMENT ON COLUMN public.survey.survey_name IS 'Survey name string';
+
+
+--
+-- Name: COLUMN survey.start_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.survey.start_date IS 'Start date of survey';
+
+
+--
+-- Name: COLUMN survey.end_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.survey.end_date IS 'End date of survey';
 
 
 --
