@@ -9,7 +9,6 @@ CREATE TABLE dataset (
     convex_hull_polygon text,
     metadata_uuid character(36) NOT NULL UNIQUE,
     point_count INTEGER,
-    completion_date date,
     FOREIGN KEY (survey_id) REFERENCES survey(survey_id) ON UPDATE CASCADE
 );
 
@@ -45,7 +44,9 @@ CREATE TABLE protocol (
 CREATE TABLE survey (
     survey_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL UNIQUE,
     ga_survey_id character varying(16) NOT NULL UNIQUE,
-    survey_name character varying(128)
+    survey_name character varying(128),
+    start_date date,
+    end_date date
 );
 
 CREATE INDEX fki_dataset_keyword_dataset_id ON dataset_keyword (dataset_id);

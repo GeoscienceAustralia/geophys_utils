@@ -20,8 +20,8 @@ def main():
                                                  )
     
     print('Search results:')
-    for url in metadata_list:
-        print(url) # You would do your own thing here.
+    for metadata in metadata_list:
+        print(', '.join(metadata)) # You would do your own thing here.
 
     print('{} datasets found.'.format(len(metadata_list)))
 if __name__ == '__main__':

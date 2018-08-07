@@ -87,7 +87,9 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
         params = dict(dataset.__dict__)
         
         self.add_survey(ga_survey_id=dataset.ga_survey_id,
-                        survey_name=None
+                        survey_name=None, # TODO: Need to fill this in at some stage
+                        dataset.start_date,
+                        dataset.end_date
                         )
         
         cursor = self.db_connection.cursor()
@@ -100,7 +102,8 @@ class PostgresDatasetMetadataCache(DatasetMetadataCache):
     latitude_min,
     latitude_max,
     convex_hull_polygon,
-    metadata_uuid
+    metadata_uuid,
+    point_count
     )
 select
     %(dataset_title)s,
@@ -110,7 +113,8 @@ select
     %(latitude_min)s,
     %(latitude_max)s,
     %(convex_hull_polygon)s,
-    %(metadata_uuid)s
+    %(metadata_uuid)s,
+    %(point_count)s
 where not exists (select dataset_id from dataset where metadata_uuid = %(metadata_uuid)s);
 '''
     
@@ -129,9 +133,11 @@ where metadata_uuid = %(metadata_uuid)s;
 
 
     def add_survey(self, 
-                      ga_survey_id,
-                      survey_name=None
-                      ):
+                    ga_survey_id,
+                    survey_name=None,
+                    start_date=None,
+                    end_date=None
+                    ):
         '''
         Function to insert survey
         '''
@@ -141,11 +147,13 @@ where metadata_uuid = %(metadata_uuid)s;
         cursor = self.db_connection.cursor()
         
         params = {'ga_survey_id': ga_survey_id,
-                  'survey_name': survey_name
+                  'survey_name': survey_name,
+                  'start_date': start_date,
+                  'end_date': end_date
                   }
         
         insert_survey_sql = '''insert into survey(ga_survey_id, survey_name)
-select %(ga_survey_id)s, %(survey_name)s
+select %(ga_survey_id)s, %(survey_name)s, %(start_date)s, %(end_date)s
 where not exists (select survey_id from survey where ga_survey_id = %(ga_survey_id)s);
 '''            
         cursor.execute(insert_survey_sql, params)
@@ -285,8 +293,20 @@ where not exists (select distribution_id from distribution where dataset_id = %(
                                      ll_ur_coords=None
                                      ):
         '''
-        Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
+        Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
+        Tuples returned are as follows:
+            (ga_survey_id, 
+            dataset_title,  
+            distribution_url, 
+            convex_hull_polygon, 
+            longitude_min,
+            longitude_max,
+            latitude_min,
+            latitude_max,
+            point_count,
+            start_date,
+            end_date)    
         '''
         cursor = self.db_connection.cursor()
         
@@ -299,10 +319,21 @@ where not exists (select distribution_id from distribution where dataset_id = %(
                   'latitude_max': ll_ur_coords[1][1],
                   })
 
-        dataset_search_sql = """select distribution_url
+        dataset_search_sql = """select ga_survey_id,
+    dataset_title,
+    distribution_url,
+    convex_hull_polygon,
+    longitude_min,
+    longitude_max,
+    latitude_min,
+    latitude_max,
+    point_count,
+    start_date,
+    end_date    
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
+inner join survey using(survey_id)
 """
         for keyword_index in range(len(keyword_list)):    
             keyword = keyword_list[keyword_index] 
@@ -329,7 +360,7 @@ inner join dataset using(dataset_id)
         cursor.execute(dataset_search_sql, params)
         
         # Return list of distribution_url values
-        return [row[0] for row in cursor]
+        return [row for row in cursor]
         
 def main():
     pdmc = PostgresDatasetMetadataCache(debug=True)

@@ -118,7 +118,9 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
         params = dict(dataset.__dict__)
         
         self.add_survey(ga_survey_id=dataset.ga_survey_id,
-                        survey_name=None
+                        survey_name=None, # TODO: Need to fill this in at some stage
+                        dataset.start_date,
+                        dataset.end_date
                         )
         
         cursor = self.db_connection.cursor()
@@ -131,7 +133,8 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
     latitude_min,
     latitude_max,
     convex_hull_polygon,
-    metadata_uuid
+    metadata_uuid,
+    point_count
     )
 select
     :dataset_title,
@@ -141,7 +144,8 @@ select
     :latitude_min,
     :latitude_max,
     :convex_hull_polygon,
-    :metadata_uuid
+    :metadata_uuid,
+    :point_count
 where not exists (select dataset_id from dataset where metadata_uuid = :metadata_uuid);
 '''
         #logger.debug('insert_dataset_sql: {}'.format(insert_dataset_sql))
@@ -169,7 +173,9 @@ where metadata_uuid = :metadata_uuid;
 
     def add_survey(self, 
                       ga_survey_id,
-                      survey_name=None
+                      survey_name=None,
+                      start_date=None,
+                      end_date=None
                       ):
         '''
         Function to insert survey
@@ -180,12 +186,16 @@ where metadata_uuid = :metadata_uuid;
         cursor = self.db_connection.cursor()
         
         params = {'ga_survey_id': ga_survey_id,
-                  'survey_name': survey_name
+                  'survey_name': survey_name,
+                  'start_date': start_date,
+                  'end_date': end_date
                   }
         
-        insert_survey_sql = '''insert into survey(ga_survey_id, survey_name)
+        insert_survey_sql = '''insert into survey(ga_survey_id, survey_name, start_date, end_date)
 select :ga_survey_id, 
-    :survey_name
+    :survey_name,
+    :start_date,
+    :end_date
 where not exists (select survey_id from survey where ga_survey_id = :ga_survey_id);
 '''            
         cursor.execute(insert_survey_sql, params)
@@ -343,7 +353,9 @@ where not exists (select distribution_id from distribution where dataset_id = :d
             longitude_max,
             latitude_min,
             latitude_max,
-            is_exclusive)
+            point_count,
+            start_date,
+            end_date)    
         '''
         cursor = self.db_connection.cursor()
         
@@ -364,10 +376,9 @@ where not exists (select distribution_id from distribution where dataset_id = :d
     longitude_max,
     latitude_min,
     latitude_max,
-    (longitude_min >= :longitude_min
-    and longitude_max <= :longitude_max
-    and latitude_min >= :latitude_min
-    and latitude_max <= :latitude_max) as is_exclusive
+    point_count,
+    start_date,
+    end_date    
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)

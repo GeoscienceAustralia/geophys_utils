@@ -47,8 +47,7 @@ CREATE TABLE public.dataset (
     latitude_max double precision NOT NULL,
     convex_hull_polygon text,
     metadata_uuid character(36),
-    point_count bigint,
-    completion_date date
+    point_count bigint
 );
 
 
@@ -357,7 +356,9 @@ ALTER SEQUENCE public.protocol_protocol_id_seq OWNED BY public.protocol.protocol
 CREATE TABLE public.survey (
     survey_id bigint NOT NULL,
     ga_survey_id character varying(16) NOT NULL,
-    survey_name character varying(128)
+    survey_name character varying(128),
+    start_date date,
+    end_date date
 );
 
 
@@ -389,6 +390,20 @@ COMMENT ON COLUMN public.survey.ga_survey_id IS 'GA survey ID string';
 --
 
 COMMENT ON COLUMN public.survey.survey_name IS 'Survey name string';
+
+
+--
+-- Name: COLUMN survey.start_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.survey.start_date IS 'Start date of survey';
+
+
+--
+-- Name: COLUMN survey.end_date; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON COLUMN public.survey.end_date IS 'End date of survey';
 
 
 --
