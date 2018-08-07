@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 import logging
 
-COLORMAP_NAME='rainbow'
-COLOUR_STRETCH_RANGE=(-500, 500) # min/max tuple for colour stretch range
+COLORMAP_NAME = 'rainbow'
+COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
@@ -14,8 +14,8 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
-# converts a value from a np array to a value within a desired range. Essentially it converts a number in one
-# range to a number in another range, while maintaining the ratio.
+    # converts a value from a np array to a value within a desired range. Essentially it converts a number in one
+    # range to a number in another range, while maintaining the ratio.
     old_min = old_range_min
     old_range = old_range_max - old_range_min
     new_range = new_range_max - new_range_min
@@ -24,18 +24,10 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
     return new_value
 
+
 class NetCDF2kmlConverter(object):
 
     def __init__(self, metadata_tuple=None):
-
-
-        # Create NetCDFPointUtils object for specified netCDF dataset
-        #netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
-        #netcdf_path = 'E:\\Temp\\gravity_point_test\\195256.nc'
-        #195256
-        #netcdf_path = "C:\\Users\\u62231\\Desktop\\grav_netcdf_4\\201780.nc"
-        #195105
-        #201780
 
         self.npu = None
         self.survey_id = metadata_tuple[0]
@@ -52,15 +44,11 @@ class NetCDF2kmlConverter(object):
         self.north_extent = metadata_tuple[7]
 
         self.point_icon_style_link = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
-        
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
-
-    # -----------------------bounds------------
-    #        self.bounds = [xmin, ymin, xmax, ymax]
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
-        Builds a kml region.
+        Builds a KML Region using simplekml.
         lod parameters are the measurements in screen pixels that represents the maximum limit of the visibility range
         for a given Region.
         :param min_lod_pixels:
@@ -86,20 +74,34 @@ class NetCDF2kmlConverter(object):
         Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
         :param parent_folder:
         :param polygon_style:
-        :return: the input parent folder now containig the polygon and the polygon itself if that is desired instead.
+        :param visibility:
+        :return: the input parent folder now containing the polygon and the polygon itself if that is desired instead.
         """
         logger.debug("Building polygon...")
         # get the polygon points from the netcdf global attributes
         try:
-            polygon_bounds = self.polygon
-            logger.debug(polygon_bounds)
-            polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
-            polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
-            polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
-            polygon_bounds = [tuple(p.split(' ')) for p in
-                              polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
+            # polygon_bounds = self.polygon
+            # logger.debug(polygon_bounds)
+            # polygon_bounds = re.sub('POLYGON\(\(', '', polygon_bounds)  # cut out polygon and opening brackets
+            # polygon_bounds = re.sub('\)\)', '', polygon_bounds)  # cut out trailing brackets
+            # polygon_bounds = polygon_bounds.split(',')  # turn the string into a list, seperating on the commas
+            # polygon_bounds = [tuple(p.split(' ')) for p in
+            #                   polygon_bounds]  # within each coord set split the lat and long - group the set in a tuple
+            print(self.polygon)
+            polygon_bounds = [[float(ordinate)
+                               for ordinate in coord_pair.strip().split(' ')
+                               ]
+                              for coord_pair in
+                              re.search('POLYGON\(\((.*)\)\)',
+                                        self.polygon
+                                        ).group(1).split(',')
+                              ]
 
-            # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
+            print("POLYGON BOUNDS")
+            print(polygon_bounds)
+
+
+                # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
             pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id), outerboundaryis=polygon_bounds, visibility=visibility)
 
 
@@ -111,8 +113,9 @@ class NetCDF2kmlConverter(object):
             description_string = description_string + ']]>'
 
             pol.description = description_string
+
+            # rough timestamp
             start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
-            print(start_date)
             pol.timespan.begin = str(start_date) + "-01-01"
             pol.timespan.end = str(start_date) + "-01-01"
 
@@ -145,6 +148,11 @@ class NetCDF2kmlConverter(object):
 
             new_survey_folder = points_folder.newfolder(name=str(self.survey_title) + " " +
                                                                   str(self.survey_id))
+
+            # rough timestamp
+            start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
+            new_survey_folder.timespan.begin = str(start_date) + "-01-01"
+            new_survey_folder.timespan.end = str(start_date) + "-01-01"
 
             point_data_generator = self.npu.all_point_data_generator(field_list, spatial_mask)
             logger.debug(point_data_generator)
