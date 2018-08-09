@@ -4,6 +4,7 @@ import time
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import logging
+from datetime import date
 
 COLORMAP_NAME = 'rainbow'
 COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
@@ -121,18 +122,23 @@ class NetCDF2kmlConverter(object):
             pol.description = description_string
 
             # Add timestamp
-            if self.start_date is not None and self.end_date is not None:
+            #if self.start_date is not None and self.end_date is not None:
+            try:
+                assert self.start_date > date(1900, 1, 1), 'Start date {} is less than 1900-01-01'.format(self.start_date)
+                assert self.end_date < date(2020, 1, 1), 'End date {} is greater than 2020-01-01'.format(self.end_date)
+                assert self.end_date > date(1900, 1, 1), 'End date {} is less than 1900-01-01'.format(self.end_date)
+                assert self.start_date < date(2020, 1, 1), 'Start date {} is greater than 2020-01-01'.format(self.start_date)
                 pol.timespan.begin = str(self.start_date)
                 pol.timespan.end = str(self.end_date)
-            else:  # if survey does not contain start/end date information, use survey id as start/end date year.
-                start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
-                assert int(start_date) > 1900
-                pol.timespan.begin = str(start_date) + "-06-01"
-                pol.timespan.end = str(start_date) + "-07-01"
+            except:  # if survey does not contain start/end date information, use survey id as start/end date year.
+                survey_year = int(re.match('^[0-9]{4}', str(self.survey_id)).group())
+                assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
+                pol.timespan.begin = str(survey_year) + "-06-01"
+                pol.timespan.end = str(survey_year) + "-07-01"
                 #print("none: " + str(start_date) + "-06-01")
             pol.style = polygon_style
-        except:
-            logger.debug("No polygon data found.")
+        except Exception as e:
+            logger.warning("Unable to display polygon: {}".format(e))
 
         return parent_folder
 
