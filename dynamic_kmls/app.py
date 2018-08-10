@@ -29,7 +29,7 @@ logger.setLevel(logging.DEBUG)  # Initial logging level for this module
 
 
 @app.route('/<bounding_box>',methods=['GET'])
-def do_everything(bounding_box):
+def build_dynamic_kml(bounding_box):
 
     t0 = time.time()  # retrieve coordinates from query
 
@@ -73,10 +73,10 @@ def do_everything(bounding_box):
 
         if len(point_data_tuple_list) > 0:
             # set point style
-            point_style = simplekml.Style()
-            point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
-            point_style.iconstyle.scale = 0.7
-            point_style.labelstyle.scale = 0  # removes the label
+            # point_style = simplekml.Style()
+            # point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+            # point_style.iconstyle.scale = 0.7
+            # point_style.labelstyle.scale = 0  # removes the label
 
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Observations")
 
@@ -86,8 +86,7 @@ def do_everything(bounding_box):
                 t3 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file ...")
                 logger.debug("Time: " + str(t3 - t2))
-
-                #logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
+                logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
 
                 nc_path = netcdf2kml_obj.netcdf_path
                 if LOCAL_FILE_LOCATION:
@@ -101,14 +100,14 @@ def do_everything(bounding_box):
 
                 if netcdf2kml_obj.npu.point_count > 0:
                     ta = time.time()
-                    netcdf2kml_obj.build_points(netcdf_file_folder, bbox_list, point_style)
+                    netcdf2kml_obj.build_points(netcdf_file_folder, bbox_list)
                     tb = time.time()
                     logger.debug("do the things time: " + str(tb-ta))
-                    logger.debug("Build the point ...")
+                    logger.debug("Build the points ...")
                 dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
                 netcdf_file_folder.region = dataset_points_region
                 netcdf2kml_obj.netcdf_dataset.close() # file must be closed after use to avoid errors when accessed again.
-                del netcdf2kml_obj # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
+                del netcdf2kml_obj  # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
                 t4 = time.time()
 
             return str(netcdf_file_folder)
@@ -122,19 +121,14 @@ def do_everything(bounding_box):
         t_polygon_1 = time.time()
 
         # set polygon style
-        polygon_style = simplekml.Style()
-        polygon_style.polystyle.color = 'B30000ff'  # Transparent red
-        #polygon_style.polystyle.color = 'ff4545'
-        polygon_style.polystyle.outline = 1
 
-        polygon_style_background = simplekml.Style()
-        polygon_style_background.polystyle.color = '7FFFFFFF'  # Transparent white
-        polygon_style_background.polystyle.outline = 1
+
 
         if len(point_data_tuple_list) > 0:
             netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Extents")
             for point_data_tuple in point_data_tuple_list:
-
+                logger.debug("point_data_tuple: " + str(point_data_tuple))
+            
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(point_data_tuple)
                 t_polygon_2 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
@@ -143,7 +137,6 @@ def do_everything(bounding_box):
                 try:
                     survey_polygon = wkt.loads(point_data_tuple[3])
                 except Exception as e:
-                    #print(e)
                     continue # Skip this polygon
                     
                 if survey_polygon.within(bbox_polygon):
@@ -151,9 +144,9 @@ def do_everything(bounding_box):
                 #if survey_polygon.centroid.within(bbox_polygon):
                 #if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
                     
-                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style)
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, visibility=True)
                 else:
-                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, polygon_style, False)
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder, visibility=False)
             
                 dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
                 polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
