@@ -2,13 +2,9 @@ from flask import Flask
 from flask_restful import Api
 from flask import request
 import simplekml
-import netCDF4
 import time
-import os
-import re
 from shapely.geometry import Polygon
 from shapely import wkt
-from geophys_utils import NetCDFPointUtils
 from geophys_utils.netcdf_converter import netcdf2kml
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
@@ -18,10 +14,6 @@ DATABASE_ENGINE = 'SQLite'
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
 MAX_BOX_WIDTH_FOR_POINTS = 1.5
-
-# Set the following to None or empty string to use OPeNDAP endpoints
-LOCAL_FILE_LOCATION = None
-#LOCAL_FILE_LOCATION = 'D:\Temp\gravity point_datasets'
 
 app = Flask(__name__)
 api = Api(app)
@@ -91,16 +83,6 @@ def do_everything(bounding_box):
                 logger.debug("Time: " + str(t3 - t2))
 
                 #logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
-
-                nc_path = netcdf2kml_obj.netcdf_path
-                if LOCAL_FILE_LOCATION:
-                    nc_path = os.path.join(LOCAL_FILE_LOCATION,
-                                           os.path.basename(nc_path)
-                                           )
-                    
-                netcdf2kml_obj.netcdf_dataset = netCDF4.Dataset(nc_path)
-
-                netcdf2kml_obj.npu = NetCDFPointUtils(netcdf2kml_obj.netcdf_dataset)
 
                 if netcdf2kml_obj.npu.point_count > 0:
                     ta = time.time()

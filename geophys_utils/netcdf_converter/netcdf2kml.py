@@ -1,10 +1,18 @@
 import simplekml
+import os
 import re
 import time
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import logging
 from datetime import date
+import netCDF4
+from geophys_utils import NetCDFPointUtils
+
+#TODO: GET RID OF THIS HORRIBLE HACK
+# Set the following to None or empty string to use OPeNDAP endpoints
+LOCAL_FILE_LOCATION = None
+#LOCAL_FILE_LOCATION = 'D:\Temp\gravity point_datasets'
 
 COLORMAP_NAME = 'rainbow'
 COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
@@ -52,6 +60,16 @@ class NetCDF2kmlConverter(object):
         #print(self.end_date)
         self.point_icon_style_link = "http://maps.google.com/mapfiles/kml/shapes/placemark_square.png"
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
+
+        #TODO: GET RID OF THIS HORRIBLE HACK
+        if LOCAL_FILE_LOCATION:
+            self.netcdf_path = os.path.join(LOCAL_FILE_LOCATION,
+                                   os.path.basename(self.netcdf_path)
+                                   )
+            
+        self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+
+        self.npu = NetCDFPointUtils(self.netcdf_dataset, enable_cache=False)
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
