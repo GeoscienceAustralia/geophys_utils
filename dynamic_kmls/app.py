@@ -131,7 +131,8 @@ def do_everything(bounding_box):
                     #print(e)
                     continue # Skip this polygon
                     
-                if survey_polygon.within(bbox_polygon):
+                if survey_polygon.intersects(bbox_polygon):
+                #if survey_polygon.within(bbox_polygon):
                 #if not survey_polygon.contains(bbox_polygon):
                 #if survey_polygon.centroid.within(bbox_polygon):
                 #if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
