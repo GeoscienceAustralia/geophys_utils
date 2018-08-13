@@ -1,0 +1,9 @@
+ground_gravity:
+  polygon_color: 'B30000ff'
+  polygon_outline: 1
+  point_icon_scale: 0.7
+  point_labelstyle_scale: 0
+  point_icon_href: "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+  point_flag_exists: True
+  point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
+
