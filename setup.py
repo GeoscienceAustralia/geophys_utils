@@ -31,7 +31,7 @@ setup(name='geophys_utils',
                     'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml']
                     },
       scripts=(['bin/csw_find',
-                'bin/rechunk'
+                'bin/rechunk',
                 'bin/aseg2nc',
                 'bin/nc2aseg',
                 ] 

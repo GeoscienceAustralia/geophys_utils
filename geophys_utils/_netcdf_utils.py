@@ -68,10 +68,15 @@ class NetCDFUtils(object):
             self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
         # Identify all spatial grid variables
-        self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
-                                   if hasattr(variable, 'grid_mapping')]
-        
-        #assert self.data_variable_list, 'Unable to determine data variable(s) (must have "grid_mapping" attribute)'
+        self.data_variable_list = []
+        try:
+            data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
+                                       if hasattr(variable, 'grid_mapping')][0].dimensions
+            self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
+                                       if variable.dimensions == data_variable_dimensions]
+        except:
+            logger.error('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+            raise
         
         #TODO: Make sure this is general for all CRSs
         self.x_variable = (self.netcdf_dataset.variables.get('lon') 
