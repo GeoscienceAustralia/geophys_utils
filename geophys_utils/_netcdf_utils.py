@@ -67,7 +67,8 @@ class NetCDFUtils(object):
         else:
             self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
-        # Identify all spatial grid variables
+        # Identify all spatial grid variables by first finding the variable with 'grid_mapping'
+        # and then finding all variables with the same dimensionality
         self.data_variable_list = []
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
@@ -159,7 +160,7 @@ class NetCDFUtils(object):
         try:
             dims_used = set()
             dim_size = {}
-            for variable_name, variable in self.netcdf_dataset.variables.iteritems():
+            for variable_name, variable in self.netcdf_dataset.variables.items():
                 dims_used |= set(variable.dimensions)
                 
                 for dimension_index in range(len(variable.dimensions)): 
@@ -176,7 +177,7 @@ class NetCDFUtils(object):
             #logger.debug(dim_size)
             
             #Copy dimensions
-            for dimension_name, dimension in self.netcdf_dataset.dimensions.iteritems():
+            for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 if dimension_name in dims_used: # Discard unused dimensions
                     logger.info('Copying dimension %s of length %d' % (dimension_name, dim_size[dimension_name]))
                     nc_output_dataset.createDimension(dimension_name, 
@@ -187,7 +188,7 @@ class NetCDFUtils(object):
                     logger.info('Skipping unused dimension %s' % dimension_name)
     
             # Copy variables
-            for variable_name, input_variable in self.netcdf_dataset.variables.iteritems():
+            for variable_name, input_variable in self.netcdf_dataset.variables.items():
                 dtype = datatype_map_dict.get(str(input_variable.datatype)) or input_variable.datatype
                 
                 # Special case for "crs" or "transverse_mercator" - want byte datatype
@@ -229,7 +230,7 @@ class NetCDFUtils(object):
                         var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index],
                                                                          dim_size[input_variable.dimensions[dimension_index]])
                              
-                options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.iteritems()]) if var_options else ''   
+                options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.items()]) if var_options else ''   
                 logger.info("Copying variable %s from datatype %s to datatype %s%s" % (variable_name, 
                                                                                        input_variable.datatype, 
                                                                                        dtype, 
@@ -293,7 +294,7 @@ class NetCDFUtils(object):
                                           for dimension_index in range(len(input_variable.dimensions))
                                          ]
         
-                            piece_index_ranges = [(overall_slices[dimension_index].start / piece_sizes[dimension_index],
+                            piece_index_ranges = [(overall_slices[dimension_index].start // piece_sizes[dimension_index],
                                                   int(math.ceil(float(overall_slices[dimension_index].stop) / piece_sizes[dimension_index]))
                                                  )
                                                  for dimension_index in range(len(input_variable.dimensions))
