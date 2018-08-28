@@ -256,25 +256,18 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
                 smaller_array = data_array.astype(smaller_dtype)
                 difference_array = data_array - smaller_array
-#===============================================================================
-#                 logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
-# difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
-#                                                                                                smaller_dtype, 
-#                                                                                                data_array, 
-#                                                                                                smaller_array, 
-#                                                                                                difference_array, 
-#                                                                                                decimal_places, 
-#                                                                                                np.count_nonzero(difference_array >= pow(10, -decimal_places)), 
-#                                                                                                difference_array[difference_array != 0]
-#                                                                                                )
-#                       )
-#===============================================================================
-                #===============================================================
-                # if np.count_nonzero(np.abs(difference_array) >= pow(10, -decimal_places)):
-                #     # Differences found - try larger datatype
-                #     continue
-                #===============================================================
-                logger.debug('Maximum error converting from {} to {}: {}'.format(current_dtype,
+                logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
+difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
+                                                                                               smaller_dtype, 
+                                                                                               data_array, 
+                                                                                               smaller_array, 
+                                                                                               difference_array, 
+                                                                                               decimal_places, 
+                                                                                               np.count_nonzero(difference_array >= pow(10, -decimal_places)), 
+                                                                                               difference_array[difference_array != 0]
+                                                                                               )
+                      )
+                logger.info('Maximum error converting from {} to {}: {}'.format(current_dtype,
                                                                                  smaller_dtype,
                                                                                  np.nanmax(np.abs(difference_array))))
                 smaller_mantissa, smaller_exponent = np.frexp(smaller_array)
