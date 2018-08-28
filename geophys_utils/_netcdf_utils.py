@@ -69,6 +69,7 @@ class NetCDFUtils(object):
         
         # Identify all spatial grid variables by first finding the variable with 'grid_mapping'
         # and then finding all variables with the same dimensionality
+        #TODO: Do something not specific to gridded datasets
         self.data_variable_list = []
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
@@ -76,8 +77,8 @@ class NetCDFUtils(object):
             self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
         except:
-            logger.error('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
-            raise
+            logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+
         
         #TODO: Make sure this is general for all CRSs
         self.x_variable = (self.netcdf_dataset.variables.get('lon') 

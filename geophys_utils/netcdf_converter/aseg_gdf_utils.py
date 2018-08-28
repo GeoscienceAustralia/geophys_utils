@@ -36,8 +36,8 @@ ASEG_DTYPE_CODE_MAPPING = {'int8': 'I',
                            'int16': 'I',
                            'int32': 'I',
                            'int64': 'I',
-                           'float32': 'F',
-                           'float64': 'D',
+                           'float32': 'E', # real in exponent form
+                           'float64': 'D', # double precision real in exponent form
                            'str': 'A'
                            }
 
@@ -200,7 +200,10 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
                               )
                                   
         aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, width_specifier, decimal_places)
-        python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
+        if aseg_dtype_code == 'F': # Floating point notation
+            python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
+        else: # Exponential notation for 'D' or 'E'
+            python_format = '{' + ':>{:d}.{:d}E'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
 
     elif aseg_dtype_code == 'A': # String
         if hasattr(array_variable, 'aseg_gdf_format'):
@@ -243,6 +246,8 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
     '''
     logger.debug('data_array: {}, current_dtype: {}, decimal_places: {}'.format(data_array, current_dtype, decimal_places))
     
+    data_mantissa, data_exponent = np.frexp(data_array)
+    
     for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
@@ -251,18 +256,30 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
             for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
                 smaller_array = data_array.astype(smaller_dtype)
                 difference_array = data_array - smaller_array
-                logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
-difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
-                                                                                               smaller_dtype, 
-                                                                                               data_array, 
-                                                                                               smaller_array, 
-                                                                                               difference_array, 
-                                                                                               decimal_places, 
-                                                                                               np.count_nonzero(difference_array >= pow(10, -decimal_places)), 
-                                                                                               difference_array[difference_array != 0]
-                                                                                               )
-                      )
-                if np.count_nonzero(np.abs(difference_array) >= pow(10, -decimal_places)):
+#===============================================================================
+#                 logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
+# difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
+#                                                                                                smaller_dtype, 
+#                                                                                                data_array, 
+#                                                                                                smaller_array, 
+#                                                                                                difference_array, 
+#                                                                                                decimal_places, 
+#                                                                                                np.count_nonzero(difference_array >= pow(10, -decimal_places)), 
+#                                                                                                difference_array[difference_array != 0]
+#                                                                                                )
+#                       )
+#===============================================================================
+                #===============================================================
+                # if np.count_nonzero(np.abs(difference_array) >= pow(10, -decimal_places)):
+                #     # Differences found - try larger datatype
+                #     continue
+                #===============================================================
+                logger.debug('Maximum error converting from {} to {}: {}'.format(current_dtype,
+                                                                                 smaller_dtype,
+                                                                                 np.nanmax(np.abs(difference_array))))
+                smaller_mantissa, smaller_exponent = np.frexp(smaller_array)
+                if np.any(np.logical_or((smaller_exponent != data_exponent), 
+                                        (np.abs(data_mantissa - smaller_mantissa) >= pow(10, -decimal_places)))):
                     # Differences found - try larger datatype
                     continue
                 else:
