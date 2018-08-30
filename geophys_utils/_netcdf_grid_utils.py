@@ -86,6 +86,15 @@ class NetCDFGridUtils(NetCDFUtils):
             self.nominal_pixel_degrees = [round(abs(centre_pixel_wgs84_coords[1][
                         dim_index] - centre_pixel_wgs84_coords[0][dim_index]), 8) for dim_index in range(2)]
 
+            try:
+                data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
+                                           if hasattr(variable, 'grid_mapping')][0].dimensions
+                self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
+                                           if variable.dimensions == data_variable_dimensions]
+            except:
+                logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+                raise
+            
         def get_default_sample_metres():
             '''
             Function to return average nominal pixel size in metres rounded up to nearest 10^x or 5*10^x

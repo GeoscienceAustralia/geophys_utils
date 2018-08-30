@@ -111,6 +111,9 @@ class NetCDFPointUtils(NetCDFUtils):
         xmax = np.nanmax(xycoords[:,0])
         ymin = np.nanmin(xycoords[:,1])
         ymax = np.nanmax(xycoords[:,1])
+        
+        self.data_variable_list = [key for key, value in netcdf_dataset.variables.items()
+                                   if 'point' in value.dimensions]
 
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
