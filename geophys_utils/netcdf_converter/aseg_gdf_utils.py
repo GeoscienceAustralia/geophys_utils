@@ -10,11 +10,33 @@ Created on 19 Jun. 2018
 import re
 import numpy as np
 from collections import OrderedDict
-from math import log10, ceil
+from math import ceil, log10
 import logging
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
+
+def dfrexp(f):
+    '''
+    Decimal version of frexp or np.frexp function to return mantissa & exponent
+    @param f: Floating point scalar or array
+    @return fman: Scalar or array decimal mantissa between 0.0 and 1.0 
+    @return fexp: Scalar or array decimal exponent
+    '''
+    # Compute decimal exponent
+    if type(f) == np.ndarray:
+        fexp = np.zeros(shape=f.shape, dtype='int32')
+        fexp[f != 0] = np.ceil(np.log10(np.abs(f[f != 0]))).astype('int32')
+    else: # Scalar
+        fexp = int(ceil(log10(abs(f)))) if f != 0 else 0
+            
+    # Compute decimal mantissa between 0.0 and 1.0
+    fman = f/10.0**fexp
+    
+    logger.debug('fman: {}'.format(fman))
+    logger.debug('fexp: {}'.format(fexp))
+    
+    return fman, fexp
 
 
 # Approximate maximum number of significant decimal figures for each signed datatype
@@ -246,7 +268,7 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
     '''
     logger.debug('data_array: {}, current_dtype: {}, decimal_places: {}'.format(data_array, current_dtype, decimal_places))
     
-    data_mantissa, data_exponent = np.frexp(data_array)
+    data_mantissa, data_exponent = dfrexp(data_array)
     
     for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
@@ -270,12 +292,14 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                 logger.info('Maximum error converting from {} to {}: {}'.format(current_dtype,
                                                                                  smaller_dtype,
                                                                                  np.nanmax(np.abs(difference_array))))
-                smaller_mantissa, smaller_exponent = np.frexp(smaller_array)
+                smaller_mantissa, smaller_exponent = dfrexp(smaller_array)
                 if np.any(np.logical_or((smaller_exponent != data_exponent), 
                                         (np.abs(data_mantissa - smaller_mantissa) >= pow(10, -decimal_places)))):
                     # Differences found - try larger datatype
                     continue
                 else:
+                    logger.info('Maximum mantissa difference: {}'.format(np.nanmax(np.abs(data_mantissa - smaller_mantissa))))
+                    logger.info('Maximum exponent difference: {}'.format(np.nanmax(np.abs(smaller_exponent - data_exponent))))
                     aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(smaller_array, decimal_places)
 
                     if fill_value is not None:
