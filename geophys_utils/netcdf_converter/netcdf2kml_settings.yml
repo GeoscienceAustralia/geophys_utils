@@ -1,4 +1,8 @@
 ground_gravity:
+  netcdf_file_folder_name: "Ground Gravity Surveys"
+  thredds_link: "http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/"
+  keyword_list: ['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points']
+  protocol: 'opendap'
   polygon_color: 'B30000ff'
   polygon_outline: 1
   point_icon_scale: 0.7
@@ -6,4 +10,15 @@ ground_gravity:
   point_icon_href: "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
   point_flag_exists: True
   point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
-
+aem:
+  netcdf_file_folder_name: "AEM Surveys"
+  thredds_link: "http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/aem/AusAEM_Year1_Tranche1_Final_CND.nc"
+  keyword_list: ["geophysics", "airborne", "AEM", "conductivity"]
+  protocol: 'opendap'
+  polygon_color: 'B30000ff'
+  polygon_outline: 1
+  point_icon_scale: 0.7
+  point_labelstyle_scale: 0
+  point_icon_href: "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+  point_flag_exists: True
+  point_field_list: ['line_index', 'latitude', 'longitude', 'lidar', 'mag', 'gps_elevation']
