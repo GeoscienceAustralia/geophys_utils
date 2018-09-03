@@ -52,30 +52,38 @@ class NetCDFPointUtils(NetCDFUtils):
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
     '''
 
-    def __init__(self, netcdf_dataset, debug=False):
+    def __init__(self, 
+                 netcdf_dataset, 
+                 enable_cache=None, 
+                 debug=False):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
+        @parameter enable_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
         '''
         # Start of init function - Call inherited constructor first
-        NetCDFUtils.__init__(self, netcdf_dataset, debug)
-
+        NetCDFUtils.__init__(self, 
+                             netcdf_dataset=netcdf_dataset, 
+                             debug=debug)
+        
         self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
                                      if 'point' in self.netcdf_dataset.variables[var_name].dimensions
                                      and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
                                      ])
         
-        # Create local cache for coordinates
-        nc_cache_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0] + '.nc'))
-        self._nc_cache_dataset = netCDF4.Dataset(nc_cache_path, mode="w", clobber=True, format='NETCDF4')
+        # If caching is not explicitly specified, enable it for OPeNDAP access
+        if enable_cache is None:
+            self.enable_cache = self.opendap
+        else:
+            self.enable_cache = enable_cache
         
-        point_dimension = self.netcdf_dataset.dimensions['point']
-        self.point_count = len(point_dimension)
-        self.unlimited_points = point_dimension.isunlimited()
+        self._nc_cache_dataset = None # This will only be defined if caching is enabled
         
-        self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
+        self.point_count = self.netcdf_dataset.dimensions['point'].size # Will be zero for unlimited
 
-        if self.opendap: # Create and populate xycoords variable in cache dataset if OPeNDAP
+        if self.enable_cache: # Create and populate xycoords variable in cache dataset if OPeNDAP
+            self.create_local_cache()
+            
             self._nc_cache_dataset.createDimension('xy', 2)
         
             try:
@@ -117,12 +125,13 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         NetCDFPointUtils Destructor
         '''
-        try:
-            cache_file_path = self._nc_cache_dataset.filepath()
-            self._nc_cache_dataset.close()
-            os.remove(cache_file_path)
-        except:
-            pass
+        if self.enable_cache:
+            try:
+                cache_file_path = self._nc_cache_dataset.filepath()
+                self._nc_cache_dataset.close()
+                os.remove(cache_file_path)
+            except:
+                pass
         
     def fetch_array(self, source_array):
         '''
@@ -849,11 +858,22 @@ class NetCDFPointUtils(NetCDFUtils):
 
     @property
     def xycoords(self):
-        if self.opendap:
+        if self.enable_cache:
             return self._nc_cache_dataset.variables['xycoords'][:]
         else:
             return self.get_xy_coord_values()
         
+
+    def create_local_cache(self):
+        # Create local cache for coordinates
+        nc_cache_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0] + '.nc'))
+        self._nc_cache_dataset = netCDF4.Dataset(nc_cache_path, mode="w", clobber=True, format='NETCDF4')
+        
+        point_dimension = self.netcdf_dataset.dimensions['point']
+        self.unlimited_points = point_dimension.isunlimited()
+        
+        self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
+
 
 def main(debug=True):
     '''

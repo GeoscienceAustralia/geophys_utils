@@ -33,13 +33,18 @@ class NetCDFLineUtils(NetCDFPointUtils):
     NetCDFLineUtils class to do various fiddly things with NetCDF geophysics line data files.
     '''
 
-    def __init__(self, netcdf_dataset, debug=False):
+    def __init__(self, 
+                 netcdf_dataset, 
+                 debug=False):
         '''
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
         '''     
         # Start of init function - Call inherited constructor first
-        NetCDFPointUtils.__init__(self, netcdf_dataset, debug)
+        #TODO: Make local caching optional - currently forced to True
+        NetCDFPointUtils.__init__(self, netcdf_dataset=netcdf_dataset, 
+                                  enable_cache=True, 
+                                  debug=debug)
 
         line_variable = self.netcdf_dataset.variables.get('line')
         assert line_variable, 'Variable "line" does not exist in netCDF file'
