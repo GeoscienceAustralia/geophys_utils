@@ -43,8 +43,9 @@ from geophys_utils import points2convex_hull
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'D:\Temp'
+TEMP_DIR = 'U:\Alex\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -735,7 +736,22 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             'geospatial_north_resolution': "point",
             }
             
-        if self.spatial_ref.GetUTMZone(): # CRS is in UTM
+        if set(['longitude', 'latitude']) <= set(self._nc_cache_dataset.variables.keys()):
+            metadata_dict.update({
+                'geospatial_lon_min': np.min(self.get_raw_data('longitude')),
+                'geospatial_lon_max': np.max(self.get_raw_data('longitude')),
+                'geospatial_lon_units': "degrees East",
+                'geospatial_lat_min': np.min(self.get_raw_data('latitude')),
+                'geospatial_lat_max': np.max(self.get_raw_data('latitude')),
+                'geospatial_lat_units': "degrees North",
+                })
+        
+            coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
+                                            self.nc_output_dataset.variables['latitude'][:]
+                                            )
+                                        )
+                                   )
+        elif set(['easting', 'northing']) <= set(self._nc_cache_dataset.variables.keys()): # CRS is in UTM
             metadata_dict.update({
                 'geospatial_east_min': np.min(self.get_raw_data('easting')),
                 'geospatial_east_max': np.max(self.get_raw_data('easting')),
@@ -751,20 +767,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                         )
                                    )
         else:
-            metadata_dict.update({
-                'geospatial_east_min': np.min(self.get_raw_data('longitude')),
-                'geospatial_east_max': np.max(self.get_raw_data('longitude')),
-                'geospatial_east_units': "degrees East",
-                'geospatial_north_min': np.min(self.get_raw_data('latitude')),
-                'geospatial_north_max': np.max(self.get_raw_data('latitude')),
-                'geospatial_north_units': "degrees North",
-                })
-        
-            coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
-                                            self.nc_output_dataset.variables['latitude'][:]
-                                            )
-                                        )
-                                   )
+            raise BaseException('Unable to set spatial attributes - unrecognised coordinates')
             
         #Compute convex hull and add GML representation to metadata
         #logger.debug('coordinates: {}'.format(coordinates))
