@@ -34,7 +34,7 @@ import numpy as np
 # TODO: GET RID OF THIS HORRIBLE HACK
 # Set the following to None or empty string to use OPeNDAP endpoints
 # LOCAL_FILE_LOCATION = None
-LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\aem_data\\AusAEM_Year1_Tranche1_Final_CND.nc'
+LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\aem_data\\AusAEM_Year1_Tranche1_Final_EM.nc'
 # LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\grav_data_10_july'
 
 COLORMAP_NAME = 'rainbow'
@@ -59,7 +59,7 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 class NetCDF2kmlConverter(object):
     def __init__(self, dataset_settings, metadata_tuple=None):
-
+        print(metadata_tuple)
         self.npu = None
         self.survey_id = metadata_tuple[0]
         self.survey_title = metadata_tuple[1]

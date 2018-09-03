@@ -148,7 +148,7 @@ class NetCDF2DatasetMetadataCache(object):
                 point_count = None
             
             dataset = Dataset(dataset_title=nc_attribute['title'],
-                              ga_survey_id=nc_attribute['survey_id'],
+                              ga_survey_id=nc_attribute.get('survey_id'),
                               longitude_min=np.asscalar(nc_attribute['geospatial_lon_min']),
                               longitude_max=np.asscalar(nc_attribute['geospatial_lon_max']),
                               latitude_min=np.asscalar(nc_attribute['geospatial_lat_min']),

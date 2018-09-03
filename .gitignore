@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
+dataset_metadata_cache.sqlite
 
 # C extensions
 *.so
