@@ -1,4 +1,4 @@
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 #
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,7 +12,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 '''
 Created on 03/08/2018
 
@@ -23,12 +23,19 @@ import re
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import logging
+from datetime import date
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
-from geophys_utils import NetCDFPointUtils
+from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import yaml
 import os
+import numpy as np
 
+# TODO: GET RID OF THIS HORRIBLE HACK
+# Set the following to None or empty string to use OPeNDAP endpoints
+# LOCAL_FILE_LOCATION = None
+LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\aem_data\\AusAEM_Year1_Tranche1_Final_CND.nc'
+# LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\grav_data_10_july'
 
 COLORMAP_NAME = 'rainbow'
 COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
@@ -51,18 +58,12 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 
 class NetCDF2kmlConverter(object):
-
-    def __init__(self, metadata_tuple=None):
-
-        self.settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_settings.yml'))
-        yaml_settings = self.settings['ground_gravity']
-        print(yaml_settings)
-        print(yaml_settings['polygon_color'])
+    def __init__(self, dataset_settings, metadata_tuple=None):
 
         self.npu = None
         self.survey_id = metadata_tuple[0]
         self.survey_title = metadata_tuple[1]
-        self.netcdf_path = metadata_tuple[2]
+        self.netcdf_path = metadata_tuple[2]  # test
         self.polygon = metadata_tuple[3]
 
         self.kml = simplekml.Kml()
@@ -79,24 +80,35 @@ class NetCDF2kmlConverter(object):
         self.end_date = metadata_tuple[10]
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
 
-        self.thredds_metadata_link = "http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/"
+        # TODO: GET RID OF THIS HORRIBLE HACK
+        # if LOCAL_FILE_LOCATION:
+        #     self.netcdf_path = os.path.join(LOCAL_FILE_LOCATION,
+        #                            os.path.basename(self.netcdf_path)
+        #                            )
+        self.netcdf_path = LOCAL_FILE_LOCATION
+        self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+
+        self.npu = NetCDFPointUtils(self.netcdf_dataset)
+
+        # for e in self.npu.netcdf_dataset.variables['lidar']:
+        #     #print(self.npu.netcdf_dataset.variables['lidar'])
+        #     print(e)
+        self.thredds_metadata_link = dataset_settings['thredds_link']
 
         self.polygon_style = simplekml.Style()
-        self.polygon_style.polystyle.color = yaml_settings['polygon_color']
-        self.polygon_style.polystyle.outline = yaml_settings['polygon_outline']
+        self.polygon_style.polystyle.color = dataset_settings['polygon_color']
+        self.polygon_style.polystyle.outline = dataset_settings['polygon_outline']
 
-        self.point_flag_exists = yaml_settings['point_flag_exists']
+        self.point_flag_exists = dataset_settings['point_flag_exists']
 
         self.point_style = simplekml.Style()
-        self.point_style.point_icon_scale = yaml_settings['point_icon_scale']
-        self.point_style.point_labelstyle_scale = yaml_settings['point_labelstyle_scale']  # 0 removes the label
-        self.point_style.point_icon_href = yaml_settings['point_icon_href']
-
+        self.point_style.iconstyle.scale = dataset_settings['point_icon_scale']
+        self.point_style.labelstyle.scale = dataset_settings['point_labelstyle_scale']  # 0 removes the label
+        self.point_style.iconstyle.icon.href = dataset_settings['point_icon_href']
         self.unflagged_point_icon_color_scheme = None  # insert function string
         self.flagged_point_icon_color = 'ff000000'
 
-        self.field_list = yaml_settings['point_field_list']
-
+        self.field_list = dataset_settings['point_field_list']
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
@@ -118,14 +130,12 @@ class NetCDF2kmlConverter(object):
                                       "<maxLodPixels>" + str(max_lod_pixels) + "</maxLodPixels>" +
                                       "<minFadeExtent>" + str(min_fade_extent) + "</minFadeExtent>" +
                                       "<maxFadeExtent>" + str(max_fade_extent) + "</maxFadeExtent>")
-
         return region
 
     def build_polygon(self, parent_folder, visibility=True):
         """
         Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
         :param parent_folder:
-        :param polygon_style:
         :param visibility:
         :return: the input parent folder now containing the polygon and the polygon itself if that is desired instead.
         """
@@ -140,36 +150,106 @@ class NetCDF2kmlConverter(object):
                                         self.polygon
                                         ).group(1).split(',')
                               ]
-
             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
-            pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id), outerboundaryis=polygon_bounds, visibility=visibility)
+            pol = parent_folder.newpolygon(name=str(self.survey_title) + " " + str(self.survey_id),
+                                           outerboundaryis=polygon_bounds, visibility=visibility)
 
             # build the polygon description
-
             description_string = '<![CDATA['
-            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', str(self.survey_title))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
+                                                                                      str(self.survey_title))
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.survey_id))
-            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date', str(self.start_date))
-            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date', str(self.end_date))
-            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(self.thredds_metadata_link) + str(self.survey_id) + '.nc')
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
+                                                                                      str(self.start_date))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
+                                                                                      str(self.end_date))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(
+                self.thredds_metadata_link) + str(self.survey_id) + '.nc')
             description_string = description_string + ']]>'
             pol.description = description_string
 
             # Add timestamp
-            if self.start_date is not None and self.end_date is not None:
+            # if self.start_date is not None and self.end_date is not None:
+            try:
+                assert self.start_date > date(1900, 1, 1), 'Start date {} is less than 1900-01-01'.format(
+                    self.start_date)
+                assert self.end_date < date(2020, 1, 1), 'End date {} is greater than 2020-01-01'.format(self.end_date)
+                assert self.end_date > date(1900, 1, 1), 'End date {} is less than 1900-01-01'.format(self.end_date)
+                assert self.start_date < date(2020, 1, 1), 'Start date {} is greater than 2020-01-01'.format(
+                    self.start_date)
                 pol.timespan.begin = str(self.start_date)
                 pol.timespan.end = str(self.end_date)
-            else:  # if survey does not contain start/end date information, use survey id as start/end date year.
-                start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
-                assert int(start_date) > 1900
-                pol.timespan.begin = str(start_date) + "-06-01"
-                pol.timespan.end = str(start_date) + "-07-01"
+            except:  # if survey does not contain start/end date information, use survey id as start/end date year.
+                survey_year = int(re.match('^[0-9]{4}', str(self.survey_id)).group())
+                assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
+                pol.timespan.begin = str(survey_year) + "-06-01"
+                pol.timespan.end = str(survey_year) + "-07-01"
+                # print("none: " + str(start_date) + "-06-01")
             pol.style = self.polygon_style
-
-        except:
-            logger.debug("No polygon data found.")
+        except Exception as e:
+            logger.warning("Unable to display polygon: {}".format(e))
 
         return parent_folder
+
+    def build_lines(self, lines_folder, bounding_box):
+        bounding_box_floats = [float(coord) for coord in bounding_box]
+        # if bounding_box[2] - bounding_box[0] < 5:
+        line_utils = NetCDFLineUtils(self.netcdf_dataset)
+        line_list = []
+        for b in self.netcdf_dataset.variables['line']:
+            line_list.append(b)
+        print("LINE LIST")
+        print(line_list)
+
+        line_dict = line_utils.get_lines(line_list, "line_index", bounding_box_floats)
+        print("LINE DICT: " + str(line_dict))
+        for line in line_dict:
+
+            print("LINE: " + str(line))
+            line_number = line[0]
+
+            coords_array = line[1]['coordinates']
+            print("COORDS ARRAY")
+            print(coords_array)
+            if coords_array.size is not 0:
+
+                # print(coords_array[0])
+                # print("coords size")
+                # print(coords_array.size)
+                small_array = coords_array[0:coords_array.size:100]
+                if line_number == 1020003:
+                    print("CHECK PLEASE")
+                    print(small_array)
+                    print(coords_array)
+                    # TODO fix this mess....
+
+                i = 1
+                print("size")
+                print(small_array.size)
+                while i < small_array.size / 2:
+                    last_point_index = int(small_array.size)
+                    print(last_point_index)
+                    linestring = lines_folder.newlinestring(name=str("Line Segment: " + str(i - 1)))
+                    linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1]),
+                                         (small_array[i][0], small_array[i][1])]
+
+                    # linestring.coords = [(coords_array[0][0], coords_array[0][1]), (coords_array[-1][0], coords_array[-1][1])]
+
+                    # build the polygon description
+                    description_string = '<![CDATA['
+                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number',
+                                                                                              str(line_number))
+                    description_string = description_string + ']]>'
+                    linestring.description = description_string
+
+                    i = i + 1
+                linestring = lines_folder.newlinestring(name="A Line")
+                linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1]),
+                                     (coords_array[-1][0], coords_array[-1][1])]
+            else:
+                print("line doesn't have any points in view")
+
+        return lines_folder
 
     def build_points(self, points_folder, bounding_box):
         """
@@ -181,29 +261,49 @@ class NetCDF2kmlConverter(object):
         logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
         logger.debug('bounding_box:' + str(bounding_box))
         bounding_box_floats = [float(coord) for coord in bounding_box]
+        print(bounding_box_floats)
+        # bounding_box_floats = [110.4899599829594, -56.11642075733719, 166.658146968822, -6.11642075733719]
         spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
-
-        logger.debug("spatial mask: {0}".format(spatial_mask))
-
+        print(spatial_mask)
         if True in spatial_mask:
-           # field_list = ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype',
-             #             'reliab', 'gridflag']  # select grav point variables to include
-
+            print("TRUE")
             new_survey_folder = points_folder.newfolder(name=str(self.survey_title) + " " + str(self.survey_id))
 
             # Set timestamp
-            start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
-            new_survey_folder.timespan.begin = str(start_date) + "-01-01"
-            new_survey_folder.timespan.end = str(start_date) + "-01-01"
+            # start_date = re.match('^[0-9]{4}', str(self.survey_id)).group()
+            # new_survey_folder.timespan.begin = str(start_date) + "-01-01"
+            # new_survey_folder.timespan.end = str(start_date) + "-01-01"
 
             point_data_generator = self.npu.all_point_data_generator(self.field_list, spatial_mask)
             logger.debug(point_data_generator)
             variable_attributes = next(point_data_generator)
             logger.debug(variable_attributes)
+            print("variable_attributes: " + str(variable_attributes))
+            aem_variable_atts = {'aem_test': {'units': 'um/s^2'}}
 
             skip_points = 1  # set to limit the points displayed if required.
             points_read = 0
+            # print("point_data_generator: " + str(point_data_generator))
+            print(self.npu.netcdf_dataset.variables['lidar'][0])
+            list_of_point_data = [
+                [self.npu.netcdf_dataset.variables['lidar'][0], self.npu.netcdf_dataset.variables['latitude'][0],
+                 self.npu.netcdf_dataset.variables['longitude'][0], self.npu.netcdf_dataset.variables['lidar'][0],
+                 self.npu.netcdf_dataset.variables['lidar'][0], self.npu.netcdf_dataset.variables['lidar'][0]],
+                [self.npu.netcdf_dataset.variables['lidar'][0],
+                 self.npu.netcdf_dataset.variables['latitude'][0],
+                 self.npu.netcdf_dataset.variables['longitude'][0],
+                 self.npu.netcdf_dataset.variables['lidar'][0],
+                 self.npu.netcdf_dataset.variables['lidar'][0],
+                 self.npu.netcdf_dataset.variables['lidar'][0]]]
+
+            print(list_of_point_data[0])
+            # for point_data in list_of_point_data:
+            #     print("Points datas:")
+            #     print(point_data[0])
+            #     print(point_data[1])
+            #     print(point_data[2])
             for point_data in point_data_generator:
+                print("POINT DATA: " + str(point_data))
                 points_read += 1
 
                 # ignore points between skip_points
@@ -219,17 +319,13 @@ class NetCDF2kmlConverter(object):
                 new_point.description = description_string  # set description to point
 
                 # styling
+                self.unflagged_point_icon_color_scheme = self.value2colourhex(point_data[5])
                 new_point.style = self.point_style  # sets the icon scale, labelstyle scale, icon link
-                new_point.style.iconstyle.color = self.unflagged_point_icon_color_scheme(point_data[5])
 
                 # Set the style for points if gridflag == 2
-                if self.point_flag_exists:  # if there is a point_flag separate the points and colour differently
-                    if point_data[8] == "Station not used in the production of GA grids.":
-                        new_point.style.iconstyle.color = self.flagged_point_icon_color
-                #     else:
-                #         new_point.style.iconstyle.color = self.unflagged_point_icon_color_scheme(point_data[5])
-                # else:  # if there is not point_flag set everything to the specified colour scheme.
-                #     new_point.style.iconstyle.color = self.flagged_point_icon_color
+                # if self.point_flag_exists:  # if there is a point_flag separate the points and colour differently
+                #     if point_data[8] == "Station not used in the production of GA grids.":
+                #         new_point.style.iconstyle.color = self.flagged_point_icon_color
 
             return new_survey_folder
         else:
@@ -244,12 +340,18 @@ class NetCDF2kmlConverter(object):
             :param point_data: A list of the actual data of each point
             :return: return the description string html ready to be attached to a kml point.
         """
+
+        print(variable_attributes)
+
         description_string = '<![CDATA['
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', self.survey_title)
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', self.survey_id)
 
-        i = 3  # skip obsno, lat, long in field_list
-        while i < len(self.field_list):
+        i = 1  # skip obsno, lat, long in field_list
+        print("LENGTH: " + str(len(self.field_list)))
+        while i < len(self.field_list) - 1:
+            print(self.field_list)
+            print(point_data[i])
             if variable_attributes[self.field_list[i]].get('units'):
                 description_string = description_string + '<p><b>{0}: </b>{1} {2}</p>'.format(
                     variable_attributes[self.field_list[i]].get('long_name'),
@@ -260,9 +362,9 @@ class NetCDF2kmlConverter(object):
                     variable_attributes[self.field_list[i]].get('long_name'),
                     point_data[i])
             i += 1
+            print(i)
         description_string = description_string + ']]>'
         return description_string
-
 
     def get_basic_density_measurement(self):
         """
@@ -273,8 +375,8 @@ class NetCDF2kmlConverter(object):
         """
         logger.debug("Point Count: {}".format(self.npu.point_count))
         logger.debug("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
-        logger.debug("Density: {}".format(((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
-
+        logger.debug("Density: {}".format(((self.east_extent - self.west_extent) * (
+        self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
 
     def build_static_kml(self):
 
@@ -293,7 +395,7 @@ class NetCDF2kmlConverter(object):
         netcdf_file_folder = kml.newfolder(name=self.survey_title + " " + self.survey_id)
 
         polygon_folder = self.kml.newfolder(name="polygon")
-        polygon_folder, polygon = self.build_polygon(polygon_folder, polygon_style)
+        polygon_folder, polygon = self.build_polygon(polygon_folder)
         dataset_polygon_region = self.build_region(-1, 600, 200, 800)
         dataset_points_region = self.build_region(0, -1, 200, 800)
 
@@ -310,13 +412,12 @@ class NetCDF2kmlConverter(object):
         Function to convert data value to hex string for color in self.colormap
         '''
         cmap_value = int(convert_value_from_old_to_new_range(data_value, *COLOUR_STRETCH_RANGE, 0, 255))
-        #print(cmap_value)
-        #print(str(self.colormap(cmap_value)[:3]))
-        #print(str(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3])))
-        #print(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]))
-        
-        return mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]).replace('#', 'ff')
+        # print(cmap_value)
+        # print(str(self.colormap(cmap_value)[:3]))
+        # print(str(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3])))
+        # print(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]))
 
+        return mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]).replace('#', 'ff')
 
 
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
@@ -330,7 +431,6 @@ def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/qu
     net_link.link.refreshinterval = 2
 
     return net_link
-
 
 
 def main():
@@ -351,7 +451,7 @@ def main():
         keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
         protocol='opendap',
         ll_ur_coords=bounding_box
-        )
+    )
     for survey in endpoint_list:
         kml = simplekml.Kml()
         netcdf_file_folder = kml.newfolder(name="Ground Gravity Survey Observations")
@@ -366,12 +466,12 @@ def main():
         polygon_folder = netcdf2kml_obj.build_polygon(polygon_folder)
         polygon_folder.region = polygon_region  # insert built point region into point folder
 
-
         netcdf_file_folder.region = survey_region  # insert built point region into point folder
 
         if netcdf2kml_obj.npu.point_count > 2:
 
-            survey_points_folder = netcdf2kml_obj.build_points(netcdf_file_folder, ['110.00', '-45.00', '155.00', '-10.00'])
+            survey_points_folder = netcdf2kml_obj.build_points(netcdf_file_folder,
+                                                               ['110.00', '-45.00', '155.00', '-10.00'])
             survey_points_folder.region = survey_region  # insert built point region into point folder
 
             cleaned_survey_title = re.sub("/", " or ", netcdf2kml_obj.survey_title)
@@ -385,64 +485,65 @@ def main():
 
 
 
-    # netcdf_path_list = []
-    # i = 2
-    # while i < len(sys.argv):
-    #     print(sys.argv[i])
-    #     netcdf_path_list.append(sys.argv[i])
-    #     i += 1
-    # print(netcdf_path_list)
+            # netcdf_path_list = []
+            # i = 2
+            # while i < len(sys.argv):
+            #     print(sys.argv[i])
+            #     netcdf_path_list.append(sys.argv[i])
+            #     i += 1
+            # print(netcdf_path_list)
 
-    # parser = argparse.ArgumentParser()
-    #
-    # parser.add_argument("-s", "--server", help="The server to receive the get request from google earth and dynamically "
-    #                                            "build kml points within the bbox. If this parameter is empty, a static "
-    #                                            "kml will be generated", type=str, required=False)
-    # parser.add_argument("-n", "--netcdf_path_list", help="Add one or more paths to netcdf files to be converted into a"
-    #                                                      "single kml file.", type=str, nargs='+')
-    #
-    # args = parser.parse_args()
-    #
-    # print(args.server)
-    # print(args.netcdf_path_list)
+            # parser = argparse.ArgumentParser()
+            #
+            # parser.add_argument("-s", "--server", help="The server to receive the get request from google earth and dynamically "
+            #                                            "build kml points within the bbox. If this parameter is empty, a static "
+            #                                            "kml will be generated", type=str, required=False)
+            # parser.add_argument("-n", "--netcdf_path_list", help="Add one or more paths to netcdf files to be converted into a"
+            #                                                      "single kml file.", type=str, nargs='+')
+            #
+            # args = parser.parse_args()
+            #
+            # print(args.server)
+            # print(args.netcdf_path_list)
 
-    # if args.server:
-    #     # dynamic build
-    #     print("dynamic build")
-    #     if len(args.netcdf_path_list) > 1:
-    #         print("multiple surveys")
-    #         # multiples
-    #         list_of_converter_objects= []
-    #         for netcdf in args.netcdf_path_list:
-    #             #list_of_converter_objects.append(NetCDF2kmlConverter(netcdf))
-    #             pass
-    #
-    #         # then add the network link using this args.server
+            # if args.server:
+            #     # dynamic build
+            #     print("dynamic build")
+            #     if len(args.netcdf_path_list) > 1:
+            #         print("multiple surveys")
+            #         # multiples
+            #         list_of_converter_objects= []
+            #         for netcdf in args.netcdf_path_list:
+            #             #list_of_converter_objects.append(NetCDF2kmlConverter(netcdf))
+            #             pass
+            #
+            #         # then add the network link using this args.server
 
-    #     else:
-    #         # single
-    #         print("single survey")
-    #         converter_object = NetCDF2kmlConverter(args.netcdf_path_list[0])
-    #         converter_object.build_dynamic_kml()
-    #         converter_object.kml.save(converter_object.survey_title + " dynamic points.kml")
-    #         print("Building kml for survey: " + converter_object.survey_title + " dynamic points.kml")
-    # else:
-    #     # static build
-    #     print("static build")
-    #     if len(args.netcdf_path_list) > 1:
-    #         print("multiple surveys")
-    #         pass
-    #     else:
-    #         print("single survey")
-    #         converter_object = NetCDF2kmlConverter(args.netcdf_path_list[0])
-    #         converter_object.build_static_kml()
-    #
-    #         converter_object.kml.save(converter_object.survey_title + " static points.kml")
-    #         print("Building kml for survey: " + converter_object.survey_title + " static points.kml")
+            #     else:
+            #         # single
+            #         print("single survey")
+            #         converter_object = NetCDF2kmlConverter(args.netcdf_path_list[0])
+            #         converter_object.build_dynamic_kml()
+            #         converter_object.kml.save(converter_object.survey_title + " dynamic points.kml")
+            #         print("Building kml for survey: " + converter_object.survey_title + " dynamic points.kml")
+            # else:
+            #     # static build
+            #     print("static build")
+            #     if len(args.netcdf_path_list) > 1:
+            #         print("multiple surveys")
+            #         pass
+            #     else:
+            #         print("single survey")
+            #         converter_object = NetCDF2kmlConverter(args.netcdf_path_list[0])
+            #         converter_object.build_static_kml()
+            #
+            #         converter_object.kml.save(converter_object.survey_title + " static points.kml")
+            #         print("Building kml for survey: " + converter_object.survey_title + " static points.kml")
             # single
 
-    #modified_server_url_for_dynamic_kml_generation = args.server + 'query'
-    #NetCDF2kmlConverter(args.netcdf_path_list)
+            # modified_server_url_for_dynamic_kml_generation = args.server + 'query'
+            # NetCDF2kmlConverter(args.netcdf_path_list)
+
 
 if __name__ == '__main__':
     main()
