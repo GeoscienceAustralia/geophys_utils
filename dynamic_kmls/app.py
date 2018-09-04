@@ -16,7 +16,8 @@ DATABASE_ENGINE = 'SQLite'
 # DATABASE_ENGINE = 'Postgres'
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
-MAX_BOX_WIDTH_FOR_POINTS = 1.5
+# MAX_BOX_WIDTH_FOR_POINTS = 1.5
+MAX_BOX_WIDTH_FOR_POINTS = 0.001
 
 app = Flask(__name__)
 api = Api(app)
@@ -156,6 +157,5 @@ def do_everything(bounding_box):
         else:
             empty_folder = kml.newfolder(name="no points in view")
             return str(empty_folder)
-
 
 app.run(debug=True)

@@ -42,7 +42,9 @@ COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
-logger.setLevel(logging.INFO)  # Initial logging level for this module
+logger.setLevel(logging.DEBUG)  # Initial logging level for this module
+
+LINE_RESOLUTION_STEPS = 30
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
@@ -59,7 +61,7 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 class NetCDF2kmlConverter(object):
     def __init__(self, dataset_settings, metadata_tuple=None):
-        print(metadata_tuple)
+        logger.debug(metadata_tuple)
         self.npu = None
         self.survey_id = metadata_tuple[0]
         self.survey_title = metadata_tuple[1]
@@ -179,77 +181,90 @@ class NetCDF2kmlConverter(object):
                     self.start_date)
                 pol.timespan.begin = str(self.start_date)
                 pol.timespan.end = str(self.end_date)
+
             except:  # if survey does not contain start/end date information, use survey id as start/end date year.
                 survey_year = int(re.match('^[0-9]{4}', str(self.survey_id)).group())
                 assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
+
                 pol.timespan.begin = str(survey_year) + "-06-01"
                 pol.timespan.end = str(survey_year) + "-07-01"
-                # print("none: " + str(start_date) + "-06-01")
             pol.style = self.polygon_style
+
         except Exception as e:
             logger.warning("Unable to display polygon: {}".format(e))
 
         return parent_folder
 
-    def build_lines(self, lines_folder, bounding_box):
+    def build_lines(self, netcdf_file_folder, bounding_box):
+
+        logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
-        # if bounding_box[2] - bounding_box[0] < 5:
         line_utils = NetCDFLineUtils(self.netcdf_dataset)
-        line_list = []
-        for b in self.netcdf_dataset.variables['line']:
-            line_list.append(b)
-        print("LINE LIST")
-        print(line_list)
+        line_list = [line for line in self.netcdf_dataset.variables['line']]
+        logger.debug("List of lines in view: {}".format(line_list))
 
-        line_dict = line_utils.get_lines(line_list, "line_index", bounding_box_floats)
-        print("LINE DICT: " + str(line_dict))
+        line_dict = line_utils.get_lines(line_list, variables=['gps_elevation', "line_index"], bounds=bounding_box_floats)
+        logger.debug("Line Dictionary: {}".format(next(line_dict)))
+
         for line in line_dict:
-
-            print("LINE: " + str(line))
             line_number = line[0]
-
+            line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
             coords_array = line[1]['coordinates']
-            print("COORDS ARRAY")
-            print(coords_array)
+            #number_of_points_in_line = int(coords_array.size / 2)
+            number_of_points_in_line = len(line[1]['gps_elevation'])
+
             if coords_array.size is not 0:
+                print("HERE")
+                print(line[1]['gps_elevation'][1])
+                # coord_index = 0
+                # while coord_index <= coords_array.size:
+                #     np.append(coords_array[coord_index], line[1]['gps_elevation'][coord_index])
+                #     coord_index = coord_index + 1
 
-                # print(coords_array[0])
-                # print("coords size")
-                # print(coords_array.size)
-                small_array = coords_array[0:coords_array.size:100]
-                if line_number == 1020003:
-                    print("CHECK PLEASE")
-                    print(small_array)
-                    print(coords_array)
-                    # TODO fix this mess....
+                small_array = coords_array[0:coords_array.size:LINE_RESOLUTION_STEPS]  # step size is hardcoded at 100
 
+                # build the line segments
                 i = 1
-                print("size")
-                print(small_array.size)
+                elevation_index = LINE_RESOLUTION_STEPS
                 while i < small_array.size / 2:
                     last_point_index = int(small_array.size)
-                    print(last_point_index)
-                    linestring = lines_folder.newlinestring(name=str("Line Segment: " + str(i - 1)))
-                    linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1]),
-                                         (small_array[i][0], small_array[i][1])]
-
-                    # linestring.coords = [(coords_array[0][0], coords_array[0][1]), (coords_array[-1][0], coords_array[-1][1])]
+                    linestring = line_folder.newlinestring(name=str("Line Segment: " + str(i - 1)))
+                    print("elevation_index: " + str(elevation_index))
+                    print(str(line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]) + " - " + str(line[1]['gps_elevation'][elevation_index]))
+                    linestring.coords = [
+                                         (small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
+                                         (small_array[i][0], small_array[i][1], line[1]['gps_elevation'][elevation_index])
+                                        ]
+                    # linestring.altitudemode = simplekml.AltitudeMode.relativetoground
+                    linestring.altitudemode = simplekml.AltitudeMode.relativetoground
+                    linestring.extrude = 0
+                    linestring.tessellate = 1
+                    linestring.style.linestyle.width = 5
+                    linestring.style.linestyle.color = simplekml.Color.yellowgreen
 
                     # build the polygon description
                     description_string = '<![CDATA['
-                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number',
-                                                                                              str(line_number))
+                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number', str(line_number))
                     description_string = description_string + ']]>'
                     linestring.description = description_string
 
                     i = i + 1
-                linestring = lines_folder.newlinestring(name="A Line")
-                linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1]),
-                                     (coords_array[-1][0], coords_array[-1][1])]
+                    elevation_index = elevation_index + LINE_RESOLUTION_STEPS
+
+                #linestring = lines_folder.newlinestring(name="Line Number: {}".format(line_number))
+                print(line[1]['gps_elevation'][number_of_points_in_line-1])
+                linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
+                                     (coords_array[-1][0], coords_array[-1][1], line[1]['gps_elevation'][number_of_points_in_line- 1])
+                                     ]
+                # # touring
+                # tour = line_folder.newgxtour(name="Line {} Fly Through".format(line_number))
+                # playlist = tour.newgxplaylist()
+
+
             else:
                 print("line doesn't have any points in view")
 
-        return lines_folder
+        return netcdf_file_folder
 
     def build_points(self, points_folder, bounding_box):
         """
