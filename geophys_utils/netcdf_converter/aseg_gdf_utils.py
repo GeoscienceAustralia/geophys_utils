@@ -40,7 +40,11 @@ def dfrexp(f):
 
 
 # Approximate maximum number of significant decimal figures for each signed datatype
-SIG_FIGS = OrderedDict([('int8', 2), # 128
+SIG_FIGS = OrderedDict([('uint8', 4), # 128
+                        ('uint16', 10), # 32768
+                        ('uint32', 19), # 2147483648 - should be 9, but made 10 because int64 is unsupported
+                        ('uint64', 30), # 9223372036854775808 - Not supported in netCDF3 or netCDF4-Classic
+                        ('int8', 2), # 128
                         ('int16', 4), # 32768
                         ('int32', 10), # 2147483648 - should be 9, but made 10 because int64 is unsupported
                         ('int64', 19), # 9223372036854775808 - Not supported in netCDF3 or netCDF4-Classic
