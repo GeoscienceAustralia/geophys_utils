@@ -58,7 +58,11 @@ DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
                          ['float64', 'float32', 'int16', 'int8'] # Floating point dtypes
                          ]
     
-ASEG_DTYPE_CODE_MAPPING = {'int8': 'I',
+ASEG_DTYPE_CODE_MAPPING = {'uint8': 'I',
+                           'uint16': 'I',
+                           'uint32': 'I',
+                           'uint64': 'I',
+                           'int8': 'I',
                            'int16': 'I',
                            'int32': 'I',
                            'int64': 'I',
