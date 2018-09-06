@@ -44,7 +44,7 @@ COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.DEBUG)  # Initial logging level for this module
 
-LINE_RESOLUTION_STEPS = 30
+LINE_RESOLUTION_STEPS = 70
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
@@ -60,7 +60,7 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 
 class NetCDF2kmlConverter(object):
-    def __init__(self, dataset_settings, metadata_tuple=None):
+    def __init__(self, netcdf_path, dataset_settings, metadata_tuple=None):
         logger.debug(metadata_tuple)
         self.npu = None
         self.survey_id = metadata_tuple[0]
@@ -87,14 +87,11 @@ class NetCDF2kmlConverter(object):
         #     self.netcdf_path = os.path.join(LOCAL_FILE_LOCATION,
         #                            os.path.basename(self.netcdf_path)
         #                            )
-        self.netcdf_path = LOCAL_FILE_LOCATION
+
+        self.netcdf_path = netcdf_path
+
         self.netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
-
         self.npu = NetCDFPointUtils(self.netcdf_dataset)
-
-        # for e in self.npu.netcdf_dataset.variables['lidar']:
-        #     #print(self.npu.netcdf_dataset.variables['lidar'])
-        #     print(e)
         self.thredds_metadata_link = dataset_settings['thredds_link']
 
         self.polygon_style = simplekml.Style()
@@ -214,12 +211,6 @@ class NetCDF2kmlConverter(object):
             number_of_points_in_line = len(line[1]['gps_elevation'])
 
             if coords_array.size is not 0:
-                print("HERE")
-                print(line[1]['gps_elevation'][1])
-                # coord_index = 0
-                # while coord_index <= coords_array.size:
-                #     np.append(coords_array[coord_index], line[1]['gps_elevation'][coord_index])
-                #     coord_index = coord_index + 1
 
                 small_array = coords_array[0:coords_array.size:LINE_RESOLUTION_STEPS]  # step size is hardcoded at 100
 
@@ -229,14 +220,13 @@ class NetCDF2kmlConverter(object):
                 while i < small_array.size / 2:
                     last_point_index = int(small_array.size)
                     linestring = line_folder.newlinestring(name=str("Line Segment: " + str(i - 1)))
-                    print("elevation_index: " + str(elevation_index))
-                    print(str(line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]) + " - " + str(line[1]['gps_elevation'][elevation_index]))
+
                     linestring.coords = [
                                          (small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
                                          (small_array[i][0], small_array[i][1], line[1]['gps_elevation'][elevation_index])
                                         ]
-                    # linestring.altitudemode = simplekml.AltitudeMode.relativetoground
                     linestring.altitudemode = simplekml.AltitudeMode.relativetoground
+                    #linestring.altitudemode = simplekml.AltitudeMode.clamptoground
                     linestring.extrude = 0
                     linestring.tessellate = 1
                     linestring.style.linestyle.width = 5
@@ -252,14 +242,30 @@ class NetCDF2kmlConverter(object):
                     elevation_index = elevation_index + LINE_RESOLUTION_STEPS
 
                 #linestring = lines_folder.newlinestring(name="Line Number: {}".format(line_number))
-                print(line[1]['gps_elevation'][number_of_points_in_line-1])
                 linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
                                      (coords_array[-1][0], coords_array[-1][1], line[1]['gps_elevation'][number_of_points_in_line- 1])
                                      ]
-                # # touring
-                # tour = line_folder.newgxtour(name="Line {} Fly Through".format(line_number))
+                # # # touring
+                # tour = kml.newgxtour(name="Play me!")
                 # playlist = tour.newgxplaylist()
+                #
+                # soundcue = playlist.newgxsoundcue()
+                # soundcue.href = "http://code.google.com/p/simplekml/source/browse/samples/drum_roll_1.wav"
+                # soundcue.gxdelayedstart = 2
+                #
+                # animatedupdate = playlist.newgxanimatedupdate(gxduration=6.5)
+                # animatedupdate.update.change = '<IconStyle targetId="{0}"><scale>10.0</scale></IconStyle>'.format(
+                #     pnt.style.iconstyle.id)
+                #
+                # flyto = playlist.newgxflyto(gxduration=4.1)
+                # flyto.camera.longitude = 170.157
+                # flyto.camera.latitude = -43.671
+                # flyto.camera.altitude = 9700
+                # flyto.camera.heading = -6.333
+                # flyto.camera.tilt = 33.5
+                # flyto.camera.roll = 0
 
+                # wait = playlist.newgxwait(gxduration=2.4)
 
             else:
                 print("line doesn't have any points in view")
@@ -298,25 +304,7 @@ class NetCDF2kmlConverter(object):
 
             skip_points = 1  # set to limit the points displayed if required.
             points_read = 0
-            # print("point_data_generator: " + str(point_data_generator))
-            print(self.npu.netcdf_dataset.variables['lidar'][0])
-            list_of_point_data = [
-                [self.npu.netcdf_dataset.variables['lidar'][0], self.npu.netcdf_dataset.variables['latitude'][0],
-                 self.npu.netcdf_dataset.variables['longitude'][0], self.npu.netcdf_dataset.variables['lidar'][0],
-                 self.npu.netcdf_dataset.variables['lidar'][0], self.npu.netcdf_dataset.variables['lidar'][0]],
-                [self.npu.netcdf_dataset.variables['lidar'][0],
-                 self.npu.netcdf_dataset.variables['latitude'][0],
-                 self.npu.netcdf_dataset.variables['longitude'][0],
-                 self.npu.netcdf_dataset.variables['lidar'][0],
-                 self.npu.netcdf_dataset.variables['lidar'][0],
-                 self.npu.netcdf_dataset.variables['lidar'][0]]]
 
-            print(list_of_point_data[0])
-            # for point_data in list_of_point_data:
-            #     print("Points datas:")
-            #     print(point_data[0])
-            #     print(point_data[1])
-            #     print(point_data[2])
             for point_data in point_data_generator:
                 print("POINT DATA: " + str(point_data))
                 points_read += 1
@@ -338,9 +326,9 @@ class NetCDF2kmlConverter(object):
                 new_point.style = self.point_style  # sets the icon scale, labelstyle scale, icon link
 
                 # Set the style for points if gridflag == 2
-                # if self.point_flag_exists:  # if there is a point_flag separate the points and colour differently
-                #     if point_data[8] == "Station not used in the production of GA grids.":
-                #         new_point.style.iconstyle.color = self.flagged_point_icon_color
+                if self.point_flag_exists:  # if there is a point_flag separate the points and colour differently
+                    if point_data[8] == "Station not used in the production of GA grids.":
+                        new_point.style.iconstyle.color = self.flagged_point_icon_color
 
             return new_survey_folder
         else:

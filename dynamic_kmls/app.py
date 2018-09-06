@@ -16,8 +16,8 @@ DATABASE_ENGINE = 'SQLite'
 # DATABASE_ENGINE = 'Postgres'
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
-# MAX_BOX_WIDTH_FOR_POINTS = 1.5
-MAX_BOX_WIDTH_FOR_POINTS = 0.001
+MAX_BOX_WIDTH_FOR_POINTS = 1.5
+
 
 app = Flask(__name__)
 api = Api(app)
@@ -26,28 +26,24 @@ api = Api(app)
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.DEBUG)  # Initial logging level for this module
 
-# while i < len(sys.argv):
-#     print(sys.argv[i])
-#     netcdf_path_list.append(sys.argv[i])
-#     i += 1
-# print(netcdf_path_list)
-
-parser = argparse.ArgumentParser()
+# parser = argparse.ArgumentParser()
+# #
+# # parser.add_argument("-d", "--dataset_settings", help="Point the flask server to the correct dataset settings in the "
+# #                                                      "yaml file. Options include: ground_gravity, aem.", type=str,
+# #                     required=False)
 #
-parser.add_argument("-d", "--dataset_settings", help="Point the flask server to the correct dataset settings in the "
-                                                     "yaml file. Options include: ground_gravity, aem.", type=str,
-                    required=False)
-
-args = parser.parse_args()
+# args = parser.parse_args()
 
 settings = yaml.safe_load(open(os.path.dirname(__file__) + '/netcdf2kml_settings.yml'))
-yaml_settings = settings[args.dataset_settings]
 
 
-@app.route('/<bounding_box>', methods=['GET'])
-def do_everything(bounding_box):
+@app.route('/aem/<bounding_box>', methods=['GET'])
+def build_aem_kml(bounding_box):
+
+    yaml_settings = settings['aem']
+
     t0 = time.time()  # retrieve coordinates from query
-
+    print("AEM")
     query_string = request.args
     bbox = query_string['BBOX']
     bbox_list = bbox.split(',')
@@ -83,6 +79,87 @@ def do_everything(bounding_box):
     kml = simplekml.Kml()
     netcdf_file_folder = kml.newfolder(name=yaml_settings['netcdf_file_folder_name'])
 
+    t_polygon_1 = time.time()
+
+    if len(point_data_tuple_list) > 0:
+
+            for point_data_tuple in point_data_tuple_list:
+                logger.debug("point_data_tuple: " + str(point_data_tuple))
+                netcdf_path = str(point_data_tuple[2])
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
+                t_polygon_2 = time.time()
+                logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
+                logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
+
+                try:
+                    survey_polygon = wkt.loads(point_data_tuple[3])
+                except Exception as e:
+                    # print(e)
+                    continue  # Skip this polygon
+
+                if survey_polygon.intersects(bbox_polygon):
+                    # if survey_polygon.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon):
+                    # if survey_polygon.centroid.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+
+                    netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+
+                else:
+                    netcdf2kml_obj.build_lines(netcdf_file_folder, False)
+
+                #dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
+            return str(netcdf_file_folder)
+
+    else:
+            empty_folder = kml.newfolder(name="no points in view")
+            return str(empty_folder)
+
+#grav
+
+@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
+def do_everything(bounding_box):
+
+    yaml_settings = settings['ground_gravity']
+
+    t0 = time.time()  # retrieve coordinates from query
+
+    query_string = request.args
+    bbox = query_string['BBOX']
+    bbox_list = bbox.split(',')
+    west = float(bbox_list[0])
+    south = float(bbox_list[1])
+    east = float(bbox_list[2])
+    north = float(bbox_list[3])
+
+    bbox_polygon = Polygon(((west, south),
+                            (east, south),
+                            (east, north),
+                            (west, north),
+                            (west, south)
+                            ))
+
+    t1 = time.time()
+    logger.debug("Retrieve bbox values from get request...")
+    logger.debug("Time: " + str(t1 - t0))
+
+    # Get the point_data_tuple surveys from the database that are within the bbox
+    sdmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=False)
+    point_data_tuple_list = sdmc.search_dataset_distributions(
+        keyword_list=yaml_settings['keyword_list'],
+        protocol=yaml_settings['protocol'],
+        ll_ur_coords=[[west, south], [east, north]]
+    )
+    print("tuple: " + str(point_data_tuple_list))
+
+    logger.debug([[west, south], [east, north]])
+    t2 = time.time()
+    logger.debug("Retrieve point_data_tuple strings from database...")
+    logger.debug("Time: " + str(t2 - t1))
+
+    kml = simplekml.Kml()
+    netcdf_file_folder = kml.newfolder(name=yaml_settings['netcdf_file_folder_name'])
+
     # ----------------------------------------------------------------------------------------------------------------
     # High zoom: show points rather than polygons.
     if east - west < MAX_BOX_WIDTH_FOR_POINTS:
@@ -90,7 +167,8 @@ def do_everything(bounding_box):
         if len(point_data_tuple_list) > 0:
             for point_data_tuple in point_data_tuple_list:
                 logger.debug("Building NETCDF: " + str(point_data_tuple[2]))
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(yaml_settings, point_data_tuple)
+                netcdf_path = yaml_settings['netcdf_path_prefix'] + str(point_data_tuple[0] + ".nc")
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
                 t3 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file ...")
                 logger.debug("Time: " + str(t3 - t2))
@@ -117,13 +195,15 @@ def do_everything(bounding_box):
     # ----------------------------------------------------------------------------------------------------------------
     # Low zoom: show polygons and not points.
     else:
+        print('polygon')
         t_polygon_1 = time.time()
 
         if len(point_data_tuple_list) > 0:
 
             for point_data_tuple in point_data_tuple_list:
                 logger.debug("point_data_tuple: " + str(point_data_tuple))
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(yaml_settings, point_data_tuple)
+                netcdf_path = yaml_settings['netcdf_path_prefix'] + str(point_data_tuple[0] + ".nc")
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
                 t_polygon_2 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
@@ -140,11 +220,11 @@ def do_everything(bounding_box):
                     # if survey_polygon.centroid.within(bbox_polygon):
                     # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
 
-                    # polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
-                    polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
+                    #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
 
                 else:
-                    polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, False)
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
 
                 dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
             # polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
