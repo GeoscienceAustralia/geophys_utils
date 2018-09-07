@@ -3,11 +3,11 @@
 xmlns:gx="http://www.google.com/kml/ext/2.2">
     <Document id="feat_1">
         <NetworkLink id="feat_3">
-            <name>Gravity Surveys from Local  KML Server</name>
+            <name>AEM Surveys from Local  KML Server</name>
             <Link id="link_0">
-                <href>http://127.0.0.1:5000/ground_gravity/query</href>
+                <href>http://127.0.0.1:5000/aem/query</href>
                 <refreshInterval>2</refreshInterval>
-                <viewRefreshMode>onStop</viewRefreshMode>
+                <viewRefreshMode>onRequest</viewRefreshMode>
                 <viewRefreshTime>1</viewRefreshTime>
             </Link>
         </NetworkLink>

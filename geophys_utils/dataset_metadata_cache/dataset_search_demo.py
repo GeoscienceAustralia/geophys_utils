@@ -21,7 +21,7 @@ def main():
     
     print('Search results:')
     for metadata in metadata_list:
-        print(', '.join([repr(element) for element in metadata])) # You would do your own thing here.
+        print(', '.join(metadata)) # You would do your own thing here.
 
     print('{} datasets found.'.format(len(metadata_list)))
 if __name__ == '__main__':

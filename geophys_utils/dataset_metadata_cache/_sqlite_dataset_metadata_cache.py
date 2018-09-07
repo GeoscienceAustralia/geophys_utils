@@ -445,15 +445,12 @@ def main():
     # sdmc.add_dataset(dataset)
     #===========================================================================
     
-    metadata_list = sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
-                                                 protocol='opendap',
-                                                 #ll_ur_coords=[[-179.9, -90.0], [180.0, 90.0]]
-                                                 ll_ur_coords=[[138.193588256836, -30.5767288208008], [138.480285644531, -30.1188278198242]]
-                                                 )
-    
     print('Search results:')
-    for metadata in metadata_list:
-        print(', '.join([repr(element) for element in metadata])) # You would do your own thing here.
+    for url in sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+                                                 protocol='opendap',
+                                                 ll_ur_coords=None
+                                                 ):
+        print(url)
                 
 if __name__ == '__main__':
     # Setup logging handlers if required
