@@ -58,13 +58,17 @@ class RowCache(object):
     def read_points(self, start_index, end_index, mask=None):
         '''
         '''
-        def expand_indexing_variable(indexing_variable_name):
+        def expand_indexing_variable(indexing_variable_name, start_index, end_index):
             '''
             Helper function to expand indexing variables and return an array of the required size
+            N.B: Only required for legacy dataset support
             '''
             value_variable = self.nc_dataset.variables[indexing_variable_name]
-            start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
-            count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
+            assert value_variable.dimensions == ('line',), 'Invalid dimension for value variable {}'.format(indexing_variable_name)
+            start_variable = self.nc_dataset.variables['index_line']
+            assert start_variable.dimensions == ('line',), 'Invalid dimension for start variable {}'.format('index_line')
+            count_variable = self.nc_dataset.variables['index_count']
+            assert count_variable.dimensions == ('line',), 'Invalid dimension for count variable {}'.format('index_count')
             
             expanded_array = np.zeros(shape=(self.index_range,), 
                                       dtype=value_variable.dtype)
@@ -75,9 +79,9 @@ class RowCache(object):
             
             #logger.debug('indices: {}'.format(indices))
             for index in indices:
-                start_index = max(start_variable[index]-start_index, 0)
-                end_index = min(start_index+count_variable[index], self.index_range)
-                expanded_array[start_index:end_index] = value_variable[index]
+                new_start_index = max(start_variable[index]-start_index, 0)
+                new_end_index = min(start_index+count_variable[index], self.index_range)
+                expanded_array[new_start_index:new_end_index] = value_variable[index]
                 
             #logger.debug('expanded_array: {}'.format(expanded_array))
             return expanded_array
@@ -132,7 +136,7 @@ class RowCache(object):
             elif len(variable.shape) in [1, 2]: # 1D or 2D variable
                 # Indexing array variable
                 if ('point' not in variable.dimensions) and (short_name in self.settings['index_fields']): 
-                    self.cache[short_name] = expand_indexing_variable(variable_name)[subset_mask]
+                    self.cache[short_name] = expand_indexing_variable(variable_name, start_index, end_index)[subset_mask]
                     
                 # Lookup array variable
                 elif ('point' in variable.dimensions) and (short_name in self.settings['lookup_fields'] or variable_name.endswith('_index')): 
@@ -194,6 +198,7 @@ class NetCDF2ASEGGDFConverter(object):
     '''
     def __init__(self,
                  netcdf_in_path,
+                 crs_string=None,
                  settings_path=None
                  ):
         '''
@@ -218,6 +223,25 @@ class NetCDF2ASEGGDFConverter(object):
 
         self.nc_dataset = netCDF4.Dataset(self.netcdf_in_path, 'r')
         assert 'point' in self.nc_dataset.dimensions.keys(), 'No point dimension defined in netCDF dataset'
+        
+        self.spatial_ref = None
+        if crs_string:
+            self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
+            logger.debug('self.spatial_ref set from WKT {}'.format(crs_string))
+        else:
+            wkt = None
+            try:
+                for crs_variable_name in ['crs', 'transverse_mercator']:
+                    if crs_variable_name in self.nc_dataset.variables.keys():
+                        wkt = self.nc_dataset.variables[crs_variable_name].spatial_ref
+                        break
+                self.spatial_ref = get_spatial_ref_from_wkt(wkt)
+            except:
+                pass
+            
+        assert self.spatial_ref, 'No Coordinate Reference System defined'
+                
+                    
         
         self.total_points = self.nc_dataset.dimensions['point'].size
         
@@ -454,30 +478,22 @@ DEFN 14 ST=RECD,RT=PROJ; PARAM7: D14.0:
 DEFN 15 ST=RECD,RT=PROJ; END DEFN
 PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse Mercator  0.000000  141.000000  0.999600 500000.000000 10000000.00000
                 """
-                wkt = None
-                for crs_variable_name in ['crs', 'transverse_mercator']:
-                    if crs_variable_name in self.nc_dataset.variables.keys():
-                        wkt = self.nc_dataset.variables[crs_variable_name].spatial_ref
-                        break
-                assert wkt, 'No Coordinate Reference System defined'
+                geogcs = self.spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
+                projcs = self.spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
+                ellipse_name = self.spatial_ref.GetAttrValue('spheroid', 0)
+                major_axis = float(self.spatial_ref.GetAttrValue('spheroid', 1))
+                prime_meridian = float(self.spatial_ref.GetAttrValue('primem', 1))
+                inverse_flattening = float(self.spatial_ref.GetInvFlattening())
+                #eccentricity = self.spatial_ref.GetAttrValue('spheroid', 2) # Non-standard definition same as inverse_flattening?
                 
-                spatial_ref = get_spatial_ref_from_wkt(wkt)
-                geogcs = spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
-                projcs = spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
-                ellipse_name = spatial_ref.GetAttrValue('spheroid', 0)
-                major_axis = float(spatial_ref.GetAttrValue('spheroid', 1))
-                prime_meridian = float(spatial_ref.GetAttrValue('primem', 1))
-                inverse_flattening = float(spatial_ref.GetInvFlattening())
-                #eccentricity = spatial_ref.GetAttrValue('spheroid', 2) # Non-standard definition same as inverse_flattening?
-                
-                if spatial_ref.IsProjected():
+                if self.spatial_ref.IsProjected():
                     if projcs.startswith(geogcs):
                         projection_name = projcs
                     else:
                         projection_name = geogcs + ' / ' + re.sub('[\:\,\=]+', '', projcs) # e.g. 'GDA94 / UTM Zone 54, Southern Hemisphere'
-                    projection_method = spatial_ref.GetAttrValue('projection').replace('_', ' ')
+                    projection_method = self.spatial_ref.GetAttrValue('projection').replace('_', ' ')
                     projection_parameters = [(key, float(value))
-                                              for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', spatial_ref.ExportToPrettyWkt())
+                                              for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', self.spatial_ref.ExportToPrettyWkt())
                                               ]
                 else: # Unprojected CRS
                     projection_name = geogcs
@@ -697,6 +713,10 @@ def main():
                             help="Path to settings file",
                             type=str,
                             dest="settings_path")
+        parser.add_argument("-r", "--crs",
+                            help="Coordinate Reference System string (e.g. GDA94, EPSG:4283)",
+                            type=str,
+                            dest="crs")
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
@@ -727,7 +747,10 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
         
     dfn_out_path = args.dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
     
+    logger.debug('args: {}'.format(args.__dict__))
+    
     netcdf2aseg_gdf_converter = NetCDF2ASEGGDFConverter(nc_in_path,
+                                                        crs_string=args.crs,
                                                         )
     
     mask = None # Process all points

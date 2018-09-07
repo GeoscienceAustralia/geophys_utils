@@ -50,11 +50,12 @@ SIG_FIGS = OrderedDict([('uint8', 4), # 128
                         ('int64', 19), # 9223372036854775808 - Not supported in netCDF3 or netCDF4-Classic
                         # https://en.wikipedia.org/wiki/Floating-point_arithmetic#IEEE_754:_floating_point_in_modern_computers
                         ('float32', 7), # 7.2
-                        ('float64', 30) # 15.9 - should be 16, but made 30 to support unrealistic precision specifications
+                        ('float64', 35) # 15.9 - should be 16, but made 35 to support unrealistic precision specifications
                         ]
                        )
 
 DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
+                         ['uint64', 'uint32', 'uint16', 'uint8'], # Unsigned integer dtypes
                          ['float64', 'float32', 'int16', 'int8'] # Floating point dtypes
                          ]
     
@@ -215,14 +216,14 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     elif aseg_dtype_code in ['F', 'D', 'E']: # Floating point
         # If array_variable is a netCDF variable with a "format" attribute, use stored format string to determine decimal_places
         if decimal_places is not None:
-            decimal_places = min(decimal_places, sig_figs-integer_digits)
+            decimal_places = min(decimal_places, abs(sig_figs-integer_digits))
             logger.debug('decimal_places set to {} from decimal_places {}'.format(decimal_places, decimal_places))
         elif hasattr(array_variable, 'aseg_gdf_format'): 
             _columns, _aseg_dtype_code, _integer_digits, decimal_places = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
-            decimal_places = min(decimal_places, sig_figs-integer_digits)
+            decimal_places = min(decimal_places, abs(sig_figs-integer_digits))
             logger.debug('decimal_places set to {} from variable attribute aseg_gdf_format {}'.format(decimal_places, array_variable.aseg_gdf_format))
         else: # No aseg_gdf_format variable attribute
-            decimal_places = sig_figs - integer_digits # Allow for full precision of datatype
+            decimal_places = abs(sig_figs-integer_digits) # Allow for full precision of datatype
             logger.debug('decimal_places set to {} from sig_figs {} and integer_digits {}'.format(decimal_places, sig_figs, integer_digits))
         
         width_specifier = min(sign_width + integer_digits + decimal_places + 2,

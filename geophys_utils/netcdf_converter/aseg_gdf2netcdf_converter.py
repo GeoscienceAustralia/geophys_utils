@@ -970,13 +970,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                      
                 continue
             
-            # Process designated index fields
-            elif short_name in self.settings['index_fields']:
-                for index_variable in index_variable_generator():
-                    # Create index dimension
-                    yield index_variable
-                    
-                continue
+            #===================================================================
+            # # THIS HAS BEEN REMOVED BECAUSE WE NO LONGER USE INDEXING VARIABLES
+            # # Process designated index fields
+            # elif short_name in self.settings['index_fields']:
+            #     for index_variable in index_variable_generator():
+            #         # Create index dimension
+            #         yield index_variable
+            #         
+            #     continue
+            #===================================================================
             
             # Process normal data field
             long_name = field_definition.get('long_name')
