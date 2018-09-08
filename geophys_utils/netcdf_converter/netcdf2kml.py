@@ -63,7 +63,7 @@ class NetCDF2kmlConverter(object):
         @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
         '''
         logger.debug(metadata_dict)
-        self.npu = None
+        self.point_utils = None
         self.survey_id = metadata_dict['ga_survey_id']
         self.survey_title = metadata_dict['dataset_title']
         #self.netcdf_path = metadata_dict['distribution_url']  # test
@@ -84,8 +84,11 @@ class NetCDF2kmlConverter(object):
 
         self.netcdf_path = netcdf_path
 
-        # Don't connect until we have to
+        # Don't connect to netCDF until we have to
         self.netcdf_dataset = None
+        self.point_utils = None
+        self.line_utils = None
+        #self.grid_utils = None
         
         self.thredds_metadata_link = dataset_settings['thredds_link']
         self.polygon_style = simplekml.Style()
@@ -196,10 +199,9 @@ class NetCDF2kmlConverter(object):
         return parent_folder
 
     def build_lines(self, netcdf_file_folder, bounding_box):
-
+        
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        line_utils = NetCDFLineUtils(self.netcdf_dataset)
-
+        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset)
 
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
@@ -207,10 +209,10 @@ class NetCDF2kmlConverter(object):
         line_list = [line for line in self.netcdf_dataset.variables['line']]
         logger.debug("List of lines in view: {}".format(line_list))
 
-        line_dict = line_utils.get_lines(line_list, variables=['gps_elevation', "line_index"], bounds=bounding_box_floats)
-        logger.debug("Line Dictionary: {}".format(next(line_dict)))
+        line_dict = self.line_utils.get_lines(line_list, variables=['gps_elevation', "line_index"], bounds=bounding_box_floats)
 
         for line in line_dict:
+            logger.debug("Line Dictionary: {}".format(line))
             line_number = line[0]
             line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
             coords_array = line[1]['coordinates']
@@ -290,15 +292,15 @@ class NetCDF2kmlConverter(object):
         logger.debug('bounding_box:' + str(bounding_box))
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.npu = NetCDFPointUtils(self.netcdf_dataset)
+        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset)
         
-        if not self.npu.point_count:
+        if not self.point_utils.point_count:
             return None
 
         bounding_box_floats = [float(coord) for coord in bounding_box]
         logger.debug(bounding_box_floats)
         # bounding_box_floats = [110.4899599829594, -56.11642075733719, 166.658146968822, -6.11642075733719]
-        spatial_mask = self.npu.get_spatial_mask(bounding_box_floats)
+        spatial_mask = self.point_utils.get_spatial_mask(bounding_box_floats)
         logger.debug(spatial_mask)
         if True in spatial_mask:
             logger.debug("TRUE")
@@ -309,7 +311,7 @@ class NetCDF2kmlConverter(object):
             # new_survey_folder.timespan.begin = str(start_date) + "-01-01"
             # new_survey_folder.timespan.end = str(start_date) + "-01-01"
 
-            point_data_generator = self.npu.all_point_data_generator(self.field_list, spatial_mask)
+            point_data_generator = self.point_utils.all_point_data_generator(self.field_list, spatial_mask)
             logger.debug(point_data_generator)
             variable_attributes = next(point_data_generator)
             logger.debug(variable_attributes)
@@ -396,10 +398,10 @@ class NetCDF2kmlConverter(object):
     #     point scale or even an additional region.
     #     :return: Currently just prints to output
     #     """
-    #     logger.debug("Point Count: {}".format(self.npu.point_count))
+    #     logger.debug("Point Count: {}".format(self.point_utils.point_count))
     #     logger.debug("Area: {}".format((self.east_extent - self.west_extent) * (self.north_extent - self.south_extent)))
     #     logger.debug("Density: {}".format(((self.east_extent - self.west_extent) * (
-    #     self.north_extent - self.south_extent)) / self.npu.point_count * 1000))
+    #     self.north_extent - self.south_extent)) / self.point_utils.point_count * 1000))
     #===========================================================================
 
     def build_static_kml(self):

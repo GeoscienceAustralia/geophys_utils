@@ -6,8 +6,7 @@ ground_gravity:
   point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>))
   - freeair
   - [-500, 500]
-  point_field_list: [obsno, latitude, longitude, grav, freeair, bouguer, stattype,
-    reliab, gridflag]
+  point_field_list: [obsno, latitude, longitude, grav, freeair, bouguer, stattype, reliab, gridflag]
   point_filter: {gridflag: Station not used in the production of GA grids.} # Dict containing field names & values to filter out
   point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
   point_icon_scale: 0.7
