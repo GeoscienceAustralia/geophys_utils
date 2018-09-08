@@ -27,6 +27,7 @@ from datetime import date
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
+import numpy as np
 
 COLORMAP_NAME = 'rainbow'
 
@@ -34,7 +35,7 @@ COLORMAP_NAME = 'rainbow'
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
-LINE_RESOLUTION_STEPS = 70
+MAX_POINTS_PER_LINE = 100
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
@@ -208,53 +209,47 @@ class NetCDF2kmlConverter(object):
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
         line_list = [line for line in self.netcdf_dataset.variables['line']]
-        logger.debug("List of lines in view: {}".format(line_list))
+        #logger.debug("List of ALL lines: {}".format(line_list))
 
-        line_dict = self.line_utils.get_lines(line_list, variables=['gps_elevation', "line_index"], bounds=bounding_box_floats)
-
-        for line in line_dict:
-            logger.debug("Line Dictionary: {}".format(line))
-            line_number = line[0]
+        for line_number, line_data in self.line_utils.get_lines(line_list, variables=['lidar'], bounds=bounding_box_floats):
+            #logger.debug("line_number: {}".format(line_number))
+            #logger.debug("line_data: {}".format(line_data))
             line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
-            coords_array = line[1]['coordinates']
-            #number_of_points_in_line = int(coords_array.size / 2)
-            number_of_points_in_line = len(line[1]['gps_elevation'])
-
-            if coords_array.size is not 0:
-
-                small_array = coords_array[0:coords_array.size:LINE_RESOLUTION_STEPS]  # step size is hardcoded at 100
-
+            number_of_points_in_line = len(line_data['coordinates'])
+            if number_of_points_in_line:
+                #TODO: Determine the points per line according to length of line
+                point_step = max(1, number_of_points_in_line // MAX_POINTS_PER_LINE)
+                
+                # Create array of subset indicies, including the index of the last point if not in subsample indices
+                array_subset_indices = np.unique(np.concatenate((np.arange(0, number_of_points_in_line, point_step),
+                                                                 np.array([number_of_points_in_line-1])),
+                                                                axis=None)
+                                                 )
+                points_in_subset = len(array_subset_indices)
+                subset_3d_array = np.zeros(shape=(points_in_subset, 3), dtype=line_data['coordinates'].dtype)
+                # Populate coords_3d_array with (x,y,z) coordinates
+                subset_3d_array[:,0:2] = line_data['coordinates'][array_subset_indices]          
+                subset_3d_array[:,2] = line_data['lidar'][array_subset_indices] # Height above ground
+                
                 # build the line segments
-                i = 1
-                elevation_index = LINE_RESOLUTION_STEPS
-                while i < small_array.size / 2:
-                    last_point_index = int(small_array.size)
-                    linestring = line_folder.newlinestring(name=str("Line Segment: " + str(i - 1)))
-
-                    linestring.coords = [
-                                         (small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
-                                         (small_array[i][0], small_array[i][1], line[1]['gps_elevation'][elevation_index])
-                                        ]
+                for line_segment_index in range(points_in_subset-1):
+                    linestring = line_folder.newlinestring(name=str("Line Segment: {}".format(line_segment_index)))
+    
+                    linestring.coords = [list(subset_3d_array[line_segment_index]), list(subset_3d_array[line_segment_index+1])]
                     linestring.altitudemode = simplekml.AltitudeMode.relativetoground
                     #linestring.altitudemode = simplekml.AltitudeMode.clamptoground
                     linestring.extrude = 0
                     linestring.tessellate = 1
                     linestring.style.linestyle.width = 5
                     linestring.style.linestyle.color = simplekml.Color.yellowgreen
-
+    
                     # build the polygon description
                     description_string = '<![CDATA['
                     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number', str(line_number))
                     description_string = description_string + ']]>'
                     linestring.description = description_string
+                    
 
-                    i = i + 1
-                    elevation_index = elevation_index + LINE_RESOLUTION_STEPS
-
-                #linestring = lines_folder.newlinestring(name="Line Number: {}".format(line_number))
-                linestring.coords = [(small_array[i - 1][0], small_array[i - 1][1], line[1]['gps_elevation'][elevation_index - LINE_RESOLUTION_STEPS]),
-                                     (coords_array[-1][0], coords_array[-1][1], line[1]['gps_elevation'][number_of_points_in_line- 1])
-                                     ]
                 # # # touring
                 # tour = kml.newgxtour(name="Play me!")
                 # playlist = tour.newgxplaylist()

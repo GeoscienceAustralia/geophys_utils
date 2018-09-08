@@ -117,9 +117,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         self.kdtree = None
         
-        print(line_values)
-        print(line_indices)
-        
     def get_line_masks(self, line_numbers=None):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
