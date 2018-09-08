@@ -57,26 +57,25 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 
 class NetCDF2kmlConverter(object):
-    def __init__(self, netcdf_path, dataset_settings, metadata_tuple=None):
-        logger.debug(metadata_tuple)
+    def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
+        logger.debug(metadata_dict)
         self.npu = None
-        self.survey_id = metadata_tuple[0]
-        self.survey_title = metadata_tuple[1]
-        #self.netcdf_path = metadata_tuple[2]  # test
-        self.polygon = metadata_tuple[3]
+        self.survey_id = metadata_dict['ga_survey_id']
+        self.survey_title = metadata_dict['dataset_title']
+        #self.netcdf_path = metadata_dict['distribution_url']  # test
+        self.polygon = metadata_dict['convex_hull_polygon']
 
         self.kml = simplekml.Kml()
-
         # Store dataset spatial extents as python variables
-        self.west_extent = metadata_tuple[4]
-        self.east_extent = metadata_tuple[5]
-        self.south_extent = metadata_tuple[6]
-        self.north_extent = metadata_tuple[7]
+        self.west_extent = metadata_dict['longitude_min']
+        self.east_extent = metadata_dict['longitude_max']
+        self.south_extent = metadata_dict['latitude_min']
+        self.north_extent = metadata_dict['latitude_max']
 
-        self.point_count = metadata_tuple[8]
+        self.point_count = metadata_dict['point_count']
 
-        self.start_date = metadata_tuple[9]
-        self.end_date = metadata_tuple[10]
+        self.start_date = metadata_dict['start_date']
+        self.end_date = metadata_dict['end_date']
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
 
         # TODO: GET RID OF THIS HORRIBLE HACK

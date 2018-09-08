@@ -342,9 +342,9 @@ where not exists (select distribution_id from distribution where dataset_id = :d
                                      ll_ur_coords=None
                                      ):
         '''
-        Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
+        Function to return list of dicts containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
-        Tuples returned are as follows:
+        Keys in dicts returned are as follows:
             (ga_survey_id, 
             dataset_title,  
             distribution_url, 
@@ -409,8 +409,8 @@ left join survey using(survey_id)
         logger.debug('params: {}'.format(params))
         cursor.execute(dataset_search_sql, params)
         
-        # Convert date strings to Python date objects
-        #return [tuple(row) for row in cursor]
+        # Convert date strings from SQLite into Python date objects
+        #return [dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)) for row in cursor]
         row_list = []
         for row in cursor:
             row = list(row)
@@ -419,7 +419,7 @@ left join survey using(survey_id)
                     row[datetime_index] = datetime.strptime(row[datetime_index], '%Y-%m-%d').date()
                 except TypeError:
                     row[datetime_index] = None
-            row_list.append(row)
+            row_list.append(dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)))
         return row_list
         
 def main():
@@ -446,11 +446,11 @@ def main():
     #===========================================================================
     
     print('Search results:')
-    for url in sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+    for dataset_metadata in sdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
                                                  protocol='opendap',
                                                  ll_ur_coords=None
                                                  ):
-        print(url)
+        print(dataset_metadata)
                 
 if __name__ == '__main__':
     # Setup logging handlers if required

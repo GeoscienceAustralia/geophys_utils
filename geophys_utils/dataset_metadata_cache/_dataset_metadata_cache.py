@@ -72,6 +72,20 @@ class DatasetMetadataCache(object):
     '''
     DatasetMetadataCache class definition
     '''
+    # Tuple containing field names for results of search_dataset_distributions function
+    dataset_distribution_search_fields = ('ga_survey_id',
+                                          'dataset_title',
+                                          'distribution_url',
+                                          'convex_hull_polygon',
+                                          'longitude_min',
+                                          'longitude_max',
+                                          'latitude_min',
+                                          'latitude_max',
+                                          'point_count',
+                                          'start_date',
+                                          'end_date'
+                                          )
+    
     _db_engine = None
 
     @abc.abstractmethod

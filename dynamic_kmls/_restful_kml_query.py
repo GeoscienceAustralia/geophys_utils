@@ -72,7 +72,9 @@ class RestfulKMLQuery(Resource):
 
     
     def modify_nc_path(self, netcdf_path_prefix, opendap_endpoint):    
-        #logger.debug("point_data_tuple: " + str(point_data_tuple))
+        '''
+        Helper function to substitute netcdf_path_prefix in netcdf_path if defined
+        '''
         if netcdf_path_prefix:
             return os.path.join(netcdf_path_prefix, os.path.basename(opendap_endpoint))
         else:
@@ -101,18 +103,18 @@ class RestfulKMLQuery(Resource):
         
         logger.debug('Getting {} lines'.format(dataset_type))
     
-        # Get the point_data_tuple surveys from the database that are within the bbox
+        # Get the dataset_metadata_tuple surveys from the database that are within the bbox
         
-        point_data_tuple_list = self.sdmc.search_dataset_distributions(
+        dataset_metadata_tuple_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[west, south], [east, north]]
         )
-        print(point_data_tuple_list)
+        print(dataset_metadata_tuple_list)
     
         logger.debug([[west, south], [east, north]])
         t2 = time.time()
-        logger.debug("Retrieve point_data_tuple strings from database...")
+        logger.debug("Retrieve dataset_metadata_tuple strings from database...")
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
@@ -120,20 +122,21 @@ class RestfulKMLQuery(Resource):
     
         t_polygon_1 = time.time()
     
-        if len(point_data_tuple_list) > 0:
+        if len(dataset_metadata_tuple_list) > 0:
     
-                for point_data_tuple in point_data_tuple_list:
-                    logger.debug("point_data_tuple: " + str(point_data_tuple))
+                for dataset_metadata_tuple in dataset_metadata_tuple_list:
+                    dataset_metadata_dict = dict(zip(self.sdmc.dataset_distribution_search_fields, dataset_metadata_tuple))
+                    logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
                     
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                     
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_tuple)
                     t_polygon_2 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
+                    logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_tuple for polygon ...")
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
     
                     try:
-                        survey_polygon = wkt.loads(point_data_tuple[3])
+                        survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
                     except Exception as e:
                         # print(e)
                         continue  # Skip this polygon
@@ -180,17 +183,17 @@ class RestfulKMLQuery(Resource):
         logger.debug("Retrieve bbox values from get request...")
         logger.debug("Time: " + str(t1 - t0))
     
-        # Get the point_data_tuple surveys from the database that are within the bbox
-        point_data_tuple_list = self.sdmc.search_dataset_distributions(
+        # Get the dataset_metadata_tuple surveys from the database that are within the bbox
+        dataset_metadata_tuple_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[west, south], [east, north]]
         )
-        logger.debug("tuple: " + str(point_data_tuple_list))
+        logger.debug("tuple: " + str(dataset_metadata_tuple_list))
     
         logger.debug([[west, south], [east, north]])
         t2 = time.time()
-        logger.debug("Retrieve point_data_tuple strings from database...")
+        logger.debug("Retrieve dataset_metadata_tuple strings from database...")
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
@@ -200,14 +203,16 @@ class RestfulKMLQuery(Resource):
         # High zoom: show points rather than polygons.
         if east - west < MAX_BOX_WIDTH_FOR_POINTS:
             logger.debug('Getting {} points'.format(dataset_type))
-            if len(point_data_tuple_list) > 0:
-                for point_data_tuple in point_data_tuple_list:
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+            if len(dataset_metadata_tuple_list) > 0:
+                for dataset_metadata_tuple in dataset_metadata_tuple_list:
+                    dataset_metadata_dict = dict(zip(self.sdmc.dataset_distribution_search_fields, dataset_metadata_tuple))
                     
-                    logger.debug("Building NETCDF: " + str(point_data_tuple[2]))
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
+                    
+                    logger.debug("Building NETCDF: {} ".format(netcdf_path))
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_tuple)
                     t3 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file ...")
+                    logger.debug("set style and create netcdf2kmlconverter instance of dataset_metadata_tuple file ...")
                     logger.debug("Time: " + str(t3 - t2))
     
                     # logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
@@ -233,18 +238,19 @@ class RestfulKMLQuery(Resource):
             logger.debug('Getting {} polygons'.format(dataset_type))
             t_polygon_1 = time.time()
     
-            if len(point_data_tuple_list) > 0:
+            if len(dataset_metadata_tuple_list) > 0:
     
-                for point_data_tuple in point_data_tuple_list:
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+                for dataset_metadata_tuple in dataset_metadata_tuple_list:
+                    dataset_metadata_dict = dict(zip(self.sdmc.dataset_distribution_search_fields, dataset_metadata_tuple))
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                     #logger.debug(netcdf_path)
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
                     t_polygon_2 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
+                    logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
     
                     try:
-                        survey_polygon = wkt.loads(point_data_tuple[3])
+                        survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
                     except Exception as e:
                         # print(e)
                         continue  # Skip this polygon

@@ -293,9 +293,9 @@ where not exists (select distribution_id from distribution where dataset_id = %(
                                      ll_ur_coords=None
                                      ):
         '''
-        Function to return list of tuples containing metadata for all datasets with specified keywords and bounding box
+        Function to return list of dicts containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
-        Tuples returned are as follows:
+        Keys in dicts returned are as follows:
             (ga_survey_id, 
             dataset_title,  
             distribution_url, 
@@ -360,7 +360,7 @@ left join survey using(survey_id)
         cursor.execute(dataset_search_sql, params)
         
         # Return list of distribution_url values
-        return [row for row in cursor]
+        return [dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)) for row in cursor]
         
 def main():
     pdmc = PostgresDatasetMetadataCache(debug=True)
@@ -386,11 +386,11 @@ def main():
     #===========================================================================
     
     print('Search results:')
-    for url in pdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
+    for dataset_metadata in pdmc.search_dataset_distributions(keyword_list=['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points'],
                                                  protocol='opendap',
                                                  ll_ur_coords=None
                                                  ):
-        print(url)
+        print(dataset_metadata)
                 
 if __name__ == '__main__':
     # Setup logging handlers if required
