@@ -28,18 +28,11 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 
-# TODO: GET RID OF THIS HORRIBLE HACK
-# Set the following to None or empty string to use OPeNDAP endpoints
-# LOCAL_FILE_LOCATION = None
-LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\aem_data\\AusAEM_Year1_Tranche1_Final_EM.nc'
-# LOCAL_FILE_LOCATION = 'C:\\Users\\u62231\\Desktop\\grav_data_10_july'
-
 COLORMAP_NAME = 'rainbow'
-COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
-logger.setLevel(logging.DEBUG)  # Initial logging level for this module
+logger.setLevel(logging.INFO)  # Initial logging level for this module
 
 LINE_RESOLUTION_STEPS = 70
 
@@ -77,12 +70,6 @@ class NetCDF2kmlConverter(object):
         self.start_date = metadata_dict['start_date']
         self.end_date = metadata_dict['end_date']
         self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
-
-        # TODO: GET RID OF THIS HORRIBLE HACK
-        # if LOCAL_FILE_LOCATION:
-        #     self.netcdf_path = os.path.join(LOCAL_FILE_LOCATION,
-        #                            os.path.basename(self.netcdf_path)
-        #                            )
 
         self.netcdf_path = netcdf_path
 

@@ -7,7 +7,7 @@ xmlns:gx="http://www.google.com/kml/ext/2.2">
             <Link id="link_0">
                 <href>http://127.0.0.1:5000/aem/query</href>
                 <refreshInterval>2</refreshInterval>
-                <viewRefreshMode>onRequest</viewRefreshMode>
+                <viewRefreshMode>onStop</viewRefreshMode>
                 <viewRefreshTime>1</viewRefreshTime>
             </Link>
         </NetworkLink>
