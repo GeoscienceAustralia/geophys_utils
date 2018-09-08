@@ -11,9 +11,8 @@ import simplekml
 import time
 from shapely.geometry import Polygon
 from shapely import wkt
-from geophys_utils.netcdf_converter import netcdf2kml
+from dynamic_kmls import netcdf2kml,  DEBUG, DATABASE_ENGINE
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
-from dynamic_kmls import DEBUG, DATABASE_ENGINE
 import logging
 from pprint import pprint, pformat
 

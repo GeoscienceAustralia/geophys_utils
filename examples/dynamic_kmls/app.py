@@ -5,7 +5,7 @@ import simplekml
 import time
 from shapely.geometry import Polygon
 from shapely import wkt
-from geophys_utils.netcdf_converter import netcdf2kml
+from dynamic_kmls import netcdf2kml
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
 
