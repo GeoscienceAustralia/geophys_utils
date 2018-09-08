@@ -20,9 +20,11 @@ DEBUG = True
 DATABASE_ENGINE = 'SQLite'
 #DATABASE_ENGINE = 'Postgres'
 
-# Set this to change file path
-#FILE_PATH_MAP = None
-FILE_PATH_MAP = ('D:\\Temp\\gravity point_datasets\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/')
+# Set this to change file path - THIS IS A HACK!!!!
+#FILE_PATH_MAPS = []
+FILE_PATH_MAPS = [('D:\\Temp\\gravity point_datasets\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/'),
+                 ('D:\\Temp\\AEM conductivity datasets\\', '/g/data2/uc0/rr2_dev/axi547/aem/')
+                 ]
 
 class NetCDF2DatasetMetadataCache(object):
     '''
@@ -96,8 +98,8 @@ class NetCDF2DatasetMetadataCache(object):
             
             nc_attribute = dict(nc_dataset.__dict__)
     
-            if FILE_PATH_MAP:
-                nc_path = nc_path.replace(*FILE_PATH_MAP)
+            for file_path_map in FILE_PATH_MAPS:
+                nc_path = nc_path.replace(*file_path_map)
                 
             nc_attribute['nc_path'] = nc_path
             

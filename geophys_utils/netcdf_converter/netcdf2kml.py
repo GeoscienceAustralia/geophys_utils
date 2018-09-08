@@ -39,7 +39,7 @@ COLOUR_STRETCH_RANGE = (-500, 500)  # min/max tuple for colour stretch range
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
-logger.setLevel(logging.INFO)  # Initial logging level for this module
+logger.setLevel(logging.DEBUG)  # Initial logging level for this module
 
 LINE_RESOLUTION_STEPS = 70
 
@@ -95,7 +95,7 @@ class NetCDF2kmlConverter(object):
         self.polygon_style.polystyle.color = dataset_settings['polygon_color']
         self.polygon_style.polystyle.outline = dataset_settings['polygon_outline']
 
-        self.point_flag_exists = dataset_settings['point_flag_exists']
+        self.point_filter = dataset_settings.get('point_filter')
 
         self.point_style = simplekml.Style()
         self.point_style.iconstyle.scale = dataset_settings['point_icon_scale']
@@ -103,6 +103,15 @@ class NetCDF2kmlConverter(object):
         self.point_style.iconstyle.icon.href = dataset_settings['point_icon_href']
         self.unflagged_point_icon_color_scheme = None  # insert function string
         self.flagged_point_icon_color = 'ff000000'
+        
+        point_colour_settings = dataset_settings.get('point_colour')
+        if point_colour_settings:
+            self.point_colour_field = point_colour_settings[0]
+            self.point_colour_range = point_colour_settings[1]
+        else: #TODO: Do something sensible here if no colour mapping defined
+            self.point_colour_field = None
+            self.point_colour_range = None
+            
 
         self.field_list = dataset_settings['point_field_list']
 
@@ -308,13 +317,13 @@ class NetCDF2kmlConverter(object):
             variable_attributes = next(point_data_generator)
             logger.debug(variable_attributes)
             logger.debug("variable_attributes: " + str(variable_attributes))
-            aem_variable_atts = {'aem_test': {'units': 'um/s^2'}}
 
             skip_points = 1  # set to limit the points displayed if required.
             points_read = 0
 
-            for point_data in point_data_generator:
-                logger.debug("POINT DATA: " + str(point_data))
+            for point_data_list in point_data_generator:
+                point_data = dict(zip(self.field_list, point_data_list)) # Create dict for better readability
+                logger.debug("POINT DATA: {}".format(point_data))
                 points_read += 1
 
                 # ignore points between skip_points
@@ -322,21 +331,24 @@ class NetCDF2kmlConverter(object):
                     continue
 
                 # add new points with netcdf file Obsno as title and long and lat as coordinatess
-                new_point = new_survey_folder.newpoint(name="Observation no. " + str(point_data[0]),
-                                                       coords=[(point_data[2], point_data[1])])
+                # point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
+                new_point = new_survey_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
+                                                       coords=[(point_data['longitude'], point_data['latitude'])])
 
                 description_string = self.build_html_description_string(variable_attributes, point_data)
                 logger.debug(description_string)
                 new_point.description = description_string  # set description to point
 
                 # styling
-                self.unflagged_point_icon_color_scheme = self.value2colourhex(point_data[5])
+                self.unflagged_point_icon_color_scheme = self.value2colourhex(point_data[self.point_colour_field], self.point_colour_range)
                 new_point.style = self.point_style  # sets the icon scale, labelstyle scale, icon link
 
                 # Set the style for points if gridflag == 2
-                if self.point_flag_exists:  # if there is a point_flag separate the points and colour differently
-                    if point_data[8] == "Station not used in the production of GA grids.":
-                        new_point.style.iconstyle.color = self.flagged_point_icon_color
+                if self.point_filter:  # if there is a point_flag separate the points and colour differently
+                    logger.debug('self.point_filter: {}'.format(self.point_filter))
+                    for key, value in self.point_filter.items():
+                        if point_data[key] == value:
+                            new_point.style.iconstyle.color = self.flagged_point_icon_color
 
             return new_survey_folder
         else:
@@ -347,8 +359,8 @@ class NetCDF2kmlConverter(object):
             Helper function to build the description string automatically based on how many fields are in the field list.
             It will take into account if a unit of measure needs to be specified or not.
             :param field_list: The fields to be included in the description.
-            :param variable_attributes: a list of lists? Matching point_data.
-            :param point_data: A list of the actual data of each point
+            :param variable_attributes: a list of lists? Matching self.field_list.
+            :param point_data: A dict of the actual data of each point
             :return: return the description string html ready to be attached to a kml point.
         """
 
@@ -358,22 +370,24 @@ class NetCDF2kmlConverter(object):
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name', self.survey_title)
         description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', self.survey_id)
 
-        i = 1  # skip obsno, lat, long in field_list
-        logger.debug("LENGTH: " + str(len(self.field_list)))
-        while i < len(self.field_list) - 1:
-            logger.debug(self.field_list)
-            logger.debug(point_data[i])
-            if variable_attributes[self.field_list[i]].get('units'):
+        logger.debug("self.field_list: {}".format(self.field_list))
+        for field in self.field_list:
+            # skip obsno, lat, long in field_list
+            if field in ['obsno', 'latitude', 'longitude']:
+                continue
+            
+            logger.debug(field)
+            logger.debug(point_data[field])
+            if variable_attributes[field].get('units'):
                 description_string = description_string + '<p><b>{0}: </b>{1} {2}</p>'.format(
-                    variable_attributes[self.field_list[i]].get('long_name'),
-                    point_data[i],
-                    variable_attributes[self.field_list[i]].get('units'))
+                    variable_attributes[field].get('long_name'),
+                    point_data[field],
+                    variable_attributes[field].get('units'))
             else:
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format(
-                    variable_attributes[self.field_list[i]].get('long_name'),
-                    point_data[i])
-            i += 1
-            logger.debug(i)
+                    variable_attributes[field].get('long_name'),
+                    point_data[field])
+
         description_string = description_string + ']]>'
         return description_string
 
@@ -420,11 +434,11 @@ class NetCDF2kmlConverter(object):
         points_folder.region = dataset_points_region  # insert built point region into point folder
         return self.kml
 
-    def value2colourhex(self, data_value):
+    def value2colourhex(self, data_value, data_range):
         '''
         Function to convert data value to hex string for color in self.colormap
         '''
-        cmap_value = int(convert_value_from_old_to_new_range(data_value, *COLOUR_STRETCH_RANGE, 0, 255))
+        cmap_value = int(convert_value_from_old_to_new_range(data_value, *data_range, 0, 255))
         # logger.debug(cmap_value)
         # logger.debug(str(self.colormap(cmap_value)[:3]))
         # logger.debug(str(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3])))

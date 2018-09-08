@@ -14,7 +14,6 @@ if DEBUG:
     logger.setLevel(logging.DEBUG) # Initial logging level for this module
 else:
     logger.setLevel(logging.INFO) # Initial logging level for this module
-logger.debug('__name__ = {}'.format(__name__))
 
 app = Flask('dynamic_kmls')
 api = Api(app)

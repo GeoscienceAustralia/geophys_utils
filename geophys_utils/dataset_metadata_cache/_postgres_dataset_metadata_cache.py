@@ -333,7 +333,7 @@ where not exists (select distribution_id from distribution where dataset_id = %(
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
-inner join survey using(survey_id)
+left join survey using(survey_id)
 """
         for keyword_index in range(len(keyword_list)):    
             keyword = keyword_list[keyword_index] 

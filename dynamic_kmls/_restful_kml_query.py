@@ -29,6 +29,8 @@ else:
 
 settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
                                             'netcdf2kml_settings.yml')))
+#print('settings: {}'.format(settings))
+#print('settings: {}'.format(yaml.safe_dump(settings)))
 
 class RestfulKMLQuery(Resource):
     '''
@@ -44,19 +46,25 @@ class RestfulKMLQuery(Resource):
            
     
     def get(self, dataset_type):
-        logger.debug(dataset_type)
-        get_function = {'ground_gravity': RestfulKMLQuery.build_ground_gravity_kml,
-                        'aem': RestfulKMLQuery.build_aem_kml
-                        }
+        '''
+        get method for RESTful API
+        '''
+        logger.debug('dataset_type: {}'.format(dataset_type))
         
-        get_function = get_function.get(dataset_type)
+        get_kml_functions = {'point': RestfulKMLQuery.build_point_kml,
+                             'line': RestfulKMLQuery.build_line_kml
+                             }
+        
+        dataset_settings = settings.get(dataset_type)
         
         #TODO: Handle this more gracefully
-        assert get_function, 'Invalid dataset type "{}"'.format(dataset_type)
+        assert dataset_settings, 'Invalid dataset type "{}"'.format(dataset_type)
+        
+        get_kml_function = get_kml_functions.get(dataset_settings['format'])
         
         bbox = request.args['BBOX'] 
     
-        xml = get_function(self, bbox)
+        xml = get_kml_function(self, bbox, dataset_type, dataset_settings)
         
         response = make_response(xml)
         response.headers['content-type'] = 'application/vnd.google-earth.kml+xml'
@@ -66,17 +74,13 @@ class RestfulKMLQuery(Resource):
     def modify_nc_path(self, netcdf_path_prefix, opendap_endpoint):    
         #logger.debug("point_data_tuple: " + str(point_data_tuple))
         if netcdf_path_prefix:
-            return netcdf_path_prefix + os.path.basename(opendap_endpoint)
+            return os.path.join(netcdf_path_prefix, os.path.basename(opendap_endpoint))
         else:
             return opendap_endpoint
 
-    #@app.route('/aem/<bounding_box>', methods=['GET'])
-    def build_aem_kml(self, bbox):
-    
-        yaml_settings = settings['aem']
+    def build_line_kml(self, bbox, dataset_type, dataset_settings):
     
         t0 = time.time()  # retrieve coordinates from query
-        print("AEM")
 
         bbox_list = bbox.split(',')
         west = float(bbox_list[0])
@@ -94,14 +98,17 @@ class RestfulKMLQuery(Resource):
         t1 = time.time()
         logger.debug("Retrieve bbox values from get request...")
         logger.debug("Time: " + str(t1 - t0))
+        
+        logger.debug('Getting {} lines'.format(dataset_type))
     
         # Get the point_data_tuple surveys from the database that are within the bbox
         
         point_data_tuple_list = self.sdmc.search_dataset_distributions(
-            keyword_list=yaml_settings['keyword_list'],
-            protocol=yaml_settings['protocol'],
+            keyword_list=dataset_settings['keyword_list'],
+            protocol=dataset_settings['protocol'],
             ll_ur_coords=[[west, south], [east, north]]
         )
+        print(point_data_tuple_list)
     
         logger.debug([[west, south], [east, north]])
         t2 = time.time()
@@ -109,7 +116,7 @@ class RestfulKMLQuery(Resource):
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
-        netcdf_file_folder = kml.newfolder(name=yaml_settings['netcdf_file_folder_name'])
+        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
         t_polygon_1 = time.time()
     
@@ -118,9 +125,9 @@ class RestfulKMLQuery(Resource):
                 for point_data_tuple in point_data_tuple_list:
                     logger.debug("point_data_tuple: " + str(point_data_tuple))
                     
-                    netcdf_path = self.modify_nc_path(yaml_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
                     
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
                     t_polygon_2 = time.time()
                     logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
@@ -152,9 +159,7 @@ class RestfulKMLQuery(Resource):
     #grav
     
     #@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
-    def build_ground_gravity_kml(self, bbox):
-    
-        yaml_settings = settings['ground_gravity']
+    def build_point_kml(self, bbox, dataset_type, dataset_settings):
     
         t0 = time.time()  # retrieve coordinates from query
     
@@ -177,8 +182,8 @@ class RestfulKMLQuery(Resource):
     
         # Get the point_data_tuple surveys from the database that are within the bbox
         point_data_tuple_list = self.sdmc.search_dataset_distributions(
-            keyword_list=yaml_settings['keyword_list'],
-            protocol=yaml_settings['protocol'],
+            keyword_list=dataset_settings['keyword_list'],
+            protocol=dataset_settings['protocol'],
             ll_ur_coords=[[west, south], [east, north]]
         )
         logger.debug("tuple: " + str(point_data_tuple_list))
@@ -189,18 +194,18 @@ class RestfulKMLQuery(Resource):
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
-        netcdf_file_folder = kml.newfolder(name=yaml_settings['netcdf_file_folder_name'])
+        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
         # ----------------------------------------------------------------------------------------------------------------
         # High zoom: show points rather than polygons.
         if east - west < MAX_BOX_WIDTH_FOR_POINTS:
-            logger.debug('gravity points')
+            logger.debug('Getting {} points'.format(dataset_type))
             if len(point_data_tuple_list) > 0:
                 for point_data_tuple in point_data_tuple_list:
-                    netcdf_path = self.modify_nc_path(yaml_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
                     
                     logger.debug("Building NETCDF: " + str(point_data_tuple[2]))
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
                     t3 = time.time()
                     logger.debug("set style and create netcdf2kmlconverter instance of point_data_tuple file ...")
                     logger.debug("Time: " + str(t3 - t2))
@@ -225,15 +230,15 @@ class RestfulKMLQuery(Resource):
         # ----------------------------------------------------------------------------------------------------------------
         # Low zoom: show polygons and not points.
         else:
-            logger.debug('gravity polygons')
+            logger.debug('Getting {} polygons'.format(dataset_type))
             t_polygon_1 = time.time()
     
             if len(point_data_tuple_list) > 0:
     
                 for point_data_tuple in point_data_tuple_list:
-                    netcdf_path = self.modify_nc_path(yaml_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
+                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(point_data_tuple[2]))
                     #logger.debug(netcdf_path)
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, yaml_settings, point_data_tuple)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, point_data_tuple)
                     t_polygon_2 = time.time()
                     logger.debug("set style and create netcdf2kmlconverter instance from point_data_tuple for polygon ...")
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))

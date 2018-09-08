@@ -1,26 +1,32 @@
 ground_gravity:
-  netcdf_file_folder_name: "Ground Gravity Surveys"
-  thredds_link: "http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/"
-  netcdf_path_prefix:
-  keyword_list: ['AUS', 'ground digital data', 'gravity', 'geophysical survey', 'points']
-  protocol: 'opendap'
-  polygon_color: 'B30000ff'
-  polygon_outline: 1
+  format: point
+  keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
+  netcdf_file_folder_name: Ground Gravity Surveys
+  netcdf_path_prefix: D:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
+  point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>))
+  - freeair
+  - [-500, 500]
+  point_field_list: [obsno, latitude, longitude, grav, freeair, bouguer, stattype,
+    reliab, gridflag]
+  point_filter: {gridflag: Station not used in the production of GA grids.} # Dict containing field names & values to filter out
+  point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
   point_icon_scale: 0.7
   point_labelstyle_scale: 0
-  point_icon_href: "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
-  point_flag_exists: True
-  point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
+  polygon_color: B30000ff
+  polygon_outline: 1
+  protocol: opendap
+  thredds_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/
 aem:
-  netcdf_file_folder_name: "AEM Surveys"
-  thredds_link: "http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/aem/AusAEM_Year1_Tranche1_Final_CND.nc"
-  netcdf_path_prefix: "C:\\Users\\u62231\\Desktop\\aem_data\\"
-  keyword_list: ["geophysics", "airborne", "AEM", "conductivity"]
-  protocol: 'opendap'
-  polygon_color: 'B30000ff'
-  polygon_outline: 1
+  format: line
+  keyword_list: [geophysics, airborne, AEM, conductivity]
+  netcdf_file_folder_name: AEM Surveys
+  netcdf_path_prefix: D:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
+  point_field_list: [line_index, latitude, longitude, lidar, mag, gps_elevation]
+  point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
   point_icon_scale: 0.7
   point_labelstyle_scale: 0
-  point_icon_href: "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
-  point_flag_exists: True
-  point_field_list: ['line_index', 'latitude', 'longitude', 'lidar', 'mag', 'gps_elevation']
+  polygon_color: B30000ff
+  polygon_outline: 1
+  protocol: opendap
+  thredds_link: http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/aem/
+  
