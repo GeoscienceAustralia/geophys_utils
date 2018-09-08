@@ -38,8 +38,10 @@ LINE_RESOLUTION_STEPS = 70
 
 
 def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
-    # converts a value from a np array to a value within a desired range. Essentially it converts a number in one
-    # range to a number in another range, while maintaining the ratio.
+    '''
+    Helper function to convert a value from a np array to a value within a desired range. Essentially it converts a number in one
+    range to a number in another range, while maintaining the ratio.
+    '''
     old_min = old_range_min
     old_range = old_range_max - old_range_min
     new_range = new_range_max - new_range_min
@@ -50,7 +52,16 @@ def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_ran
 
 
 class NetCDF2kmlConverter(object):
+    '''
+    NetCDF2kmlConverter class definition
+    '''
     def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
+        '''
+        Constructor for NetCDF2kmlConverter class
+        @param netcdf_path: netCDF file path or OPeNDAP endpoint
+        @param dataset_settings: Dataset settings as read from netcdf2kml_settings.yml settings file
+        @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
+        '''
         logger.debug(metadata_dict)
         self.npu = None
         self.survey_id = metadata_dict['ga_survey_id']

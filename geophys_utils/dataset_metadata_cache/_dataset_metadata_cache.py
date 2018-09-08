@@ -140,7 +140,7 @@ class DatasetMetadataCache(object):
                                      ll_ur_coords=None
                                      ):
         '''
-        Function to return URLs of specified distribution for all datasets with specified keywords and bounding box
+        Function to return list of dicts containing metadata for all datasets with specified keywords and bounding box
         Note that keywords are searched exclusively, i.e. using "and", not "or"
         '''
         return

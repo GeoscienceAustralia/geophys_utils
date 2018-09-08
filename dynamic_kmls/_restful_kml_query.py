@@ -34,7 +34,7 @@ settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__f
 
 class RestfulKMLQuery(Resource):
     '''
-    RestfulKMLQuery Resource subclass
+    RestfulKMLQuery Resource subclass for RESTful API
     '''
     def __init__(self):
         '''
@@ -42,7 +42,7 @@ class RestfulKMLQuery(Resource):
         '''
         super(RestfulKMLQuery, self).__init__()
         
-        self.sdmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=False)
+        self.sdmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=DEBUG)
            
     
     def get(self, dataset_type):
@@ -60,6 +60,7 @@ class RestfulKMLQuery(Resource):
         #TODO: Handle this more gracefully
         assert dataset_settings, 'Invalid dataset type "{}"'.format(dataset_type)
         
+        # Determine which KML generation function to call based on dataset_settings['format']
         get_kml_function = get_kml_functions.get(dataset_settings['format'])
         
         bbox = request.args['BBOX'] 
@@ -79,9 +80,15 @@ class RestfulKMLQuery(Resource):
             return os.path.join(netcdf_path_prefix, os.path.basename(opendap_endpoint))
         else:
             return opendap_endpoint
+        
 
     def build_line_dataset_kml(self, bbox, dataset_type, dataset_settings):
-    
+        '''
+        Function to build KML for line datasets
+        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
+        @param dataset_settings: settins for dataset_type as read from netcdf2kml_settings.yml settings file
+        '''
         t0 = time.time()  # retrieve coordinates from query
 
         bbox_list = bbox.split(',')
@@ -134,16 +141,16 @@ class RestfulKMLQuery(Resource):
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
     
                     try:
-                        survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
+                        survey_polygon = wkt.loads(dataset_metadata_dict.get('convex_hull_polygon'))
                     except Exception as e:
-                        # print(e)
+                        logger.debug('Invalid geometry for polygon {}: {}'.format(dataset_metadata_dict.get('convex_hull_polygon'), e))
                         continue  # Skip this polygon
     
                     if survey_polygon.intersects(bbox_polygon):
-                        # if survey_polygon.within(bbox_polygon):
-                        # if not survey_polygon.contains(bbox_polygon):
-                        # if survey_polygon.centroid.within(bbox_polygon):
-                        # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+                    # if survey_polygon.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon):
+                    # if survey_polygon.centroid.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
     
                         netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
     
@@ -161,7 +168,12 @@ class RestfulKMLQuery(Resource):
     
     #@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
     def build_point_dataset_kml(self, bbox, dataset_type, dataset_settings):
-    
+        '''
+        Function to build KML for point datasets
+        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
+        @param dataset_settings: settins for dataset_type as read from netcdf2kml_settings.yml settings file
+        '''
         t0 = time.time()  # retrieve coordinates from query
     
         bbox_list = bbox.split(',')

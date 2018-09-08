@@ -15,16 +15,8 @@ if DEBUG:
 else:
     logger.setLevel(logging.INFO) # Initial logging level for this module
 
-app = Flask('dynamic_kmls')
+app = Flask('dynamic_kmls') # Note hard-coded module name
 api = Api(app)
 api.add_resource(RestfulKMLQuery, '/<string:dataset_type>/query')
-
-# parser = argparse.ArgumentParser()
-# #
-# # parser.add_argument("-d", "--dataset_settings", help="Point the flask server to the correct dataset settings in the "
-# #                                                      "yaml file. Options include: ground_gravity, aem.", type=str,
-# #                     required=False)
-#
-# args = parser.parse_args()
 
 app.run(debug=DEBUG)
