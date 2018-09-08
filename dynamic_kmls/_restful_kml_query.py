@@ -136,7 +136,7 @@ class RestfulKMLQuery(Resource):
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
-        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
+        dataset_type_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
         t_polygon_1 = time.time()
     
@@ -145,6 +145,8 @@ class RestfulKMLQuery(Resource):
             for dataset_metadata_dict in dataset_metadata_dict_list:
                 logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
                 
+                netcdf_file_folder = dataset_type_folder.newfolder(name=dataset_metadata_dict['dataset_title'])
+
                 netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                 
                 netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
