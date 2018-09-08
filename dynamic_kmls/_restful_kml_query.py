@@ -52,7 +52,8 @@ class RestfulKMLQuery(Resource):
         logger.debug('dataset_type: {}'.format(dataset_type))
         
         get_kml_functions = {'point': RestfulKMLQuery.build_point_dataset_kml,
-                             'line': RestfulKMLQuery.build_line_dataset_kml
+                             'line': RestfulKMLQuery.build_line_dataset_kml,
+                             'grid': RestfulKMLQuery.build_grid_dataset_kml
                              }
         
         dataset_settings = settings.get(dataset_type)
@@ -82,12 +83,23 @@ class RestfulKMLQuery(Resource):
             return opendap_endpoint
         
 
+    def build_grid_dataset_kml(self, bbox, dataset_type, dataset_settings):
+        '''
+        Function to build KML for grid datasets
+        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
+        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
+        '''
+        #TODO: Implement this
+        pass
+    
+    
     def build_line_dataset_kml(self, bbox, dataset_type, dataset_settings):
         '''
         Function to build KML for line datasets
         @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
-        @param dataset_settings: settins for dataset_type as read from netcdf2kml_settings.yml settings file
+        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
 
@@ -170,7 +182,7 @@ class RestfulKMLQuery(Resource):
         Function to build KML for point datasets
         @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
-        @param dataset_settings: settins for dataset_type as read from netcdf2kml_settings.yml settings file
+        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
     

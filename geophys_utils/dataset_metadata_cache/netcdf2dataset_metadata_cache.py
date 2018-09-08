@@ -13,7 +13,7 @@ import numpy as np
 from datetime import datetime, date
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 DEBUG = True
 

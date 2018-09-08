@@ -202,6 +202,7 @@ class NetCDF2kmlConverter(object):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
         self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset)
+        self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
 
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
