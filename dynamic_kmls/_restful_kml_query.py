@@ -130,40 +130,38 @@ class RestfulKMLQuery(Resource):
     
         if len(dataset_metadata_dict_list) > 0:
     
-                for dataset_metadata_dict in dataset_metadata_dict_list:
-                    logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
-                    
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
-                    
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
-                    t_polygon_2 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
-                    logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
-    
-                    try:
-                        survey_polygon = wkt.loads(dataset_metadata_dict.get('convex_hull_polygon'))
-                    except Exception as e:
-                        logger.debug('Invalid geometry for polygon {}: {}'.format(dataset_metadata_dict.get('convex_hull_polygon'), e))
-                        continue  # Skip this polygon
-    
-                    if survey_polygon.intersects(bbox_polygon):
-                    # if survey_polygon.within(bbox_polygon):
-                    # if not survey_polygon.contains(bbox_polygon):
-                    # if survey_polygon.centroid.within(bbox_polygon):
-                    # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
-    
-                        netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
-    
-                    else:
-                        netcdf2kml_obj.build_lines(netcdf_file_folder, False)
-    
-                    #dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
-                return str(netcdf_file_folder)
+            for dataset_metadata_dict in dataset_metadata_dict_list:
+                logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
+                
+                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
+                
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
+                t_polygon_2 = time.time()
+                logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
+                logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
+
+                try:
+                    survey_polygon = wkt.loads(dataset_metadata_dict.get('convex_hull_polygon'))
+                except Exception as e:
+                    logger.debug('Invalid geometry for polygon {}: {}'.format(dataset_metadata_dict.get('convex_hull_polygon'), e))
+                    continue  # Skip this polygon
+
+                if survey_polygon.intersects(bbox_polygon):
+                # if survey_polygon.within(bbox_polygon):
+                # if not survey_polygon.contains(bbox_polygon):
+                # if survey_polygon.centroid.within(bbox_polygon):
+                # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+
+                    netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+
+
+                #dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
+            return str(netcdf_file_folder)
     
         else:
-                empty_folder = kml.newfolder(name="no points in view")
-                return str(empty_folder)
-    
+            empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
+            return str(empty_folder)
+
     #grav
     
     #@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
@@ -238,7 +236,8 @@ class RestfulKMLQuery(Resource):
                 return str(netcdf_file_folder)
     
             else:
-                logger.debug("No surveys in view")
+                empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
+                return empty_folder
     
         # ----------------------------------------------------------------------------------------------------------------
         # Low zoom: show polygons and not points.
@@ -263,16 +262,14 @@ class RestfulKMLQuery(Resource):
                         continue  # Skip this polygon
     
                     if survey_polygon.intersects(bbox_polygon):
-                        # if survey_polygon.within(bbox_polygon):
-                        # if not survey_polygon.contains(bbox_polygon):
-                        # if survey_polygon.centroid.within(bbox_polygon):
-                        # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
-    
+                    # if survey_polygon.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon):
+                    # if survey_polygon.centroid.within(bbox_polygon):
+                    # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+
                         polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
                         #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
-    
-                    else:
-                        polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
+
     
                     dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
                 # polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
@@ -283,5 +280,5 @@ class RestfulKMLQuery(Resource):
                 # neww = kml.save("test_polygon.kml")
                 return str(netcdf_file_folder)
             else:
-                empty_folder = kml.newfolder(name="no points in view")
+                empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
                 return str(empty_folder)
