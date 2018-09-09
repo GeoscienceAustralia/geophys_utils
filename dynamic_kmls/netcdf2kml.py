@@ -235,29 +235,27 @@ class NetCDF2kmlConverter(object):
                 subset_3d_array[:,0:2] = line_data['coordinates'][array_subset_indices]          
                 subset_3d_array[:,2] = line_data['lidar'][array_subset_indices] # Height above ground
                 
-                # build the line segments
-                for line_segment_index in range(points_in_subset-1):
-                    line_segment = line_folder.newlinestring(name=str("Line Segment: {}".format(line_segment_index)))
-    
-                    line_segment.coords = [list(subset_3d_array[line_segment_index]), list(subset_3d_array[line_segment_index+1])]
-                    line_segment.altitudemode = simplekml.AltitudeMode.relativetoground
-                    #line_segment.altitudemode = simplekml.AltitudeMode.clamptoground
-                    line_segment.extrude = 0
-                    line_segment.tessellate = 1
-                    line_segment.style.linestyle.width = self.line_width
-                    
-                    line_segment.style.linestyle.color = self.line_colour # Fixed colour
-                    #line_segment.style.linestyle.color = line_colour_map[line_number] # Rainbow colour scheme for lines
-    
-                    # build the line description
-                    description_string = '<![CDATA['
-                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number', str(line_number))
-                    description_string = description_string + ']]>'
-                    line_segment.description = description_string
-                    
-                    # Uncomment the following line to enable timestamps on line segments
-                    #self.set_timestamps(line_segment)
+                line_string = line_folder.newlinestring(name=str("Line number: {}".format(line_number)))
+                line_string.coords = subset_3d_array
+                line_string.altitudemode = simplekml.AltitudeMode.relativetoground
+                #line_segment.altitudemode = simplekml.AltitudeMode.clamptoground
+                line_string.extrude = 0
+                line_string.tessellate = 1
+                line_string.style.linestyle.width = self.line_width
+                
+                line_string.style.linestyle.color = self.line_colour # Fixed colour
+                #line_segment.style.linestyle.color = line_colour_map[line_number] # Rainbow colour scheme for lines
+                
+                # build the line description
+                description_string = '<![CDATA['
+                description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ', str(self.survey_title))
+                description_string = description_string + ']]>'
+                line_string.description = description_string
 
+                # Uncomment the following line to enable timestamps on lines
+                #self.set_timestamps(line_segment)
+
+               
                 # # # touring
                 # tour = kml.newgxtour(name="Play me!")
                 # playlist = tour.newgxplaylist()
