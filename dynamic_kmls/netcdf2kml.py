@@ -41,14 +41,22 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 # Define maximum number of segments to show per line
 MAX_SEGMENTS_PER_LINE = 100
 
-
-
+# Default values when not specified in settings
+DEFAULT_POLYGON_COLOUR = 'B30000ff'
+DEFAULT_POLYGON_OUTLINE = 1
+DEFAULT_LINE_COLOUR = simplekml.Color.yellowgreen
+DEFAULT_LINE_WIDTH = 5
+DEFAULT_POINT_ICON_SCALE = 0.7
+DEFAULT_POINT_LABELSTYLE_SCALE = 0 # 0 removes the label
+DEFAULT_POINT_ICON_HREF = 'http://maps.google.com/mapfiles/kml/paddle/grn-blank.png'
+DEFAULT_FLAGGED_POINT_ICON_COLOUR = 'ff000000'
+DEFAULT_POINT_COLOUR = 'ff32cd9a'
 
 class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME, DEFAULT_COLOUR_COUNT)
+    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME)
 
     def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
         '''
@@ -84,29 +92,40 @@ class NetCDF2kmlConverter(object):
         self.line_utils = None
         #self.grid_utils = None
         
-        self.thredds_metadata_link = dataset_settings['thredds_link']
+        self.thredds_metadata_link = dataset_settings.get('thredds_link') #TODO: Replace this with something more general
         self.polygon_style = simplekml.Style()
-        self.polygon_style.polystyle.color = dataset_settings['polygon_color']
-        self.polygon_style.polystyle.outline = dataset_settings['polygon_outline']
+        self.polygon_style.polystyle.color = dataset_settings.get('polygon_color') or DEFAULT_POLYGON_COLOUR
+        self.polygon_style.polystyle.outline = dataset_settings.get('polygon_outline') or DEFAULT_POLYGON_OUTLINE
+        
+        self.line_colour = dataset_settings.get('line_colour') or DEFAULT_LINE_COLOUR
+        self.line_width = dataset_settings.get('line_width') or DEFAULT_LINE_WIDTH
 
-        self.point_filter = dataset_settings.get('point_filter')
+        self.point_filter = dataset_settings.get('point_filter') # Dict containing field names & values to filter out
 
         self.point_style = simplekml.Style()
-        self.point_style.iconstyle.scale = dataset_settings['point_icon_scale']
-        self.point_style.labelstyle.scale = dataset_settings['point_labelstyle_scale']  # 0 removes the label
-        self.point_style.iconstyle.icon.href = dataset_settings['point_icon_href']
-        self.unflagged_point_icon_color_scheme = None  # insert function string
-        self.flagged_point_icon_color = 'ff000000'
+        self.point_style.iconstyle.scale = dataset_settings.get('point_icon_scale') or DEFAULT_POINT_ICON_SCALE
+        self.point_style.labelstyle.scale = dataset_settings.get('point_labelstyle_scale') or DEFAULT_POINT_LABELSTYLE_SCALE
+        self.point_style.iconstyle.icon.href = dataset_settings.get('point_icon_href') or DEFAULT_POINT_ICON_HREF
+        
+        self.filtered_point_icon_color = DEFAULT_FLAGGED_POINT_ICON_COLOUR
         
         point_colour_settings = dataset_settings.get('point_colour')
         if point_colour_settings:
-            self.point_colour_field = point_colour_settings[0]
-            self.point_colour_range = point_colour_settings[1]
-        else: #TODO: Do something sensible here if no colour mapping defined
+            if type(point_colour_settings) == list: # Variable point colour based on specified field value and range
+                self.point_colour_field = point_colour_settings[0]
+                self.point_colour_range = point_colour_settings[1]
+                self.point_colour = None
+            elif type(point_colour_settings) == str: # Fixed colour defined in settings
+                self.point_colour_field = None
+                self.point_colour_range = None
+                self.point_colour = point_colour_settings
+            else:
+                raise BaseException('Invalid point colour settings')
+        else: # No colour mapping defined - use default colour
             self.point_colour_field = None
             self.point_colour_range = None
-            
-
+            self.point_colour = DEFAULT_POINT_COLOUR
+        
         self.field_list = dataset_settings['point_field_list']
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
@@ -139,7 +158,7 @@ class NetCDF2kmlConverter(object):
         :return: the input parent folder now containing the polygon and the polygon itself if that is desired instead.
         """
         logger.debug("Building polygon...")
-        # get the polygon points from the netcdf global attributes
+        # get the polygon points from the polygon string
         try:
             polygon_bounds = [[float(ordinate)
                                for ordinate in coord_pair.strip().split(' ')
@@ -167,30 +186,15 @@ class NetCDF2kmlConverter(object):
             description_string = description_string + ']]>'
             pol.description = description_string
 
-            # Add timestamp
-            # if self.start_date is not None and self.end_date is not None:
-            try:
-                assert self.start_date > date(1900, 1, 1), 'Start date {} is less than 1900-01-01'.format(
-                    self.start_date)
-                assert self.end_date < date(2020, 1, 1), 'End date {} is greater than 2020-01-01'.format(self.end_date)
-                assert self.end_date > date(1900, 1, 1), 'End date {} is less than 1900-01-01'.format(self.end_date)
-                assert self.start_date < date(2020, 1, 1), 'Start date {} is greater than 2020-01-01'.format(
-                    self.start_date)
-                pol.timespan.begin = str(self.start_date)
-                pol.timespan.end = str(self.end_date)
-
-            except:  # if survey does not contain start/end date information, use survey id as start/end date year.
-                survey_year = int(re.match('^[0-9]{4}', str(self.survey_id)).group())
-                assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
-
-                pol.timespan.begin = str(survey_year) + "-06-01"
-                pol.timespan.end = str(survey_year) + "-07-01"
             pol.style = self.polygon_style
+            
+            self.set_timestamps(pol)
 
         except Exception as e:
             logger.warning("Unable to display polygon: {}".format(e))
 
         return parent_folder
+    
 
     def build_lines(self, netcdf_file_folder, bounding_box):
         
@@ -214,6 +218,7 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))
             line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
+                        
             number_of_points_in_line = len(line_data['coordinates'])
             if number_of_points_in_line:
                 #TODO: Determine the points per line according to length of line
@@ -232,24 +237,26 @@ class NetCDF2kmlConverter(object):
                 
                 # build the line segments
                 for line_segment_index in range(points_in_subset-1):
-                    linestring = line_folder.newlinestring(name=str("Line Segment: {}".format(line_segment_index)))
+                    line_segment = line_folder.newlinestring(name=str("Line Segment: {}".format(line_segment_index)))
     
-                    linestring.coords = [list(subset_3d_array[line_segment_index]), list(subset_3d_array[line_segment_index+1])]
-                    linestring.altitudemode = simplekml.AltitudeMode.relativetoground
-                    #linestring.altitudemode = simplekml.AltitudeMode.clamptoground
-                    linestring.extrude = 0
-                    linestring.tessellate = 1
-                    linestring.style.linestyle.width = 5
+                    line_segment.coords = [list(subset_3d_array[line_segment_index]), list(subset_3d_array[line_segment_index+1])]
+                    line_segment.altitudemode = simplekml.AltitudeMode.relativetoground
+                    #line_segment.altitudemode = simplekml.AltitudeMode.clamptoground
+                    line_segment.extrude = 0
+                    line_segment.tessellate = 1
+                    line_segment.style.linestyle.width = self.line_width
                     
-                    linestring.style.linestyle.color = simplekml.Color.yellowgreen # Fixed colour
-                    #linestring.style.linestyle.color = line_colour_map[line_number] # Rainbow colour scheme for lines
+                    line_segment.style.linestyle.color = self.line_colour # Fixed colour
+                    #line_segment.style.linestyle.color = line_colour_map[line_number] # Rainbow colour scheme for lines
     
-                    # build the polygon description
+                    # build the line description
                     description_string = '<![CDATA['
                     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Line Number', str(line_number))
                     description_string = description_string + ']]>'
-                    linestring.description = description_string
+                    line_segment.description = description_string
                     
+                    # Uncomment the following line to enable timestamps on line segments
+                    #self.set_timestamps(line_segment)
 
                 # # # touring
                 # tour = kml.newgxtour(name="Play me!")
@@ -331,20 +338,32 @@ class NetCDF2kmlConverter(object):
                 new_point = new_survey_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
                                                        coords=[(point_data['longitude'], point_data['latitude'])])
 
+                new_point.style = simplekml.Style()
+                new_point.style.iconstyle.scale = self.point_style.iconstyle.scale
+                new_point.style.labelstyle.scale = self.point_style.labelstyle.scale
+                new_point.style.iconstyle.icon.href = self.point_style.iconstyle.icon.href
+                
                 description_string = self.build_html_description_string(variable_attributes, point_data)
                 logger.debug(description_string)
                 new_point.description = description_string  # set description to point
+                
+                # Uncomment the following line to enable timestamps on points
+                #self.set_timestamps(new_point)
 
                 # styling
-                self.unflagged_point_icon_color_scheme = self.value2colourhex(point_data[self.point_colour_field], self.point_colour_range)
-                new_point.style = self.point_style  # sets the icon scale, labelstyle scale, icon link
+                if self.point_colour: # Fixed point colour
+                    unfiltered_point_icon_colour = self.point_colour
+                else: # Variable point colour
+                    unfiltered_point_icon_colour = self.value2colourhex(point_data[self.point_colour_field], self.point_colour_range)
+                
+                new_point.style.iconstyle.color = unfiltered_point_icon_colour
 
-                # Set the style for points if gridflag == 2
+                # Set the style for filtered points
                 if self.point_filter:  # if there is a point_flag separate the points and colour differently
                     logger.debug('self.point_filter: {}'.format(self.point_filter))
                     for key, value in self.point_filter.items():
                         if point_data[key] == value:
-                            new_point.style.iconstyle.color = self.flagged_point_icon_color
+                            new_point.style.iconstyle.color = self.filtered_point_icon_color
 
             return new_survey_folder
         else:
@@ -437,12 +456,42 @@ class NetCDF2kmlConverter(object):
         @param data_value: Data value for which to compute colour
         @param data_range: Tuple defining (min, max) of data values over which to compute colours
         @param colormap: matplotlib.mpl_cm.colormap obnect, or None to use class default colormap
+        @param clip: Boolean parameter indicating whether out-of-range values should be clipped to range
+        
         @return colourhex: KML colour definition string of form ff<rr><gg><bb>, e.g: 'ff60fac5'
         '''
         colormap = colormap or NetCDF2kmlConverter.default_colormap
-        scalar_mappable_object = mpl_cm.ScalarMappable(mpl_colors.Normalize(*data_range), colormap)
-        return mpl_colors.to_hex(scalar_mappable_object.to_rgba(data_value)).replace('#', 'ff')
+        
+        normalised_value = (data_value - data_range[0]) / (data_range[1] - data_range[0])
+        #normalised_value = min(1.0, max(0.0, (data_value - data_range[0]) / (data_range[1] - data_range[0])))
+        print(data_value, data_range, normalised_value, colormap(normalised_value), mpl_colors.to_hex(colormap(normalised_value)[:3]))
+        
+        return mpl_colors.rgb2hex(colormap(normalised_value)[:3]).replace('#', 'ff')
 
+
+    def set_timestamps(self, kml_entity):
+        '''
+        Function to set timestamps on specified kml_entity
+        '''
+        # Add timestamp
+        # if self.start_date is not None and self.end_date is not None:
+        try:
+            assert self.start_date > date(1900, 1, 1), 'Start date {} is less than 1900-01-01'.format(
+                self.start_date)
+            assert self.end_date < date(2020, 1, 1), 'End date {} is greater than 2020-01-01'.format(self.end_date)
+            assert self.end_date > date(1900, 1, 1), 'End date {} is less than 1900-01-01'.format(self.end_date)
+            assert self.start_date < date(2020, 1, 1), 'Start date {} is greater than 2020-01-01'.format(
+                self.start_date)
+            kml_entity.timespan.begin = str(self.start_date)
+            kml_entity.timespan.end = str(self.end_date)
+
+        except:  # if survey does not contain start/end date information, use survey id as start/end date year.
+            if self.survey_id:
+                survey_year = int(re.match('^[0-9]{4}', str(self.survey_id)).group())
+                assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
+
+                kml_entity.timespan.begin = str(survey_year) + "-06-01"
+                kml_entity.timespan.end = str(survey_year) + "-07-01"
 
 
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
