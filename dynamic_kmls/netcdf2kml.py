@@ -56,7 +56,7 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME)
+    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME, DEFAULT_COLOUR_COUNT)
 
     def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
         '''
@@ -217,8 +217,6 @@ class NetCDF2kmlConverter(object):
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, variables=['lidar'], bounds=bounding_box_floats):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))
-            line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
-                        
             number_of_points_in_line = len(line_data['coordinates'])
             if number_of_points_in_line:
                 #TODO: Determine the points per line according to length of line
@@ -235,7 +233,7 @@ class NetCDF2kmlConverter(object):
                 subset_3d_array[:,0:2] = line_data['coordinates'][array_subset_indices]          
                 subset_3d_array[:,2] = line_data['lidar'][array_subset_indices] # Height above ground
                 
-                line_string = line_folder.newlinestring(name=str("Line number: {}".format(line_number)))
+                line_string = netcdf_file_folder.newlinestring(name=str("Line number: {}".format(line_number)))
                 line_string.coords = subset_3d_array
                 line_string.altitudemode = simplekml.AltitudeMode.relativetoground
                 #line_segment.altitudemode = simplekml.AltitudeMode.clamptoground
@@ -461,8 +459,6 @@ class NetCDF2kmlConverter(object):
         colormap = colormap or NetCDF2kmlConverter.default_colormap
         
         normalised_value = (data_value - data_range[0]) / (data_range[1] - data_range[0])
-        #normalised_value = min(1.0, max(0.0, (data_value - data_range[0]) / (data_range[1] - data_range[0])))
-        print(data_value, data_range, normalised_value, colormap(normalised_value), mpl_colors.to_hex(colormap(normalised_value)[:3]))
         
         return mpl_colors.rgb2hex(colormap(normalised_value)[:3]).replace('#', 'ff')
 
