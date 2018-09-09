@@ -20,8 +20,8 @@ Created on 03/08/2018
 '''
 import simplekml
 import re
-import matplotlib.pyplot as plt
-import matplotlib as mpl
+import matplotlib.cm as mpl_cm
+import matplotlib.colors as mpl_colors
 import logging
 from datetime import date
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
@@ -29,33 +29,27 @@ import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import numpy as np
 
-COLORMAP_NAME = 'rainbow'
+DEFAULT_COLORMAP_NAME = 'rainbow'
+DEFAULT_COLOUR_COUNT = 512
+
+
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
-MAX_POINTS_PER_LINE = 100
+# Define maximum number of segments to show per line
+MAX_SEGMENTS_PER_LINE = 100
 
 
-def convert_value_from_old_to_new_range(value_to_convert, old_range_min, old_range_max, new_range_min, new_range_max):
-    '''
-    Helper function to convert a value from a np array to a value within a desired range. Essentially it converts a number in one
-    range to a number in another range, while maintaining the ratio.
-    '''
-    old_min = old_range_min
-    old_range = old_range_max - old_range_min
-    new_range = new_range_max - new_range_min
-
-    new_value = (((value_to_convert - old_min) * new_range) / old_range) + 0
-
-    return new_value
 
 
 class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
+    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME, DEFAULT_COLOUR_COUNT)
+
     def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
         '''
         Constructor for NetCDF2kmlConverter class
@@ -81,7 +75,6 @@ class NetCDF2kmlConverter(object):
 
         self.start_date = metadata_dict['start_date']
         self.end_date = metadata_dict['end_date']
-        self.colormap = plt.cm.get_cmap(COLORMAP_NAME, 256)
 
         self.netcdf_path = netcdf_path
 
@@ -204,23 +197,29 @@ class NetCDF2kmlConverter(object):
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
         self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset)
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
+        
+        #=======================================================================
+        # # Set up colour map for rainbow colour scheme
+        # line_index_range = (0, len(self.line_utils.line)-1)
+        # line_colour_map = {self.line_utils.line[line_index]: self.value2colourhex(line_index, 
+        #                                                                      line_index_range)
+        #                    for line_index in range(0, len(self.line_utils.line))
+        #                    }
+        #=======================================================================
 
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
-        line_list = [line for line in self.netcdf_dataset.variables['line']]
-        #logger.debug("List of ALL lines: {}".format(line_list))
-
-        for line_number, line_data in self.line_utils.get_lines(line_list, variables=['lidar'], bounds=bounding_box_floats):
+        for line_number, line_data in self.line_utils.get_lines(line_numbers=None, variables=['lidar'], bounds=bounding_box_floats):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))
             line_folder = netcdf_file_folder.newfolder(name="Line Number: {}".format(line_number))
             number_of_points_in_line = len(line_data['coordinates'])
             if number_of_points_in_line:
                 #TODO: Determine the points per line according to length of line
-                point_step = max(1, number_of_points_in_line // MAX_POINTS_PER_LINE)
+                point_step = max(1, number_of_points_in_line // MAX_SEGMENTS_PER_LINE)
                 
-                # Create array of subset indicies, including the index of the last point if not in subsample indices
+                # Create array of subset indices, including the index of the last point if not in subsample indices
                 array_subset_indices = np.unique(np.concatenate((np.arange(0, number_of_points_in_line, point_step),
                                                                  np.array([number_of_points_in_line-1])),
                                                                 axis=None)
@@ -241,7 +240,9 @@ class NetCDF2kmlConverter(object):
                     linestring.extrude = 0
                     linestring.tessellate = 1
                     linestring.style.linestyle.width = 5
-                    linestring.style.linestyle.color = simplekml.Color.yellowgreen
+                    
+                    linestring.style.linestyle.color = simplekml.Color.yellowgreen # Fixed colour
+                    #linestring.style.linestyle.color = line_colour_map[line_number] # Rainbow colour scheme for lines
     
                     # build the polygon description
                     description_string = '<![CDATA['
@@ -429,17 +430,19 @@ class NetCDF2kmlConverter(object):
         points_folder.region = dataset_points_region  # insert built point region into point folder
         return self.kml
 
-    def value2colourhex(self, data_value, data_range):
-        '''
-        Function to convert data value to hex string for color in self.colormap
-        '''
-        cmap_value = int(convert_value_from_old_to_new_range(data_value, *data_range, 0, 255))
-        # logger.debug(cmap_value)
-        # logger.debug(str(self.colormap(cmap_value)[:3]))
-        # logger.debug(str(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3])))
-        # logger.debug(mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]))
 
-        return mpl.colors.rgb2hex(self.colormap(cmap_value)[:3]).replace('#', 'ff')
+    def value2colourhex(self, data_value, data_range, colormap=None):
+        '''
+        Function to convert data value to hex string for color in colormap_name
+        @param data_value: Data value for which to compute colour
+        @param data_range: Tuple defining (min, max) of data values over which to compute colours
+        @param colormap: matplotlib.mpl_cm.colormap obnect, or None to use class default colormap
+        @return colourhex: KML colour definition string of form ff<rr><gg><bb>, e.g: 'ff60fac5'
+        '''
+        colormap = colormap or NetCDF2kmlConverter.default_colormap
+        scalar_mappable_object = mpl_cm.ScalarMappable(mpl_colors.Normalize(*data_range), colormap)
+        return mpl_colors.to_hex(scalar_mappable_object.to_rgba(data_value)).replace('#', 'ff')
+
 
 
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
