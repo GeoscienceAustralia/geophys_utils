@@ -199,7 +199,7 @@ class NetCDF2kmlConverter(object):
     def build_lines(self, netcdf_file_folder, bounding_box):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset)
+        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, enable_cache=False)
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================

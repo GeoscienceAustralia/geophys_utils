@@ -58,7 +58,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  debug=False):
         '''
         NetCDFPointUtils Constructor
-        @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
+        @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
         @parameter enable_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
         '''
         # Start of init function - Call inherited constructor first
@@ -122,7 +122,7 @@ class NetCDFPointUtils(NetCDFUtils):
         # Define bounds
         self.bounds = [xmin, ymin, xmax, ymax]
                
-        self.kdtree = None
+        self.kdtree = None # Don't set up kdtree until required
         
     def __del__(self):
         '''
