@@ -109,7 +109,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.warning('Invalid line number %d' % line_number)
                 continue # Should this be break?
             
-            line_mask = self.line_indices[:] == line_index
+            line_mask = self.line_index[:] == line_index
             logger.debug('line_mask: {}'.format(line_mask))  
             
             yield line_number, line_mask
@@ -167,11 +167,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         if line_variable.shape: # Multiple lines
             #line_values = self.fetch_array(line_variable)
             line_values = line_variable[:] # Should be small enough to retrieve in one hit
-            #self.line_count = line_variable.shape[0]
             
         else: # Scalar - only one line
             line_values = line_variable[:].reshape((1,)) # Change scalar to single-element 1D array
-            #self.line_count = 1
             
         return line_values
     
@@ -183,7 +181,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_index_variable = self.netcdf_dataset.variables.get('line_index')
             if line_index_variable: # Lookup format lines - Current format
                 logger.debug('Line data is in lookup format (current)')
-                line_indices = self.fetch_array(line_index_variable)
+                #line_indices = self.fetch_array(line_index_variable)
+                line_indices = line_index_variable[:]
             else: # Indexing format lines - OLD FORMAT
                 raise BaseException('Line data is in indexing format (unsupported)')
             
@@ -194,101 +193,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                                     ) 
             
         return line_indices
-    
-        
-    #===========================================================================
-    # def get_line_values1(self):
-    #     line_variable = self.netcdf_dataset.variables.get('line')
-    #     assert line_variable, 'Variable "line" does not exist in netCDF file'
-    #     if line_variable.shape: # Multiple lines
-    #         line_values = self.fetch_array(line_variable)
-    #         self.line_count = line_variable.shape[0]
-    #         line_index_variable = self.netcdf_dataset.variables.get('line_index')
-    #         if line_index_variable: # Lookup format lines - Current format
-    #             logger.debug('Line data is in lookup format (current)')
-    #             line_indices = self.fetch_array(line_index_variable)
-    #             line_index_dtype = line_index_variable.dtype
-    #             line_index_var_options = line_index_variable.filters() or {}
-    #         else: # Indexing format lines - OLD FORMAT
-    #             #TODO: Get rid of this case when we stop using old format data
-    #             index_line_variable = self.netcdf_dataset.variables.get('index_line')
-    #             index_count_variable = self.netcdf_dataset.variables.get('index_count')
-    #             assert (index_line_variable.dimensions[0] == 'line'
-    #                     and index_count_variable.dimensions[0] == 'line'), 'Invalid line variable dimensioning'
-    #             logger.warning('Line data is in indexing format (deprecated)')
-    #             
-    #             # Synthesise line index array from start & count values
-    #             line_indices = np.zeros(shape=(self.point_count,), 
-    #                                     dtype=('int8' if len(line_values) <= 127
-    #                                         else 'int16' if len(line_values) <= 32768
-    #                                             else 'int32')
-    #                                     )
-    #             for line_index in range(len(line_values)):
-    #                 line_indices[index_line_variable[line_index]:index_line_variable[line_index]+index_count_variable[line_index]] = line_index         
-    #             
-    #             line_index_dtype = index_line_variable.dtype
-    #             line_index_var_options = index_line_variable.filters() or {}
-    #     else: # Scalar
-    #         line_values = line_variable[:].reshape((1,)) # Change scalar to 1D array
-    #         self.line_count = 1
-    #         # Synthesize line_indices array with all zeroes for single value
-    #         line_indices = np.zeros(shape=(self.point_count,), 
-    #                                 dtype=('int8' if len(line_values) <= 127
-    #                                         else 'int16' if len(line_values) <= 32768
-    #                                             else 'int32')
-    #                                 ) 
-    #         line_index_dtype = 'int8'
-    #         line_index_var_options = {}    
-    #         
-    #     return line_values, line_index_dtype, line_index_var_options
-    # 
-    # 
-    # def get_line_values2(self):
-    #     line_variable = self.netcdf_dataset.variables.get('line')
-    #     assert line_variable, 'Variable "line" does not exist in netCDF file'
-    #     if line_variable.shape: # Multiple lines
-    #         line_values = self.fetch_array(line_variable)
-    #         self.line_count = line_variable.shape[0]
-    #         line_index_variable = self.netcdf_dataset.variables.get('line_index')
-    #         if line_index_variable: # Lookup format lines - Current format
-    #             logger.debug('Line data is in lookup format (current)')
-    #             line_indices = self.fetch_array(line_index_variable)
-    #             line_index_dtype = line_index_variable.dtype
-    #             line_index_var_options = line_index_variable.filters() or {}
-    #         else: # Indexing format lines - OLD FORMAT
-    #             #TODO: Get rid of this case when we stop using old format data
-    #             index_line_variable = self.netcdf_dataset.variables.get('index_line')
-    #             index_count_variable = self.netcdf_dataset.variables.get('index_count')
-    #             assert (index_line_variable.dimensions[0] == 'line'
-    #                     and index_count_variable.dimensions[0] == 'line'), 'Invalid line variable dimensioning'
-    #             logger.warning('Line data is in indexing format (deprecated)')
-    #             
-    #             # Synthesise line index array from start & count values
-    #             line_indices = np.zeros(shape=(self.point_count,), 
-    #                                     dtype=('int8' if len(line_values) <= 127
-    #                                         else 'int16' if len(line_values) <= 32768
-    #                                             else 'int32')
-    #                                     )
-    #             for line_index in range(len(line_values)):
-    #                 line_indices[index_line_variable[line_index]:index_line_variable[line_index]+index_count_variable[line_index]] = line_index         
-    #             
-    #             line_index_dtype = index_line_variable.dtype
-    #             line_index_var_options = index_line_variable.filters() or {}
-    #     else: # Scalar
-    #         line_values = line_variable[:].reshape((1,)) # Change scalar to 1D array
-    #         self.line_count = 1
-    #         # Synthesize line_indices array with all zeroes for single value
-    #         line_indices = np.zeros(shape=(self.point_count,), 
-    #                                 dtype=('int8' if len(line_values) <= 127
-    #                                         else 'int16' if len(line_values) <= 32768
-    #                                             else 'int32')
-    #                                 ) 
-    #         line_index_dtype = 'int8'
-    #         line_index_var_options = {}    
-    #         
-    #     return line_values, line_index_dtype, line_index_var_options
-    #===========================================================================
-    
+      
     
     @property
     def line(self):
@@ -302,11 +207,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
     
     
     @property
-    def line_indices(self):
+    def line_index(self):
         '''
         Property get method to return array of line_indices for all points
         '''
         if self.enable_cache:
-            return self._nc_cache_dataset.variables['line_indices'][:]
+            return self._nc_cache_dataset.variables['line_index'][:]
         else:
             return self.get_line_indices()
