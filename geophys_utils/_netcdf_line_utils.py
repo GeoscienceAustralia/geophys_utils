@@ -101,27 +101,34 @@ class NetCDFLineUtils(NetCDFPointUtils):
         except TypeError:
             line_numbers = [line_numbers]
 
-        #TODO: Vectorise this operation
+        all_line_numbers = self.line[:]
+        line_indices = self.line_index[:]
         for line_number in line_numbers:
             try:
-                line_index = int(np.where(self.line[:] == line_number)[0])
+                line_index = int(np.where(all_line_numbers == line_number)[0])
             except TypeError:
                 logger.warning('Invalid line number %d' % line_number)
                 continue # Should this be break?
             
-            line_mask = self.line_index[:] == line_index
-            logger.debug('line_mask: {}'.format(line_mask))  
+            line_mask = (line_indices == line_index)
+            logger.debug('Line {} has {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
             yield line_number, line_mask
     
     
-    def get_lines(self, line_numbers=None, variables=None, bounds=None, bounds_wkt=None):
+    def get_lines(self, line_numbers=None, 
+                  variables=None, 
+                  bounds=None, 
+                  bounds_wkt=None,
+                  stride=None
+                  ):
         '''
         Generator to return coordinates and specified variable values for specified lines
         @param line_numbers: list of integer line number or single integer line number
         @param variables: list of variable name strings or single variable name string
         @param bounds: Spatial bounds for point selection
         @param bounds_wkt: WKT for bounds Coordinate Reference System 
+        @param stride: Stride between points
         
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
@@ -146,12 +153,23 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         
-        for line_number in line_numbers:
-            _line_number, line_mask = next(self.get_line_masks(line_numbers=line_number)) # Only one mask per line
+        for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
-            if len(point_indices):
+            line_point_count = len(point_indices)
+            if line_point_count:
+                # Use subset of indices if stride is set
+                if stride:
+                    # Create array of subset indices, including the index of the last point if not already in subsample indices
+                    subset_indices = np.unique(np.concatenate((np.arange(0, line_point_count, stride),
+                                                              np.array([line_point_count-1])),
+                                                              axis=None)
+                                                              )
+                    logger.debug('Subset of line {} has {} points'.format(line_number, len(subset_indices)))
+                    point_indices = point_indices[subset_indices]
+                    
                 line_dict = {'coordinates': self.xycoords[point_indices]}
+                # Add <variable_name>: <variable_array> for each specified variable
                 for variable_name in variables:
                     line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
         

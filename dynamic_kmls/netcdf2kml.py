@@ -28,6 +28,7 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import numpy as np
+from dynamic_kmls import DEBUG
 
 DEFAULT_COLORMAP_NAME = 'rainbow'
 DEFAULT_COLOUR_COUNT = 512
@@ -38,8 +39,8 @@ DEFAULT_COLOUR_COUNT = 512
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
-# Define maximum number of segments to show per line
-MAX_SEGMENTS_PER_LINE = 100
+# Define stride for line sub-sampling
+LINE_SEGMENT_STRIDE = 200
 
 # Default values when not specified in settings
 DEFAULT_POLYGON_COLOUR = 'B30000ff'
@@ -199,7 +200,7 @@ class NetCDF2kmlConverter(object):
     def build_lines(self, netcdf_file_folder, bounding_box):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, enable_cache=False)
+        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================
@@ -214,24 +215,19 @@ class NetCDF2kmlConverter(object):
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
-        for line_number, line_data in self.line_utils.get_lines(line_numbers=None, variables=['lidar'], bounds=bounding_box_floats):
+        for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
+                                                                variables=['lidar'], 
+                                                                bounds=bounding_box_floats,
+                                                                stride = LINE_SEGMENT_STRIDE
+                                                                ):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))
-            number_of_points_in_line = len(line_data['coordinates'])
-            if number_of_points_in_line:
-                #TODO: Determine the points per line according to length of line
-                point_step = max(1, number_of_points_in_line // MAX_SEGMENTS_PER_LINE)
-                
-                # Create array of subset indices, including the index of the last point if not in subsample indices
-                array_subset_indices = np.unique(np.concatenate((np.arange(0, number_of_points_in_line, point_step),
-                                                                 np.array([number_of_points_in_line-1])),
-                                                                axis=None)
-                                                 )
-                points_in_subset = len(array_subset_indices)
+            points_in_subset = len(line_data['coordinates'])
+            if points_in_subset:
                 subset_3d_array = np.zeros(shape=(points_in_subset, 3), dtype=line_data['coordinates'].dtype)
                 # Populate coords_3d_array with (x,y,z) coordinates
-                subset_3d_array[:,0:2] = line_data['coordinates'][array_subset_indices]          
-                subset_3d_array[:,2] = line_data['lidar'][array_subset_indices] # Height above ground
+                subset_3d_array[:,0:2] = line_data['coordinates']      
+                subset_3d_array[:,2] = line_data['lidar'] # Height above ground
                 
                 line_string = netcdf_file_folder.newlinestring(name=str("Line number: {}".format(line_number)))
                 line_string.coords = subset_3d_array
@@ -292,7 +288,7 @@ class NetCDF2kmlConverter(object):
         logger.debug('bounding_box:' + str(bounding_box))
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset)
+        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
         
         if not self.point_utils.point_count:
             return None
