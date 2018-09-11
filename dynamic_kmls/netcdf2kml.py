@@ -221,17 +221,17 @@ class NetCDF2kmlConverter(object):
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
         # Compute segment length as a proportion of the height of bounding box
-        segment_length = (bounding_box_floats[3] - bounding_box_floats[1]) / self.line_segments_across_bbox
+        subsampling_distance = (bounding_box_floats[3] - bounding_box_floats[1]) / self.line_segments_across_bbox
         
         if self.height_variable:
-            height_variable = self.height_variable # e.g. 'lidar'
+            height_variable = [self.height_variable] # e.g. ['lidar']
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
                                                                 bounds=bounding_box_floats,
-                                                                segment_length = segment_length
+                                                                subsampling_distance=subsampling_distance
                                                                 ):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))

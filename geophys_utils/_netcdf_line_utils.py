@@ -125,7 +125,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                   variables=None, 
                   bounds=None, 
                   bounds_wkt=None,
-                  segment_length=None
+                  subsampling_distance=None
                   ):
         '''
         Generator to return coordinates and specified variable values for specified lines
@@ -133,7 +133,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param variables: list of variable name strings or single variable name string. None returns all variables
         @param bounds: Spatial bounds for point selection
         @param bounds_wkt: WKT for bounds Coordinate Reference System 
-        @param stride: Stride between points
+        @param subsampling_distance: Minimum subsampling_distance expressed in native coordinate units (e.g. degrees)
         
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
@@ -160,7 +160,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         
-        logger.debug('segment_length: {}'.format(segment_length))
+        logger.debug('subsampling_distance: {}'.format(subsampling_distance))
         for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
@@ -168,10 +168,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_point_count = len(point_indices)
             if line_point_count:
                 # Use subset of indices if stride is set
-                if segment_length:
+                if subsampling_distance:
                     line_length = pdist([self.xycoords[point_indices[0]], self.xycoords[point_indices[-1]]])[0]
                     logger.debug('line_length: {}'.format(line_length))
-                    stride = int(line_point_count/max(1, line_length/segment_length))
+                    stride = int(line_point_count/max(1, line_length/subsampling_distance))
                     logger.debug('stride: {}'.format(stride))
                     # Create array of subset indices, including the index of the last point if not already in subsample indices
                     subset_indices = np.unique(np.concatenate((np.arange(0, line_point_count, stride),
