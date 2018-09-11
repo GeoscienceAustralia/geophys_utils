@@ -116,7 +116,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 continue # Should this be break?
             
             line_mask = (self.line_index == line_index)
-            logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
+            #logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
             yield line_number, line_mask
     
@@ -164,7 +164,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
-            logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
+            #logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
             line_point_count = len(point_indices)
             if line_point_count:
                 # Use subset of indices if stride is set

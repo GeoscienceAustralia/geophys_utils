@@ -61,12 +61,13 @@ class RestfulKMLQuery(Resource):
         # Determine which KML generation function to call based on dataset_settings['format']
         get_kml_function = get_kml_functions.get(dataset_settings['format'])
         
-        bbox = request.args['BBOX'] 
+        bbox = request.args['BBOX']
+        bbox_list = [float(ordinate) for ordinate in bbox.split(',')]
     
         # return polygon KML for low zoom
-        kml = self.build_polygon_kml(bbox, dataset_type, settings)
+        kml = self.build_polygon_kml(bbox_list, dataset_type, settings)
         if not kml: # High zoom - plot detailed dataset
-            kml = get_kml_function(self, bbox, dataset_type, settings)
+            kml = get_kml_function(self, bbox_list, dataset_type, settings)
         
         response = make_response(kml)
         response.headers['content-type'] = 'application/vnd.google-earth.kml+xml'
@@ -83,10 +84,22 @@ class RestfulKMLQuery(Resource):
             return opendap_endpoint
         
 
-    def build_grid_dataset_kml(self, bbox, dataset_type, settings):
+    def polygon_from_bbox_list(self, bbox_list):
+        '''
+        Helper function to return bounding box rectangle from [<xmin>, <ymin>, <xmax>, <ymax>] list
+        '''
+        return Polygon(((bbox_list[0], bbox_list[1]),
+                        (bbox_list[2], bbox_list[1]),
+                        (bbox_list[2], bbox_list[3]),
+                        (bbox_list[0], bbox_list[3]),
+                        (bbox_list[0], bbox_list[1])
+                        ))
+        
+            
+    def build_grid_dataset_kml(self, bbox_list, dataset_type, settings):
         '''
         Function to build KML for grid datasets
-        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param bbox_list: List of bounding box ordinates of form [<xmin>, <ymin>, <xmax>, <ymax>]
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
         @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
@@ -94,28 +107,15 @@ class RestfulKMLQuery(Resource):
         pass
     
     
-    def build_line_dataset_kml(self, bbox, dataset_type, settings):
+    def build_line_dataset_kml(self, bbox_list, dataset_type, settings):
         '''
         Function to build KML for line datasets
-        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param bbox_list: List of bounding box ordinates of form [<xmin>, <ymin>, <xmax>, <ymax>]
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
         @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
 
-        bbox_list = bbox.split(',')
-        west = float(bbox_list[0])
-        south = float(bbox_list[1])
-        east = float(bbox_list[2])
-        north = float(bbox_list[3])
-    
-        bbox_polygon = Polygon(((west, south),
-                                (east, south),
-                                (east, north),
-                                (west, north),
-                                (west, south)
-                                ))
-    
         t1 = time.time()
         logger.debug("Retrieve bbox values from get request...")
         logger.debug("Time: " + str(t1 - t0))
@@ -129,10 +129,10 @@ class RestfulKMLQuery(Resource):
         dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
-            ll_ur_coords=[[west, south], [east, north]]
+            ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
         )
     
-        logger.debug([[west, south], [east, north]])
+        logger.debug([[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]])
         t2 = time.time()
         logger.debug("Retrieve dataset_metadata_dict strings from database...")
         logger.debug("Time: " + str(t2 - t1))
@@ -162,11 +162,11 @@ class RestfulKMLQuery(Resource):
                     logger.debug('Invalid geometry for polygon {}: {}'.format(dataset_metadata_dict.get('convex_hull_polygon'), e))
                     continue  # Skip this polygon
 
-                if survey_polygon.intersects(bbox_polygon):
-                # if survey_polygon.within(bbox_polygon):
-                # if not survey_polygon.contains(bbox_polygon):
-                # if survey_polygon.centroid.within(bbox_polygon):
-                # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+                if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
+                # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
+                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
+                # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
+                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
 
                     netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
 
@@ -181,27 +181,14 @@ class RestfulKMLQuery(Resource):
     #grav
     
     #@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
-    def build_point_dataset_kml(self, bbox, dataset_type, settings):
+    def build_point_dataset_kml(self, bbox_list, dataset_type, settings):
         '''
         Function to build KML for point datasets
-        @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
+        @param bbox_list: List of bounding box ordinates of form [<xmin>, <ymin>, <xmax>, <ymax>]
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
         @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
-    
-        bbox_list = bbox.split(',')
-        west = float(bbox_list[0])
-        south = float(bbox_list[1])
-        east = float(bbox_list[2])
-        north = float(bbox_list[3])
-    
-        bbox_polygon = Polygon(((west, south),
-                                (east, south),
-                                (east, north),
-                                (west, north),
-                                (west, south)
-                                ))
     
         t1 = time.time()
         logger.debug("Retrieve bbox values from get request...")
@@ -213,10 +200,10 @@ class RestfulKMLQuery(Resource):
         dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
-            ll_ur_coords=[[west, south], [east, north]]
+            ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
             )
         
-        logger.debug([[west, south], [east, north]])
+        logger.debug([[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]])
         t2 = time.time()
         logger.debug("Retrieve dataset_metadata_dict strings from database...")
         logger.debug("Time: " + str(t2 - t1))
@@ -254,20 +241,7 @@ class RestfulKMLQuery(Resource):
             return empty_folder
     
 
-    def build_polygon_kml(self, bbox, dataset_type, settings):
-        
-        bbox_list = bbox.split(',')
-        west = float(bbox_list[0])
-        south = float(bbox_list[1])
-        east = float(bbox_list[2])
-        north = float(bbox_list[3])
-    
-        bbox_polygon = Polygon(((west, south),
-                                (east, south),
-                                (east, north),
-                                (west, north),
-                                (west, south)
-                                ))
+    def build_polygon_kml(self, bbox_list, dataset_type, settings):
         
         dataset_settings = settings['dataset_settings'][dataset_type]
         
@@ -275,11 +249,11 @@ class RestfulKMLQuery(Resource):
         dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
-            ll_ur_coords=[[west, south], [east, north]]       
+            ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]       
             )
         # ----------------------------------------------------------------------------------------------------------------
         # Low zoom: show polygons and not points or lines.
-        if ((east - west) >= dataset_settings['min_polygon_bbox_width']):            
+        if ((bbox_list[2] - bbox_list[0]) >= dataset_settings['min_polygon_bbox_width']):            
             logger.debug('Getting {} polygons'.format(dataset_type))
             t_polygon_1 = time.time()
     
@@ -302,11 +276,11 @@ class RestfulKMLQuery(Resource):
                         # print(e)
                         continue  # Skip this polygon
     
-                    if survey_polygon.intersects(bbox_polygon):
-                    # if survey_polygon.within(bbox_polygon):
-                    # if not survey_polygon.contains(bbox_polygon):
-                    # if survey_polygon.centroid.within(bbox_polygon):
-                    # if not survey_polygon.contains(bbox_polygon) and survey_polygon.centroid.within(bbox_polygon):
+                    if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
+                    # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
+                    # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
+                    # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
+                    # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
 
                         polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
                         #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
