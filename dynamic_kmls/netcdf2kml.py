@@ -224,7 +224,7 @@ class NetCDF2kmlConverter(object):
         subsampling_distance = (bounding_box_floats[3] - bounding_box_floats[1]) / self.line_segments_across_bbox
         
         if self.height_variable:
-            height_variable = [self.height_variable] # e.g. ['lidar']
+            height_variable = self.height_variable # e.g. 'lidar'
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
