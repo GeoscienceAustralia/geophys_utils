@@ -2,7 +2,7 @@ ground_gravity:
   format: point
   keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
   netcdf_file_folder_name: Ground Gravity Surveys
-  netcdf_path_prefix: C:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
+  netcdf_path_prefix: C:\Users\u62231\Desktop\grav_data_10_july # Local directory containing files. Leave empty to use OPeNDAP
   point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>)) or static colour
   - bouguer
   - [-500, 500]
@@ -19,7 +19,7 @@ aem:
   format: line
   keyword_list: [geophysics, airborne, AEM, conductivity]
   netcdf_file_folder_name: AEM Surveys
-  netcdf_path_prefix: C:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
+  netcdf_path_prefix: C:\Users\u62231\Desktop\aem_data # Local directory containing files. Leave empty to use OPeNDAP
   point_field_list: [line_index, latitude, longitude, lidar, mag, gps_elevation]
   point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
   point_icon_scale: 0.7
