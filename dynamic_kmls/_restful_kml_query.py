@@ -16,9 +16,6 @@ from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
 #from pprint import pformat
 
-# Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
-MAX_BOX_WIDTH_FOR_POINTS = 1.5
-
 logger = logging.getLogger(__name__)
 if DEBUG:
     logger.setLevel(logging.DEBUG) # Initial logging level for this module
@@ -28,7 +25,7 @@ else:
 
 settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
                                             'netcdf2kml_settings.yml')))
-#print('settings: {}'.format(pformat(settings)))
+print('settings = {}'.format(settings))
 #print('settings: {}'.format(yaml.safe_dump(settings)))
 
 class RestfulKMLQuery(Resource):
@@ -55,7 +52,8 @@ class RestfulKMLQuery(Resource):
                              'grid': RestfulKMLQuery.build_grid_dataset_kml
                              }
         
-        dataset_settings = settings.get(dataset_type)
+
+        dataset_settings = settings['dataset_settings'].get(dataset_type)
         
         #TODO: Handle this more gracefully
         assert dataset_settings, 'Invalid dataset type "{}"'.format(dataset_type)
@@ -65,7 +63,7 @@ class RestfulKMLQuery(Resource):
         
         bbox = request.args['BBOX'] 
     
-        xml = get_kml_function(self, bbox, dataset_type, dataset_settings)
+        xml = get_kml_function(self, bbox, dataset_type, settings)
         
         response = make_response(xml)
         response.headers['content-type'] = 'application/vnd.google-earth.kml+xml'
@@ -82,23 +80,23 @@ class RestfulKMLQuery(Resource):
             return opendap_endpoint
         
 
-    def build_grid_dataset_kml(self, bbox, dataset_type, dataset_settings):
+    def build_grid_dataset_kml(self, bbox, dataset_type, settings):
         '''
         Function to build KML for grid datasets
         @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
-        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
+        @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
         #TODO: Implement this
         pass
     
     
-    def build_line_dataset_kml(self, bbox, dataset_type, dataset_settings):
+    def build_line_dataset_kml(self, bbox, dataset_type, settings):
         '''
         Function to build KML for line datasets
         @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
-        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
+        @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
 
@@ -122,6 +120,8 @@ class RestfulKMLQuery(Resource):
         logger.debug('Getting {} lines'.format(dataset_type))
     
         # Get the dataset_metadata_dict surveys from the database that are within the bbox
+        
+        dataset_settings = settings['dataset_settings'][dataset_type]
         
         dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
@@ -148,7 +148,7 @@ class RestfulKMLQuery(Resource):
 
                 netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                 
-                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
                 t_polygon_2 = time.time()
                 logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
@@ -178,12 +178,12 @@ class RestfulKMLQuery(Resource):
     #grav
     
     #@app.route('/ground_gravity/<bounding_box>', methods=['GET'])
-    def build_point_dataset_kml(self, bbox, dataset_type, dataset_settings):
+    def build_point_dataset_kml(self, bbox, dataset_type, settings):
         '''
         Function to build KML for point datasets
         @param bbox: Bounding box query parameter, e.g: BBOX=133.8666248233259,-16.80720537521252,135.0274640184073,-16.1150287021518
         @param dataset_type: dataset type string - must be a valid key in settings: e.g. 'aem' or 'ground_gravity'
-        @param dataset_settings: settings for dataset_type as read from netcdf2kml_settings.yml settings file
+        @param settings: settings as read from netcdf2kml_settings.yml settings file
         '''
         t0 = time.time()  # retrieve coordinates from query
     
@@ -204,6 +204,8 @@ class RestfulKMLQuery(Resource):
         logger.debug("Retrieve bbox values from get request...")
         logger.debug("Time: " + str(t1 - t0))
     
+        dataset_settings = settings['dataset_settings'][dataset_type]
+        
         # Get the dataset_metadata_dict surveys from the database that are within the bbox
         dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
             keyword_list=dataset_settings['keyword_list'],
@@ -222,14 +224,14 @@ class RestfulKMLQuery(Resource):
     
         # ----------------------------------------------------------------------------------------------------------------
         # High zoom: show points rather than polygons.
-        if east - west < MAX_BOX_WIDTH_FOR_POINTS:
+        if east - west < settings['min_polygon_bbox_width']:
             logger.debug('Getting {} points'.format(dataset_type))
             if len(dataset_metadata_dict_list) > 0:
                 for dataset_metadata_dict in dataset_metadata_dict_list:                   
                     netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                     
                     logger.debug("Building NETCDF: {} ".format(netcdf_path))
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
                     t3 = time.time()
                     logger.debug("set style and create netcdf2kmlconverter instance...")
                     logger.debug("Time: " + str(t3 - t2))
@@ -263,7 +265,7 @@ class RestfulKMLQuery(Resource):
                 for dataset_metadata_dict in dataset_metadata_dict_list:
                     netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                     #logger.debug(netcdf_path)
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, dataset_settings, dataset_metadata_dict)
+                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
                     t_polygon_2 = time.time()
                     logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
                     logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))

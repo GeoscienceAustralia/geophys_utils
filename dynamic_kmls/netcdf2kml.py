@@ -30,17 +30,9 @@ from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import numpy as np
 from dynamic_kmls import DEBUG
 
-DEFAULT_COLORMAP_NAME = 'rainbow'
-DEFAULT_COLOUR_COUNT = 512
-
-
-
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
-
-# Define number of line segments to show across bounding box height for line sub-sampling
-LINE_SEGMENTS_ACROSS_BBOX = 100
 
 # Default values when not specified in settings
 DEFAULT_POLYGON_COLOUR = 'B30000ff'
@@ -57,9 +49,7 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    default_colormap = mpl_cm.get_cmap(DEFAULT_COLORMAP_NAME, DEFAULT_COLOUR_COUNT)
-
-    def __init__(self, netcdf_path, dataset_settings, metadata_dict=None):
+    def __init__(self, netcdf_path, settings, dataset_type, metadata_dict=None):
         '''
         Constructor for NetCDF2kmlConverter class
         @param netcdf_path: netCDF file path or OPeNDAP endpoint
@@ -93,6 +83,15 @@ class NetCDF2kmlConverter(object):
         self.line_utils = None
         #self.grid_utils = None
         
+        # Global settings
+        self.line_segments_across_bbox = settings['line_segments_across_bbox']
+        
+        
+        dataset_settings = settings['dataset_settings'][dataset_type]
+        
+        self.colormap = mpl_cm.get_cmap(dataset_settings['colormap_name'], 
+                                        dataset_settings['color_count'])
+
         self.thredds_metadata_link = dataset_settings.get('thredds_link') #TODO: Replace this with something more general
         self.polygon_style = simplekml.Style()
         self.polygon_style.polystyle.color = dataset_settings.get('polygon_color') or DEFAULT_POLYGON_COLOUR
@@ -128,6 +127,9 @@ class NetCDF2kmlConverter(object):
             self.point_colour = DEFAULT_POINT_COLOUR
         
         self.field_list = dataset_settings['point_field_list']
+        
+        self.height_variable = dataset_settings.get('height_variable')
+
 
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
@@ -219,10 +221,15 @@ class NetCDF2kmlConverter(object):
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
         # Compute segment length as a proportion of the height of bounding box
-        segment_length = (bounding_box_floats[3] - bounding_box_floats[1]) / LINE_SEGMENTS_ACROSS_BBOX
+        segment_length = (bounding_box_floats[3] - bounding_box_floats[1]) / self.line_segments_across_bbox
+        
+        if self.height_variable:
+            height_variable = self.height_variable # e.g. 'lidar'
+        else:
+            height_variable = [] # Empty string to return no variables, just 'coordinates'
         
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
-                                                                variables=['lidar'], 
+                                                                variables=height_variable, 
                                                                 bounds=bounding_box_floats,
                                                                 segment_length = segment_length
                                                                 ):
@@ -230,15 +237,22 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_data: {}".format(line_data))
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
-                subset_3d_array = np.zeros(shape=(points_in_subset, 3), dtype=line_data['coordinates'].dtype)
-                # Populate coords_3d_array with (x,y,z) coordinates
-                subset_3d_array[:,0:2] = line_data['coordinates']      
-                subset_3d_array[:,2] = line_data['lidar'] # Height above ground
-                
                 line_string = netcdf_file_folder.newlinestring(name=str("Line number: {}".format(line_number)))
-                line_string.coords = subset_3d_array
-                line_string.altitudemode = simplekml.AltitudeMode.relativetoground
-                #line_segment.altitudemode = simplekml.AltitudeMode.clamptoground
+
+                if self.height_variable: # 3D
+                    subset_array = np.zeros(shape=(points_in_subset, 3), dtype=line_data['coordinates'].dtype)
+                    # Populate coords_3d_array with (x,y,z) coordinates
+                    subset_array[:,0:2] = line_data['coordinates']      
+                    subset_array[:,2] = line_data[height_variable] # Height above ground
+                    
+                    line_string.altitudemode = simplekml.AltitudeMode.relativetoground
+                else: # 2D
+                    subset_array = line_data['coordinates']
+                    line_string.altitudemode = simplekml.AltitudeMode.clamptoground
+                    
+                line_string = netcdf_file_folder.newlinestring(name=str("Line number: {}".format(line_number)))
+                line_string.coords = subset_array
+
                 line_string.extrude = 0
                 line_string.tessellate = 1
                 line_string.style.linestyle.width = self.line_width
@@ -461,7 +475,7 @@ class NetCDF2kmlConverter(object):
         
         @return colourhex: KML colour definition string of form ff<rr><gg><bb>, e.g: 'ff60fac5'
         '''
-        colormap = colormap or NetCDF2kmlConverter.default_colormap
+        colormap = colormap or self.colormap
         
         normalised_value = (data_value - data_range[0]) / (data_range[1] - data_range[0])
         

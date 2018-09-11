@@ -130,7 +130,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Generator to return coordinates and specified variable values for specified lines
         @param line_numbers: list of integer line number or single integer line number
-        @param variables: list of variable name strings or single variable name string
+        @param variables: list of variable name strings or single variable name string. None returns all variables
         @param bounds: Spatial bounds for point selection
         @param bounds_wkt: WKT for bounds Coordinate Reference System 
         @param stride: Stride between points
@@ -148,8 +148,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
         except TypeError:
             line_numbers = [line_numbers]
 
+        # Return all variables if specified variable is None
+        variables = self.point_variables if variables is None else variables
+        
         # Allow single variable to be given as a string
-        variables = variables or self.point_variables
         single_var = (type(variables) == str)
         if single_var:
             variables = [variables]
