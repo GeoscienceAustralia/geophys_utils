@@ -132,6 +132,13 @@ class NetCDF2kmlConverter(object):
         self.height_variable = dataset_settings.get('height_variable')
 
 
+    def __del__(self):
+        '''
+        NetCDF2kmlConverter destructor
+        '''
+        if self.netcdf_dataset:
+            self.netcdf_dataset.close()
+    
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
         Builds a KML Region using simplekml.
@@ -385,6 +392,7 @@ class NetCDF2kmlConverter(object):
                         if point_data[key] == value:
                             new_point.style.iconstyle.color = self.filtered_point_icon_color
 
+            dataset_folder.region = self.build_region(100, -1, 200, 800)
             return dataset_folder
 
 

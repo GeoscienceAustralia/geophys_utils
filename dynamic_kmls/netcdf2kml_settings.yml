@@ -8,8 +8,8 @@ dataset_settings:
     format: point
     min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
-    netcdf_file_folder_name: Ground Gravity Surveys
-    netcdf_path_prefix: #C:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
+    dataset_type_name: Ground Gravity Surveys
+    netcdf_path_prefix: C:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
     point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>)) or static colour
     - bouguer
     - [-500, 500]
@@ -28,8 +28,8 @@ dataset_settings:
     format: line
     min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [geophysics, airborne, AEM, conductivity]
-    netcdf_file_folder_name: AEM Surveys
-    netcdf_path_prefix: #C:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
+    dataset_type_name: AEM Surveys
+    netcdf_path_prefix: C:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
     point_field_list: [line_index, latitude, longitude, lidar, mag, gps_elevation]
     point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
     point_icon_scale: 0.7
