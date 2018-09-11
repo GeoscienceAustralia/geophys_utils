@@ -28,6 +28,7 @@ from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import numpy as np
+import os
 from dynamic_kmls import DEBUG
 
 # Setup logging handlers if required
@@ -185,7 +186,7 @@ class NetCDF2kmlConverter(object):
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
                                                                                       str(self.end_date))
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(
-                self.thredds_metadata_link) + str(self.survey_id) + '.nc')
+                self.thredds_metadata_link) + os.path.basename(self.netcdf_path))
             description_string = description_string + ']]>'
             pol.description = description_string
 

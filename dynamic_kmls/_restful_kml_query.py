@@ -63,9 +63,12 @@ class RestfulKMLQuery(Resource):
         
         bbox = request.args['BBOX'] 
     
-        xml = get_kml_function(self, bbox, dataset_type, settings)
+        # return polygon KML for low zoom
+        kml = self.build_polygon_kml(bbox, dataset_type, settings)
+        if not kml: # High zoom - plot detailed dataset
+            kml = get_kml_function(self, bbox, dataset_type, settings)
         
-        response = make_response(xml)
+        response = make_response(kml)
         response.headers['content-type'] = 'application/vnd.google-earth.kml+xml'
         return response
 
@@ -211,9 +214,8 @@ class RestfulKMLQuery(Resource):
             keyword_list=dataset_settings['keyword_list'],
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[west, south], [east, north]]
-        )
-        logger.debug("tuple: " + str(dataset_metadata_dict_list))
-    
+            )
+        
         logger.debug([[west, south], [east, north]])
         t2 = time.time()
         logger.debug("Retrieve dataset_metadata_dict strings from database...")
@@ -222,43 +224,67 @@ class RestfulKMLQuery(Resource):
         kml = simplekml.Kml()
         netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
-        # ----------------------------------------------------------------------------------------------------------------
-        # High zoom: show points rather than polygons.
-        if east - west < settings['min_polygon_bbox_width']:
-            logger.debug('Getting {} points'.format(dataset_type))
-            if len(dataset_metadata_dict_list) > 0:
-                for dataset_metadata_dict in dataset_metadata_dict_list:                   
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
-                    
-                    logger.debug("Building NETCDF: {} ".format(netcdf_path))
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
-                    t3 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance...")
-                    logger.debug("Time: " + str(t3 - t2))
-    
-                    # logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
-    
-                    ta = time.time()
-                    netcdf2kml_obj.build_points(netcdf_file_folder, bbox_list)
-                    tb = time.time()
-                    logger.debug("do the things time: " + str(tb - ta))
-                    logger.debug("Build the point ...")
-                    dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
-                    netcdf_file_folder.region = dataset_points_region
-                    netcdf2kml_obj.netcdf_dataset.close()  # file must be closed after use to avoid errors when accessed again.
-                    del netcdf2kml_obj  # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
-                    t4 = time.time()
-                return str(netcdf_file_folder)
-    
-            else:
-                empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
-                return empty_folder
-    
-        # ----------------------------------------------------------------------------------------------------------------
-        # Low zoom: show polygons and not points.
+        logger.debug('Getting {} points'.format(dataset_type))
+        if len(dataset_metadata_dict_list) > 0:
+            for dataset_metadata_dict in dataset_metadata_dict_list:                   
+                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
+                
+                logger.debug("Building NETCDF: {} ".format(netcdf_path))
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
+                t3 = time.time()
+                logger.debug("set style and create netcdf2kmlconverter instance...")
+                logger.debug("Time: " + str(t3 - t2))
+
+                # logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
+
+                ta = time.time()
+                netcdf2kml_obj.build_points(netcdf_file_folder, bbox_list)
+                tb = time.time()
+                logger.debug("do the things time: " + str(tb - ta))
+                logger.debug("Build the point ...")
+                dataset_points_region = netcdf2kml_obj.build_region(100, -1, 200, 800)
+                netcdf_file_folder.region = dataset_points_region
+                netcdf2kml_obj.netcdf_dataset.close()  # file must be closed after use to avoid errors when accessed again.
+                del netcdf2kml_obj  # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
+                t4 = time.time()
+            return str(netcdf_file_folder)
+
         else:
+            empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
+            return empty_folder
+    
+
+    def build_polygon_kml(self, bbox, dataset_type, settings):
+        
+        bbox_list = bbox.split(',')
+        west = float(bbox_list[0])
+        south = float(bbox_list[1])
+        east = float(bbox_list[2])
+        north = float(bbox_list[3])
+    
+        bbox_polygon = Polygon(((west, south),
+                                (east, south),
+                                (east, north),
+                                (west, north),
+                                (west, south)
+                                ))
+        
+        dataset_settings = settings['dataset_settings'][dataset_type]
+        
+        # Get the dataset_metadata_dict surveys from the database that are within the bbox
+        dataset_metadata_dict_list = self.sdmc.search_dataset_distributions(
+            keyword_list=dataset_settings['keyword_list'],
+            protocol=dataset_settings['protocol'],
+            ll_ur_coords=[[west, south], [east, north]]       
+            )
+        # ----------------------------------------------------------------------------------------------------------------
+        # Low zoom: show polygons and not points or lines.
+        if ((east - west) >= dataset_settings['min_polygon_bbox_width']):            
             logger.debug('Getting {} polygons'.format(dataset_type))
             t_polygon_1 = time.time()
+    
+            kml = simplekml.Kml()
+            netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
             if len(dataset_metadata_dict_list) > 0:
     
@@ -296,4 +322,8 @@ class RestfulKMLQuery(Resource):
                 return str(netcdf_file_folder)
             else:
                 empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
-                return str(empty_folder)
+                return str(empty_folder)  
+            
+             
+        else: # High zoom - plot detailed dataset    
+            return None 

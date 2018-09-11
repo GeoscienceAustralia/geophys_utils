@@ -1,5 +1,4 @@
 # Global settings
-min_polygon_bbox_width: 1.5 # maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
 # Define number of line segments to show across bounding box height for line sub-sampling
 line_segments_across_bbox: 100
 
@@ -7,6 +6,7 @@ line_segments_across_bbox: 100
 dataset_settings:
   ground_gravity:
     format: point
+    min_polygon_bbox_width: 1.5 # maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     netcdf_file_folder_name: Ground Gravity Surveys
     netcdf_path_prefix: #C:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
@@ -26,6 +26,7 @@ dataset_settings:
     color_count: 512
   aem:
     format: line
+    min_polygon_bbox_width: 15.0 # maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [geophysics, airborne, AEM, conductivity]
     netcdf_file_folder_name: AEM Surveys
     netcdf_path_prefix: #C:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
@@ -33,12 +34,12 @@ dataset_settings:
     point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
     point_icon_scale: 0.7
     point_labelstyle_scale: 0
-    polygon_color: B30000ff
+    polygon_color: ff32cd9a
     polygon_outline: 1
     line_colour: ff32cd9a
     line_width: 5
     protocol: opendap
-    thredds_link: http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/aem/
+    thredds_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/aem/catalog.html?dataset=uc0/rr2_dev/axi547/aem/
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
     color_count: 512
