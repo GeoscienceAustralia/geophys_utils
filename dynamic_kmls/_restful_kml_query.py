@@ -25,7 +25,7 @@ else:
 
 settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
                                             'netcdf2kml_settings.yml')))
-print('settings = {}'.format(settings))
+#print('settings = {}'.format(settings))
 #print('settings: {}'.format(yaml.safe_dump(settings)))
 
 class RestfulKMLQuery(Resource):
