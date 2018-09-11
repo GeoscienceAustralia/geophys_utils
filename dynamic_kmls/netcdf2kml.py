@@ -39,8 +39,8 @@ DEFAULT_COLOUR_COUNT = 512
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
-# Define stride for line sub-sampling
-LINE_SEGMENT_STRIDE = 200
+# Define number of line segments to show across bounding box height for line sub-sampling
+LINE_SEGMENTS_ACROSS_BBOX = 100
 
 # Default values when not specified in settings
 DEFAULT_POLYGON_COLOUR = 'B30000ff'
@@ -200,7 +200,10 @@ class NetCDF2kmlConverter(object):
     def build_lines(self, netcdf_file_folder, bounding_box):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
+        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
+                                                             enable_disk_cache=False,
+                                                             enable_memory_cache=True,
+                                                             debug=DEBUG)
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================
@@ -215,10 +218,13 @@ class NetCDF2kmlConverter(object):
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
+        # Compute segment length as a proportion of the height of bounding box
+        segment_length = (bounding_box_floats[3] - bounding_box_floats[1]) / LINE_SEGMENTS_ACROSS_BBOX
+        
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=['lidar'], 
                                                                 bounds=bounding_box_floats,
-                                                                stride = LINE_SEGMENT_STRIDE
+                                                                segment_length = segment_length
                                                                 ):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))
@@ -288,7 +294,10 @@ class NetCDF2kmlConverter(object):
         logger.debug('bounding_box:' + str(bounding_box))
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
+        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, 
+                                                                enable_disk_cache=False, 
+                                                                enable_memory_cache=True,
+                                                                debug=DEBUG)
         
         if not self.point_utils.point_count:
             return None

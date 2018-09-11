@@ -5,9 +5,8 @@ Created on 7 Sep. 2018
 '''
 from flask import Flask
 from flask_restful import Api
-from dynamic_kmls import settings, DEBUG, RestfulKMLQuery
+from dynamic_kmls import DEBUG, RestfulKMLQuery
 import logging
-from pprint import pprint, pformat
 
 logger = logging.getLogger(__name__)
 if DEBUG:
