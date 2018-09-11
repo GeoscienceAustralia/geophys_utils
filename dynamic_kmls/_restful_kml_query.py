@@ -156,23 +156,10 @@ class RestfulKMLQuery(Resource):
                 logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
 
-                try:
-                    survey_polygon = wkt.loads(dataset_metadata_dict.get('convex_hull_polygon'))
-                except Exception as e:
-                    logger.debug('Invalid geometry for polygon {}: {}'.format(dataset_metadata_dict.get('convex_hull_polygon'), e))
-                    continue  # Skip this polygon
-
-                if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
-                # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
-                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
-                # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
-                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
-
-                    netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
-
+                netcdf_file_folder = netcdf2kml_obj.build_lines(dataset_type_folder, bbox_list)
 
                 #dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
-            return str(netcdf_file_folder)
+            return str(dataset_type_folder)
     
         else:
             empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
@@ -209,11 +196,11 @@ class RestfulKMLQuery(Resource):
         logger.debug("Time: " + str(t2 - t1))
     
         kml = simplekml.Kml()
-        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
+        dataset_type_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
     
         logger.debug('Getting {} points'.format(dataset_type))
         if len(dataset_metadata_dict_list) > 0:
-            for dataset_metadata_dict in dataset_metadata_dict_list:                   
+            for dataset_metadata_dict in dataset_metadata_dict_list: 
                 netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
                 
                 logger.debug("Building NETCDF: {} ".format(netcdf_path))
@@ -225,7 +212,7 @@ class RestfulKMLQuery(Resource):
                 # logger.debug("Number of points in file: " + str(netcdf2kml_obj.npu.point_count))
 
                 ta = time.time()
-                netcdf2kml_obj.build_points(netcdf_file_folder, bbox_list)
+                netcdf_file_folder = netcdf2kml_obj.build_points(dataset_type_folder, bbox_list)
                 tb = time.time()
                 logger.debug("do the things time: " + str(tb - ta))
                 logger.debug("Build the point ...")
@@ -234,7 +221,8 @@ class RestfulKMLQuery(Resource):
                 netcdf2kml_obj.netcdf_dataset.close()  # file must be closed after use to avoid errors when accessed again.
                 del netcdf2kml_obj  # Delete netcdf2kml_obj to removenetcdf2kml_obj.npu cache file
                 t4 = time.time()
-            return str(netcdf_file_folder)
+                
+            return str(dataset_type_folder)
 
         else:
             empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
@@ -255,7 +243,8 @@ class RestfulKMLQuery(Resource):
         t_polygon_1 = time.time()
 
         kml = simplekml.Kml()
-        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
+        dataset_type_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
+    
 
         if len(dataset_metadata_dict_list) > 0:
 
@@ -267,20 +256,7 @@ class RestfulKMLQuery(Resource):
                 logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
                 logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
 
-                try:
-                    survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
-                except Exception as e:
-                    # print(e)
-                    continue  # Skip this polygon
-
-                if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
-                # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
-                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
-                # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
-                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
-
-                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
-                    #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+                netcdf_file_folder = netcdf2kml_obj.build_polygon(dataset_type_folder)
 
 
                 dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
@@ -290,7 +266,7 @@ class RestfulKMLQuery(Resource):
             #    logger.debug("not enough points")
 
             # neww = kml.save("test_polygon.kml")
-            return str(netcdf_file_folder)
+            return str(dataset_type_folder)
         else:
             empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
             return str(empty_folder)  
