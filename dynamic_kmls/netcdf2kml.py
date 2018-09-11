@@ -39,8 +39,8 @@ DEFAULT_COLOUR_COUNT = 512
 logger = logging.getLogger(__name__)  # Get logger
 logger.setLevel(logging.INFO)  # Initial logging level for this module
 
-# Define stride for line sub-sampling
-LINE_SEGMENT_STRIDE = 200
+# Define number of line segments to show across bounding box height for line sub-sampling
+LINE_SEGMENTS_ACROSS_BBOX = 100
 
 # Default values when not specified in settings
 DEFAULT_POLYGON_COLOUR = 'B30000ff'
@@ -215,10 +215,13 @@ class NetCDF2kmlConverter(object):
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
+        # Compute segment length as a proportion of the height of bounding box
+        segment_length = (bounding_box_floats[3] - bounding_box_floats[1]) / LINE_SEGMENTS_ACROSS_BBOX
+        
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=['lidar'], 
                                                                 bounds=bounding_box_floats,
-                                                                stride = LINE_SEGMENT_STRIDE
+                                                                segment_length = segment_length
                                                                 ):
             #logger.debug("line_number: {}".format(line_number))
             #logger.debug("line_data: {}".format(line_data))

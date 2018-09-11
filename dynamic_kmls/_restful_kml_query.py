@@ -14,7 +14,7 @@ from shapely import wkt
 from dynamic_kmls import netcdf2kml,  DEBUG, DATABASE_ENGINE
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
-from pprint import pprint, pformat
+#from pprint import pformat
 
 # Define maximum bounding box width for point display. Uses survey convex-hull polygons for anything larger.
 MAX_BOX_WIDTH_FOR_POINTS = 1.5
@@ -28,7 +28,7 @@ else:
 
 settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
                                             'netcdf2kml_settings.yml')))
-#print('settings: {}'.format(settings))
+#print('settings: {}'.format(pformat(settings)))
 #print('settings: {}'.format(yaml.safe_dump(settings)))
 
 class RestfulKMLQuery(Resource):

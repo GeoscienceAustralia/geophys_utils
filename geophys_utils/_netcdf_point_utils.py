@@ -28,7 +28,7 @@ import sys
 import re
 import tempfile
 from collections import OrderedDict
-from pprint import pformat, pprint
+from pprint import pformat
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance

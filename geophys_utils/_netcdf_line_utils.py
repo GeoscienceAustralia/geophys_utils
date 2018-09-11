@@ -22,6 +22,7 @@ Created on 16/11/2016
 '''
 import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
+from scipy.spatial.distance import pdist
 import logging
 
 # Setup logging handlers if required
@@ -111,7 +112,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 continue # Should this be break?
             
             line_mask = (line_indices == line_index)
-            logger.debug('Line {} has {} points'.format(line_number, np.count_nonzero(line_mask))) 
+            logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
             yield line_number, line_mask
     
@@ -120,7 +121,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                   variables=None, 
                   bounds=None, 
                   bounds_wkt=None,
-                  stride=None
+                  segment_length=None
                   ):
         '''
         Generator to return coordinates and specified variable values for specified lines
@@ -133,6 +134,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
+        xycoords = self.xycoords[:] # Read this once to avoid repeated reads in loop
+        
         # Return all lines if not specified
         if line_numbers is None:
             line_numbers = self.line[:]
@@ -153,13 +156,19 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         
+        logger.debug('segment_length: {}'.format(segment_length))
         for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
+            logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
             line_point_count = len(point_indices)
             if line_point_count:
                 # Use subset of indices if stride is set
-                if stride:
+                if segment_length:
+                    line_length = pdist([self.xycoords[point_indices[0]], self.xycoords[point_indices[-1]]])[0]
+                    logger.debug('line_length: {}'.format(line_length))
+                    stride = int(line_point_count/max(1, line_length/segment_length))
+                    logger.debug('stride: {}'.format(stride))
                     # Create array of subset indices, including the index of the last point if not already in subsample indices
                     subset_indices = np.unique(np.concatenate((np.arange(0, line_point_count, stride),
                                                               np.array([line_point_count-1])),
@@ -168,7 +177,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     logger.debug('Subset of line {} has {} points'.format(line_number, len(subset_indices)))
                     point_indices = point_indices[subset_indices]
                     
-                line_dict = {'coordinates': self.xycoords[point_indices]}
+                line_dict = {'coordinates': xycoords[point_indices]}
                 # Add <variable_name>: <variable_array> for each specified variable
                 for variable_name in variables:
                     line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
