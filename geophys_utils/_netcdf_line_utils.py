@@ -36,16 +36,20 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
     def __init__(self, 
                  netcdf_dataset, 
-                 enable_cache=None,
+                 enable_disk_cache=None,
+                 enable_memory_cache=False,
                  debug=False):
         '''
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
-        @parameter enable_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not. Only used if enable_disk_cache == False
+        @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''     
         # Start of init function - Call inherited constructor first
         NetCDFPointUtils.__init__(self, netcdf_dataset=netcdf_dataset, 
-                                  enable_cache=enable_cache, 
+                                  enable_disk_cache=enable_disk_cache, 
+                                  enable_memory_cache=enable_memory_cache,
                                   debug=debug)
 
         line_variable = self.netcdf_dataset.variables.get('line')
@@ -54,7 +58,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self.line_count = len(line_variable)
             
         # Set up local disk cache if required
-        if self.enable_cache:
+        if self.enable_disk_cache:
             self._nc_cache_dataset.createDimension('line', self.line_count if not self.unlimited_points else None)
             
             line_var_options = line_variable.filters() or {}
@@ -81,7 +85,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
                                           **line_index_var_options
                                           )
             line_index_cache_variable[:] = self.get_line_indices()
-        
+        elif self.enable_memory_cache:
+            self._line = self.get_line_values()
+            self._line_index = self.get_line_indices()
         
     def get_line_masks(self, line_numbers=None):
         '''
@@ -102,16 +108,14 @@ class NetCDFLineUtils(NetCDFPointUtils):
         except TypeError:
             line_numbers = [line_numbers]
 
-        all_line_numbers = self.line[:]
-        line_indices = self.line_index[:]
         for line_number in line_numbers:
             try:
-                line_index = int(np.where(all_line_numbers == line_number)[0])
+                line_index = int(np.where(self.line == line_number)[0])
             except TypeError:
                 logger.warning('Invalid line number %d' % line_number)
                 continue # Should this be break?
             
-            line_mask = (line_indices == line_index)
+            line_mask = (self.line_index == line_index)
             logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
             yield line_number, line_mask
@@ -134,8 +138,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
-        xycoords = self.xycoords[:] # Read this once to avoid repeated reads in loop
-        
         # Return all lines if not specified
         if line_numbers is None:
             line_numbers = self.line[:]
@@ -177,7 +179,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     logger.debug('Subset of line {} has {} points'.format(line_number, len(subset_indices)))
                     point_indices = point_indices[subset_indices]
                     
-                line_dict = {'coordinates': xycoords[point_indices]}
+                line_dict = {'coordinates': self.xycoords[point_indices]}
                 # Add <variable_name>: <variable_array> for each specified variable
                 for variable_name in variables:
                     line_dict[variable_name] = self.netcdf_dataset.variables[variable_name][point_indices]
@@ -227,18 +229,21 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Property get method to return array of all valid line numbers
         '''
-        if self.enable_cache:
+        if self.enable_disk_cache:
             return self._nc_cache_dataset.variables['line'][:]
+        elif self.enable_memory_cache:
+            return self._line
         else:
             return self.get_line_values()
-    
     
     @property
     def line_index(self):
         '''
         Property get method to return array of line_indices for all points
         '''
-        if self.enable_cache:
+        if self.enable_disk_cache:
             return self._nc_cache_dataset.variables['line_index'][:]
+        elif self.enable_memory_cache:
+            return self._line_index
         else:
             return self.get_line_indices()

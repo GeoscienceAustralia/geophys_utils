@@ -200,7 +200,10 @@ class NetCDF2kmlConverter(object):
     def build_lines(self, netcdf_file_folder, bounding_box):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
+        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
+                                                             enable_disk_cache=False,
+                                                             enable_memory_cache=True,
+                                                             debug=DEBUG)
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================
@@ -291,7 +294,10 @@ class NetCDF2kmlConverter(object):
         logger.debug('bounding_box:' + str(bounding_box))
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, enable_cache=False, debug=DEBUG)
+        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, 
+                                                                enable_disk_cache=False, 
+                                                                enable_memory_cache=True,
+                                                                debug=DEBUG)
         
         if not self.point_utils.point_count:
             return None

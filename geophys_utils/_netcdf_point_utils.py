@@ -54,12 +54,15 @@ class NetCDFPointUtils(NetCDFUtils):
 
     def __init__(self, 
                  netcdf_dataset, 
-                 enable_cache=None, 
+                 enable_disk_cache=None,
+                 enable_memory_cache=False,
                  debug=False):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
-        @parameter enable_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not. Only used if enable_disk_cache == False
+        @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''
         # Start of init function - Call inherited constructor first
         NetCDFUtils.__init__(self, 
@@ -72,17 +75,19 @@ class NetCDFPointUtils(NetCDFUtils):
                                      ])
         
         # If caching is not explicitly specified, enable it for OPeNDAP access
-        if enable_cache is None:
-            self.enable_cache = self.opendap
+        if enable_disk_cache is None:
+            self.enable_disk_cache = self.opendap
         else:
-            self.enable_cache = enable_cache
+            self.enable_disk_cache = enable_disk_cache
+            
+        self.enable_memory_cache = enable_memory_cache
         
         self._nc_cache_dataset = None # This will only be defined if caching is enabled
         
         self.point_count = self.netcdf_dataset.dimensions['point'].size # Will be zero for unlimited
 
-        if self.enable_cache: # Create and populate xycoords variable in cache dataset if OPeNDAP
-            self.create_local_cache()
+        if self.enable_disk_cache: # Create and populate xycoords variable in cache dataset if OPeNDAP
+            self.create_disk_cache()
             
             self._nc_cache_dataset.createDimension('xy', 2)
         
@@ -104,7 +109,10 @@ class NetCDFPointUtils(NetCDFUtils):
                                           )
             
             self._nc_cache_dataset.variables['xycoords'] = self.get_xy_coord_values()
-
+        elif self.enable_memory_cache:
+            # Set in-memory array
+            self._xycoords = self.get_xy_coord_values()
+            
         # Determine exact spatial bounds
         xycoords = self.xycoords
         xmin = np.nanmin(xycoords[:,0])
@@ -128,7 +136,7 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         NetCDFPointUtils Destructor
         '''
-        if self.enable_cache:
+        if self.enable_disk_cache:
             try:
                 cache_file_path = self._nc_cache_dataset.filepath()
                 self._nc_cache_dataset.close()
@@ -861,13 +869,15 @@ class NetCDFPointUtils(NetCDFUtils):
 
     @property
     def xycoords(self):
-        if self.enable_cache:
+        if self.enable_disk_cache:
             return self._nc_cache_dataset.variables['xycoords'][:]
+        elif self.enable_memory_cache:
+            return self._xycoords
         else:
             return self.get_xy_coord_values()
         
 
-    def create_local_cache(self):
+    def create_disk_cache(self):
         # Create local cache for coordinates
         nc_cache_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0] + '.nc'))
         self._nc_cache_dataset = netCDF4.Dataset(nc_cache_path, mode="w", clobber=True, format='NETCDF4')
