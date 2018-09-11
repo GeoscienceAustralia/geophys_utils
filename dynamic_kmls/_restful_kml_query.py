@@ -61,12 +61,12 @@ class RestfulKMLQuery(Resource):
         # Determine which KML generation function to call based on dataset_settings['format']
         get_kml_function = get_kml_functions.get(dataset_settings['format'])
         
-        bbox = request.args['BBOX']
-        bbox_list = [float(ordinate) for ordinate in bbox.split(',')]
+        bbox_list = [float(ordinate) for ordinate in request.args['BBOX'].split(',')]
     
         # return polygon KML for low zoom
-        kml = self.build_polygon_kml(bbox_list, dataset_type, settings)
-        if not kml: # High zoom - plot detailed dataset
+        if ((bbox_list[2] - bbox_list[0]) >= dataset_settings['min_polygon_bbox_width']):
+            kml = self.build_polygon_kml(bbox_list, dataset_type, settings)
+        else: # High zoom - plot detailed dataset
             kml = get_kml_function(self, bbox_list, dataset_type, settings)
         
         response = make_response(kml)
@@ -251,53 +251,46 @@ class RestfulKMLQuery(Resource):
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]       
             )
-        # ----------------------------------------------------------------------------------------------------------------
-        # Low zoom: show polygons and not points or lines.
-        if ((bbox_list[2] - bbox_list[0]) >= dataset_settings['min_polygon_bbox_width']):            
-            logger.debug('Getting {} polygons'.format(dataset_type))
-            t_polygon_1 = time.time()
-    
-            kml = simplekml.Kml()
-            netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
-    
-            if len(dataset_metadata_dict_list) > 0:
-    
-                for dataset_metadata_dict in dataset_metadata_dict_list:
-                    netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
-                    #logger.debug(netcdf_path)
-                    netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
-                    t_polygon_2 = time.time()
-                    logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
-                    logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
-    
-                    try:
-                        survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
-                    except Exception as e:
-                        # print(e)
-                        continue  # Skip this polygon
-    
-                    if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
-                    # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
-                    # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
-                    # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
-                    # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
+        logger.debug('Getting {} polygons'.format(dataset_type))
+        t_polygon_1 = time.time()
 
-                        polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
-                        #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+        kml = simplekml.Kml()
+        netcdf_file_folder = kml.newfolder(name=dataset_settings['netcdf_file_folder_name'])
 
-    
-                    dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
-                # polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-    
-                # else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
-                #    logger.debug("not enough points")
-    
-                # neww = kml.save("test_polygon.kml")
-                return str(netcdf_file_folder)
-            else:
-                empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
-                return str(empty_folder)  
-            
-             
-        else: # High zoom - plot detailed dataset    
-            return None 
+        if len(dataset_metadata_dict_list) > 0:
+
+            for dataset_metadata_dict in dataset_metadata_dict_list:
+                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
+                #logger.debug(netcdf_path)
+                netcdf2kml_obj = netcdf2kml.NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
+                t_polygon_2 = time.time()
+                logger.debug("set style and create netcdf2kmlconverter instance from dataset_metadata_dict for polygon ...")
+                logger.debug("Time: " + str(t_polygon_2 - t_polygon_1))
+
+                try:
+                    survey_polygon = wkt.loads(dataset_metadata_dict['convex_hull_polygon'])
+                except Exception as e:
+                    # print(e)
+                    continue  # Skip this polygon
+
+                if survey_polygon.intersects(self.polygon_from_bbox_list(bbox_list)):
+                # if survey_polygon.within(self.polygon_from_bbox_list(bbox_list)):
+                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)):
+                # if survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
+                # if not survey_polygon.contains(self.polygon_from_bbox_list(bbox_list)) and survey_polygon.centroid.within(self.polygon_from_bbox_list(bbox_list)):
+
+                    polygon_folder = netcdf2kml_obj.build_polygon(netcdf_file_folder)
+                    #polygon_folder = netcdf2kml_obj.build_lines(netcdf_file_folder, bbox_list)
+
+
+                dataset_polygon_region = netcdf2kml_obj.build_region(-1, -1, 200, 800)
+            # polygon_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
+
+            # else:  # for surveys with 1 or 2 points. Can't make a polygon. Still save the points?
+            #    logger.debug("not enough points")
+
+            # neww = kml.save("test_polygon.kml")
+            return str(netcdf_file_folder)
+        else:
+            empty_folder = kml.newfolder(name="No {} in view".format(dataset_settings['netcdf_file_folder_name']))
+            return str(empty_folder)  
