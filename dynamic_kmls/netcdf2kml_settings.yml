@@ -9,7 +9,7 @@ dataset_settings:
     min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     dataset_type_name: Ground Gravity Surveys
-    netcdf_path_prefix: C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Leave empty to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
     point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>)) or static colour
     - bouguer
     - [-500, 500]

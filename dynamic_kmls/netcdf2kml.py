@@ -76,7 +76,7 @@ class NetCDF2kmlConverter(object):
         self.start_date = metadata_dict['start_date']
         self.end_date = metadata_dict['end_date']
 
-        self.netcdf_path = netcdf_path
+        self.netcdf_path = str(netcdf_path).strip()
 
         # Don't connect to netCDF until we have to
         self.netcdf_dataset = None
