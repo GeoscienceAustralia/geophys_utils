@@ -9,7 +9,7 @@ dataset_settings:
     min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     dataset_type_name: Ground Gravity Surveys
-    netcdf_path_prefix: C:\Temp\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Leave empty to use OPeNDAP
     point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>)) or static colour
     - bouguer
     - [-500, 500]
@@ -18,10 +18,10 @@ dataset_settings:
     point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
     point_icon_scale: 0.7
     point_labelstyle_scale: 0
-    polygon_color: B30000ff
+    polygon_color: B30000ff # Red
     polygon_outline: 1
     protocol: opendap
-    thredds_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/
+    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{nc_basename}
     colormap_name: rainbow
     color_count: 512
   aem:
@@ -29,17 +29,65 @@ dataset_settings:
     min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [geophysics, airborne, AEM, conductivity]
     dataset_type_name: AEM Surveys
-    netcdf_path_prefix: C:\Temp\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
-    point_field_list: [line_index, latitude, longitude, lidar, mag, gps_elevation]
-    point_icon_href: http://maps.google.com/mapfiles/kml/paddle/grn-blank.png
-    point_icon_scale: 0.7
-    point_labelstyle_scale: 0
-    polygon_color: ff32cd9a
+    netcdf_path_prefix: C:\Temp\Geophysics\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
+    polygon_color: ff32cd9a # Bright Green
     polygon_outline: 1
     line_colour: ff32cd9a
     line_width: 5
     protocol: opendap
-    thredds_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/aem/catalog.html?dataset=uc0/rr2_dev/axi547/aem/
+    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{nc_basename}
+    height_variable: lidar # Do not set this value for 2D coordinates
+    colormap_name: rainbow
+    color_count: 512
+  magnetic_grids:
+    format: grid
+    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    keyword_list: [NCI, geophysical survey, airborne digital data, magnetics, grid]
+    dataset_type_name: Magnetic Survey grids
+    netcdf_path_prefix: #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Leave empty to use OPeNDAP
+    polygon_color: ffff0000 # Blue
+    polygon_outline: 1
+    protocol: opendap
+    dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
+    height_variable: lidar # Do not set this value for 2D coordinates
+    colormap_name: rainbow
+    color_count: 512
+  potassium_grids:
+    format: grid
+    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, potassium, grid]
+    dataset_type_name: Potassium Survey grids
+    netcdf_path_prefix: #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Leave empty to use OPeNDAP
+    polygon_color: ff808080 # Grey
+    polygon_outline: 1
+    protocol: opendap
+    dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
+    height_variable: lidar # Do not set this value for 2D coordinates
+    colormap_name: rainbow
+    color_count: 512
+  thorium_grids:
+    format: grid
+    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, thorium, grid]
+    dataset_type_name: Thorium Equivalent Survey grids
+    netcdf_path_prefix: #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Leave empty to use OPeNDAP
+    polygon_color: ffffff00 # Cyan
+    polygon_outline: 1
+    protocol: opendap
+    dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
+    height_variable: lidar # Do not set this value for 2D coordinates
+    colormap_name: rainbow
+    color_count: 512
+  uranium_grids:
+    format: grid
+    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, uranium, grid]
+    dataset_type_name: Uranium Equivalent Survey grids
+    netcdf_path_prefix: #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Leave empty to use OPeNDAP
+    polygon_color: ffe0ffff # lightyellow
+    polygon_outline: 1
+    protocol: opendap
+    dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
     color_count: 512

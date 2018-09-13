@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+xmlns:gx="http://www.google.com/kml/ext/2.2">
+    <Document id="feat_1">
+        <NetworkLink id="feat_3">
+            <name>Magnetic Survey Grids from Local  KML Server</name>
+            <Link id="link_0">
+                <href>http://127.0.0.1:5000/magnetic_grids/query</href>
+                <refreshInterval>2</refreshInterval>
+                <viewRefreshMode>onStop</viewRefreshMode>
+                <viewRefreshTime>1</viewRefreshTime>
+            </Link>
+        </NetworkLink>
+     </Document>
+</kml>

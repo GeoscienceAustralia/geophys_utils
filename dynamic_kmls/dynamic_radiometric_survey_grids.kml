@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"
+	xmlns:gx="http://www.google.com/kml/ext/2.2">
+	<Document id="feat_1">
+		<Folder>
+			<name>Radiometric Survey Grids from Local KML Server</name>
+			<visibility>0</visibility>
+			<open>0</open>
+			<description>Radiometric Survey Grids from Local KML Server
+			</description>
+			<NetworkLink id="feat_3">
+				<name>Radiometric Potassium Survey Grids</name>
+				<Link id="link_0">
+					<href>http://127.0.0.1:5000/potassium_grids/query</href>
+					<refreshInterval>2</refreshInterval>
+					<viewRefreshMode>onStop</viewRefreshMode>
+					<viewRefreshTime>1</viewRefreshTime>
+				</Link>
+			</NetworkLink>
+			<NetworkLink id="feat_3">
+				<name>Radiometric Thorium Equivalent Survey Grids</name>
+				<Link id="link_0">
+					<href>http://127.0.0.1:5000/thorium_grids/query</href>
+					<refreshInterval>2</refreshInterval>
+					<viewRefreshMode>onStop</viewRefreshMode>
+					<viewRefreshTime>1</viewRefreshTime>
+				</Link>
+			</NetworkLink>
+			<NetworkLink id="feat_3">
+				<name>Radiometric Uranium Equivalent Survey Grids</name>
+				<Link id="link_0">
+					<href>http://127.0.0.1:5000/uranium_grids/query</href>
+					<refreshInterval>2</refreshInterval>
+					<viewRefreshMode>onStop</viewRefreshMode>
+					<viewRefreshTime>1</viewRefreshTime>
+				</Link>
+			</NetworkLink>
+		</Folder>
+	</Document>
+</kml>

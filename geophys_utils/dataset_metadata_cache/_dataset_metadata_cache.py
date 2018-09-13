@@ -83,7 +83,8 @@ class DatasetMetadataCache(object):
                                           'latitude_max',
                                           'point_count',
                                           'start_date',
-                                          'end_date'
+                                          'end_date',
+                                          'metadata_uuid'
                                           )
     
     _db_engine = None

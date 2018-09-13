@@ -306,7 +306,9 @@ where not exists (select distribution_id from distribution where dataset_id = %(
             latitude_max,
             point_count,
             start_date,
-            end_date)    
+            end_date,
+            metadata_uuid
+            )    
         '''
         cursor = self.db_connection.cursor()
         
@@ -329,7 +331,8 @@ where not exists (select distribution_id from distribution where dataset_id = %(
     latitude_max,
     point_count,
     start_date,
-    end_date    
+    end_date,
+    metadata_uuid   
 from distribution
 inner join protocol using(protocol_id)
 inner join dataset using(dataset_id)
@@ -339,7 +342,7 @@ left join survey using(survey_id)
             keyword = keyword_list[keyword_index] 
             dataset_search_sql += """inner join (select dataset_id from dataset_keyword
     inner join keyword using(keyword_id)
-    where keyword_value = '""" + keyword + """'
+    where lower(keyword_value) = '""" + keyword.lower() + """'
     ) keyword{} using(dataset_id)
 """.format(keyword_index+1)
         

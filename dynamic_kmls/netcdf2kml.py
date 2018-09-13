@@ -93,7 +93,13 @@ class NetCDF2kmlConverter(object):
         self.colormap = mpl_cm.get_cmap(dataset_settings['colormap_name'], 
                                         dataset_settings['color_count'])
 
-        self.thredds_metadata_link = dataset_settings.get('thredds_link') #TODO: Replace this with something more general
+        self.dataset_link = dataset_settings.get('dataset_link')
+        if self.dataset_link:
+            # Perform any substitutions required
+            self.dataset_link = self.dataset_link.replace('{nc_basename}', os.path.basename(netcdf_path))
+            for key, value in metadata_dict.items():
+                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
+        
         self.polygon_style = simplekml.Style()
         self.polygon_style.polystyle.color = dataset_settings.get('polygon_color') or DEFAULT_POLYGON_COLOUR
         self.polygon_style.polystyle.outline = dataset_settings.get('polygon_outline') or DEFAULT_POLYGON_OUTLINE
@@ -127,7 +133,7 @@ class NetCDF2kmlConverter(object):
             self.point_colour_range = None
             self.point_colour = DEFAULT_POINT_COLOUR
         
-        self.field_list = dataset_settings['point_field_list']
+        self.field_list = dataset_settings.get('point_field_list')
         
         self.height_variable = dataset_settings.get('height_variable')
 
@@ -193,8 +199,9 @@ class NetCDF2kmlConverter(object):
                                                                                           str(self.start_date))
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
                                                                                           str(self.end_date))
-                description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('NCI Data Link', str(
-                    self.thredds_metadata_link) + os.path.basename(self.netcdf_path))
+                if self.dataset_link:
+                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Data Link', str(
+                    self.dataset_link))
                 description_string = description_string + ']]>'
                 dataset_folder.description = description_string
     
