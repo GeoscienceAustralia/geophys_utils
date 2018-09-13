@@ -82,10 +82,14 @@ class NetCDF2DatasetMetadataCache(object):
             #logger.debug('datetime_string: {}'.format(datetime_string))
             
             if datetime_string:
-                try:
-                    result = datetime.strptime(datetime_string, '%Y-%m-%d %H:%M:%S').date()
-                except ValueError:
-                    pass
+                for datetime_format in ['%Y-%m-%d', 
+                                        '%Y-%m-%d %H:%M:%S'
+                                        ]:
+                    try:
+                        result = datetime.strptime(datetime_string, datetime_format).date()
+                        break
+                    except ValueError:
+                        pass
             
             return result
         
