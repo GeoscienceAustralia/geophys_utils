@@ -9,8 +9,8 @@ dataset_settings:
     min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     dataset_type_name: Ground Gravity Surveys
-    netcdf_path_prefix: C:\Temp\Geophysics\gravity point_datasets # Local directory containing files. Leave empty to use OPeNDAP
-    point_colour: # Parameters for point colour display defined as: (<field_name>: (<colour_range_min>, <colour_range_max>)) or static colour
+    netcdf_path_prefix: C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Leave empty to use OPeNDAP
+    point_color_settings: # Parameters for point color display defined as: (<field_name>: (<color_range_min>, <color_range_max>)) or static color
     - bouguer
     - [-500, 500]
     point_field_list: [obsno, latitude, longitude, grav, freeair, bouguer, stattype, reliab, gridflag]
@@ -32,7 +32,7 @@ dataset_settings:
     netcdf_path_prefix: C:\Temp\Geophysics\AEM conductivity datasets # Local directory containing files. Leave empty to use OPeNDAP
     polygon_color: ff32cd9a # Bright Green
     polygon_outline: 1
-    line_colour: ff32cd9a
+    line_color: ff32cd9a
     line_width: 5
     protocol: opendap
     dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{nc_basename}
