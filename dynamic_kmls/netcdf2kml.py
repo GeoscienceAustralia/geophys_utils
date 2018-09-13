@@ -23,7 +23,7 @@ import re
 import matplotlib.cm as mpl_cm
 import matplotlib.colors as mpl_colors
 import logging
-from datetime import date
+from datetime import date, timedelta
 from geophys_utils.dataset_metadata_cache import SQLiteDatasetMetadataCache
 import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
@@ -75,6 +75,9 @@ class NetCDF2kmlConverter(object):
 
         self.start_date = metadata_dict['start_date']
         self.end_date = metadata_dict['end_date']
+        # Set self.end_date if unknown and self.start_date is known
+        if self.start_date and not self.end_date:
+            self.end_date = self.start_date + timedelta(days=30)
 
         self.netcdf_path = str(netcdf_path).strip()
 
