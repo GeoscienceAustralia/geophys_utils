@@ -153,23 +153,26 @@ class NetCDF2DatasetMetadataCache(object):
             except:
                 point_count = None
             
-            dataset = Dataset(dataset_title=nc_attribute['title'],
-                              ga_survey_id=nc_attribute.get('survey_id'),
-                              longitude_min=np.asscalar(nc_attribute['geospatial_lon_min']),
-                              longitude_max=np.asscalar(nc_attribute['geospatial_lon_max']),
-                              latitude_min=np.asscalar(nc_attribute['geospatial_lat_min']),
-                              latitude_max=np.asscalar(nc_attribute['geospatial_lat_max']),
-                              convex_hull_polygon=nc_attribute.get('geospatial_bounds'), 
-                              keyword_list=[keyword.strip() for keyword in nc_attribute['keywords'].split(',')],
-                              distribution_list=distribution_list,
-                              point_count=point_count,
-                              metadata_uuid=nc_attribute.get('uuid'), # Could be None
-                              start_date=datetimestring2date(nc_attribute.get('time_coverage_start')),
-                              end_date=datetimestring2date(nc_attribute.get('time_coverage_end'))
-                              )
+            try:
+                dataset = Dataset(dataset_title=nc_attribute['title'],
+                                  ga_survey_id=nc_attribute.get('survey_id'),
+                                  longitude_min=np.asscalar(nc_attribute['geospatial_lon_min']),
+                                  longitude_max=np.asscalar(nc_attribute['geospatial_lon_max']),
+                                  latitude_min=np.asscalar(nc_attribute['geospatial_lat_min']),
+                                  latitude_max=np.asscalar(nc_attribute['geospatial_lat_max']),
+                                  convex_hull_polygon=nc_attribute.get('geospatial_bounds'), 
+                                  keyword_list=[keyword.strip() for keyword in nc_attribute['keywords'].split(',')],
+                                  distribution_list=distribution_list,
+                                  point_count=point_count,
+                                  metadata_uuid=nc_attribute.get('uuid'), # Could be None
+                                  start_date=datetimestring2date(nc_attribute.get('time_coverage_start')),
+                                  end_date=datetimestring2date(nc_attribute.get('time_coverage_end'))
+                                  )
 
-            #logger.debug('dataset: {}'.format(dataset.__dict__))
-            self.dataset_metadata_cache.add_dataset(dataset)
+                #logger.debug('dataset: {}'.format(dataset.__dict__))
+                self.dataset_metadata_cache.add_dataset(dataset)
+            except Exception as e:
+                logger.warning('Unable to process dataset {}: {}'.format(nc_path, e))
         
 
 def main():

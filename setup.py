@@ -25,10 +25,12 @@ setup(name='geophys_utils',
       packages=[
           'geophys_utils',
           'geophys_utils.test',
-          'geophys_utils.netcdf_converter'
+          'geophys_utils.netcdf_converter',
+          'geophys_utils.dataset_metadata_cache'
       ],
       package_data={'geophys_utils': ['csw_utils_settings.yml'],
-                    'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml']
+                    'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml'],
+                    'geophys_utils.dataset_metadata_cache': ['settings.yml']
                     },
       scripts=(['bin/csw_find',
                 'bin/rechunk',
