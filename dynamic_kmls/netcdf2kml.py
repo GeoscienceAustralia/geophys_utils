@@ -38,23 +38,6 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    # Default values when not specified in settings file
-    default_settings = {
-        'polygon_color': 'B30000ff',
-        'polygon_color': 1,
-        'line_color': simplekml.Color.yellowgreen,
-        'line_width': 5,
-        'point_icon_scale': 0.7,
-        'point_labelstyle_scale': 0, # 0 removes the label
-        'point_icon_href': 'http://maps.google.com/mapfiles/kml/paddle/grn-blank.png',
-        'point_color_settings': 'ff32cd9a',
-        'filtered_point_icon_color': 'ff000000',
-        # Optional settings which need to be set to None if not specified
-        'point_field_list': None, 
-        'dataset_link': None, 
-        'height_variable': None,
-        }
-
     def __init__(self, netcdf_path, settings, dataset_type, metadata_dict):
         '''
         Constructor for NetCDF2kmlConverter class
@@ -63,8 +46,8 @@ class NetCDF2kmlConverter(object):
         @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
         '''
         # Create combined full settings dict and set instance attributes
-        full_settings = dict(NetCDF2kmlConverter.default_settings) # Default settings
-        full_settings.update({key: value for key, value in settings.items() if key != 'dataset_settings'}) # Global settings
+        full_settings = dict(settings['global_settings']) # Global settings
+        full_settings.update(settings['default_dataset_settings']) # Default dataset settings
         full_settings.update(settings['dataset_settings'][dataset_type]) # Dataset settings
         full_settings.update(metadata_dict) # Database search results
         full_settings['netcdf_path'] = str(netcdf_path).strip()

@@ -45,7 +45,7 @@
 				</Link>
 			</NetworkLink>
 			<NetworkLink id="feat_3">
-				<name>Radiometric Thorium Survey Grids</name>
+				<name>Radiometric Thorium Equivalent Survey Grids</name>
 				<visibility>0</visibility>
 				<Link id="link_0">
 					<href>http://127.0.0.1:5000/thorium_grids/query?</href>
@@ -55,7 +55,7 @@
 				</Link>
 			</NetworkLink>
 			<NetworkLink id="feat_3">
-				<name>Radiometric Uranium Survey Grids</name>
+				<name>Radiometric Uranium Equivalent Survey Grids</name>
 				<visibility>0</visibility>
 				<Link id="link_0">
 					<href>http://127.0.0.1:5000/uranium_grids/query?</href>
