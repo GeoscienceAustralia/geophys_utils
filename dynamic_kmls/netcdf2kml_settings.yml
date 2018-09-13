@@ -84,7 +84,7 @@ dataset_settings:
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, uranium, grid]
     dataset_type_name: Uranium Equivalent Survey grids
     netcdf_path_prefix: #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Leave empty to use OPeNDAP
-    polygon_color: ffe0ffff # lightyellow
+    polygon_color: ff800080 # Purple
     polygon_outline: 1
     protocol: opendap
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
