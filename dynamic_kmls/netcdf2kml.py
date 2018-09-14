@@ -16,7 +16,7 @@
 '''
 Created on 03/08/2018
 
-@author: Andrew Turner
+@author: Andrew Turner & Alex Ip, Geoscience Australia
 '''
 import simplekml
 import re
