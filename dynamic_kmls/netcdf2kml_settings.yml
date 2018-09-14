@@ -1,5 +1,7 @@
 # Global settings
 global_settings:
+  debug: false
+  database_engine: SQLite
   # Define number of line segments to show across bounding box height for line sub-sampling
   line_segments_across_bbox: 100
 

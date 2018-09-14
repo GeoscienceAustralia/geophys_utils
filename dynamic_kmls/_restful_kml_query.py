@@ -3,31 +3,21 @@ Created on 7 Sep. 2018
 
 @author: Andrew Turner
 '''
-import yaml
 import os
 from flask_restful import Resource
 from flask import request, make_response
 import simplekml
-import time
 from shapely.geometry import Polygon
-from shapely import wkt
-from dynamic_kmls import DEBUG, DATABASE_ENGINE
-from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter
+from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter, settings
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
 #from pprint import pformat
 
 logger = logging.getLogger(__name__)
-if DEBUG:
+if settings['global_settings']['debug']:
     logger.setLevel(logging.DEBUG) # Initial logging level for this module
 else:
     logger.setLevel(logging.INFO) # Initial logging level for this module
-
-
-settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
-                                            'netcdf2kml_settings.yml')))
-#print('settings = {}'.format(settings))
-#print('settings: {}'.format(yaml.safe_dump(settings)))
 
 class RestfulKMLQuery(Resource):
     '''
@@ -39,7 +29,8 @@ class RestfulKMLQuery(Resource):
         '''
         super(RestfulKMLQuery, self).__init__()
         
-        self.sdmc = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=DEBUG)
+        self.sdmc = get_dataset_metadata_cache(db_engine=settings['global_settings']['database_engine'], 
+                                               debug=settings['global_settings']['debug'])
            
     
     def get(self, dataset_type):

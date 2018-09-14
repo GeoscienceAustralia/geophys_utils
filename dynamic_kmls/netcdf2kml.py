@@ -28,10 +28,16 @@ import netCDF4
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
 import numpy as np
 import os
-from dynamic_kmls import DEBUG
+import yaml
+
+settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
+                                            'netcdf2kml_settings.yml')))
+#print('settings = {}'.format(settings))
+#print('settings: {}'.format(yaml.safe_dump(settings)))
+
 
 logger = logging.getLogger(__name__)
-if DEBUG:
+if settings['global_settings']['debug']:
     logger.setLevel(logging.DEBUG) # Initial logging level for this module
 else:
     logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -187,7 +193,7 @@ class NetCDF2kmlConverter(object):
         self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
                                                              enable_disk_cache=False,
                                                              enable_memory_cache=True,
-                                                             debug=DEBUG)
+                                                             debug=settings['global_settings']['debug'])
         self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================
@@ -294,7 +300,7 @@ class NetCDF2kmlConverter(object):
         self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, 
                                                                 enable_disk_cache=False, 
                                                                 enable_memory_cache=True,
-                                                                debug=DEBUG)
+                                                                debug=settings['global_settings']['debug'])
         
         if not self.point_utils.point_count: # No points in dataset
             return None
