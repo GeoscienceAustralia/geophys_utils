@@ -36,7 +36,7 @@ dataset_settings:
     polygon_color: B30000ff # Red
     polygon_outline: 1
     protocol: opendap
-    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{nc_basename}
+    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{netcdf_basename}
     colormap_name: rainbow
     color_count: 512
   aem:
@@ -50,7 +50,7 @@ dataset_settings:
     line_color: ff32cd9a
     line_width: 5
     protocol: opendap
-    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{nc_basename}
+    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{netcdf_basename}
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
     color_count: 512

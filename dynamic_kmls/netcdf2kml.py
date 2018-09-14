@@ -30,9 +30,11 @@ import numpy as np
 import os
 from dynamic_kmls import DEBUG
 
-# Setup logging handlers if required
-logger = logging.getLogger(__name__)  # Get logger
-logger.setLevel(logging.INFO)  # Initial logging level for this module
+logger = logging.getLogger(__name__)
+if DEBUG:
+    logger.setLevel(logging.DEBUG) # Initial logging level for this module
+else:
+    logger.setLevel(logging.INFO) # Initial logging level for this module
 
 class NetCDF2kmlConverter(object):
     '''
@@ -51,7 +53,9 @@ class NetCDF2kmlConverter(object):
         full_settings.update(settings['dataset_settings'][dataset_type]) # Dataset settings
         full_settings.update(metadata_dict) # Database search results
         full_settings['netcdf_path'] = str(netcdf_path).strip()
+        full_settings['netcdf_basename'] = os.path.basename(full_settings['netcdf_path'])
         full_settings['dataset_type'] = dataset_type
+        
         logger.debug('full_settings: {}'.format(full_settings))        
         for key, value in full_settings.items():
             setattr(self, key, value)
@@ -74,7 +78,7 @@ class NetCDF2kmlConverter(object):
         if self.dataset_link:
             # Perform any substitutions required
             self.dataset_link = self.dataset_link.replace('{nc_basename}', os.path.basename(netcdf_path))
-            for key, value in metadata_dict.items():
+            for key, value in full_settings.items():
                 self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
         
         self.polygon_style = simplekml.Style()
@@ -127,7 +131,7 @@ class NetCDF2kmlConverter(object):
                                       "<maxFadeExtent>" + str(max_fade_extent) + "</maxFadeExtent>")
         return region
 
-    def build_polygon(self, parent_folder, visibility=True):
+    def build_polygon(self, parent_folder, bounding_box, visibility=True):
         """
         Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
         :param parent_folder:
@@ -177,7 +181,7 @@ class NetCDF2kmlConverter(object):
 
     
 
-    def build_lines(self, parent_folder, bounding_box):
+    def build_lines(self, parent_folder, bounding_box, visibility=True):
         
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
         self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
@@ -206,7 +210,7 @@ class NetCDF2kmlConverter(object):
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
-        dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id))
+        dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
@@ -276,7 +280,7 @@ class NetCDF2kmlConverter(object):
 
         return dataset_folder
 
-    def build_points(self, parent_folder, bounding_box):
+    def build_points(self, parent_folder, bounding_box, visibility=True):
         """
         Builds all points for a survey. Including building the containing folder, setting time stamps, setting the
          style, and setting the description html to pop up when the point is selected.
@@ -302,7 +306,7 @@ class NetCDF2kmlConverter(object):
         logger.debug(spatial_mask)
         if np.any(spatial_mask):
             logger.debug("TRUE")
-            dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id))
+            dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
 
             # Set timestamp
             # start_date = re.match('^[0-9]{4}', str(self.ga_survey_id)).group()
@@ -362,6 +366,51 @@ class NetCDF2kmlConverter(object):
             dataset_folder.region = self.build_region(100, -1, 200, 800)
             return dataset_folder
 
+
+    def build_thumbnail(self, parent_folder, visibility=True):
+        """
+        Builds a kml thumbnail image into the parent folder. 
+        Thumbnail URL is built from OPeNDAP endpoint at this stage, but this needs to change.
+        :param parent_folder:
+        :param visibility:
+        :return: the input parent folder now containing the thumbnail and the polygon itself if that is desired instead.
+        """
+        logger.debug("Building WMS thumbnail...")
+        try:
+            wms_url = self.netcdf_path.replace('/dodsC/', '/wms/')
+                
+    #===========================================================================
+    #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
+    #             dataset_folder = parent_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
+    #                                            outerboundaryis=polygon_bounds, visibility=visibility)
+    # 
+    #             # build the polygon description
+    #             description_string = '<![CDATA['
+    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
+    #                                                                                       str(self.dataset_title))
+    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.ga_survey_id))
+    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
+    #                                                                                       str(self.start_date))
+    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
+    #                                                                                       str(self.end_date))
+    #             if self.dataset_link:
+    #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Data Link', str(
+    #                 self.dataset_link))
+    #             description_string = description_string + ']]>'
+    #             dataset_folder.description = description_string
+    # 
+    #             dataset_folder.style = self.polygon_style
+    #             
+    #             self.set_timestamps(dataset_folder)
+    # 
+    #             return dataset_folder
+    #===========================================================================
+        
+        except Exception as e:
+            #logger.warning("Unable to display thumbnail "{}": {}".format(wms_url, e))
+            pass
+
+    
 
     def build_html_description_string(self, variable_attributes, point_data):
         """
@@ -485,7 +534,19 @@ class NetCDF2kmlConverter(object):
                 kml_entity.timespan.begin = str(survey_year) + "-06-01"
                 kml_entity.timespan.end = str(survey_year) + "-07-01"
 
+    def build_kml_function(self, kml_feature):
+        '''
+        Return function to build specified feature
+        '''
+        build_kml_functions = {'polygon': self.build_polygon,
+                               'point': self.build_points,
+                               'line': self.build_lines,
+                               'grid': self.build_thumbnail
+                               }
+        
+        return build_kml_functions.get(kml_feature)
 
+        
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
     """
     Build a network link, set the parameters, and inserts into the specified containing folder.
