@@ -139,10 +139,11 @@ class NetCDF2kmlConverter(object):
 
     def build_polygon(self, parent_folder, bounding_box, visibility=True):
         """
-        Builds a kml polygon into the parent folder. Polygon is build from netcdf flobal attribute geospatial_bounds.
-        :param parent_folder:
-        :param visibility:
-        :return: the input parent folder now containing the polygon and the polygon itself if that is desired instead.
+        Builds a kml polygon into the parent folder. Polygon is built from convex_hull_polygon in database search result.
+        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
+        @return: Dataset folder under parent folder
         """
         logger.debug("Building polygon...")
         # get the polygon points from the polygon string
@@ -170,7 +171,7 @@ class NetCDF2kmlConverter(object):
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
                                                                                           str(self.end_date))
                 if self.dataset_link:
-                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Data Link', str(
+                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
                     self.dataset_link))
                 description_string = description_string + ']]>'
                 dataset_folder.description = description_string
@@ -188,7 +189,13 @@ class NetCDF2kmlConverter(object):
     
 
     def build_lines(self, parent_folder, bounding_box, visibility=True):
-        
+        '''
+        Builds a set of kml linestrings into the parent folder. Linestrings are built from dynamically subsampled points in line.
+        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
+        @return: Dataset folder under parent folder
+        '''
         self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
         self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
                                                              enable_disk_cache=False,
@@ -252,6 +259,9 @@ class NetCDF2kmlConverter(object):
                 # build the line description
                 description_string = '<![CDATA['
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ', str(self.dataset_title))
+                if self.dataset_link:
+                    description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
+                    self.dataset_link))
                 description_string = description_string + ']]>'
                 line_string.description = description_string
 
@@ -290,8 +300,10 @@ class NetCDF2kmlConverter(object):
         """
         Builds all points for a survey. Including building the containing folder, setting time stamps, setting the
          style, and setting the description html to pop up when the point is selected.
-        :param parent_folder: The folder for the new survey folder containing the points to be inserted into.
-        :return: the kml folder of the survey containing the new points.
+        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
+        @return: Dataset folder under parent folder
         """
         logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
         logger.debug('bounding_box:' + str(bounding_box))
@@ -377,13 +389,14 @@ class NetCDF2kmlConverter(object):
         """
         Builds a kml thumbnail image into the parent folder. 
         Thumbnail URL is built from OPeNDAP endpoint at this stage, but this needs to change.
-        :param parent_folder:
-        :param visibility:
-        :return: the input parent folder now containing the thumbnail and the polygon itself if that is desired instead.
+        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
+        @return: Dataset folder under parent folder
         """
         logger.debug("Building WMS thumbnail...")
         try:
-            wms_url = self.netcdf_path.replace('/dodsC/', '/wms/')
+            wms_url = self.netcdf_path.replace('/dodsC/', '/wms/') #TODO: Replace this hack
                 
     #===========================================================================
     #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
@@ -400,7 +413,7 @@ class NetCDF2kmlConverter(object):
     #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
     #                                                                                       str(self.end_date))
     #             if self.dataset_link:
-    #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Data Link', str(
+    #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
     #                 self.dataset_link))
     #             description_string = description_string + ']]>'
     #             dataset_folder.description = description_string
@@ -452,6 +465,10 @@ class NetCDF2kmlConverter(object):
                     variable_attributes[field].get('long_name'),
                     point_data[field])
 
+        if self.dataset_link:
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
+            self.dataset_link))
+            
         description_string = description_string + ']]>'
         return description_string
 
@@ -540,9 +557,12 @@ class NetCDF2kmlConverter(object):
                 kml_entity.timespan.begin = str(survey_year) + "-06-01"
                 kml_entity.timespan.end = str(survey_year) + "-07-01"
 
-    def build_kml_function(self, kml_feature):
+    def build_kml(self, parent_folder, bbox_list, visibility=True):
         '''
-        Return function to build specified feature
+        Function to build and return KML for specified dataset_form
+        @param parent_folder: KML folder under which to build geometry for dataset
+        @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         '''
         build_kml_functions = {'polygon': self.build_polygon,
                                'point': self.build_points,
@@ -550,8 +570,14 @@ class NetCDF2kmlConverter(object):
                                'grid': self.build_thumbnail
                                }
         
-        return build_kml_functions.get(kml_feature)
-
+        # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
+        if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
+            return self.build_polygon(parent_folder, bbox_list, visibility)
+        else: # Build detailed view for high zoom
+            build_kml_function = build_kml_functions.get(self.dataset_format)
+            assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
+                                                                                         list(build_kml_functions.keys()))
+            return build_kml_function(parent_folder, bbox_list, visibility)
         
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
     """

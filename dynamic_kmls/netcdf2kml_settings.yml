@@ -22,11 +22,11 @@ default_dataset_settings:
 # Dataset settings
 dataset_settings:
   ground_gravity:
-    format: point
+    dataset_format: point
     min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     dataset_type_name: Ground Gravity Surveys
-    netcdf_path_prefix: null #C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Use null to use OPeNDAP
     point_color_settings: # Parameters for point color display defined as: (<field_name>: (<color_range_min>, <color_range_max>)) or static color
     - bouguer
     - [-500, 500]
@@ -42,26 +42,26 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 512
   aem:
-    format: line
+    dataset_format: line
     min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [geophysics, airborne, AEM, conductivity]
     dataset_type_name: AEM Surveys
-    netcdf_path_prefix: null #C:\Temp\Geophysics\AEM conductivity datasets # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\AEM conductivity datasets # Local directory containing files. Use null to use OPeNDAP
     polygon_color: ff32cd9a # Bright Green
     polygon_outline: 1
     line_color: ff32cd9a
     line_width: 5
     protocol: opendap
-    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{netcdf_basename}
+    dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/aem/catalog.html?dataset=uc0/rr2_dev/axi547/aem/{netcdf_basename}
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
     color_count: 512
   magnetic_grids:
-    format: grid
+    dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, magnetics, grid]
     dataset_type_name: Magnetic Survey grids
-    netcdf_path_prefix: null #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\magnetic grids # Local directory containing files. Use null to use OPeNDAP
     polygon_color: ffff0000 # Blue
     polygon_outline: 1
     protocol: opendap
@@ -69,11 +69,11 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 512
   potassium_grids:
-    format: grid
+    dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, potassium, grid]
     dataset_type_name: Potassium Survey grids
-    netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
     polygon_color: ff808080 # Grey
     polygon_outline: 1
     protocol: opendap
@@ -81,11 +81,11 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 512
   thorium_grids:
-    format: grid
+    dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, thorium, grid]
     dataset_type_name: Thorium Equivalent Survey grids
-    netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
     polygon_color: ffffff00 # Cyan
     polygon_outline: 1
     protocol: opendap
@@ -93,11 +93,11 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 512
   uranium_grids:
-    format: grid
+    dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, uranium, grid]
     dataset_type_name: Uranium Equivalent Survey grids
-    netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
+    netcdf_path_prefix: C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
     polygon_color: ff800080 # Purple
     polygon_outline: 1
     protocol: opendap

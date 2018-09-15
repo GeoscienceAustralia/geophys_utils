@@ -44,9 +44,6 @@ class RestfulKMLQuery(Resource):
         #TODO: Handle this more gracefully
         assert dataset_settings, 'Invalid dataset type "{}"'.format(dataset_type)
         
-        # Determine which KML generation function to call based on dataset_settings['format']
-        dataset_format = dataset_settings['format']
-        
         bbox_list = [float(ordinate) for ordinate in request.args['BBOX'].split(',')]
     
         #=======================================================================
@@ -73,16 +70,12 @@ class RestfulKMLQuery(Resource):
                 
                 # dataset_folder = dataset_type_folder.newfolder(name=dataset_metadata_dict['dataset_title'])
 
-                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], str(dataset_metadata_dict['distribution_url']))
+                #TODO: Replace this hack for turning OPeNDAP endpoints into local pathnames
+                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
+                                                  str(dataset_metadata_dict['distribution_url']))
                 
                 netcdf2kml_obj = NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
-                build_polygon_function = netcdf2kml_obj.build_kml_function('polygon')
-                build_kml_function = netcdf2kml_obj.build_kml_function(dataset_format)
-
-                if ((bbox_list[2] - bbox_list[0]) >= dataset_settings['min_polygon_bbox_width']):
-                    build_polygon_function(dataset_type_folder, bbox_list)
-                else:
-                    build_kml_function(dataset_type_folder, bbox_list)
+                netcdf2kml_obj.build_kml(dataset_type_folder, bbox_list)
 
                 del netcdf2kml_obj # Finished with this object - delete it
     
