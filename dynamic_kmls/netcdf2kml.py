@@ -25,7 +25,7 @@ import matplotlib.colors as mpl_colors
 import logging
 from datetime import date, timedelta
 import netCDF4
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils
+from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 import numpy as np
 import os
 import yaml
@@ -68,11 +68,11 @@ class NetCDF2kmlConverter(object):
             
         self.kml = simplekml.Kml()
 
-        # Don't connect to netCDF dataset until we have to
-        self.netcdf_dataset = None
-        self.point_utils = None
-        self.line_utils = None
-        self.grid_utils = None
+        # Initialise private instance values to None - will be set by property getter methods as required
+        self._netcdf_dataset = None
+        self._point_utils = None
+        self._line_utils = None
+        self._grid_utils = None
 
         # Set self.end_date if unknown and self.start_date is known
         if self.start_date and not self.end_date:
@@ -112,8 +112,8 @@ class NetCDF2kmlConverter(object):
         '''
         NetCDF2kmlConverter destructor
         '''
-        if self.netcdf_dataset:
-            self.netcdf_dataset.close()
+        if self._netcdf_dataset:
+            self._netcdf_dataset.close()
     
     def build_region(self, min_lod_pixels=100, max_lod_pixels=-1, min_fade_extent=200, max_fade_extent=800):
         """
@@ -196,12 +196,6 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         '''
-        self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.line_utils = self.line_utils or NetCDFLineUtils(self.netcdf_dataset, 
-                                                             enable_disk_cache=False,
-                                                             enable_memory_cache=True,
-                                                             debug=settings['global_settings']['debug'])
-        self.point_utils = self.line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         
         #=======================================================================
         # # Set up color map for rainbow color scheme
@@ -307,12 +301,6 @@ class NetCDF2kmlConverter(object):
         """
         logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
         logger.debug('bounding_box:' + str(bounding_box))
-        
-        self.netcdf_dataset = self.netcdf_dataset or netCDF4.Dataset(self.netcdf_path)
-        self.point_utils = self.point_utils or NetCDFPointUtils(self.netcdf_dataset, 
-                                                                enable_disk_cache=False, 
-                                                                enable_memory_cache=True,
-                                                                debug=settings['global_settings']['debug'])
         
         if not self.point_utils.point_count: # No points in dataset
             return None
@@ -578,6 +566,52 @@ class NetCDF2kmlConverter(object):
             assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
                                                                                          list(build_kml_functions.keys()))
             return build_kml_function(parent_folder, bbox_list, visibility)
+        
+        
+    @property
+    def netcdf_dataset(self):
+        '''
+        Getter method for netcdf_dataset property. Will set self._netcdf_dataset if None
+        '''
+        if not self._netcdf_dataset:
+            # Don't connect to netCDF dataset until we have to
+            self._netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+        return self._netcdf_dataset       
+            
+    @property
+    def point_utils(self):
+        '''
+        Getter method for point_utils property. Will set self._point_utils if None
+        '''
+        if not self._point_utils:
+            self._point_utils = NetCDFPointUtils(self.netcdf_dataset, 
+                                                 enable_disk_cache=False, 
+                                                 enable_memory_cache=True,
+                                                 debug=settings['global_settings']['debug'])
+        return self._point_utils
+    
+    @property
+    def line_utils(self):
+        '''
+        Getter method for line_utils property. Will set self._line_utils if None
+        '''
+        if not self._line_utils:
+            self._line_utils = NetCDFLineUtils(self.netcdf_dataset, 
+                                               enable_disk_cache=False,
+                                               enable_memory_cache=True,
+                                               debug=settings['global_settings']['debug'])
+        self._point_utils = self._line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
+        return self._line_utils
+        
+    @property
+    def grid_utils(self):
+        '''
+        Getter method for grid_utils property. Will set self._grid_utils if None
+        '''
+        if not self._grid_utils:
+            self._grid_utils = NetCDFGridUtils(self.netcdf_dataset)
+        return self._grid_utils
+    
         
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
     """
