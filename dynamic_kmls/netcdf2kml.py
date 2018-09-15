@@ -106,9 +106,22 @@ class NetCDF2kmlConverter(object):
         self.point_style.iconstyle.scale = self.point_icon_scale
         self.point_style.labelstyle.scale = self.point_labelstyle_scale
         self.point_style.iconstyle.icon.href = self.point_icon_href
-        if self.point_color: # Fixed point colour
+        if self.point_color: # Fixed point colour - will None if variant color required
             self.point_style.iconstyle.color = self.point_color
             
+        if self.filtered_point_icon_color:
+            self.filtered_point_style = simplekml.Style()
+            self.filtered_point_style.iconstyle.scale = self.point_icon_scale
+            self.filtered_point_style.labelstyle.scale = self.point_labelstyle_scale
+            self.filtered_point_style.iconstyle.icon.href = self.point_icon_href
+            self.filtered_point_style.iconstyle.color = self.filtered_point_icon_color
+        else:
+            self.filtered_point_style = None
+            
+        self.line_style = simplekml.Style()
+        self.line_style.linestyle.width = self.line_width
+        self.line_style.linestyle.color = self.line_color # Fixed color
+        
 
 
     def __del__(self):
@@ -164,6 +177,8 @@ class NetCDF2kmlConverter(object):
                 dataset_folder = parent_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
                                                outerboundaryis=polygon_bounds, visibility=visibility)
     
+                dataset_folder.style = self.polygon_style
+    
                 # Always set timestamps on polygons
                 self.set_timestamps(dataset_folder)
 
@@ -182,8 +197,6 @@ class NetCDF2kmlConverter(object):
                 description_string = description_string + ']]>'
                 dataset_folder.description = description_string
     
-                dataset_folder.style = self.polygon_style
-    
                 return dataset_folder
         
         except Exception as e:
@@ -201,15 +214,6 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         '''
         
-        #=======================================================================
-        # # Set up color map for rainbow color scheme
-        # line_index_range = (0, len(self.line_utils.line)-1)
-        # line_color_map = {self.line_utils.line[line_index]: self.value2colorhex(line_index, 
-        #                                                                      line_index_range)
-        #                    for line_index in range(0, len(self.line_utils.line))
-        #                    }
-        #=======================================================================
-
         logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
@@ -222,6 +226,8 @@ class NetCDF2kmlConverter(object):
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
         dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        
+        dataset_folder.style = self.line_style
         
         if self.timestamp_detail_view:
             # Enable timestamps on lines
@@ -253,10 +259,7 @@ class NetCDF2kmlConverter(object):
 
                 line_string.extrude = 0
                 line_string.tessellate = 1
-                line_string.style.linestyle.width = self.line_width
-                
-                line_string.style.linestyle.color = self.line_color # Fixed color
-                #line_segment.style.linestyle.color = line_color_map[line_number] # Rainbow color scheme for lines
+                line_string.style = self.line_style # Fixed color
                 
                 # build the line description
                 description_string = '<![CDATA['
@@ -352,30 +355,29 @@ class NetCDF2kmlConverter(object):
 
                 description_string = self.build_html_description_string(variable_attributes, point_data)
                 logger.debug(description_string)
-                new_point.description = description_string  # set description to point
+                new_point.description = description_string  # set description of point
                 
-                # styling
-                if self.point_color: # Fixed point color
-                    variant_point_color = None
-                else: # Variable point color
-                    variant_point_color = self.value2colorhex(point_data[self.point_color_field], self.point_color_range)
-                    
+                # Set point styling               
                 # Set the color for filtered points
+                point_is_unfiltered = True # Assume point is unfiltered
                 if self.point_filter:  # if there is a point_flag separate the points and color differently
                     logger.debug('self.point_filter: {}'.format(self.point_filter))
                     for key, value in self.point_filter.items():
-                        if point_data[key] == value:
-                            variant_point_color = self.filtered_point_icon_color
+                        if point_data[key] == value: # Point satisfies filter condition
+                            point_is_unfiltered = False
+                            new_point.style = self.filtered_point_style
                             break
                 
-                if variant_point_color: # If colour has been overridden
-                    new_point.style = simplekml.Style()
-                    new_point.style.iconstyle.scale = self.point_style.iconstyle.scale
-                    new_point.style.labelstyle.scale = self.point_style.labelstyle.scale
-                    new_point.style.iconstyle.icon.href = self.point_style.iconstyle.icon.href
-                    new_point.style.iconstyle.color = variant_point_color
-                else: # Default style
-                    new_point.style = self.point_style
+                if point_is_unfiltered: # Point is not filtered 
+                    if self.point_color: # Fixed point color required
+                        new_point.style = self.point_style
+                    else: # Variable point color
+                        variant_point_color = self.value2colorhex(point_data[self.point_color_field], self.point_color_range)
+                        new_point.style = simplekml.Style()
+                        new_point.style.iconstyle.scale = self.point_icon_scale
+                        new_point.style.labelstyle.scale = self.point_labelstyle_scale
+                        new_point.style.iconstyle.icon.href = self.point_icon_href
+                        new_point.style.iconstyle.color = variant_point_color
 
             dataset_folder.region = self.build_region(100, -1, 200, 800)
             return dataset_folder
