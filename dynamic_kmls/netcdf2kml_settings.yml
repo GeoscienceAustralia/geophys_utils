@@ -18,6 +18,7 @@ default_dataset_settings:
   point_icon_scale: 0.7
   point_labelstyle_scale: 0
   polygon_color: 1
+  timestamp_detail_view: false
   
 # Dataset settings
 dataset_settings:
