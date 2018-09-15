@@ -161,6 +161,9 @@ class NetCDF2kmlConverter(object):
                 dataset_folder = parent_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
                                                outerboundaryis=polygon_bounds, visibility=visibility)
     
+                # Always set timestamps on polygons
+                self.set_timestamps(dataset_folder)
+
                 # build the polygon description
                 description_string = '<![CDATA['
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
@@ -177,8 +180,6 @@ class NetCDF2kmlConverter(object):
                 dataset_folder.description = description_string
     
                 dataset_folder.style = self.polygon_style
-                
-                self.set_timestamps(dataset_folder)
     
                 return dataset_folder
         
@@ -219,6 +220,10 @@ class NetCDF2kmlConverter(object):
         
         dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
+        if self.timestamp_detail_view:
+            # Enable timestamps on lines
+            self.set_timestamps(dataset_folder)
+        
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
                                                                 bounds=bounding_box_floats,
@@ -258,10 +263,6 @@ class NetCDF2kmlConverter(object):
                     self.dataset_link))
                 description_string = description_string + ']]>'
                 line_string.description = description_string
-
-                # Uncomment the following line to enable timestamps on lines
-                #self.set_timestamps(line_segment)
-
                
                 # # # touring
                 # tour = kml.newgxtour(name="Play me!")
@@ -313,6 +314,11 @@ class NetCDF2kmlConverter(object):
         if np.any(spatial_mask):
             logger.debug("TRUE")
             dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+            
+            if self.timestamp_detail_view:
+                # Enable timestamps on points
+                self.set_timestamps(dataset_folder)
+
 
             # Set timestamp
             # start_date = re.match('^[0-9]{4}', str(self.ga_survey_id)).group()
@@ -351,9 +357,6 @@ class NetCDF2kmlConverter(object):
                 logger.debug(description_string)
                 new_point.description = description_string  # set description to point
                 
-                # Uncomment the following line to enable timestamps on points
-                #self.set_timestamps(new_point)
-
                 # styling
                 if self.point_color: # Fixed point color
                     unfiltered_point_icon_color = self.point_color

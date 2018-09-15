@@ -41,6 +41,7 @@ dataset_settings:
     dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{netcdf_basename}
     colormap_name: rainbow
     color_count: 512
+    timestamp_detail_view: true
   aem:
     dataset_format: line
     min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
@@ -56,6 +57,7 @@ dataset_settings:
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
     color_count: 512
+    timestamp_detail_view: true
   magnetic_grids:
     dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
@@ -68,6 +70,7 @@ dataset_settings:
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
     color_count: 512
+    timestamp_detail_view: true
   potassium_grids:
     dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
@@ -80,6 +83,7 @@ dataset_settings:
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
     color_count: 512
+    timestamp_detail_view: true
   thorium_grids:
     dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
@@ -92,6 +96,7 @@ dataset_settings:
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
     color_count: 512
+    timestamp_detail_view: true
   uranium_grids:
     dataset_format: grid
     min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
@@ -104,4 +109,5 @@ dataset_settings:
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
     color_count: 512
-  
+    timestamp_detail_view: true
+ 
