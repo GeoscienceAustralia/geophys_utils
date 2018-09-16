@@ -6,7 +6,6 @@ Created on 7 Sep. 2018
 import os
 from flask_restful import Resource
 from flask import request, make_response
-import simplekml
 from shapely.geometry import Polygon
 from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter, settings
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
