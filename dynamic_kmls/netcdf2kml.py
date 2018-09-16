@@ -237,6 +237,7 @@ class NetCDF2kmlConverter(object):
             # Enable timestamps on lines
             self.set_timestamps(dataset_kml)
         
+        visible_line_count = 0 # Need to iterate through generator to count lines
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
                                                                 bounds=bounding_box_floats,
@@ -246,6 +247,7 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_data: {}".format(line_data))
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
+                visible_line_count += 1
                 line_string = dataset_kml.newlinestring(name=str("Line number: {}".format(line_number)))
                 
                 #line_string.style = dataset_kml.style
@@ -302,6 +304,10 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
 
+        if not visible_line_count:
+            dataset_kml.name = '{} has no lines in view'.format(self.dataset_title)
+            dataset_kml.visibility = False
+            
         return dataset_kml
 
     def build_points(self, bounding_box, visibility=True):
@@ -313,15 +319,6 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         """        
-        if not self.point_utils.point_count: # No points in dataset
-            return
-
-        # bounding_box_floats = [110.4899599829594, -56.11642075733719, 166.658146968822, -6.11642075733719]
-        spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
-        #logger.debug('spatial_mask: {}'.format(spatial_mask))
-        
-        if not np.any(spatial_mask):
-            return
         
         dataset_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
@@ -331,22 +328,34 @@ class NetCDF2kmlConverter(object):
             # Enable timestamps on points
             self.set_timestamps(dataset_kml)
             
+        visible_points_exist = False
+        if self.point_utils.point_count: # Points found in dataset
+            spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
+            #logger.debug('spatial_mask: {}'.format(spatial_mask))
+            visible_points_exist = np.any(spatial_mask)
+
+        if not visible_points_exist:   
+            # Return empty folder 
+            dataset_kml.name = '{} has no points in view'.format(self.dataset_title)
+            dataset_kml.visibility = False
+            return dataset_kml
+        
         point_data_generator = self.point_utils.all_point_data_generator(self.point_field_list, spatial_mask)
         logger.debug(point_data_generator)
-        variable_attributes = next(point_data_generator)
+        variable_attributes = next(point_data_generator) # Get point attribute names from first item returned
         logger.debug(variable_attributes)
         logger.debug("variable_attributes: " + str(variable_attributes))
 
         skip_points = 1  # set to limit the points displayed if required.
-        points_read = 0
+        visible_point_count = 0
 
         for point_data_list in point_data_generator:
             point_data = dict(zip(self.point_field_list, point_data_list)) # Create dict for better readability
             logger.debug("POINT DATA: {}".format(point_data))
-            points_read += 1
+            visible_point_count += 1
 
             # ignore points between skip_points
-            if points_read % skip_points != 0:
+            if visible_point_count % skip_points != 0:
                 continue
 
             # add new points with netcdf file Obsno as title and long and lat as coordinatess
@@ -388,7 +397,7 @@ class NetCDF2kmlConverter(object):
                 point_kml.style = variant_point_style
 
         dataset_kml.region = self.build_region(100, -1, 200, 800)
-        
+            
         return dataset_kml
 
 
