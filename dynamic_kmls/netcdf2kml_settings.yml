@@ -1,6 +1,7 @@
 # Global settings
 global_settings:
   debug: false
+  http_compression: true
   database_engine: SQLite
   # Define number of line segments to show across bounding box height for line sub-sampling
   line_segments_across_bbox: 100
@@ -41,7 +42,7 @@ dataset_settings:
     protocol: opendap
     dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/ground_gravity/point_datasets/catalog.html?dataset=uc0/rr2_dev/axi547/ground_gravity/point_datasets/{netcdf_basename}
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
   aem:
     dataset_format: line
@@ -57,7 +58,7 @@ dataset_settings:
     dataset_link: http://dapds00.nci.org.au/thredds/catalog/uc0/rr2_dev/axi547/aem/catalog.html?dataset=uc0/rr2_dev/axi547/aem/{netcdf_basename}
     height_variable: lidar # Do not set this value for 2D coordinates
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
   magnetic_grids:
     dataset_format: grid
@@ -70,7 +71,7 @@ dataset_settings:
     protocol: opendap
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
   potassium_grids:
     dataset_format: grid
@@ -83,7 +84,7 @@ dataset_settings:
     protocol: opendap
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
   thorium_grids:
     dataset_format: grid
@@ -96,7 +97,7 @@ dataset_settings:
     protocol: opendap
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
   uranium_grids:
     dataset_format: grid
@@ -109,6 +110,6 @@ dataset_settings:
     protocol: opendap
     dataset_link: 'https://ecat.ga.gov.au/geonetwork/srv/eng/catalog.search#/metadata/{metadata_uuid}'
     colormap_name: rainbow
-    color_count: 512
+    color_count: 256
     timestamp_detail_view: true
  

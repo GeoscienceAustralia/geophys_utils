@@ -227,8 +227,6 @@ class NetCDF2kmlConverter(object):
         
         dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
-        dataset_folder.style = self.line_style
-        
         if self.timestamp_detail_view:
             # Enable timestamps on lines
             self.set_timestamps(dataset_folder)
@@ -305,82 +303,87 @@ class NetCDF2kmlConverter(object):
         @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
-        """
+        """        
         logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
         logger.debug('bounding_box:' + str(bounding_box))
         
         if not self.point_utils.point_count: # No points in dataset
-            return None
+            return
 
         bounding_box_floats = [float(coord) for coord in bounding_box]
         logger.debug(bounding_box_floats)
         # bounding_box_floats = [110.4899599829594, -56.11642075733719, 166.658146968822, -6.11642075733719]
         spatial_mask = self.point_utils.get_spatial_mask(bounding_box_floats)
         logger.debug(spatial_mask)
-        if np.any(spatial_mask):
-            logger.debug("TRUE")
-            dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        
+        if not np.any(spatial_mask):
+            return
+        
+        dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        
+        if self.timestamp_detail_view:
+            # Enable timestamps on points
+            self.set_timestamps(dataset_folder)
             
-            if self.timestamp_detail_view:
-                # Enable timestamps on points
-                self.set_timestamps(dataset_folder)
-                
-            # Set timestamp
-            # start_date = re.match('^[0-9]{4}', str(self.ga_survey_id)).group()
-            # dataset_folder.timespan.begin = str(start_date) + "-01-01"
-            # dataset_folder.timespan.end = str(start_date) + "-01-01"
+        point_data_generator = self.point_utils.all_point_data_generator(self.point_field_list, spatial_mask)
+        logger.debug(point_data_generator)
+        variable_attributes = next(point_data_generator)
+        logger.debug(variable_attributes)
+        logger.debug("variable_attributes: " + str(variable_attributes))
 
-            point_data_generator = self.point_utils.all_point_data_generator(self.point_field_list, spatial_mask)
-            logger.debug(point_data_generator)
-            variable_attributes = next(point_data_generator)
-            logger.debug(variable_attributes)
-            logger.debug("variable_attributes: " + str(variable_attributes))
+        skip_points = 1  # set to limit the points displayed if required.
+        points_read = 0
+        
+        point_style_by_color = {}
 
-            skip_points = 1  # set to limit the points displayed if required.
-            points_read = 0
+        for point_data_list in point_data_generator:
+            point_data = dict(zip(self.point_field_list, point_data_list)) # Create dict for better readability
+            logger.debug("POINT DATA: {}".format(point_data))
+            points_read += 1
 
-            for point_data_list in point_data_generator:
-                point_data = dict(zip(self.point_field_list, point_data_list)) # Create dict for better readability
-                logger.debug("POINT DATA: {}".format(point_data))
-                points_read += 1
+            # ignore points between skip_points
+            if points_read % skip_points != 0:
+                continue
 
-                # ignore points between skip_points
-                if points_read % skip_points != 0:
-                    continue
+            # add new points with netcdf file Obsno as title and long and lat as coordinatess
+            # point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
+            new_point = dataset_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
+                                                   coords=[(point_data['longitude'], point_data['latitude'])])
 
-                # add new points with netcdf file Obsno as title and long and lat as coordinatess
-                # point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
-                new_point = dataset_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
-                                                       coords=[(point_data['longitude'], point_data['latitude'])])
+            description_string = self.build_html_description_string(variable_attributes, point_data)
+            logger.debug(description_string)
+            new_point.description = description_string  # set description of point
+            
+            # Set point styling               
+            # Set the color for filtered points
+            point_is_unfiltered = True # Assume point is unfiltered
+            if self.point_filter:  # if there is a point_flag separate the points and color differently
+                logger.debug('self.point_filter: {}'.format(self.point_filter))
+                for key, value in self.point_filter.items():
+                    if point_data[key] == value: # Point satisfies filter condition
+                        point_is_unfiltered = False
+                        new_point.style = self.filtered_point_style
+                        break
+            
+            if point_is_unfiltered: # Point is not filtered 
+                if self.point_color: # Fixed point color required
+                    new_point.style = self.point_style
+                else: # Variable point color
+                    variant_point_color = self.value2colorhex(point_data[self.point_color_field], self.point_color_range)
+                    
+                    point_style = point_style_by_color.get(variant_point_color)
+                    if not point_style: # Point style doesn't already exist in cache - construct and cache it
+                        point_style = simplekml.Style()
+                        point_style.iconstyle.scale = self.point_icon_scale
+                        point_style.labelstyle.scale = self.point_labelstyle_scale
+                        point_style.iconstyle.icon.href = self.point_icon_href
+                        point_style.iconstyle.color = variant_point_color
+                        point_style_by_color[variant_point_color] = point_style
+                    
+                    new_point.style = point_style
 
-                description_string = self.build_html_description_string(variable_attributes, point_data)
-                logger.debug(description_string)
-                new_point.description = description_string  # set description of point
-                
-                # Set point styling               
-                # Set the color for filtered points
-                point_is_unfiltered = True # Assume point is unfiltered
-                if self.point_filter:  # if there is a point_flag separate the points and color differently
-                    logger.debug('self.point_filter: {}'.format(self.point_filter))
-                    for key, value in self.point_filter.items():
-                        if point_data[key] == value: # Point satisfies filter condition
-                            point_is_unfiltered = False
-                            new_point.style = self.filtered_point_style
-                            break
-                
-                if point_is_unfiltered: # Point is not filtered 
-                    if self.point_color: # Fixed point color required
-                        new_point.style = self.point_style
-                    else: # Variable point color
-                        variant_point_color = self.value2colorhex(point_data[self.point_color_field], self.point_color_range)
-                        new_point.style = simplekml.Style()
-                        new_point.style.iconstyle.scale = self.point_icon_scale
-                        new_point.style.labelstyle.scale = self.point_labelstyle_scale
-                        new_point.style.iconstyle.icon.href = self.point_icon_href
-                        new_point.style.iconstyle.color = variant_point_color
-
-            dataset_folder.region = self.build_region(100, -1, 200, 800)
-            return dataset_folder
+        dataset_folder.region = self.build_region(100, -1, 200, 800)
+        return dataset_folder
 
 
     def build_thumbnail(self, parent_folder, visibility=True):
