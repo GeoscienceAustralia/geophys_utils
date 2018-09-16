@@ -83,7 +83,7 @@ class NetCDF2kmlConverter(object):
             self.point_color = self.point_color_settings
         else:
             raise BaseException('Invalid point color settings') # Should never happen
-        
+                        
         if self.filtered_point_icon_color:
             self.filtered_point_style = simplekml.Style()
             self.filtered_point_style.iconstyle.scale = self.point_icon_scale
@@ -92,23 +92,40 @@ class NetCDF2kmlConverter(object):
             self.filtered_point_style.iconstyle.color = self.filtered_point_icon_color
         else:
             self.filtered_point_style = None
+
+        self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
+        #=======================================================================
+        # # Set fixed styles for sub-elements
+        # self.dataset_type_folder.style.polystyle.color = self.polygon_color
+        # self.dataset_type_folder.style.polystyle.outline = self.polygon_outline
+        # self.dataset_type_folder.style.iconstyle.scale = self.point_icon_scale
+        # self.dataset_type_folder.style.labelstyle.scale = self.point_labelstyle_scale
+        # self.dataset_type_folder.style.iconstyle.icon.href = self.point_icon_href
+        # if self.point_color: # Fixed point colour - will None if variant color required
+        #     self.dataset_type_folder.style.iconstyle.color = self.point_color
+        # self.dataset_type_folder.style.linestyle.width = self.line_width
+        # self.dataset_type_folder.style.linestyle.color = self.line_color # Fixed color
+        #=======================================================================
+        
+        self.polygon_style = simplekml.Style()
+        self.polygon_style.polystyle.color = self.polygon_color
+        self.polygon_style.polystyle.outline = self.polygon_outline
+
+        self.line_style = simplekml.Style()
+        self.line_style.linestyle.width = self.line_width
+        self.line_style.linestyle.color = self.line_color # Fixed color
+        
+        self.point_style = simplekml.Style()
+        self.point_style.iconstyle.scale = self.point_icon_scale
+        self.point_style.labelstyle.scale = self.point_labelstyle_scale
+        self.point_style.iconstyle.icon.href = self.point_icon_href
+        if self.point_color: # Fixed point colour - will None if variant color required
+            self.point_style.iconstyle.color = self.point_color
         
         # Initialise point style cache for variant colors to cut down the number of style definitions required
         self.point_style_by_color = {}  
         
         self.dataset_count = 0
-
-        self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
-        # Set fixed styles for sub-elements
-        self.dataset_type_folder.style.polystyle.color = self.polygon_color
-        self.dataset_type_folder.style.polystyle.outline = self.polygon_outline
-        self.dataset_type_folder.style.iconstyle.scale = self.point_icon_scale
-        self.dataset_type_folder.style.labelstyle.scale = self.point_labelstyle_scale
-        self.dataset_type_folder.style.iconstyle.icon.href = self.point_icon_href
-        if self.point_color: # Fixed point colour - will None if variant color required
-            self.dataset_type_folder.style.iconstyle.color = self.point_color
-        self.dataset_type_folder.style.linestyle.width = self.line_width
-        self.dataset_type_folder.style.linestyle.color = self.line_color # Fixed color
 
     def __del__(self):
         '''
@@ -163,6 +180,8 @@ class NetCDF2kmlConverter(object):
                 # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
                 dataset_folder = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
                                                outerboundaryis=polygon_bounds, visibility=visibility)
+                
+                dataset_folder.style = self.polygon_style
     
                 # Always set timestamps on polygons
                 self.set_timestamps(dataset_folder)
@@ -212,6 +231,9 @@ class NetCDF2kmlConverter(object):
         
         dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
+        #dataset_folder.style = self.dataset_type_folder.style
+        #dataset_folder.style = self.line_style
+    
         if self.timestamp_detail_view:
             # Enable timestamps on lines
             self.set_timestamps(dataset_folder)
@@ -226,7 +248,11 @@ class NetCDF2kmlConverter(object):
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
                 line_string = dataset_folder.newlinestring(name=str("Line number: {}".format(line_number)))
+                
+                #line_string.style = dataset_folder.style
 
+                line_string.style = self.line_style               
+                
                 if self.height_variable: # 3D
                     subset_array = np.zeros(shape=(points_in_subset, 3), dtype=line_data['coordinates'].dtype)
                     # Populate coords_3d_array with (x,y,z) coordinates
@@ -305,6 +331,8 @@ class NetCDF2kmlConverter(object):
         
         dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
+        dataset_folder.style = self.point_style
+
         if self.timestamp_detail_view:
             # Enable timestamps on points
             self.set_timestamps(dataset_folder)
@@ -332,6 +360,8 @@ class NetCDF2kmlConverter(object):
             new_point = dataset_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
                                                    coords=[(point_data['longitude'], point_data['latitude'])])
 
+            new_point.style = dataset_folder.style
+            
             description_string = self.build_html_description_string(variable_attributes, point_data)
             logger.debug(description_string)
             new_point.description = description_string  # set description of point
@@ -563,21 +593,18 @@ class NetCDF2kmlConverter(object):
         # Set self.end_date if unknown and self.start_date is known
         if self.start_date and not self.end_date:
             self.end_date = self.start_date + timedelta(days=30)
-            
-        # Only create the parent folder once
-        if not self.dataset_count:
-            self.dataset_type_folder = self.kml.newfolder(name=self.dataset_type_name)
         
         # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
         if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
-            self.build_polygon(bbox_list, visibility)
+            dataset_kml = self.build_polygon(bbox_list, visibility)
         else: # Build detailed view for high zoom
             build_kml_function = build_kml_functions.get(self.dataset_format)
             assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
                                                                                          list(build_kml_functions.keys()))
-            build_kml_function(bbox_list, visibility)
+            dataset_kml = build_kml_function(bbox_list, visibility)
 
-        self.dataset_count += 1
+        if dataset_kml:
+            self.dataset_count += 1
         
         
     @property
@@ -641,10 +668,13 @@ class NetCDF2kmlConverter(object):
                 self._netcdf_dataset.close()
                 self._netcdf_dataset = None
             if self._point_utils:
+                del self._point_utils
                 self._point_utils = None
             if self._line_utils:
+                del self._line_utils
                 self._line_utils = None
             if self._grid_utils:
+                del self._grid_utils
                 self._grid_utils = None
                 
         self._netcdf_path = str(netcdf_path).strip()
