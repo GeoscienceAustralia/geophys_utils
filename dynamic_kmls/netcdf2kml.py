@@ -64,6 +64,7 @@ class NetCDF2kmlConverter(object):
         self.kml = simplekml.Kml()
 
         # Initialise private instance values to None - will be set by property getter methods as required
+        self._netcdf_path = None
         self._netcdf_dataset = None
         self._point_utils = None
         self._line_utils = None
@@ -578,7 +579,7 @@ class NetCDF2kmlConverter(object):
         
         # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
         if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
-            self.build_polygon(self.dataset_type_folder, bbox_list, visibility)
+            self.build_polygon(bbox_list, visibility)
         else: # Build detailed view for high zoom
             build_kml_function = build_kml_functions.get(self.dataset_format)
             assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
