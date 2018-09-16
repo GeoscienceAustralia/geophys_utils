@@ -23,6 +23,8 @@ class RestfulKMLQuery(Resource):
     '''
     RestfulKMLQuery Resource subclass for RESTful API
     '''
+    CONTENT_TYPE = 'application/vnd.google-earth.kml+xml'
+    
     def __init__(self):
         '''
         RestfulKMLQuery Constructor
@@ -60,11 +62,9 @@ class RestfulKMLQuery(Resource):
             ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
         )
     
-        kml = simplekml.Kml()
-    
         if len(dataset_metadata_dict_list) > 0:
-            dataset_type_folder = kml.newfolder(name=dataset_settings['dataset_type_name'])
-    
+            netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type)
+            
             for dataset_metadata_dict in dataset_metadata_dict_list:
                 logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
                 
@@ -74,17 +74,14 @@ class RestfulKMLQuery(Resource):
                 netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
                                                   str(dataset_metadata_dict['distribution_url']))
                 
-                netcdf2kml_obj = NetCDF2kmlConverter(netcdf_path, settings, dataset_type, dataset_metadata_dict)
-                netcdf2kml_obj.build_kml(dataset_type_folder, bbox_list)
-
-                del netcdf2kml_obj # Finished with this object - delete it
-    
-        else:
-            dataset_type_folder = kml.newfolder(name="No {} in view".format(dataset_settings['dataset_type_name']))
-        
-        response = make_response(str(dataset_type_folder))
-        response.headers['content-type'] = 'application/vnd.google-earth.kml+xml'
-        return response
+                netcdf2kml_obj.build_kml(netcdf_path, dataset_metadata_dict, bbox_list)
+       
+            response = make_response(netcdf2kml_obj.kml_string)
+            
+            del netcdf2kml_obj
+            
+            response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
+            return response
 
     
     def modify_nc_path(self, netcdf_path_prefix, opendap_endpoint):    

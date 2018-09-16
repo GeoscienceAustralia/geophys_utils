@@ -16,24 +16,19 @@ if settings['global_settings']['debug']:
 else:
     logger.setLevel(logging.INFO) # Initial logging level for this module
 
-# Compression defaults
-COMPRESS_MIMETYPES = ['application/vnd.google-earth.kml+xml',
-                      'text/html', 
-                      'text/css', 
-                      'text/xml', 
-                      'application/json', 
-                      'application/javascript'
-                      ]
-COMPRESS_LEVEL = 6
-COMPRESS_MIN_SIZE = 2000 # Don't bother compressing small KML responses
-
-def configure_app(app):
+def configure_app_compression(app):
     '''
     Helper function to set app config parameters
     '''
-    app.config['COMPRESS_MIMETYPES'] = COMPRESS_MIMETYPES 
-    app.config['COMPRESS_LEVEL'] = COMPRESS_LEVEL 
-    app.config['COMPRESS_MIN_SIZE'] = COMPRESS_MIN_SIZE 
+    app.config['COMPRESS_MIMETYPES'] = [RestfulKMLQuery.CONTENT_TYPE,
+                                        'text/html', 
+                                        'text/css', 
+                                        'text/xml', 
+                                        'application/json', 
+                                        'application/javascript'
+                                        ] 
+    app.config['COMPRESS_LEVEL'] = 6 
+    app.config['COMPRESS_MIN_SIZE'] = 2000 # Don't bother compressing small KML responses 
 
 app = Flask('dynamic_kmls') # Note hard-coded module name
 
@@ -41,7 +36,7 @@ api = Api(app)
 api.add_resource(RestfulKMLQuery, '/<string:dataset_type>/query')
 
 if settings['global_settings']['http_compression']:
-    configure_app(app)
+    configure_app_compression(app)
     Compress(app)
 
 app.run(host='0.0.0.0', debug=settings['global_settings']['debug'])

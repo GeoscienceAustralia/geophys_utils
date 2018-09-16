@@ -46,24 +46,19 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    def __init__(self, netcdf_path, settings, dataset_type, metadata_dict):
+    def __init__(self, settings, dataset_type):
         '''
         Constructor for NetCDF2kmlConverter class
-        @param netcdf_path: netCDF file path or OPeNDAP endpoint
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
-        @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
         '''
         # Create combined full settings dict and set instance attributes
-        full_settings = dict(settings['global_settings']) # Global settings
-        full_settings.update(settings['default_dataset_settings']) # Default dataset settings
-        full_settings.update(settings['dataset_settings'][dataset_type]) # Dataset settings
-        full_settings.update(metadata_dict) # Database search results
-        full_settings['netcdf_path'] = str(netcdf_path).strip()
-        full_settings['netcdf_basename'] = os.path.basename(full_settings['netcdf_path'])
-        full_settings['dataset_type'] = dataset_type
+        combined_settings = dict(settings['global_settings']) # Global settings
+        combined_settings.update(settings['default_dataset_settings']) # Default dataset settings
+        combined_settings.update(settings['dataset_settings'][dataset_type]) # Dataset settings
+        combined_settings['dataset_type'] = dataset_type
         
-        logger.debug('full_settings: {}'.format(full_settings))        
-        for key, value in full_settings.items():
+        logger.debug('combined_settings: {}'.format(combined_settings))        
+        for key, value in combined_settings.items():
             setattr(self, key, value)
             
         self.kml = simplekml.Kml()
@@ -74,19 +69,9 @@ class NetCDF2kmlConverter(object):
         self._line_utils = None
         self._grid_utils = None
 
-        # Set self.end_date if unknown and self.start_date is known
-        if self.start_date and not self.end_date:
-            self.end_date = self.start_date + timedelta(days=30)
-
         self.colormap = mpl_cm.get_cmap(self.colormap_name, 
                                         self.color_count)
 
-        if self.dataset_link:
-            # Perform any substitutions required
-            self.dataset_link = self.dataset_link.replace('{nc_basename}', os.path.basename(netcdf_path))
-            for key, value in full_settings.items():
-                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
-        
         if type(self.point_color_settings) == list: # Variable point color based on specified field value and range
             self.point_color_field = self.point_color_settings[0]
             self.point_color_range = self.point_color_settings[1]
@@ -122,6 +107,11 @@ class NetCDF2kmlConverter(object):
         self.line_style.linestyle.width = self.line_width
         self.line_style.linestyle.color = self.line_color # Fixed color
         
+        # Initialise point style cache for variant colors
+        self.point_style_by_color = {}  
+        
+        self.dataset_type_folder = None
+        self.dataset_count = 0
 
 
     def __del__(self):
@@ -153,15 +143,16 @@ class NetCDF2kmlConverter(object):
                                       "<maxFadeExtent>" + str(max_fade_extent) + "</maxFadeExtent>")
         return region
 
-    def build_polygon(self, parent_folder, bounding_box, visibility=True):
+    def build_polygon(self, bounding_box, visibility=True):
         """
         Builds a kml polygon into the parent folder. Polygon is built from convex_hull_polygon in database search result.
-        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param self.dataset_type_folder: KML folder under which to build geometry for line dataset
         @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         """
         logger.debug("Building polygon...")
+        
         # get the polygon points from the polygon string
         try:
             if self.convex_hull_polygon:
@@ -173,8 +164,8 @@ class NetCDF2kmlConverter(object):
                                             self.convex_hull_polygon
                                             ).group(1).split(',')
                                   ]
-                # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
-                dataset_folder = parent_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
+                # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
+                dataset_folder = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
                                                outerboundaryis=polygon_bounds, visibility=visibility)
     
                 dataset_folder.style = self.polygon_style
@@ -205,10 +196,10 @@ class NetCDF2kmlConverter(object):
 
     
 
-    def build_lines(self, parent_folder, bounding_box, visibility=True):
+    def build_lines(self, bounding_box, visibility=True):
         '''
         Builds a set of kml linestrings into the parent folder. Linestrings are built from dynamically subsampled points in line.
-        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param self.dataset_type_folder: KML folder under which to build geometry for line dataset
         @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
@@ -225,7 +216,7 @@ class NetCDF2kmlConverter(object):
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
-        dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
         if self.timestamp_detail_view:
             # Enable timestamps on lines
@@ -295,11 +286,11 @@ class NetCDF2kmlConverter(object):
 
         return dataset_folder
 
-    def build_points(self, parent_folder, bounding_box, visibility=True):
+    def build_points(self, bounding_box, visibility=True):
         """
         Builds all points for a survey. Including building the containing folder, setting time stamps, setting the
          style, and setting the description html to pop up when the point is selected.
-        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param self.dataset_type_folder: KML folder under which to build geometry for line dataset
         @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
@@ -319,7 +310,7 @@ class NetCDF2kmlConverter(object):
         if not np.any(spatial_mask):
             return
         
-        dataset_folder = parent_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
         if self.timestamp_detail_view:
             # Enable timestamps on points
@@ -333,8 +324,6 @@ class NetCDF2kmlConverter(object):
 
         skip_points = 1  # set to limit the points displayed if required.
         points_read = 0
-        
-        point_style_by_color = {}
 
         for point_data_list in point_data_generator:
             point_data = dict(zip(self.point_field_list, point_data_list)) # Create dict for better readability
@@ -371,14 +360,14 @@ class NetCDF2kmlConverter(object):
                 else: # Variable point color
                     variant_point_color = self.value2colorhex(point_data[self.point_color_field], self.point_color_range)
                     
-                    point_style = point_style_by_color.get(variant_point_color)
+                    point_style = self.point_style_by_color.get(variant_point_color)
                     if not point_style: # Point style doesn't already exist in cache - construct and cache it
                         point_style = simplekml.Style()
                         point_style.iconstyle.scale = self.point_icon_scale
                         point_style.labelstyle.scale = self.point_labelstyle_scale
                         point_style.iconstyle.icon.href = self.point_icon_href
                         point_style.iconstyle.color = variant_point_color
-                        point_style_by_color[variant_point_color] = point_style
+                        self.point_style_by_color[variant_point_color] = point_style
                     
                     new_point.style = point_style
 
@@ -386,11 +375,11 @@ class NetCDF2kmlConverter(object):
         return dataset_folder
 
 
-    def build_thumbnail(self, parent_folder, visibility=True):
+    def build_thumbnail(self, visibility=True):
         """
         Builds a kml thumbnail image into the parent folder. 
         Thumbnail URL is built from OPeNDAP endpoint at this stage, but this needs to change.
-        @param parent_folder: KML folder under which to build geometry for line dataset
+        @param self.dataset_type_folder: KML folder under which to build geometry for line dataset
         @param bounding_box: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
@@ -400,8 +389,8 @@ class NetCDF2kmlConverter(object):
             wms_url = self.netcdf_path.replace('/dodsC/', '/wms/') #TODO: Replace this hack
                 
     #===========================================================================
-    #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the parent_folder.
-    #             dataset_folder = parent_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
+    #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
+    #             dataset_folder = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
     #                                            outerboundaryis=polygon_bounds, visibility=visibility)
     # 
     #             # build the polygon description
@@ -558,10 +547,12 @@ class NetCDF2kmlConverter(object):
                 kml_entity.timespan.begin = str(survey_year) + "-06-01"
                 kml_entity.timespan.end = str(survey_year) + "-07-01"
 
-    def build_kml(self, parent_folder, bbox_list, visibility=True):
+    def build_kml(self, netcdf_path, metadata_dict, bbox_list, visibility=True):
         '''
         Function to build and return KML for specified dataset_form
-        @param parent_folder: KML folder under which to build geometry for dataset
+        @param netcdf_path: netCDF file path or OPeNDAP endpoint
+        @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
+        @param self.dataset_type_folder: KML folder under which to build geometry for dataset
         @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         '''
@@ -571,14 +562,30 @@ class NetCDF2kmlConverter(object):
                                'grid': self.build_thumbnail
                                }
         
+        self.netcdf_path = netcdf_path
+        
+        # Update instance attributes from metadata_dict
+        for key, value in metadata_dict.items():
+            setattr(self, key, value)
+        
+        # Set self.end_date if unknown and self.start_date is known
+        if self.start_date and not self.end_date:
+            self.end_date = self.start_date + timedelta(days=30)
+            
+        # Only create the parent folder once
+        if not self.dataset_count:
+            self.dataset_type_folder = self.kml.newfolder(name=self.dataset_type_name)
+        
         # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
         if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
-            return self.build_polygon(parent_folder, bbox_list, visibility)
+            self.build_polygon(self.dataset_type_folder, bbox_list, visibility)
         else: # Build detailed view for high zoom
             build_kml_function = build_kml_functions.get(self.dataset_format)
             assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
                                                                                          list(build_kml_functions.keys()))
-            return build_kml_function(parent_folder, bbox_list, visibility)
+            build_kml_function(bbox_list, visibility)
+
+        self.dataset_count += 1
         
         
     @property
@@ -625,6 +632,48 @@ class NetCDF2kmlConverter(object):
             self._grid_utils = NetCDFGridUtils(self.netcdf_dataset)
         return self._grid_utils
     
+    @property
+    def netcdf_path(self):
+        '''
+        Getter method for netcdf_path property.
+        '''
+        return self._netcdf_path
+    
+    @netcdf_path.setter
+    def netcdf_path(self, netcdf_path):
+        '''
+        Setter method for netcdf_path property. Will reset any dependent properties.
+        '''
+        if self._netcdf_path:
+            if self._netcdf_dataset:
+                self._netcdf_dataset.close()
+                self._netcdf_dataset = None
+            if self._point_utils:
+                self._point_utils = None
+            if self._line_utils:
+                self._line_utils = None
+            if self._grid_utils:
+                self._grid_utils = None
+                
+        self._netcdf_path = str(netcdf_path).strip()
+                
+        self.netcdf_basename = os.path.basename(netcdf_path)
+        
+        if self.dataset_link:
+            # Perform any substitutions required
+            for key, value in self.__dict__.items():
+                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
+        
+    @property
+    def kml_string(self):
+        '''
+        Getter function to return KML string from self.dataset_type_folder or empty folder
+        '''
+        if self.dataset_count:
+            return str(self.dataset_type_folder) 
+        else:
+            return str(self.kml.newfolder(name="No {} in view".format(self.dataset_type_name)))
+       
         
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
     """
