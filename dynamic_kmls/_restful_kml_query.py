@@ -65,26 +65,25 @@ class RestfulKMLQuery(Resource):
         )
         #logger.debug("dataset_metadata_dict_list: {}".format(dataset_metadata_dict_list))
     
-        if len(dataset_metadata_dict_list) > 0:
-            netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type, debug=settings['global_settings']['debug'])
+        netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type, debug=settings['global_settings']['debug'])
+        
+        for dataset_metadata_dict in dataset_metadata_dict_list:
+            #logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
             
-            for dataset_metadata_dict in dataset_metadata_dict_list:
-                #logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
-                
-                # dataset_folder = dataset_type_folder.newfolder(name=dataset_metadata_dict['dataset_title'])
+            # dataset_folder = dataset_type_folder.newfolder(name=dataset_metadata_dict['dataset_title'])
 
-                #TODO: Replace this hack for turning OPeNDAP endpoints into local pathnames
-                netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
-                                                  str(dataset_metadata_dict['distribution_url']))
-                
-                netcdf2kml_obj.build_kml(netcdf_path, dataset_metadata_dict, bbox_list)
-       
-            response = make_response(netcdf2kml_obj.kml_string)
+            #TODO: Replace this hack for turning OPeNDAP endpoints into local pathnames
+            netcdf_path = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
+                                              str(dataset_metadata_dict['distribution_url']))
             
-            del netcdf2kml_obj
-            
-            response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
-            return response
+            netcdf2kml_obj.build_kml(netcdf_path, dataset_metadata_dict, bbox_list)
+   
+        response = make_response(netcdf2kml_obj.kml_string)
+        
+        del netcdf2kml_obj
+        
+        response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
+        return response
 
     
     def modify_nc_path(self, netcdf_path_prefix, opendap_endpoint):    
