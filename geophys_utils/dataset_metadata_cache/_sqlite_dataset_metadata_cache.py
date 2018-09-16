@@ -423,6 +423,8 @@ left join survey using(survey_id)
                 except TypeError:
                     row[datetime_index] = None
             row_list.append(dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)))
+        
+        logger.debug('{} datasets found in database'.format(len(row_list)))
         return row_list
         
 def main():

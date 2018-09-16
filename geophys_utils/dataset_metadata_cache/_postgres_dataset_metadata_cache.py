@@ -363,7 +363,9 @@ left join survey using(survey_id)
         cursor.execute(dataset_search_sql, params)
         
         # Return list of distribution_url values
-        return [dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)) for row in cursor]
+        row_list = [dict(zip(DatasetMetadataCache.dataset_distribution_search_fields, row)) for row in cursor]
+        logger.debug('{} datasets found in database'.format(len(row_list)))
+        return row_list
         
 def main():
     pdmc = PostgresDatasetMetadataCache(debug=True)

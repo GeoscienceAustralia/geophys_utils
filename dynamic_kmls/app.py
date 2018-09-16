@@ -3,18 +3,20 @@ Created on 7 Sep. 2018
 
 @author: Andrew Turner & Alex Ip, Geoscience Australia
 '''
+import sys
 from flask import Flask
 from flask_restful import Api
 from flask_compress import Compress
-from dynamic_kmls import RestfulKMLQuery
-from dynamic_kmls.netcdf2kml import settings
+from dynamic_kmls import settings, RestfulKMLQuery
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
+
 if settings['global_settings']['debug']:
-    logger.setLevel(logging.DEBUG) # Initial logging level for this module
+    logger.setLevel(logging.DEBUG)
 else:
-    logger.setLevel(logging.INFO) # Initial logging level for this module
+    logger.setLevel(logging.INFO)
+logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
 def configure_app_compression(app):
     '''
@@ -40,3 +42,14 @@ if settings['global_settings']['http_compression']:
     Compress(app)
 
 app.run(host='0.0.0.0', debug=settings['global_settings']['debug'])
+
+if __name__ == '__main__':
+    # Setup logging handlers if required
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)

@@ -25,32 +25,27 @@ import matplotlib.colors as mpl_colors
 import logging
 from datetime import date, timedelta
 import netCDF4
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 import numpy as np
 import os
-import yaml
-
-settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 
-                                            'netcdf2kml_settings.yml')))
-#print('settings = {}'.format(settings))
-#print('settings: {}'.format(yaml.safe_dump(settings)))
-
+from dynamic_kmls import settings
+from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 
 logger = logging.getLogger(__name__)
-if settings['global_settings']['debug']:
-    logger.setLevel(logging.DEBUG) # Initial logging level for this module
-else:
-    logger.setLevel(logging.INFO) # Initial logging level for this module
+logger.setLevel(logging.INFO)
 
 class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    def __init__(self, settings, dataset_type):
+    def __init__(self, settings, dataset_type, debug=True):
         '''
         Constructor for NetCDF2kmlConverter class
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
         '''
+        # Initialise and set debug property
+        self._debug = None
+        self.debug = debug
+        
         # Create combined full settings dict and set instance attributes
         combined_settings = dict(settings['global_settings']) # Global settings
         combined_settings.update(settings['default_dataset_settings']) # Default dataset settings
@@ -61,6 +56,13 @@ class NetCDF2kmlConverter(object):
         for key, value in combined_settings.items():
             setattr(self, key, value)
             
+        # Dict of KML buiding functions keyed by dataset form
+        self.build_kml_functions = {'polygon': self.build_polygon,
+                                    'point': self.build_points,
+                                    'line': self.build_lines,
+                                    'grid': self.build_thumbnail
+                                    }
+        
         self.kml = simplekml.Kml()
 
         # Initialise private instance values to None - will be set by property getter methods as required
@@ -126,6 +128,7 @@ class NetCDF2kmlConverter(object):
         self.point_style_by_color = {}  
         
         self.dataset_count = 0
+        
 
     def __del__(self):
         '''
@@ -164,8 +167,6 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         """
-        logger.debug("Building polygon...")
-        
         # get the polygon points from the polygon string
         try:
             if self.convex_hull_polygon:
@@ -178,13 +179,13 @@ class NetCDF2kmlConverter(object):
                                             ).group(1).split(',')
                                   ]
                 # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
-                dataset_folder = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
+                dataset_kml = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
                                                outerboundaryis=polygon_bounds, visibility=visibility)
                 
-                dataset_folder.style = self.polygon_style
+                dataset_kml.style = self.polygon_style
     
                 # Always set timestamps on polygons
-                self.set_timestamps(dataset_folder)
+                self.set_timestamps(dataset_kml)
 
                 # build the polygon description
                 description_string = '<![CDATA['
@@ -199,13 +200,13 @@ class NetCDF2kmlConverter(object):
                     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
                     self.dataset_link))
                 description_string = description_string + ']]>'
-                dataset_folder.description = description_string
+                dataset_kml.description = description_string
     
-                return dataset_folder
+                return dataset_kml
         
         except Exception as e:
-            #logger.warning("Unable to display polygon "{}": {}".format(self.convex_hull_polygon, e))
-            pass
+            logger.debug('Unable to display polygon "{}": {}'.format(self.convex_hull_polygon, e))
+
 
     
 
@@ -217,8 +218,6 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         '''
-        
-        logger.debug("Building lines...")
         bounding_box_floats = [float(coord) for coord in bounding_box]
         
         # Compute segment length as a proportion of the height of bounding box
@@ -229,14 +228,14 @@ class NetCDF2kmlConverter(object):
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
-        dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        dataset_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
-        #dataset_folder.style = self.dataset_type_folder.style
-        #dataset_folder.style = self.line_style
+        #dataset_kml.style = self.dataset_type_folder.style
+        #dataset_kml.style = self.line_style
     
         if self.timestamp_detail_view:
             # Enable timestamps on lines
-            self.set_timestamps(dataset_folder)
+            self.set_timestamps(dataset_kml)
         
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
@@ -247,9 +246,9 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_data: {}".format(line_data))
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
-                line_string = dataset_folder.newlinestring(name=str("Line number: {}".format(line_number)))
+                line_string = dataset_kml.newlinestring(name=str("Line number: {}".format(line_number)))
                 
-                #line_string.style = dataset_folder.style
+                #line_string.style = dataset_kml.style
 
                 line_string.style = self.line_style               
                 
@@ -303,7 +302,7 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
 
-        return dataset_folder
+        return dataset_kml
 
     def build_points(self, bounding_box, visibility=True):
         """
@@ -314,28 +313,23 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         """        
-        logger.debug("Building points for netcdf file: " + str(self.netcdf_path))
-        logger.debug('bounding_box:' + str(bounding_box))
-        
         if not self.point_utils.point_count: # No points in dataset
             return
 
-        bounding_box_floats = [float(coord) for coord in bounding_box]
-        logger.debug(bounding_box_floats)
         # bounding_box_floats = [110.4899599829594, -56.11642075733719, 166.658146968822, -6.11642075733719]
-        spatial_mask = self.point_utils.get_spatial_mask(bounding_box_floats)
-        logger.debug(spatial_mask)
+        spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
+        #logger.debug('spatial_mask: {}'.format(spatial_mask))
         
         if not np.any(spatial_mask):
             return
         
-        dataset_folder = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        dataset_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
-        dataset_folder.style = self.point_style
+        dataset_kml.style = self.point_style
 
         if self.timestamp_detail_view:
             # Enable timestamps on points
-            self.set_timestamps(dataset_folder)
+            self.set_timestamps(dataset_kml)
             
         point_data_generator = self.point_utils.all_point_data_generator(self.point_field_list, spatial_mask)
         logger.debug(point_data_generator)
@@ -357,14 +351,14 @@ class NetCDF2kmlConverter(object):
 
             # add new points with netcdf file Obsno as title and long and lat as coordinatess
             # point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
-            new_point = dataset_folder.newpoint(name="Observation no. " + str(point_data['obsno']),
+            point_kml = dataset_kml.newpoint(name="Observation no. " + str(point_data['obsno']),
                                                    coords=[(point_data['longitude'], point_data['latitude'])])
 
-            new_point.style = dataset_folder.style
+            point_kml.style = dataset_kml.style
             
             description_string = self.build_html_description_string(variable_attributes, point_data)
             logger.debug(description_string)
-            new_point.description = description_string  # set description of point
+            point_kml.description = description_string  # set description of point
             
             # Set point styling               
             # Set the color for filtered points
@@ -391,10 +385,11 @@ class NetCDF2kmlConverter(object):
 
             # Override default style if required    
             if variant_point_style:
-                new_point.style = variant_point_style
+                point_kml.style = variant_point_style
 
-        dataset_folder.region = self.build_region(100, -1, 200, 800)
-        return dataset_folder
+        dataset_kml.region = self.build_region(100, -1, 200, 800)
+        
+        return dataset_kml
 
 
     def build_thumbnail(self, visibility=True):
@@ -412,7 +407,7 @@ class NetCDF2kmlConverter(object):
                 
     #===========================================================================
     #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
-    #             dataset_folder = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
+    #             dataset_kml = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
     #                                            outerboundaryis=polygon_bounds, visibility=visibility)
     # 
     #             # build the polygon description
@@ -428,13 +423,13 @@ class NetCDF2kmlConverter(object):
     #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
     #                 self.dataset_link))
     #             description_string = description_string + ']]>'
-    #             dataset_folder.description = description_string
+    #             dataset_kml.description = description_string
     # 
-    #             dataset_folder.style = self.polygon_style
+    #             dataset_kml.style = self.polygon_style
     #             
-    #             self.set_timestamps(dataset_folder)
+    #             self.set_timestamps(dataset_kml)
     # 
-    #             return dataset_folder
+    #             return dataset_kml
     #===========================================================================
         
         except Exception as e:
@@ -498,34 +493,37 @@ class NetCDF2kmlConverter(object):
     #     self.latitude_max - self.latitude_min)) / self.point_utils.point_count * 1000))
     #===========================================================================
 
-    def build_static_kml(self):
-
-        point_style = simplekml.Style()
-        point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
-        point_style.iconstyle.scale = 0.7
-        point_style.labelstyle.scale = 0  # removes the label
-
-        bbox = ['115.6900403947253', '-80.3741299166767', '165.9763920890655', '-7.21307533348337']
-        # polygon style
-        polygon_style = simplekml.Style()
-        polygon_style.polystyle.color = '990000ff'  # Transparent red
-        polygon_style.polystyle.outline = 1
-
-        kml = simplekml.Kml()
-        dataset_folder = kml.newfolder(name=self.dataset_title + " " + self.ga_survey_id)
-
-        dataset_folder = self.kml.newfolder(name="polygon")
-        dataset_folder, polygon = self.build_polygon(dataset_folder)
-        dataset_polygon_region = self.build_region(-1, 600, 200, 800)
-        dataset_points_region = self.build_region(0, -1, 200, 800)
-
-        points_folder = dataset_folder.newfolder(name="points")
-        points_folder = self.build_points(points_folder, bbox)
-
-        # structure them correctly
-        dataset_folder.region = dataset_polygon_region  # insert built polygon region into polygon folder
-        points_folder.region = dataset_points_region  # insert built point region into point folder
-        return self.kml
+#===============================================================================
+#     def build_static_kml(self):
+# 
+#         point_style = simplekml.Style()
+#         point_style.iconstyle.icon.href = "http://maps.google.com/mapfiles/kml/paddle/grn-blank.png"
+#         point_style.iconstyle.scale = 0.7
+#         point_style.labelstyle.scale = 0  # removes the label
+# 
+#         bbox = ['115.6900403947253', '-80.3741299166767', '165.9763920890655', '-7.21307533348337']
+#         # polygon style
+#         polygon_style = simplekml.Style()
+#         polygon_style.polystyle.color = '990000ff'  # Transparent red
+#         polygon_style.polystyle.outline = 1
+# 
+#         kml = simplekml.Kml()
+#         dataset_kml = kml.newfolder(name=self.dataset_title + " " + self.ga_survey_id)
+# 
+#         dataset_kml = self.kml.newfolder(name="polygon")
+#         dataset_kml, polygon = self.build_polygon(dataset_kml)
+#         dataset_polygon_region = self.build_region(-1, 600, 200, 800)
+#         dataset_points_region = self.build_region(0, -1, 200, 800)
+# 
+#         points_folder = dataset_kml.newfolder(name="points")
+#         points_folder = self.build_points(points_folder, bbox)
+# 
+#         # structure them correctly
+#         dataset_kml.region = dataset_polygon_region  # insert built polygon region into polygon folder
+#         points_folder.region = dataset_points_region  # insert built point region into point folder
+#         
+#         return self.kml
+#===============================================================================
 
 
     def value2colorhex(self, data_value, data_range, colormap=None):
@@ -569,25 +567,20 @@ class NetCDF2kmlConverter(object):
                 kml_entity.timespan.begin = str(survey_year) + "-06-01"
                 kml_entity.timespan.end = str(survey_year) + "-07-01"
 
-    def build_kml(self, netcdf_path, metadata_dict, bbox_list, visibility=True):
+    def build_kml(self, netcdf_path, dataset_metadata_dict, bbox_list, visibility=True):
         '''
         Function to build and return KML for specified dataset_form
         @param netcdf_path: netCDF file path or OPeNDAP endpoint
-        @param metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
+        @param dataset_metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
         @param self.dataset_type_folder: KML folder under which to build geometry for dataset
         @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         '''
-        build_kml_functions = {'polygon': self.build_polygon,
-                               'point': self.build_points,
-                               'line': self.build_lines,
-                               'grid': self.build_thumbnail
-                               }
-        
+        #logger.debug('build_kml({} {} {} {}) called'.format(netcdf_path, dataset_metadata_dict, bbox_list, visibility))
         self.netcdf_path = netcdf_path
         
-        # Update instance attributes from metadata_dict
-        for key, value in metadata_dict.items():
+        # Update instance attributes from dataset_metadata_dict
+        for key, value in dataset_metadata_dict.items():
             setattr(self, key, value)
         
         # Set self.end_date if unknown and self.start_date is known
@@ -596,11 +589,13 @@ class NetCDF2kmlConverter(object):
         
         # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
         if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
+            logger.debug('Processing polygon for dataset {}'.format(self.netcdf_path))
             dataset_kml = self.build_polygon(bbox_list, visibility)
         else: # Build detailed view for high zoom
-            build_kml_function = build_kml_functions.get(self.dataset_format)
+            build_kml_function = self.build_kml_functions.get(self.dataset_format)
             assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
-                                                                                         list(build_kml_functions.keys()))
+                                                                                         list(self.build_kml_functions.keys()))
+            logger.debug('Processing {} dataset {}'.format(self.dataset_format, self.netcdf_path))
             dataset_kml = build_kml_function(bbox_list, visibility)
 
         if dataset_kml:
@@ -626,7 +621,8 @@ class NetCDF2kmlConverter(object):
             self._point_utils = NetCDFPointUtils(self.netcdf_dataset, 
                                                  enable_disk_cache=False, 
                                                  enable_memory_cache=True,
-                                                 debug=settings['global_settings']['debug'])
+                                                 debug=False #settings['global_settings']['debug']
+                                                 )
         return self._point_utils
     
     @property
@@ -638,7 +634,8 @@ class NetCDF2kmlConverter(object):
             self._line_utils = NetCDFLineUtils(self.netcdf_dataset, 
                                                enable_disk_cache=False,
                                                enable_memory_cache=True,
-                                               debug=settings['global_settings']['debug'])
+                                               debug=False #settings['global_settings']['debug']
+                                               )
         self._point_utils = self._line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         return self._line_utils
         
@@ -648,7 +645,9 @@ class NetCDF2kmlConverter(object):
         Getter method for grid_utils property. Will set self._grid_utils if None
         '''
         if not self._grid_utils:
-            self._grid_utils = NetCDFGridUtils(self.netcdf_dataset)
+            self._grid_utils = NetCDFGridUtils(self.netcdf_dataset,
+                                               debug=False #settings['global_settings']['debug']
+                                               )
         return self._grid_utils
     
     @property
@@ -668,13 +667,13 @@ class NetCDF2kmlConverter(object):
                 self._netcdf_dataset.close()
                 self._netcdf_dataset = None
             if self._point_utils:
-                del self._point_utils
+                # del self._point_utils
                 self._point_utils = None
             if self._line_utils:
-                del self._line_utils
+                # del self._line_utils
                 self._line_utils = None
             if self._grid_utils:
-                del self._grid_utils
+                # del self._grid_utils
                 self._grid_utils = None
                 
         self._netcdf_path = str(netcdf_path).strip()
@@ -697,6 +696,24 @@ class NetCDF2kmlConverter(object):
             
         return str(self.dataset_type_folder) 
 
+    @property
+    def debug(self):
+        return self._debug
+    
+    @debug.setter
+    def debug(self, debug_value):
+        if self._debug != debug_value or self._debug is None:
+            self._debug = debug_value
+            
+            if self._debug:
+                logger.setLevel(logging.DEBUG)
+                logging.getLogger(self.__module__).setLevel(logging.DEBUG)
+            else:
+                logger.setLevel(logging.INFO)
+                logging.getLogger(self.__module__).setLevel(logging.INFO)
+                
+        logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
+        logging.getLogger(self.__module__).debug('Logger {} set to level {}'.format(self.__module__, logger.level))
        
         
 def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/query"):
@@ -734,7 +751,7 @@ def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/qu
 #     )
 #     for survey in endpoint_list:
 #         kml = simplekml.Kml()
-#         dataset_folder = kml.newfolder(name="Ground Gravity Survey Observations")
+#         dataset_kml = kml.newfolder(name="Ground Gravity Survey Observations")
 #         netcdf2kml_obj = NetCDF2kmlConverter(survey)
 #         netcdf2kml_obj.netcdf_dataset = netCDF4.Dataset(netcdf2kml_obj.netcdf_path)
 #         netcdf2kml_obj.npu = NetCDFPointUtils(netcdf2kml_obj.netcdf_dataset)
@@ -742,15 +759,15 @@ def build_dynamic_network_link(containing_folder, link="http://127.0.0.1:5000/qu
 #         survey_region = netcdf2kml_obj.build_region()
 #         polygon_region = netcdf2kml_obj.build_region(0, 100)
 # 
-#         dataset_folder = kml.newfolder(name="polygon")
-#         dataset_folder = netcdf2kml_obj.build_polygon(dataset_folder)
-#         dataset_folder.region = polygon_region  # insert built point region into point folder
+#         dataset_kml = kml.newfolder(name="polygon")
+#         dataset_kml = netcdf2kml_obj.build_polygon(dataset_kml)
+#         dataset_kml.region = polygon_region  # insert built point region into point folder
 # 
-#         dataset_folder.region = survey_region  # insert built point region into point folder
+#         dataset_kml.region = survey_region  # insert built point region into point folder
 # 
 #         if netcdf2kml_obj.npu.point_count > 2:
 # 
-#             survey_points_folder = netcdf2kml_obj.build_points(dataset_folder,
+#             survey_points_folder = netcdf2kml_obj.build_points(dataset_kml,
 #                                                                ['110.00', '-45.00', '155.00', '-10.00'])
 #             survey_points_folder.region = survey_region  # insert built point region into point folder
 # 

@@ -12,7 +12,7 @@ import yaml
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
-settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'settings.yml')))
+settings = yaml.safe_load(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), 'dataset_metadata_cache_settings.yml')))
 
 
 class Distribution(object):

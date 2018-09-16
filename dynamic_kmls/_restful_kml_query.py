@@ -7,16 +7,19 @@ import os
 from flask_restful import Resource
 from flask import request, make_response
 from shapely.geometry import Polygon
-from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter, settings
+from dynamic_kmls import settings
+from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
 #from pprint import pformat
 
 logger = logging.getLogger(__name__)
+    
 if settings['global_settings']['debug']:
-    logger.setLevel(logging.DEBUG) # Initial logging level for this module
+    logger.setLevel(logging.DEBUG)
 else:
-    logger.setLevel(logging.INFO) # Initial logging level for this module
+    logger.setLevel(logging.INFO)
+logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
 class RestfulKMLQuery(Resource):
     '''
@@ -60,12 +63,13 @@ class RestfulKMLQuery(Resource):
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
         )
+        #logger.debug("dataset_metadata_dict_list: {}".format(dataset_metadata_dict_list))
     
         if len(dataset_metadata_dict_list) > 0:
-            netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type)
+            netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type, debug=settings['global_settings']['debug'])
             
             for dataset_metadata_dict in dataset_metadata_dict_list:
-                logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
+                #logger.debug("dataset_metadata_dict: {}".format(dataset_metadata_dict))
                 
                 # dataset_folder = dataset_type_folder.newfolder(name=dataset_metadata_dict['dataset_title'])
 
@@ -104,3 +108,4 @@ class RestfulKMLQuery(Resource):
                         (bbox_list[0], bbox_list[1])
                         ))
         
+
