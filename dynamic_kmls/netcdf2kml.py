@@ -583,15 +583,27 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         '''
         #logger.debug('build_kml({} {} {} {}) called'.format(netcdf_path, dataset_metadata_dict, bbox_list, visibility))
-        self.netcdf_path = netcdf_path
+        self.netcdf_path = netcdf_path # Property setter will take care of dependencies
         
         # Update instance attributes from dataset_metadata_dict
         for key, value in dataset_metadata_dict.items():
             setattr(self, key, value)
+            
+        #TODO: put this back in self.netcdf_path setter method somehow
+        if self.dataset_link:
+            # Perform any substitutions required
+            dataset_metadata_dict.update({'netcdf_path': self.netcdf_path,
+                                          'netcdf_basename': self.netcdf_basename
+                                          })
+            for key, value in dataset_metadata_dict.items():
+                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
+        
         
         # Set self.end_date if unknown and self.start_date is known
         if self.start_date and not self.end_date:
             self.end_date = self.start_date + timedelta(days=30)
+            
+            
         
         # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
         if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
@@ -689,12 +701,7 @@ class NetCDF2kmlConverter(object):
         self._netcdf_path = str(netcdf_path).strip()
                 
         self.netcdf_basename = os.path.basename(netcdf_path)
-        
-        if self.dataset_link:
-            # Perform any substitutions required
-            for key, value in self.__dict__.items():
-                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
-        
+                
     @property
     def kml_string(self):
         '''

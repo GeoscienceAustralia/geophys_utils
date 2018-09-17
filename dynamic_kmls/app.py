@@ -18,19 +18,24 @@ else:
     logger.setLevel(logging.INFO)
 logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
+# Compression defaults
+COMPRESS_MIMETYPES = ['application/vnd.google-earth.kml+xml',
+                      'text/html', 
+                      'text/css', 
+                      'text/xml', 
+                      'application/json', 
+                      'application/javascript'
+                      ]
+DEFAULT_COMPRESS_LEVEL = 6
+DEFAULT_COMPRESS_MIN_SIZE = 2000 # Don't bother compressing small KML responses
+
 def configure_app_compression(app):
     '''
     Helper function to set app config parameters
     '''
-    app.config['COMPRESS_MIMETYPES'] = [RestfulKMLQuery.CONTENT_TYPE,
-                                        'text/html', 
-                                        'text/css', 
-                                        'text/xml', 
-                                        'application/json', 
-                                        'application/javascript'
-                                        ] 
-    app.config['COMPRESS_LEVEL'] = 6 
-    app.config['COMPRESS_MIN_SIZE'] = 2000 # Don't bother compressing small KML responses 
+    app.config['COMPRESS_MIMETYPES'] = COMPRESS_MIMETYPES 
+    app.config['COMPRESS_LEVEL'] = settings['global_settings'].get('compress_level') or DEFAULT_COMPRESS_LEVEL 
+    app.config['COMPRESS_MIN_SIZE'] = settings['global_settings'].get('compress_min_size') or DEFAULT_COMPRESS_MIN_SIZE 
 
 app = Flask('dynamic_kmls') # Note hard-coded module name
 
@@ -41,7 +46,8 @@ if settings['global_settings']['http_compression']:
     configure_app_compression(app)
     Compress(app)
 
-app.run(host='0.0.0.0', debug=settings['global_settings']['debug'])
+app.run(host=settings['global_settings'].get('host'), 
+        debug=settings['global_settings']['debug'])
 
 if __name__ == '__main__':
     # Setup logging handlers if required
