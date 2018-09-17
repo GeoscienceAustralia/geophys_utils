@@ -567,12 +567,16 @@ class NetCDF2kmlConverter(object):
             kml_entity.timespan.end = str(self.end_date)
 
         except:  # if survey does not contain start/end date information, use survey id as start/end date year.
-            if self.ga_survey_id:
-                survey_year = int(re.match('^[0-9]{4}', str(self.ga_survey_id)).group())
-                assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
-
-                kml_entity.timespan.begin = str(survey_year) + "-06-01"
-                kml_entity.timespan.end = str(survey_year) + "-07-01"
+            try:
+                if self.ga_survey_id:
+                    survey_year = int(re.match('^[0-9]{4}', str(self.ga_survey_id)).group())
+                    assert survey_year > 1900 and survey_year < 2020, 'survey_year <= 1900 or survey_year >= 2020'
+    
+                    kml_entity.timespan.begin = str(survey_year) + "-06-01"
+                    kml_entity.timespan.end = str(survey_year) + "-07-01"
+            except Exception as e:
+                logger.debug('Unable to parse year from survey ID: {}'.format(e))
+                pass
 
     def build_dataset_kml(self, kml_format, dataset_metadata_dict, bbox_list, visibility=True):
         '''
@@ -595,8 +599,9 @@ class NetCDF2kmlConverter(object):
             dataset_metadata_dict.update({'netcdf_path': self.netcdf_path,
                                           'netcdf_basename': self.netcdf_basename
                                           })
+            self.modified_dataset_link = self.dataset_link
             for key, value in dataset_metadata_dict.items():
-                self.modified_dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
+                self.modified_dataset_link = self.modified_dataset_link.replace('{'+key+'}', str(value))
         else:
             self.modified_dataset_link = None
             
@@ -614,7 +619,7 @@ class NetCDF2kmlConverter(object):
         
     def build_bbox_kml(self, dataset_metadata_dict_list, bbox_list, visibility=True):
         '''
-        Function to build and return KML for specified dataset_form for entire bounding box
+        Function to build and return KML for entire bounding box
         @param dataset_metadata_dict_list: List of dicts containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
         @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
