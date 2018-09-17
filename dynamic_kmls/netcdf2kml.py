@@ -27,7 +27,6 @@ from datetime import date, timedelta
 import netCDF4
 import numpy as np
 import os
-from dynamic_kmls import settings
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 
 logger = logging.getLogger(__name__)
@@ -63,8 +62,6 @@ class NetCDF2kmlConverter(object):
                                     'grid': self.build_thumbnail
                                     }
         
-        self.kml = simplekml.Kml()
-
         # Initialise private instance values to None - will be set by property getter methods as required
         self._netcdf_path = None
         self._netcdf_dataset = None
@@ -95,7 +92,7 @@ class NetCDF2kmlConverter(object):
         else:
             self.filtered_point_style = None
 
-        self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
+        self.dataset_type_folder = simplekml.Kml().newfolder(name="No {} in view".format(self.dataset_type_name))
         #=======================================================================
         # # Set fixed styles for sub-elements
         # self.dataset_type_folder.style.polystyle.color = self.polygon_color
@@ -673,16 +670,20 @@ class NetCDF2kmlConverter(object):
         '''
         if self._netcdf_path:
             if self._netcdf_dataset:
+                logger.debug('Closing {}'.format(self._netcdf_path))
                 self._netcdf_dataset.close()
                 self._netcdf_dataset = None
             if self._point_utils:
                 # del self._point_utils
+                logger.debug('Setting self._point_utils = None')
                 self._point_utils = None
             if self._line_utils:
                 # del self._line_utils
+                logger.debug('Setting self._line_utils = None')
                 self._line_utils = None
             if self._grid_utils:
                 # del self._grid_utils
+                logger.debug('Setting self._grid_utils = None')
                 self._grid_utils = None
                 
         self._netcdf_path = str(netcdf_path).strip()
