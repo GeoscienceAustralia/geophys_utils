@@ -606,7 +606,7 @@ class NetCDF2kmlConverter(object):
         assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
                                                                                      list(self.build_kml_functions.keys()))
         logger.debug('Processing {}s for dataset {}'.format(self.dataset_format, self.netcdf_path))
-        build_kml_function(bbox_list, visibility)
+        return build_kml_function(bbox_list, visibility)
 
         
         
@@ -633,6 +633,9 @@ class NetCDF2kmlConverter(object):
             if self.build_dataset_kml(kml_format, dataset_metadata_dict, bbox_list, visibility):   
                 self.dataset_count += 1
         
+        if self.dataset_count:
+            self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
+            
         
     @property
     def netcdf_dataset(self):
@@ -720,11 +723,7 @@ class NetCDF2kmlConverter(object):
     def kml_string(self):
         '''
         Getter function to return KML string from self.dataset_type_folder or empty folder
-        Modifies self.dataset_type_folder.name
         '''
-        if self.dataset_count:
-            self.dataset_type_folder.name = '{} {}'.format(self.dataset_count, self.dataset_type_name)
-            
         return str(self.dataset_type_folder) 
 
     @property
