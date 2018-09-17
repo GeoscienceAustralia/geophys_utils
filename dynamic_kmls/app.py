@@ -41,7 +41,7 @@ if settings['global_settings']['http_compression']:
     configure_app_compression(app)
     Compress(app)
 
-app.run(host='0.0.0.0', debug=settings['global_settings']['debug'])
+app.run(debug=settings['global_settings']['debug'])
 
 if __name__ == '__main__':
     # Setup logging handlers if required

@@ -401,7 +401,7 @@ class NetCDF2kmlConverter(object):
         return dataset_kml
 
 
-    def build_thumbnail(self, visibility=True):
+    def build_thumbnail(self, bounding_box, visibility=True):
         """
         Builds a kml thumbnail image into the parent folder. 
         Thumbnail URL is built from OPeNDAP endpoint at this stage, but this needs to change.
@@ -410,15 +410,23 @@ class NetCDF2kmlConverter(object):
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         @return: Dataset folder under parent folder
         """
+        print('anything')
+
         logger.debug("Building WMS thumbnail...")
         try:
+
+            west = bounding_box[0]
+            east = bounding_box[2]
+            south = bounding_box[1]
+            north = bounding_box[3]
+
             #wms_url = self.netcdf_path.replace('/dodsC/', '/wms/') #TODO: Replace this hack
             wms_url = "http://dapds00.nci.org.au/thredds/wms/rr2/airborne_geophysics/NSW/P1027/magnetics/grid/mNSW1027/" \
-                      "mNSW1027.nc?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX=-" \
-                      "36.1795811280555526,142.9650167902777582,-32.75158112805555533,145.5810167902777721" \
+                      "mNSW1027.nc?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap" \
+                      "&BBOX={0},{1},{2},{3}" \
                       "&CRS=EPSG:4326&WIDTH=206&HEIGHT=269&LAYERS=mag_tmi_anomaly&STYLES=&FORMAT=image/png" \
                       "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
-                      "&COLORSCALERANGE=-2781%2C2741&NUMCOLORBANDS=10"
+                      "&COLORSCALERANGE=-2781%2C2741&NUMCOLORBANDS=10".format(south, west, north, east)
 
             dataset_kml = self.dataset_type_folder.newfolder(name='overlay_test',
                                                              visibility=visibility)
@@ -426,16 +434,24 @@ class NetCDF2kmlConverter(object):
            # dataset_kml.style = self.point_style
 
             ground = dataset_kml.newgroundoverlay(name='GroundOverlay')
-            ground.icon.href = 'http://simplekml.googlecode.com/hg/samples/resources/smile.png'
-            #ground.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
-                                              # (18.411757, -33.902944), (18.410850, -33.902767)]
+            print(wms_url)
+            ground.icon.href = wms_url
 
-            ground.latlonbox.north = 32.75158112805555533
-            ground.latlonbox.south = 36.1795811280555526
-            ground.latlonbox.east = 145.5810167902777721
-            ground.latlonbox.west = 142.9650167902777582
+            print(ground.icon.href)
+            # ground.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
+            #                                    (18.411757, -33.902944), (18.410850, -33.902767)]
+            print("NORTH")
+            print(north)
+            ground.latlonbox.north = north
+            ground.latlonbox.south = south
+            ground.latlonbox.east = east
+            ground.latlonbox.west = west
             ground.latlonbox.rotation = -14
+            print(ground)
+            logger.debug("GROUND")
+            logger.debug(ground)
 
+            print(dataset_kml)
             return dataset_kml
 
     #===========================================================================

@@ -1,6 +1,6 @@
 # Global settings
 global_settings:
-  debug: false
+  debug: true
   http_compression: false # Set this to false for local use, true for remote
   database_engine: SQLite
   # Define number of line segments to show across bounding box height for line sub-sampling
@@ -62,7 +62,7 @@ dataset_settings:
     timestamp_detail_view: true
   magnetic_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, magnetics, grid]
     dataset_type_name: Magnetic Survey grids
     netcdf_path_prefix: C:\Temp\Geophysics\magnetic grids # Local directory containing files. Use null to use OPeNDAP
@@ -75,7 +75,7 @@ dataset_settings:
     timestamp_detail_view: true
   potassium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, potassium, grid]
     dataset_type_name: Potassium Survey grids
     netcdf_path_prefix: C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
@@ -88,7 +88,7 @@ dataset_settings:
     timestamp_detail_view: true
   thorium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 5.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, thorium, grid]
     dataset_type_name: Thorium Equivalent Survey grids
     netcdf_path_prefix: C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
