@@ -194,9 +194,9 @@ class NetCDF2kmlConverter(object):
                                                                                           str(self.start_date))
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
                                                                                           str(self.end_date))
-                if self.dataset_link:
+                if self.modified_dataset_link:
                     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-                    self.dataset_link))
+                    self.modified_dataset_link))
                 description_string = description_string + ']]>'
                 dataset_kml.description = description_string
     
@@ -271,9 +271,9 @@ class NetCDF2kmlConverter(object):
                 # build the line description
                 description_string = '<![CDATA['
                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ', str(self.dataset_title))
-                if self.dataset_link:
+                if self.modified_dataset_link:
                     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-                    self.dataset_link))
+                    self.modified_dataset_link))
                 description_string = description_string + ']]>'
                 line_string.description = description_string
                
@@ -318,6 +318,16 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         """        
         
+        visible_points_exist = False
+        if self.point_utils.point_count: # Points found in dataset
+            spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
+            #logger.debug('spatial_mask: {}'.format(spatial_mask))
+            visible_points_exist = np.any(spatial_mask)
+
+        if not visible_points_exist:   
+            logger.debug('No points in view')
+            return
+        
         dataset_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
         
         dataset_kml.style = self.point_style
@@ -326,18 +336,6 @@ class NetCDF2kmlConverter(object):
             # Enable timestamps on points
             self.set_timestamps(dataset_kml)
             
-        visible_points_exist = False
-        if self.point_utils.point_count: # Points found in dataset
-            spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
-            #logger.debug('spatial_mask: {}'.format(spatial_mask))
-            visible_points_exist = np.any(spatial_mask)
-
-        if not visible_points_exist:   
-            # Return empty folder 
-            dataset_kml.name = '{} has no points in view'.format(self.dataset_title)
-            dataset_kml.visibility = False
-            return dataset_kml
-        
         point_data_generator = self.point_utils.all_point_data_generator(self.point_field_list, spatial_mask)
         logger.debug(point_data_generator)
         variable_attributes = next(point_data_generator) # Get point attribute names from first item returned
@@ -426,9 +424,9 @@ class NetCDF2kmlConverter(object):
     #                                                                                       str(self.start_date))
     #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
     #                                                                                       str(self.end_date))
-    #             if self.dataset_link:
+    #             if self.modified_dataset_link:
     #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-    #                 self.dataset_link))
+    #                 self.modified_dataset_link))
     #             description_string = description_string + ']]>'
     #             dataset_kml.description = description_string
     # 
@@ -479,9 +477,9 @@ class NetCDF2kmlConverter(object):
                     variable_attributes[field].get('long_name'),
                     point_data[field])
 
-        if self.dataset_link:
+        if self.modified_dataset_link:
             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-            self.dataset_link))
+            self.modified_dataset_link))
             
         description_string = description_string + ']]>'
         return description_string
@@ -596,8 +594,10 @@ class NetCDF2kmlConverter(object):
                                           'netcdf_basename': self.netcdf_basename
                                           })
             for key, value in dataset_metadata_dict.items():
-                self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
-
+                self.modified_dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
+        else:
+            self.modified_dataset_link = None
+            
         # Set self.end_date if unknown and self.start_date is known
         if self.start_date and not self.end_date:
             self.end_date = self.start_date + timedelta(days=30)
