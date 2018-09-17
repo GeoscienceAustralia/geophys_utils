@@ -35,13 +35,7 @@ class RestfulKMLQuery(Resource):
         
         self.sdmc = get_dataset_metadata_cache(db_engine=settings['global_settings']['database_engine'], 
                                                debug=settings['global_settings']['debug'])
-           
-        # Instantiate one NetCDF2kmlConverter per dataset type
-        self.kml_converters = {dataset_type: NetCDF2kmlConverter(settings, 
-                                                                 dataset_type, 
-                                                                 debug=settings['global_settings']['debug']
-                                                                 )
-                               for dataset_type in settings['dataset_settings'].keys()}
+
             
             
     def get(self, dataset_type):
@@ -78,7 +72,7 @@ class RestfulKMLQuery(Resource):
             dataset_metadata_dict['netcdf_path'] = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
                                                                        str(dataset_metadata_dict['distribution_url']))
             
-        netcdf2kml_obj = self.kml_converters[dataset_type] # Get NetCDF2kmlConverter for dataset type 
+        netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type, debug=settings['global_settings']['debug'])        
         netcdf2kml_obj.build_bbox_kml(dataset_metadata_dict_list, bbox_list)
    
         response = make_response(netcdf2kml_obj.kml_string)

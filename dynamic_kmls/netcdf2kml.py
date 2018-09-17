@@ -45,6 +45,8 @@ class NetCDF2kmlConverter(object):
         self._debug = None
         self.debug = debug
         
+        logger.debug('Instantiating NetCDF2kmlConverter object for {} datasets'.format(dataset_type))
+        
         # Create combined full settings dict and set instance attributes
         combined_settings = dict(settings['global_settings']) # Global settings
         combined_settings.update(settings['default_dataset_settings']) # Default dataset settings
