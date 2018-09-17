@@ -36,7 +36,7 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    def __init__(self, settings, dataset_type, debug=True):
+    def __init__(self, settings, dataset_type, debug=False):
         '''
         Constructor for NetCDF2kmlConverter class
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
@@ -92,7 +92,8 @@ class NetCDF2kmlConverter(object):
         else:
             self.filtered_point_style = None
 
-        self.dataset_type_folder = simplekml.Kml().newfolder(name="No {} in view".format(self.dataset_type_name))
+        self.kml = simplekml.Kml()
+        self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
         #=======================================================================
         # # Set fixed styles for sub-elements
         # self.dataset_type_folder.style.polystyle.color = self.polygon_color
@@ -573,17 +574,16 @@ class NetCDF2kmlConverter(object):
                 kml_entity.timespan.begin = str(survey_year) + "-06-01"
                 kml_entity.timespan.end = str(survey_year) + "-07-01"
 
-    def build_kml(self, netcdf_path, dataset_metadata_dict, bbox_list, visibility=True):
+    def build_dataset_kml(self, kml_format, dataset_metadata_dict, bbox_list, visibility=True):
         '''
-        Function to build and return KML for specified dataset_form
-        @param netcdf_path: netCDF file path or OPeNDAP endpoint
+        Function to build and return KML of specified format for specified dataset
+        @param kml_format: Format of KML required. Must be in ['polygon', 'point', 'line', 'grid']
         @param dataset_metadata_dict: Dict containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
-        @param self.dataset_type_folder: KML folder under which to build geometry for dataset
         @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
         @param visibilty: Boolean flag indicating whether dataset geometry should be visible
         '''
-        #logger.debug('build_kml({} {} {} {}) called'.format(netcdf_path, dataset_metadata_dict, bbox_list, visibility))
-        self.netcdf_path = netcdf_path # Property setter will take care of dependencies
+        #logger.debug('build_dataset_kml({}, {}, {}, {}) called'.format(kml_format, dataset_metadata_dict, bbox_list, visibility))
+        self.netcdf_path = dataset_metadata_dict['netcdf_path'] # Property setter will take care of dependencies
         
         # Update instance attributes from dataset_metadata_dict
         for key, value in dataset_metadata_dict.items():
@@ -597,27 +597,41 @@ class NetCDF2kmlConverter(object):
                                           })
             for key, value in dataset_metadata_dict.items():
                 self.dataset_link = self.dataset_link.replace('{'+key+'}', str(value))
-        
-        
+
         # Set self.end_date if unknown and self.start_date is known
         if self.start_date and not self.end_date:
             self.end_date = self.start_date + timedelta(days=30)
-            
-            
         
-        # Build polygons if bounding box width is greater than min_polygon_bbox_width setting (low zoom)
-        if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
-            logger.debug('Processing polygon for dataset {}'.format(self.netcdf_path))
-            dataset_kml = self.build_polygon(bbox_list, visibility)
-        else: # Build detailed view for high zoom
-            build_kml_function = self.build_kml_functions.get(self.dataset_format)
-            assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
-                                                                                         list(self.build_kml_functions.keys()))
-            logger.debug('Processing {} dataset {}'.format(self.dataset_format, self.netcdf_path))
-            dataset_kml = build_kml_function(bbox_list, visibility)
+        build_kml_function = self.build_kml_functions.get(kml_format)
+        assert build_kml_function, 'Invalid dataset form "{}". Must be in {}'.format(self.dataset_format, 
+                                                                                     list(self.build_kml_functions.keys()))
+        logger.debug('Processing {}s for dataset {}'.format(self.dataset_format, self.netcdf_path))
+        build_kml_function(bbox_list, visibility)
 
-        if dataset_kml:
-            self.dataset_count += 1
+        
+        
+    def build_bbox_kml(self, dataset_metadata_dict_list, bbox_list, visibility=True):
+        '''
+        Function to build and return KML for specified dataset_form for entire bounding box
+        @param dataset_metadata_dict_list: List of dicts containing dataset metadata as returned by DatasetMetadataCache.search_dataset_distributions function
+        @param bbox_list: Bounding box specified as [<xmin>, <ymin>, <xmax>, <ymax>] list
+        @param visibilty: Boolean flag indicating whether dataset geometry should be visible
+        '''
+        # Show polygons for low zoom
+        if (bbox_list[2] - bbox_list[0]) >= self.min_polygon_bbox_width:
+            kml_format = 'polygon'
+        else:
+            kml_format = self.dataset_format
+        
+        # Reset KML
+        self.kml = simplekml.Kml()
+        self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
+
+        self.dataset_count = 0
+        for dataset_metadata_dict in dataset_metadata_dict_list: 
+            # N.B: Could determine visibility from data here
+            if self.build_dataset_kml(kml_format, dataset_metadata_dict, bbox_list, visibility):   
+                self.dataset_count += 1
         
         
     @property

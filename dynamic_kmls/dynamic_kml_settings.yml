@@ -1,7 +1,7 @@
 # Global settings
 global_settings:
   debug: false
-  http_compression: true # Set this to false for local use, true for remote
+  http_compression: false # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses
   database_engine: SQLite
