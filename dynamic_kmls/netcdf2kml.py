@@ -410,33 +410,43 @@ class NetCDF2kmlConverter(object):
         """
         logger.debug("Building WMS thumbnail...")
         try:
-            wms_url = self.netcdf_path.replace('/dodsC/', '/wms/') #TODO: Replace this hack
-                
-    #===========================================================================
-    #             # build the polygon based on the bounds. Also set the polygon name. It is inserted into the self.dataset_type_folder.
-    #             dataset_kml = self.dataset_type_folder.newpolygon(name=str(self.dataset_title) + " " + str(self.ga_survey_id),
-    #                                            outerboundaryis=polygon_bounds, visibility=visibility)
-    # 
-    #             # build the polygon description
-    #             description_string = '<![CDATA['
-    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
-    #                                                                                       str(self.dataset_title))
-    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.ga_survey_id))
-    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
-    #                                                                                       str(self.start_date))
-    #             description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
-    #                                                                                       str(self.end_date))
-    #             if self.modified_dataset_link:
-    #                 description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-    #                 self.modified_dataset_link))
-    #             description_string = description_string + ']]>'
-    #             dataset_kml.description = description_string
-    # 
-    #             dataset_kml.style = self.polygon_style
-    #             
-    #             self.set_timestamps(dataset_kml)
-    # 
-    #             return dataset_kml
+
+            west = bounding_box[0]
+            east = bounding_box[2]
+            south = bounding_box[1]
+            north = bounding_box[3]
+
+            # wms_url = self.netcdf_path.replace('/dodsC/', '/wms/') #TODO: Replace this hack
+            wms_url = "http://dapds00.nci.org.au/thredds/wms/rr2/airborne_geophysics/NSW/P1027/magnetics/grid/mNSW1027/" \
+                      "mNSW1027.nc?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap" \
+                      "&BBOX={0},{1},{2},{3}" \
+                      "&CRS=EPSG:4326&WIDTH=206&HEIGHT=269&LAYERS=mag_tmi_anomaly&STYLES=&FORMAT=image/png" \
+                      "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
+                      "&COLORSCALERANGE=-2781%2C2741&NUMCOLORBANDS=10".format(south, west, north, east)
+
+            dataset_kml = self.dataset_type_folder.newfolder(name='overlay_test',
+                                                             visibility=visibility)
+
+            # dataset_kml.style = self.point_style
+
+            ground = dataset_kml.newgroundoverlay(name='GroundOverlay')
+            print(wms_url)
+            ground.icon.href = wms_url
+            ground.icon.style =
+            print(ground.icon.href)
+            # ground.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
+            #                                    (18.411757, -33.902944), (18.410850, -33.902767)]
+            print("NORTH")
+            print(north)
+            ground.latlonbox.north = north
+            ground.latlonbox.south = south
+            ground.latlonbox.east = east
+            ground.latlonbox.west = west
+            ground.latlonbox.rotation = -14
+            print(ground)
+            logger.debug("GROUND")
+            logger.debug(ground)
+            return dataset_kml
     #===========================================================================
         
         except Exception as e:
