@@ -77,7 +77,7 @@ class RestfulImageQuery(Resource):
             response.headers['content-type'] = RestfulImageQuery.CONTENT_TYPE
             return response
         else:
-            #TODO: Craft a proper response for bad query
+            #TODO: Craft a proper response for bad query - 404 perhaps?
             logger.debug('Image file {} does not exist'.format(image_path))
             return
         
@@ -90,6 +90,7 @@ def cache_image_file(dataset_type, image_basename, image_source_url):
     image_path = os.path.join(image_dir, image_basename)
     
     if not os.path.isfile(image_path):
+        os.makedirs(image_dir, exist_ok=True)
         logger.debug('Saving image {} from {}'.format(image_path, image_source_url))
         response = requests.get(image_source_url, stream=True)
         if response.status_code == 200:
