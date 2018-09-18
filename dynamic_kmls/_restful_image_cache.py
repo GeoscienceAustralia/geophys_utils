@@ -71,8 +71,7 @@ class RestfulImageQuery(Resource):
         logger.debug('image_path: {}'.format(image_path))
         
         if os.path.isfile(image_path):
-            #TODO: Address "304 Not Modified" issue without last_modified hack
-            image_response = send_from_directory(image_dir, image_basename, last_modified=datetime.now())        
+            image_response = send_from_directory(image_dir, image_basename)        
             logger.debug('image_response: {}'.format(image_response))
             response = make_response(image_response)
             response.headers['content-type'] = RestfulImageQuery.CONTENT_TYPE
