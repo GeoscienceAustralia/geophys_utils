@@ -1,6 +1,6 @@
 # Global settings
 global_settings:
-  debug: false
+  debug: true
   http_compression: false # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses
@@ -77,7 +77,7 @@ dataset_settings:
     timestamp_detail_view: true
   potassium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 10.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, potassium, grid]
     dataset_type_name: Potassium Survey grids
     netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP

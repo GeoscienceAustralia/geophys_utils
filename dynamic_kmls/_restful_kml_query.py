@@ -64,7 +64,7 @@ class RestfulKMLQuery(Resource):
             protocol=dataset_settings['protocol'],
             ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
         )
-        #logger.debug("dataset_metadata_dict_list: {}".format(dataset_metadata_dict_list))
+        #  logger.debug("dataset_metadata_dict_list: {}".format(dataset_metadata_dict_list))
             
         # Insert modified netCDF file path into each dict in list
         for dataset_metadata_dict in dataset_metadata_dict_list:
@@ -77,6 +77,8 @@ class RestfulKMLQuery(Resource):
    
         response = make_response(netcdf2kml_obj.kml_string)
         response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
+        print('kml response')
+        print(response)
         return response
 
     
