@@ -70,7 +70,7 @@ dataset_settings:
     timestamp_detail_view: true
   magnetic_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 100.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 180.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, magnetics, grid]
     dataset_type_name: Magnetic Survey grids
     netcdf_path_prefix: C:\Temp\Geophysics\magnetic grids # Local directory containing files. Use null to use OPeNDAP
