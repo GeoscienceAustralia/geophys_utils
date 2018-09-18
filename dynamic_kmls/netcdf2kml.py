@@ -408,37 +408,27 @@ class NetCDF2kmlConverter(object):
         """
         logger.debug("Building WMS thumbnail...")
         try:
-            print("Dataset WEST extent: {}".format(self.longitude_min))
-            print("BBOX WEST extent: {}".format(bounding_box[0]))
-            print("Dataset EAST extent: {}".format(self.longitude_max))
-            print("BBOX EAST extent: {}".format(bounding_box[2]))
-            print("Dataset SOUTH extent: {}".format(self.latitude_min))
-            print("BBOX SOUTH extent: {}".format(bounding_box[1]))
-            print("Dataset NORTH extent: {}".format(self.latitude_max))
-            print("BBOX NORTH extent: {}".format(bounding_box[3]))
+            logger.debug("Dataset WEST extent: {}".format(self.longitude_min))
+            logger.debug("BBOX WEST extent: {}".format(bounding_box[0]))
+            logger.debug("Dataset EAST extent: {}".format(self.longitude_max))
+            logger.debug("BBOX EAST extent: {}".format(bounding_box[2]))
+            logger.debug("Dataset SOUTH extent: {}".format(self.latitude_min))
+            logger.debug("BBOX SOUTH extent: {}".format(bounding_box[1]))
+            logger.debug("Dataset NORTH extent: {}".format(self.latitude_max))
+            logger.debug("BBOX NORTH extent: {}".format(bounding_box[3]))
 
-
+            # Define smallest bounding box to retrieve via WMS
             west = max(bounding_box[0], self.longitude_min)
             east = min(bounding_box[2], self.longitude_max)
             south = max(bounding_box[1], self.latitude_min)
             north = min(bounding_box[3], self.latitude_max)
 
-            dataset_width = self.longitude_max - self.longitude_min
-            dataset_height = self.latitude_max - self.latitude_min
-            # aspect_ratio =  height / width
-            aspect_ratio = dataset_height / dataset_width
-            print("HEIGHT: {}".format(self.latitude_max - self.latitude_min))
-            print("WIDTH: {}".format(self.longitude_max - self.longitude_min))
-            print("ASPECT RATIO: {}".format(aspect_ratio))
-
             wms_url = self.distribution_url.replace('/dodsC/', '/wms/') #TODO: Replace this hack
-            print("WMS URL")
-            print(self.distribution_url)
-            print(self.metadata_uuid)
+            logger.debug("WMS URL")
+            logger.debug(self.distribution_url)
+            logger.debug(self.metadata_uuid)
 
-
-
-            print(wms_url)
+            logger.debug(wms_url)
             wms_url = wms_url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={0},{1},{2},{3}&CRS=EPSG:4326&WIDTH={4}&HEIGHT={5}&LAYERS={6}&STYLES=&FORMAT=image/png" \
                       "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
                       "&COLORSCALERANGE=-350%2C350&NUMCOLORBANDS=127".format(south, west, north, east, str(int((east - west) / self.wms_pixel_size)), str(int((north - south) / self.wms_pixel_size)), self.wms_layer_name)
@@ -457,43 +447,43 @@ class NetCDF2kmlConverter(object):
 
             # dataset_kml.style = self.point_style
 
-            ground = self.dataset_type_folder.newgroundoverlay(name=self.dataset_title)
-            print(wms_url)
-            ground.icon.href = wms_url
-            print(ground.icon.href)
-            # ground.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
+            dataset_kml = self.dataset_type_folder.newgroundoverlay(name=self.dataset_title)
+            logger.debug(wms_url)
+            dataset_kml.icon.href = wms_url
+            logger.debug(dataset_kml.icon.href)
+            # dataset_kml.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
             #                                    (18.411757, -33.902944), (18.410850, -33.902767)]
-            print("NORTH")
-            print(north)
-            ground.latlonbox.north = north
-            ground.latlonbox.south = south
-            ground.latlonbox.east = east
-            ground.latlonbox.west = west
-            ground.color = 'aaffffff'
-            print(ground)
+            logger.debug("NORTH")
+            logger.debug(north)
+            dataset_kml.latlonbox.north = north
+            dataset_kml.latlonbox.south = south
+            dataset_kml.latlonbox.east = east
+            dataset_kml.latlonbox.west = west
+            dataset_kml.color = 'aaffffff'
+
             logger.debug("GROUND")
-            logger.debug(ground)
+            logger.debug(dataset_kml)
 
+            self.set_timestamps(dataset_kml)
 
-            self.set_timestamps(ground)
+            # build the bitmap description
+            description_string = '<![CDATA['
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
+                                                                                      str(self.dataset_title))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID', str(self.ga_survey_id))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
+                                                                                      str(self.start_date))
+            description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
+                                                                                      str(self.end_date))
+            if self.modified_dataset_link:
+                description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
+                self.modified_dataset_link))
+            description_string = description_string + ']]>'
+            
+            #TODO: See whether we can make this a displayable balloon from the map
+            dataset_kml.description = description_string 
 
-            # build the polygon description
-            # description_string = '<![CDATA['
-            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
-            #                                                                           str(self.dataset_title))
-            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID',
-            #                                                                           str(self.ga_survey_id))
-            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
-            #                                                                           str(self.start_date))
-            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
-            #                                                                           str(self.end_date))
-            # if self.modified_dataset_link:
-            #     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
-            #         self.modified_dataset_link))
-            # description_string = description_string + ']]>'
-            # ground.description = description_string
-
-            return ground
+            return dataset_kml
     #===========================================================================
         
         except Exception as e:

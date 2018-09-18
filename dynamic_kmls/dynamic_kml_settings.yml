@@ -1,6 +1,6 @@
 # Global settings
 global_settings:
-  debug: true
+  debug: false
   http_compression: false # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses

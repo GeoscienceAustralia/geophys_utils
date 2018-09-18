@@ -77,8 +77,6 @@ class RestfulKMLQuery(Resource):
    
         response = make_response(netcdf2kml_obj.kml_string)
         response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
-        print('kml response')
-        print(response)
         return response
 
     
