@@ -409,26 +409,41 @@ class NetCDF2kmlConverter(object):
         logger.debug("Building WMS thumbnail...")
         try:
             print("Dataset WEST extent: {}".format(self.longitude_min))
+            print("BBOX WEST extent: {}".format(bounding_box[0]))
             print("Dataset EAST extent: {}".format(self.longitude_max))
-            print("Dataset SOUTH extent: {}".format(self.longitude_min))
-            print("west extent: {}".format(self.longitude_min))
-            print(self.longitude_max)
-            print(self.latitude_min)
-            print(self.latitude_max)
-            print(long_min)
+            print("BBOX EAST extent: {}".format(bounding_box[2]))
+            print("Dataset SOUTH extent: {}".format(self.latitude_min))
+            print("BBOX SOUTH extent: {}".format(bounding_box[1]))
+            print("Dataset NORTH extent: {}".format(self.latitude_max))
+            print("BBOX NORTH extent: {}".format(bounding_box[3]))
+
+
             west = max(bounding_box[0], self.longitude_min)
-            east = max(bounding_box[2], self.longitude_max)
-            south = max(bounding_box[1], self.latitude.min)
-            north = bounding_box[3]
+            east = min(bounding_box[2], self.longitude_max)
+            south = max(bounding_box[1], self.latitude_min)
+            north = min(bounding_box[3], self.latitude_max)
+
+            dataset_width = self.longitude_max - self.longitude_min
+            dataset_height = self.latitude_max - self.latitude_min
+            # aspect_ratio =  height / width
+            aspect_ratio = dataset_height / dataset_width
+            print("HEIGHT: {}".format(self.latitude_max - self.latitude_min))
+            print("WIDTH: {}".format(self.longitude_max - self.longitude_min))
+            print("ASPECT RATIO: {}".format(aspect_ratio))
 
             wms_url = self.distribution_url.replace('/dodsC/', '/wms/') #TODO: Replace this hack
             print("WMS URL")
             print(self.distribution_url)
             print(self.metadata_uuid)
+
+
+
             print(wms_url)
-            wms_url = wms_url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={0},{1},{2},{3}&CRS=EPSG:4326&WIDTH=206&HEIGHT=269&LAYERS=mag_tmi_anomaly&STYLES=&FORMAT=image/png" \
+            wms_url = wms_url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={0},{1},{2},{3}&CRS=EPSG:4326&WIDTH={4}&HEIGHT={5}&LAYERS={6}&STYLES=&FORMAT=image/png" \
                       "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
-                      "&COLORSCALERANGE=-2781%2C2741&NUMCOLORBANDS=10".format(south, west, north, east)
+                      "&COLORSCALERANGE=-350%2C350&NUMCOLORBANDS=127".format(south, west, north, east, str(int((east - west) / self.wms_pixel_size)), str(int((north - south) / self.wms_pixel_size)), self.wms_layer_name)
+
+            #mag_tmi_anomaly
 
             # wms_url = "http://dapds00.nci.org.au/thredds/wms/rr2/airborne_geophysics/NSW/P1027/magnetics/grid/mNSW1027/" \
             #           "mNSW1027.nc?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap" \
@@ -437,12 +452,12 @@ class NetCDF2kmlConverter(object):
             #           "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
             #           "&COLORSCALERANGE=-2781%2C2741&NUMCOLORBANDS=10".format(south, west, north, east)
 
-            dataset_kml = self.dataset_type_folder.newfolder(name='overlay_test',
-                                                             visibility=visibility)
+            # dataset_kml = self.dataset_type_folder.newfolder(name='overlay_test',
+            #                                                  visibility=visibility)
 
             # dataset_kml.style = self.point_style
 
-            ground = dataset_kml.newgroundoverlay(name='GroundOverlay')
+            ground = self.dataset_type_folder.newgroundoverlay(name=self.dataset_title)
             print(wms_url)
             ground.icon.href = wms_url
             print(ground.icon.href)
@@ -454,11 +469,31 @@ class NetCDF2kmlConverter(object):
             ground.latlonbox.south = south
             ground.latlonbox.east = east
             ground.latlonbox.west = west
-            ground.latlonbox.rotation = -14
+            ground.color = 'aaffffff'
             print(ground)
             logger.debug("GROUND")
             logger.debug(ground)
-            return dataset_kml
+
+
+            self.set_timestamps(ground)
+
+            # build the polygon description
+            # description_string = '<![CDATA['
+            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Name',
+            #                                                                           str(self.dataset_title))
+            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey ID',
+            #                                                                           str(self.ga_survey_id))
+            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey Start Date',
+            #                                                                           str(self.start_date))
+            # description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Survey End Date',
+            #                                                                           str(self.end_date))
+            # if self.modified_dataset_link:
+            #     description_string = description_string + '<p><b>{0}: </b>{1}</p>'.format('Link to dataset', str(
+            #         self.modified_dataset_link))
+            # description_string = description_string + ']]>'
+            # ground.description = description_string
+
+            return ground
     #===========================================================================
         
         except Exception as e:
