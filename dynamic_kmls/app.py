@@ -7,7 +7,7 @@ import sys
 from flask import Flask
 from flask_restful import Api
 from flask_compress import Compress
-from dynamic_kmls import settings, RestfulKMLQuery, RestfulImageQuery
+from dynamic_kmls import settings, RestfulKMLQuery, RestfulImageQuery, image_url_path
 import logging
 
 logger = logging.getLogger()
@@ -41,7 +41,7 @@ app = Flask('dynamic_kmls') # Note hard-coded module name
 
 api = Api(app)
 api.add_resource(RestfulKMLQuery, '/<string:dataset_type>/query')
-api.add_resource(RestfulImageQuery, '/images/<string:dataset_type>')
+api.add_resource(RestfulImageQuery, image_url_path)
 
 if settings['global_settings']['http_compression']:
     configure_app_compression(app)

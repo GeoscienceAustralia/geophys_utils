@@ -28,6 +28,7 @@ import netCDF4
 import numpy as np
 import os
 from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
+from dynamic_kmls import cache_image_file
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -36,7 +37,7 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    def __init__(self, settings, dataset_type, debug=False):
+    def __init__(self, settings, dataset_type, request_host=None, debug=False):
         '''
         Constructor for NetCDF2kmlConverter class
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
@@ -44,6 +45,8 @@ class NetCDF2kmlConverter(object):
         # Initialise and set debug property
         self._debug = None
         self.debug = debug
+        
+        self.request_host = request_host
         
         logger.debug('Instantiating NetCDF2kmlConverter object for {} datasets'.format(dataset_type))
         
@@ -417,21 +420,22 @@ class NetCDF2kmlConverter(object):
             logger.debug("Dataset NORTH extent: {}".format(self.latitude_max))
             logger.debug("BBOX NORTH extent: {}".format(bounding_box[3]))
 
-            # Define smallest bounding box to retrieve via WMS
-            west = max(bounding_box[0], self.longitude_min)
-            east = min(bounding_box[2], self.longitude_max)
-            south = max(bounding_box[1], self.latitude_min)
-            north = min(bounding_box[3], self.latitude_max)
-
             wms_url = self.distribution_url.replace('/dodsC/', '/wms/') #TODO: Replace this hack
             logger.debug("WMS URL")
             logger.debug(self.distribution_url)
-            logger.debug(self.metadata_uuid)
+            #logger.debug(self.metadata_uuid)
 
             logger.debug(wms_url)
             wms_url = wms_url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={0},{1},{2},{3}&CRS=EPSG:4326&WIDTH={4}&HEIGHT={5}&LAYERS={6}&STYLES=&FORMAT=image/png" \
                       "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
-                      "&COLORSCALERANGE=-350%2C350&NUMCOLORBANDS=127".format(south, west, north, east, str(int((east - west) / self.wms_pixel_size)), str(int((north - south) / self.wms_pixel_size)), self.wms_layer_name)
+                      "&COLORSCALERANGE=-350%2C350&NUMCOLORBANDS=127".format(self.latitude_min, 
+                                                                             self.longitude_min, 
+                                                                             self.latitude_max, 
+                                                                             self.longitude_max, 
+                                                                             int((self.longitude_max - self.longitude_min) / self.wms_pixel_size),
+                                                                             int((self.latitude_max - self.latitude_min) / self.wms_pixel_size), 
+                                                                             self.wms_layer_name
+                                                                             )
 
             #mag_tmi_anomaly
 
@@ -446,23 +450,29 @@ class NetCDF2kmlConverter(object):
             #                                                  visibility=visibility)
 
             # dataset_kml.style = self.point_style
+            
+            # Build URL for cached image file
+            wms_url = 'http://{}{}'.format(self.request_host,
+                cache_image_file(dataset_type=self.dataset_type, 
+                                 image_basename=os.path.splitext(self.netcdf_basename)[0]+'.png', 
+                                 image_source_url=wms_url)
+                )
+            logger.debug('wms_url: {}'.format(wms_url))
 
             dataset_kml = self.dataset_type_folder.newgroundoverlay(name=self.dataset_title)
-            logger.debug(wms_url)
             dataset_kml.icon.href = wms_url
-            logger.debug(dataset_kml.icon.href)
             # dataset_kml.gxlatlonquad.coords = [(18.410524, -33.903972), (18.411429, -33.904171),
             #                                    (18.411757, -33.902944), (18.410850, -33.902767)]
-            logger.debug("NORTH")
-            logger.debug(north)
-            dataset_kml.latlonbox.north = north
-            dataset_kml.latlonbox.south = south
-            dataset_kml.latlonbox.east = east
-            dataset_kml.latlonbox.west = west
+            
+            #TODO: ********************** FIX BUG WHERE THESE ARE IGNORED **********************
+            dataset_kml.latlonbox.north = self.latitude_max
+            dataset_kml.latlonbox.south = self.latitude_min
+            dataset_kml.latlonbox.east = self.latitude_max
+            dataset_kml.latlonbox.west = self.latitude_min
             dataset_kml.color = 'aaffffff'
 
-            logger.debug("GROUND")
-            logger.debug(dataset_kml)
+            logger.debug('dataset_kml.latlonbox: {}'.format(dataset_kml.latlonbox))
+            logger.debug('dataset_kml: {}'.format(dataset_kml))
 
             self.set_timestamps(dataset_kml)
 
@@ -484,10 +494,9 @@ class NetCDF2kmlConverter(object):
             dataset_kml.description = description_string 
 
             return dataset_kml
-    #===========================================================================
         
         except Exception as e:
-            #logger.warning("Unable to display thumbnail "{}": {}".format(wms_url, e))
+            logger.debug('Unable to display thumbnail "{}": {}'.format(wms_url, e))
             pass
 
     

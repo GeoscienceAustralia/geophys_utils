@@ -72,7 +72,10 @@ class RestfulKMLQuery(Resource):
             dataset_metadata_dict['netcdf_path'] = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
                                                                        str(dataset_metadata_dict['distribution_url']))
             
-        netcdf2kml_obj = NetCDF2kmlConverter(settings, dataset_type, debug=settings['global_settings']['debug'])        
+        netcdf2kml_obj = NetCDF2kmlConverter(settings, 
+                                             dataset_type, 
+                                             request_host = request.host,
+                                             debug=settings['global_settings']['debug'])        
         netcdf2kml_obj.build_bbox_kml(dataset_metadata_dict_list, bbox_list)
    
         response = make_response(netcdf2kml_obj.kml_string)

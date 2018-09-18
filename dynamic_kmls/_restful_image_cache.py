@@ -4,7 +4,10 @@ Created on 7 Sep. 2018
 @author: Andrew Turner & Alex Ip, Geoscience Australia
 '''
 import os
+import re
 import tempfile
+import requests
+from datetime import datetime
 from flask_restful import Resource
 from flask import request, make_response, send_from_directory
 
@@ -20,7 +23,9 @@ else:
     logger.setLevel(logging.INFO)
 logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
-cache_dir =  os.path.join((settings['global_settings'].get('image_cache_dir') or 
+image_url_path = '/images/<string:dataset_type>'
+
+cache_dir =  os.path.join((settings['global_settings'].get('cache_root_dir') or 
                           tempfile.gettempdir()),
                           'kml_server_cache'
                           )
@@ -63,9 +68,13 @@ class RestfulImageQuery(Resource):
             return
         
         image_path = os.path.join(image_dir, image_basename)
+        logger.debug('image_path: {}'.format(image_path))
         
-        if os.path.isfile(image_path):        
-            response = make_response(send_from_directory(image_dir, image_basename))
+        if os.path.isfile(image_path):
+            #TODO: Address "304 Not Modified" issue without last_modified hack
+            image_response = send_from_directory(image_dir, image_basename, last_modified=datetime.now())        
+            logger.debug('image_response: {}'.format(image_response))
+            response = make_response(image_response)
             response.headers['content-type'] = RestfulImageQuery.CONTENT_TYPE
             return response
         else:
@@ -82,7 +91,19 @@ def cache_image_file(dataset_type, image_basename, image_source_url):
     image_path = os.path.join(image_dir, image_basename)
     
     if not os.path.isfile(image_path):
-        #TODO: Retrieve image from URL and save it
         logger.debug('Saving image {} from {}'.format(image_path, image_source_url))
+        response = requests.get(image_source_url, stream=True)
+        if response.status_code == 200:
+            with open(image_path, 'wb') as image_file:
+                for chunk in response:
+                    image_file.write(chunk)
+        else:
+            logger.debug('response.status_code {}'.format(response.status_code))
+            return
+        
+    cached_image_url_path = re.sub('<.+>', dataset_type, image_url_path) + '?image=' + image_basename
+    logger.debug('cached_image_url_path: {}'.format(cached_image_url_path))
+    
+    return cached_image_url_path
 
 
