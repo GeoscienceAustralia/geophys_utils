@@ -21,10 +21,16 @@ DATABASE_ENGINE = 'SQLite'
 #DATABASE_ENGINE = 'Postgres'
 
 # Set this to change file path - THIS IS A HACK!!!!
-#FILE_PATH_MAPS = []
-FILE_PATH_MAPS = [('D:\\Temp\\gravity point_datasets\\', '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/'),
-                 ('D:\\Temp\\AEM conductivity datasets\\', '/g/data2/uc0/rr2_dev/axi547/aem/')
-                 ]
+#FILE_PATH_MAPS = None
+FILE_PATH_MAPS = {'D:\\Temp\\gravity point_datasets\\': '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/',
+                  'D:\\Temp\\AEM conductivity datasets\\': '/g/data2/uc0/rr2_dev/axi547/aem/'
+                  }
+
+# Set this to derive OPeNDAP endpoint URL from file path - THIS IS A HACK!!!!
+#OPENDAP_PATH_MAPS = None
+OPENDAP_PATH_MAPS = {'/g/data2/uc0/rr2_dev/': 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/',
+                     '/g/data1/rr2/': 'http://dapds00.nci.org.au/thredds/dodsC/rr2/'
+                     }
 
 class NetCDF2DatasetMetadataCache(object):
     '''
@@ -66,8 +72,7 @@ class NetCDF2DatasetMetadataCache(object):
 
     def populate_db(self,
                     nc_root_dir,
-                    nc_file_template=None,
-                    opendap_path_map=None
+                    nc_file_template=None
                     ):
         '''
         Function to populate DB with metadata from netCDF files
@@ -102,8 +107,9 @@ class NetCDF2DatasetMetadataCache(object):
             
             nc_attribute = dict(nc_dataset.__dict__)
     
-            for file_path_map in FILE_PATH_MAPS:
-                nc_path = nc_path.replace(*file_path_map)
+            if FILE_PATH_MAPS:
+                for file_path_map in FILE_PATH_MAPS.items():
+                    nc_path = nc_path.replace(*file_path_map)
                 
             nc_attribute['nc_path'] = nc_path
             
@@ -142,8 +148,13 @@ class NetCDF2DatasetMetadataCache(object):
                                               )
                                  ]
             
-            if opendap_path_map:
-                distribution_list.append(Distribution(url=nc_attribute['nc_path'].replace(*opendap_path_map),
+            if OPENDAP_PATH_MAPS:
+                # Replace directory with URL prefix
+                opendap_url=nc_attribute['nc_path']
+                for opendap_path_map in OPENDAP_PATH_MAPS.items():
+                    opendap_url = opendap_url.replace(*opendap_path_map)
+                    
+                distribution_list.append(Distribution(url=opendap_url,
                                                       protocol='opendap'
                                                       )
                                          )
@@ -187,9 +198,6 @@ def main():
     nc2dmc = NetCDF2DatasetMetadataCache(debug=DEBUG)
     nc2dmc.populate_db(nc_root_dir,
                        nc_file_template=nc_file_template,
-                       opendap_path_map=('/g/data2/uc0/rr2_dev/',
-                                         'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/'
-                                         )
                        )
     
         
