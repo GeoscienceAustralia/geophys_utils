@@ -1,6 +1,6 @@
 # Global settings
 global_settings:
-  debug: false
+  debug: true
   http_compression: false # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses
@@ -22,6 +22,9 @@ default_dataset_settings:
   point_labelstyle_scale: 0
   polygon_color: 1
   timestamp_detail_view: false
+  wms_transparency: 50
+  wms_color_range: [-350, 350]
+  wms_pixel_size: 0.01
   
 # Dataset settings
 dataset_settings:
@@ -64,7 +67,7 @@ dataset_settings:
     timestamp_detail_view: true
   magnetic_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 100.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, magnetics, grid]
     dataset_type_name: Magnetic Survey grids
     netcdf_path_prefix: null #C:\Temp\Geophysics\magnetic grids # Local directory containing files. Use null to use OPeNDAP
@@ -75,9 +78,11 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 256
     timestamp_detail_view: true
+    wms_layer_name: mag_tmi_anomaly
+    wms_color_range: [-350, 350]
   potassium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 10.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, potassium, grid]
     dataset_type_name: Potassium Survey grids
     netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
@@ -88,9 +93,10 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 256
     timestamp_detail_view: true
+    wms_layer_name: rad_k_conc
   thorium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 10.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, thorium, grid]
     dataset_type_name: Thorium Equivalent Survey grids
     netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
@@ -101,9 +107,10 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 256
     timestamp_detail_view: true
+    wms_layer_name: rad_th_equiv_conc
   uranium_grids:
     dataset_format: grid
-    min_polygon_bbox_width: 0.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 10.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [NCI, geophysical survey, airborne digital data, radiometrics, uranium, grid]
     dataset_type_name: Uranium Equivalent Survey grids
     netcdf_path_prefix: null #C:\Temp\Geophysics\radiometric grids # Local directory containing files. Use null to use OPeNDAP
@@ -114,4 +121,5 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 256
     timestamp_detail_view: true
+    wms_layer_name: rad_u_equiv_conc
  
