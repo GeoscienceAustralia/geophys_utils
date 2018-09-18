@@ -32,3 +32,4 @@ else:
 logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
 from ._restful_kml_query import RestfulKMLQuery
+from ._restful_image_cache import RestfulImageQuery
