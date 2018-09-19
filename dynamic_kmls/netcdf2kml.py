@@ -440,13 +440,15 @@ class NetCDF2kmlConverter(object):
 
             wms_url = wms_url + "?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&BBOX={0},{1},{2},{3}&CRS=EPSG:4326&WIDTH={4}&HEIGHT={5}&LAYERS={6}&STYLES=&FORMAT=image/png" \
                       "&DPI=120&MAP_RESOLUTION=120&FORMAT_OPTIONS=dpi:120&TRANSPARENT=TRUE" \
-                      "&COLORSCALERANGE=-350%2C350&NUMCOLORBANDS=127".format(south, 
+                      "&COLORSCALERANGE={7}%2C{8}&NUMCOLORBANDS=127".format(south, 
                                                                              west, 
                                                                              north, 
                                                                              east, 
                                                                              int((east - west) / self.wms_pixel_size), 
                                                                              int((north - south) / self.wms_pixel_size), 
-                                                                             self.wms_layer_name
+                                                                             self.wms_layer_name,
+                                                                             self.wms_color_range[0],
+                                                                             self.wms_color_range[1]
                                                                              )
             logger.debug('wms_url: {}'.format(wms_url))
 
