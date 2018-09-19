@@ -41,6 +41,9 @@ class NetCDF2kmlConverter(object):
         '''
         Constructor for NetCDF2kmlConverter class
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
+        @param dataset_type: String indicating dataset type
+        @param request_host: Optional host string needed for cached image URL
+        @param debug: Boolean parameter used to turn debug output on/off
         '''
         # Initialise and set debug property
         self._debug = None
@@ -64,7 +67,7 @@ class NetCDF2kmlConverter(object):
         self.build_kml_functions = {'polygon': self.build_polygon,
                                     'point': self.build_points,
                                     'line': self.build_lines,
-                                    'grid': self.build_thumbnail
+                                    'grid': self.build_thumbnail_image
                                     }
         
         # Initialise private instance values to None - will be set by property getter methods as required
@@ -400,7 +403,7 @@ class NetCDF2kmlConverter(object):
         return dataset_kml
 
 
-    def build_thumbnail(self, bounding_box, visibility=True):
+    def build_thumbnail_image(self, bounding_box, visibility=True):
         """
         Builds a kml thumbnail image into the parent folder. 
         Thumbnail URL is built from OPeNDAP endpoint at this stage, but this needs to change.
@@ -425,7 +428,7 @@ class NetCDF2kmlConverter(object):
             logger.debug(self.distribution_url)
             #logger.debug(self.metadata_uuid)
             
-            if self.cache_images:
+            if self.cache_images and self.request_host:
                 # Retrieve image for entire dataset
                 north = self.latitude_max
                 south = self.latitude_min
@@ -466,7 +469,7 @@ class NetCDF2kmlConverter(object):
 
             # dataset_kml.style = self.point_style
             
-            if self.cache_images:
+            if self.cache_images and self.request_host:
                 # Cache image and mModify URL for cached image file
                 wms_url = 'http://{}{}'.format(self.request_host,
                     cache_image_file(dataset_type=self.dataset_type, 

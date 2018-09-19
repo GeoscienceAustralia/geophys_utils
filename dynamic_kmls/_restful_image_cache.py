@@ -7,7 +7,6 @@ import os
 import re
 import tempfile
 import requests
-from datetime import datetime
 from flask_restful import Resource
 from flask import request, make_response, send_from_directory
 
@@ -23,6 +22,7 @@ else:
     logger.setLevel(logging.INFO)
 logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
+# This is used to define the path for the RESTful API, and also to set the URL prefix in cache_image_file()
 image_url_path = '/images/<string:dataset_type>'
 
 cache_dir =  os.path.join((settings['global_settings'].get('cache_root_dir') or 
@@ -49,7 +49,8 @@ class RestfulImageQuery(Resource):
             
     def get(self, dataset_type):
         '''
-        get method for RESTful API
+        get method for RESTful API to retrieve cached images
+        Needs to have "?image=<image_name>" parameter set
         '''
         logger.debug('dataset_type: {}'.format(dataset_type))
         
@@ -83,6 +84,13 @@ class RestfulImageQuery(Resource):
         
         
 def cache_image_file(dataset_type, image_basename, image_source_url):
+    '''
+    Function to retrieve image from image_source_url, and save it into file 
+    @param dataset_type: String indicating dataset type - used in creating URL path
+    @param image_basename: Base name for image file
+    @param image_source_url: Source URL for image (probably WMS query)
+    @return cached_image_url_path: URL path to cached image. Will be appended to server string
+    '''
     logger.debug('dataset_type: {}'.format(dataset_type))
         
     image_dir = os.path.join(cache_dir, dataset_type)
