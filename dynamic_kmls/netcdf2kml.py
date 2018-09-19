@@ -423,7 +423,7 @@ class NetCDF2kmlConverter(object):
         dataset_folder_kml = self.dataset_type_folder.newfolder(name=self.dataset_title, visibility=True)
 
         transparent_polygon = self.build_polygon(bounding_box, visibility=True, parent_folder=dataset_folder_kml,
-                                                 polygon_name='Transparent Polygon for Survey Metadata Display')
+                                                 polygon_name=dataset_folder_kml.name)
         logger.debug('transparent_polygon: {}'.format(transparent_polygon))
         #transparent_polygon.color =
         transparent_polygon.style.polystyle.color = '03000000' # 99% transparent black
