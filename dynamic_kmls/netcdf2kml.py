@@ -83,7 +83,8 @@ class NetCDF2kmlConverter(object):
         self._point_utils = None
         self._line_utils = None
         self._grid_utils = None
-
+        self._point_coordinates = None
+        
         self.colormap = mpl_cm.get_cmap(self.colormap_name, 
                                         self.color_count)
 
@@ -338,11 +339,13 @@ class NetCDF2kmlConverter(object):
         """        
         
         visible_points_exist = False
-        if self.point_utils.point_count: # Points found in dataset
+        if len(self.point_coordinates): # Points found in dataset - use cached coordinates instead of opening netCDF file or OPeNDAP endpoint
             spatial_mask = self.get_spatial_mask(bounding_box)
             #logger.debug('spatial_mask: {}'.format(spatial_mask))
             visible_points_exist = np.any(spatial_mask)
-
+        else:
+            logger.debug('No points in dataset {}'.format(self.netcdf_path))
+            
         if not visible_points_exist:   
             logger.debug('No points in view')
             return
@@ -725,44 +728,58 @@ class NetCDF2kmlConverter(object):
         
     def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
-        Function to retrieve spatial mask from cached coordinates
+        Function to retrieve spatial mask from point coordinates
         Returns boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
         '''
         if not self.cache_point_coordinates:
             return self.point_utils.get_spatial_mask(bounds, bounds_wkt)
             
-        logger.debug('dataset_type: {}'.format(self.dataset_type))
+        return np.logical_and(np.logical_and((bounds[0] <= self.point_coordinates[:,0]), (self.point_coordinates[:,0] <= bounds[2])), 
+                              np.logical_and((bounds[1] <= self.point_coordinates[:,1]), (self.point_coordinates[:,1] <= bounds[3]))
+                              )
+        
+        
+    @property
+    def point_coordinates(self, bounds_wkt=None):
+        '''
+        Function to return pointwise array of XY coordinates
+        '''
+        if self._point_coordinates is not None:
+            logger.debug('Returning memory cached coordinates')
+            return self._point_coordinates
+
+        if not self.cache_point_coordinates:
+            logger.debug('Returning dataset coordinates')
+            self._point_coordinates = self.point_utils.xycoords 
+            return self._point_coordinates     
         
         coord_dir = os.path.join(self.cache_dir, self.dataset_type)
     
         coord_path = os.path.join(coord_dir, os.path.splitext(self.netcdf_basename)[0] + '_coords.dat')
     
+        logger.debug('Returning locally-cached coordinates')
         if os.path.isfile(coord_path):
             # Cached coordinate file exists - read it
             logger.debug('Reading coordinate cache file {}'.format(coord_path))
             coord_file = open(coord_path, 'rb')
-            coordinates = np.fromfile(coord_file, dtype=np.float64)
-            #coordinates.reshape((len(coordinates)/2, 2))
-            coordinates.shape = (len(coordinates)//2, 2) # Reshape into array of XY pairs
+            self._point_coordinates = np.fromfile(coord_file, dtype=np.float64)
+            self._point_coordinates.shape = (len(self._point_coordinates)//2, 2) # Reshape into pointwise array of XY pairs
         else:
             os.makedirs(coord_dir, exist_ok=True)
             logger.debug('Saving coordinate cache file {}'.format(coord_path))
             coord_file = open(coord_path, 'wb')
-            coordinates = self.point_utils.xycoords.astype(np.float64)
+            self._point_coordinates = self.point_utils.xycoords.astype(np.float64)
             
             if bounds_wkt is not None:
-                coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
+                self._point_coordinates = np.array(transform_coords(self._point_coordinates, self.wkt, bounds_wkt))
     
-            coordinates.tofile(coord_file)
+            self._point_coordinates.tofile(coord_file) # Write to cache file
             
-        coord_file.close()
+        coord_file.close()    
         logger.debug('Coordinates read')
-            
-        return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
-                              np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
-                              )
         
-        
+        return self._point_coordinates
+
     @property
     def netcdf_dataset(self):
         '''
@@ -840,6 +857,10 @@ class NetCDF2kmlConverter(object):
                 # del self._grid_utils
                 logger.debug('Setting self._grid_utils = None')
                 self._grid_utils = None
+            if self._point_coordinates is not None:
+                # del self._grid_utils
+                logger.debug('Setting self._point_coordinates = None')
+                self._point_coordinates = None
                 
         self._netcdf_path = str(netcdf_path).strip()
                 
