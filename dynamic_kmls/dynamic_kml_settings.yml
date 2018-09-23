@@ -2,6 +2,7 @@
 global_settings:
   debug: false
   cache_images: true
+  cache_point_coordinates: true
   http_compression: true # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses
@@ -9,7 +10,7 @@ global_settings:
   # Define number of line segments to show across bounding box height for line sub-sampling
   line_segments_across_bbox: 100
   cache_root_dir: 'C:\Temp'
-  # host: '0.0.0.0' # Comment this out for normal local host testing
+  host: '0.0.0.0' # Comment this out for normal local host testing
 
 # Default dataset settings
 default_dataset_settings:
@@ -33,7 +34,7 @@ default_dataset_settings:
 dataset_settings:
   ground_gravity:
     dataset_format: point
-    min_polygon_bbox_width: 1.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 1.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [AUS, ground digital data, gravity, geophysical survey, points]
     dataset_type_name: Ground Gravity Surveys
     netcdf_path_prefix: C:\Temp\Geophysics\gravity point datasets # Local directory containing files. Use null to use OPeNDAP
@@ -54,7 +55,7 @@ dataset_settings:
     timestamp_detail_view: true
   aem:
     dataset_format: line
-    min_polygon_bbox_width: 15.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
+    min_polygon_bbox_width: 30.0 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [geophysics, airborne, AEM, conductivity]
     dataset_type_name: AEM Surveys
     netcdf_path_prefix: C:\Temp\Geophysics\AEM conductivity datasets # Local directory containing files. Use null to use OPeNDAP

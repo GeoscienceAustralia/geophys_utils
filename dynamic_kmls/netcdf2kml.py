@@ -27,7 +27,8 @@ from datetime import date, timedelta
 import netCDF4
 import numpy as np
 import os
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
+import tempfile
+from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils, transform_coords
 from dynamic_kmls import cache_image_file
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,12 @@ class NetCDF2kmlConverter(object):
         self.debug = debug
         
         self.request_host = request_host
+        
+        self.cache_dir = os.path.join((settings['global_settings'].get('cache_root_dir') or 
+                          tempfile.gettempdir()),
+                          'kml_server_cache'
+                          )
+        os.makedirs(self.cache_dir, exist_ok=True)
         
         logger.debug('Instantiating NetCDF2kmlConverter object for {} datasets'.format(dataset_type))
         
@@ -332,7 +339,7 @@ class NetCDF2kmlConverter(object):
         
         visible_points_exist = False
         if self.point_utils.point_count: # Points found in dataset
-            spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
+            spatial_mask = self.get_spatial_mask(bounding_box)
             #logger.debug('spatial_mask: {}'.format(spatial_mask))
             visible_points_exist = np.any(spatial_mask)
 
@@ -715,6 +722,46 @@ class NetCDF2kmlConverter(object):
         if self.dataset_count:
             self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
             
+        
+    def get_spatial_mask(self, bounds, bounds_wkt=None):
+        '''
+        Function to retrieve spatial mask from cached coordinates
+        Returns boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
+        '''
+        if not self.cache_point_coordinates:
+            return self.point_utils.get_spatial_mask(bounds, bounds_wkt)
+            
+        logger.debug('dataset_type: {}'.format(self.dataset_type))
+        
+        coord_dir = os.path.join(self.cache_dir, self.dataset_type)
+    
+        coord_path = os.path.join(coord_dir, os.path.splitext(self.netcdf_basename)[0] + '_coords.dat')
+    
+        if os.path.isfile(coord_path):
+            # Cached coordinate file exists - read it
+            logger.debug('Reading coordinate cache file {}'.format(coord_path))
+            coord_file = open(coord_path, 'rb')
+            coordinates = np.fromfile(coord_file, dtype=np.float64)
+            #coordinates.reshape((len(coordinates)/2, 2))
+            coordinates.shape = (len(coordinates)//2, 2) # Reshape into array of XY pairs
+        else:
+            os.makedirs(coord_dir, exist_ok=True)
+            logger.debug('Saving coordinate cache file {}'.format(coord_path))
+            coord_file = open(coord_path, 'wb')
+            coordinates = self.point_utils.xycoords.astype(np.float64)
+            
+            if bounds_wkt is not None:
+                coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
+    
+            coordinates.tofile(coord_file)
+            
+        coord_file.close()
+        logger.debug('Coordinates read')
+            
+        return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
+                              np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
+                              )
+        
         
     @property
     def netcdf_dataset(self):
