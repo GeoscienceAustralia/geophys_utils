@@ -587,42 +587,44 @@ class NetCDFPointUtils(NetCDFUtils):
         return index_mask 
     
 
-    def expand_indexing_variable(self, 
-                                 indexing_variable_name, 
-                                 start_index=0, 
-                                 end_index=0, 
-                                 indexing_dimension='point',
-                                 mask=None):
-        '''
-        Helper function to expand indexing variables and return an array of the required size
-        '''       
-        end_index = end_index or self.nc_dataset.dimensions[indexing_dimension].size
-        index_range = end_index - start_index
-         
-        if mask is None: # No mask defined - take all points in range
-            subset_mask = np.ones(shape=(index_range,), dtype='bool')
-        else:
-            subset_mask = mask[start_index:end_index]
-        
-        value_variable = self.nc_dataset.variables[indexing_variable_name]
-        start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
-        count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
-            
-        expanded_array = np.zeros(shape=(index_range,), 
-                                  dtype=value_variable.dtype)
-         
-        # Assume monotonically increasing start indices to find all relevant indices
-        indices = np.where(np.logical_and((start_variable[:] >= start_index),
-                                          (start_variable[:] <= end_index)))[0]
-         
-        #logger.debug('indices: {}'.format(indices))
-        for index in indices:
-            start_index = max(start_variable[index]-start_index, 0)
-            end_index = min(start_index+count_variable[index], index_range)
-            expanded_array[start_index:end_index] = value_variable[index]
-             
-        #logger.debug('expanded_array: {}'.format(expanded_array))
-        return expanded_array[subset_mask]
+    #===========================================================================
+    # def expand_indexing_variable(self, 
+    #                              indexing_variable_name, 
+    #                              start_index=0, 
+    #                              end_index=0, 
+    #                              indexing_dimension='point',
+    #                              mask=None):
+    #     '''
+    #     Helper function to expand indexing variables and return an array of the required size
+    #     '''       
+    #     end_index = end_index or self.nc_dataset.dimensions[indexing_dimension].size
+    #     index_range = end_index - start_index
+    #      
+    #     if mask is None: # No mask defined - take all points in range
+    #         subset_mask = np.ones(shape=(index_range,), dtype='bool')
+    #     else:
+    #         subset_mask = mask[start_index:end_index]
+    #     
+    #     value_variable = self.nc_dataset.variables[indexing_variable_name]
+    #     start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
+    #     count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
+    #         
+    #     expanded_array = np.zeros(shape=(index_range,), 
+    #                               dtype=value_variable.dtype)
+    #      
+    #     # Assume monotonically increasing start indices to find all relevant indices
+    #     indices = np.where(np.logical_and((start_variable[:] >= start_index),
+    #                                       (start_variable[:] <= end_index)))[0]
+    #      
+    #     #logger.debug('indices: {}'.format(indices))
+    #     for index in indices:
+    #         start_index = max(start_variable[index]-start_index, 0)
+    #         end_index = min(start_index+count_variable[index], index_range)
+    #         expanded_array[start_index:end_index] = value_variable[index]
+    #          
+    #     #logger.debug('expanded_array: {}'.format(expanded_array))
+    #     return expanded_array[subset_mask]
+    #===========================================================================
      
      
     def expand_lookup_variable(self, 
@@ -716,8 +718,20 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('No points to retrieve for point indices {}-{}: All masked out'.format(start_index, end_index-1))            
             return
         
+        # Generate full field list if None provided
         if not field_list:
-            field_list = self.netcdf_dataset.variables.keys()
+            field_list = [variable.name 
+                          for variable in self.netcdf_dataset.variables.values()
+                          if (not len(variable.dimensions) # Scalar variable
+                              or variable.dimensions[0] == 'point' # Variable is of point dimension
+                              or (variable.dimensions[0] + '_index' in self.netcdf_dataset.variables.keys() # Variable has an index variable
+                                  and len(self.netcdf_dataset.variables[variable.dimensions[0] + '_index'].dimensions) # index variable is not a scalar
+                                  and self.netcdf_dataset.variables[variable.dimensions[0] + '_index'].dimensions[0] == 'point' # index variable is of point dimension
+                                  )
+                              )
+                          and not variable.name.endswith('_index') or hasattr(variable, 'lookup') # Variable is not an index variable
+                          and not variable.name in ['crs', 'transverse_mercator'] or re.match('ga_.+_metadata', variable.name) # Not an excluded variable
+                          ]
  
         logger.debug('field_list: {}'.format(field_list))
         
@@ -725,7 +739,7 @@ class NetCDFPointUtils(NetCDFUtils):
         memory_cache = OrderedDict()
         for variable_name in field_list:
             variable = self.netcdf_dataset.variables.get(variable_name)
-            if not variable:
+            if variable is None:
                 logger.warning('Variable {} does not exist. Skipping.'.format(variable_name))
                 continue
             #logger.debug('variable_name: {}'.format(variable_name))
@@ -737,44 +751,23 @@ class NetCDFPointUtils(NetCDFUtils):
                     continue 
                 
                 # Repeat scalar value for each point
-                data = variable[:]
-                memory_cache[variable_name] = np.array([data] * index_range)
+                data_array = variable[:]
+                memory_cache[variable_name] = np.array([data_array] * index_range)
                  
-            elif len(variable.shape) in [1, 2]: # 1D or 2D variable
-                if (variable.dimensions[0] != 'point'): # Variable dimensions attribute does not start with "point"
-                    
-                    if (self.netcdf_dataset.variables.get(variable_name + '_start_index')
-                        and self.netcdf_dataset.variables.get(variable_name + '_point_count')
-                        ): # Indexing array variable
-                        memory_cache[variable_name] = self.expand_indexing_variable(variable_name, 
-                                                                                    start_index=start_index, 
-                                                                                    end_index=end_index,
-                                                                                    mask=mask)
-                    else: # Lookup array variable
-                        memory_cache[variable_name] = self.expand_lookup_variable(lookup_variable_name=variable_name, 
-                                                                                  start_index=start_index, 
-                                                                                  end_index=end_index, 
-                                                                                  mask=mask)                     
-                else: # 'point' is in variable.dimensions
-                    if variable_name.endswith('_index') or hasattr(variable, 'lookup'): # Lookup indexing array variable
-                        # Get attributes from lookup variable, not indexing variable
-                        variable_name = re.sub('_index$', '', variable_name) if variable_name.endswith('_index') else variable.lookup
-                        variable = self.netcdf_dataset.variables[variable_name] 
-                        
-                        memory_cache[variable_name] = self.expand_lookup_variable(variable_name, 
-                                                                                  start_index=start_index, 
-                                                                                  end_index=end_index, 
-                                                                                  mask=mask)
-                    else: # A point data array variable
-                        data = variable[start_index:end_index]
+            else: # nD array variable
+                if (variable.dimensions[0] != 'point'): # Variable is NOT of point dimension - must be lookup
+                    memory_cache[variable_name] = self.expand_lookup_variable(lookup_variable_name=variable_name, 
+                                                                              start_index=start_index, 
+                                                                              end_index=end_index, 
+                                                                              mask=mask)                     
+                else: # 'point' is in variable.dimensions - "normal" variable
+                    data_array = variable[start_index:end_index]
+                     
+                    # Include fill_values if array is masked
+                    if type(data_array) == np.ma.core.MaskedArray:
+                        data_array = data_array.data
                          
-                        # Include fill_values if array is masked
-                        if type(data) == np.ma.core.MaskedArray:
-                            data = data.data
-                             
-                        memory_cache[variable_name] = data[subset_mask]
-            else:
-                raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))  
+                    memory_cache[variable_name] = data_array[subset_mask]
                
             if yield_variable_attributes_first:
                 variable_attributes[variable_name] = dict(variable.__dict__)
@@ -788,18 +781,13 @@ class NetCDFPointUtils(NetCDFUtils):
         for index in range(index_range):
             point_value_list = []
             for variable_name, variable in iter(memory_cache.items()):
-                data = variable[index]
+                data_array = variable[index]
                 
                 # Convert array to string if required
-                if type(data) == np.ndarray and data.dtype == object:
-                    data = str(data)
+                if type(data_array) == np.ndarray and data_array.dtype == object:
+                    data_array = str(data_array)
 
-                if len(variable.shape) == 1: # Element from 1D variable
-                    point_value_list.append(data)
-                elif len(variable.shape) > 1: # Row from 2D variable
-                    point_value_list.append([element for element in data])
-                else:
-                    raise BaseException('Invalid dimensionality for variable {}'.format(variable_name))
+                point_value_list.append(data_array)
                             
             yield point_value_list
             
@@ -903,8 +891,8 @@ def main(debug=True):
     mask[-10:] = True
     
     # Set list of fields to read
-    #field_list = None
-    field_list = ['latitude', 'longitude', 'obsno', 'reliab'] 
+    field_list = None
+    #field_list = ['latitude', 'longitude', 'obsno', 'reliab'] 
     
     point_data_generator = ncpu.all_point_data_generator(field_list, mask)
     
