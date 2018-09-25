@@ -587,46 +587,6 @@ class NetCDFPointUtils(NetCDFUtils):
         return index_mask 
     
 
-    #===========================================================================
-    # def expand_indexing_variable(self, 
-    #                              indexing_variable_name, 
-    #                              start_index=0, 
-    #                              end_index=0, 
-    #                              indexing_dimension='point',
-    #                              mask=None):
-    #     '''
-    #     Helper function to expand indexing variables and return an array of the required size
-    #     '''       
-    #     end_index = end_index or self.nc_dataset.dimensions[indexing_dimension].size
-    #     index_range = end_index - start_index
-    #      
-    #     if mask is None: # No mask defined - take all points in range
-    #         subset_mask = np.ones(shape=(index_range,), dtype='bool')
-    #     else:
-    #         subset_mask = mask[start_index:end_index]
-    #     
-    #     value_variable = self.nc_dataset.variables[indexing_variable_name]
-    #     start_variable = self.nc_dataset.variables['{}_start_index'.format(indexing_variable_name)]
-    #     count_variable = self.nc_dataset.variables['{}_point_count'.format(indexing_variable_name)]
-    #         
-    #     expanded_array = np.zeros(shape=(index_range,), 
-    #                               dtype=value_variable.dtype)
-    #      
-    #     # Assume monotonically increasing start indices to find all relevant indices
-    #     indices = np.where(np.logical_and((start_variable[:] >= start_index),
-    #                                       (start_variable[:] <= end_index)))[0]
-    #      
-    #     #logger.debug('indices: {}'.format(indices))
-    #     for index in indices:
-    #         start_index = max(start_variable[index]-start_index, 0)
-    #         end_index = min(start_index+count_variable[index], index_range)
-    #         expanded_array[start_index:end_index] = value_variable[index]
-    #          
-    #     #logger.debug('expanded_array: {}'.format(expanded_array))
-    #     return expanded_array[subset_mask]
-    #===========================================================================
-     
-     
     def expand_lookup_variable(self, 
                                lookup_variable_name='line',
                                indexing_variable_name=None, 
@@ -729,8 +689,10 @@ class NetCDFPointUtils(NetCDFUtils):
                                   and self.netcdf_dataset.variables[variable.dimensions[0] + '_index'].dimensions[0] == 'point' # index variable is of point dimension
                                   )
                               )
-                          and not variable.name.endswith('_index') or hasattr(variable, 'lookup') # Variable is not an index variable
-                          and not variable.name in ['crs', 'transverse_mercator'] or re.match('ga_.+_metadata', variable.name) # Not an excluded variable
+                          and not variable.name.endswith('_index') 
+                            and not hasattr(variable, 'lookup') # Variable is not an index variable
+                          and not variable.name in ['crs', 'transverse_mercator'] 
+                            and not re.match('ga_.+_metadata', variable.name) # Not an excluded variable
                           ]
  
         logger.debug('field_list: {}'.format(field_list))
@@ -899,7 +861,7 @@ def main(debug=True):
     # Retrieve point variable attributes first
     variable_attributes = next(point_data_generator)
     logger.info('variable_attributes: {}'.format(variable_attributes))
-    
+
     # Use long names instead of variable names where they exist
     field_names = [variable_attributes[variable_name].get('long_name') or variable_name
                    for variable_name in variable_attributes.keys()]    
