@@ -44,7 +44,7 @@ class NetCDFUtils(object):
                             'fletcher32': True,
                             'shuffle': True,
                             'endian': 'little',
-                            'chunksizes': [1024, 1024]
+                            #'chunksizes': [1024, 1024]
                             }
 
     def __init__(self, netcdf_dataset, debug=False):
@@ -114,7 +114,8 @@ class NetCDFUtils(object):
                  nc_format=None,
                  limit_dim_size=False,
                  empty_var_list=[],
-                 invert_y=None):
+                 invert_y=None,
+                 complevel=0):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -132,8 +133,10 @@ class NetCDFUtils(object):
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
             @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
+            @param complevel: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
         '''  
-             
+        logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
+          
         if invert_y is None: # Default y-axis inversion to same as source
             invert_y = self.y_inverted
             
@@ -220,7 +223,7 @@ class NetCDFUtils(object):
                 # Ensure chunk sizes aren't bigger than variable sizes
                 if var_options.get('chunksizes'):
                     for dimension_index in range(len(input_variable.dimensions)):
-                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index],
+                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index] or dim_size[input_variable.dimensions[dimension_index]],
                                                                          dim_size[input_variable.dimensions[dimension_index]])
                              
                 options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.items()]) if var_options else ''   
@@ -305,7 +308,7 @@ class NetCDFUtils(object):
                             
                             try:
                                 ydim_index = input_variable.dimensions.index(self.y_variable.name)
-                            except ValueError:
+                            except:
                                 ydim_index = None
                             
                             # Iterate over every piece
@@ -396,11 +399,15 @@ def main():
                         action='store_const', 
                         const=True, default=False,
                         help='Copy netCDF files')
-    parser.add_argument("--chunking", help="comma-separated list of chunk sizes for each dimension",
+    parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
                         type=str)
+    parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
+                        type=int, default=4)
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
+    parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
     parser.add_argument("input_path")
     parser.add_argument("output_path")
-    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
     
     args = parser.parse_args()
     
@@ -410,18 +417,28 @@ def main():
         invert_y = None # Default to same as source
     
     if args.do_copy:
-        if args.chunking:
-            chunking = [int(chunk_size.strip()) for chunk_size in args.chunking.split(',')]
+        if args.chunkspec:
+            chunk_spec = {dim_name: int(chunk_size) 
+                        for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
         else:
-            chunking = None
+            chunk_spec = None
             
-    ncu = NetCDFUtils(args.input_path)   
+    ncu = NetCDFUtils(args.input_path,
+                      debug=args.debug
+                      )   
     
     ncu.copy(args.output_path, 
              #datatype_map_dict={},
-             variable_options_dict={data_variable.name: {'chunksizes': chunking}
-                               for data_variable in ncu.data_variable_list
-                               } if chunking else {},
+             # Compress all chunked variables
+             variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension) 
+                                                                   for dimension in variable.dimensions
+                                                                   ],
+                                                    'zlib': bool(args.complevel),
+                                                    'complevel': args.complevel
+                                                    }
+                               for variable_name, variable in ncu.netcdf_dataset.variables.items()
+                               if (set(variable.dimensions) & set(chunk_spec.keys()))
+                               } if chunk_spec else {},
              #dim_range_dict={},
              #nc_format=None,
              #limit_dim_size=False
