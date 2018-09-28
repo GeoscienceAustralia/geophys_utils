@@ -19,6 +19,15 @@ field_definitions:
   easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
   elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
     units: m}
+  lat: {long_name: Latitude, short_name: latitude, units: degrees North}
+  lon: {long_name: Longitude, short_name: longitude, units: degrees East}
+  gda94lat: {long_name: Latitude, short_name: latitude, units: degrees North}
+  gda94lon: {long_name: Longitude, short_name: longitude, units: degrees East}
+  gda94long: {long_name: Longitude, short_name: longitude, units: degrees East}
+  gda94llg: {long_name: Longitude, short_name: longitude, units: degrees East}
+  latgda94: {long_name: Latitude, short_name: latitude, units: degrees North}
+  longda94: {long_name: Longitude, short_name: longitude, units: degrees East}
+  longgda94: {long_name: Longitude, short_name: longitude, units: degrees East}
   line: {long_name: Line number, short_name: line}
   flight: {long_name: Flight number, short_name: flight}
   flt: {long_name: Flight number, short_name: flight}

@@ -56,7 +56,7 @@ SIG_FIGS = OrderedDict([('uint8', 4), # 128
 
 DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
                          ['uint64', 'uint32', 'uint16', 'uint8'], # Unsigned integer dtypes
-                         ['float64', 'float32', 'int16', 'int8'] # Floating point dtypes
+                         ['float64', 'float32'] #, 'int16', 'int8'] # Floating point dtypes - do NOT try casting to integer types
                          ]
     
 ASEG_DTYPE_CODE_MAPPING = {'uint8': 'I',
@@ -277,7 +277,11 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
     '''
     logger.debug('data_array: {}, current_dtype: {}, decimal_places: {}'.format(data_array, current_dtype, decimal_places))
     
-    data_mantissa, data_exponent = dfrexp(data_array)
+    try:
+        data_mantissa, data_exponent = dfrexp(data_array)
+    except:
+        logger.debug('Unable to compute data_mantissa & data_exponent')
+        return
     
     for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
@@ -298,7 +302,7 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                                                                                                difference_array[difference_array != 0]
                                                                                                )
                       )
-                logger.info('Maximum error converting from {} to {}: {}'.format(current_dtype,
+                logger.debug('Maximum error converting from {} to {}: {}'.format(current_dtype,
                                                                                  smaller_dtype,
                                                                                  np.nanmax(np.abs(difference_array))))
                 smaller_mantissa, smaller_exponent = dfrexp(smaller_array)
@@ -307,8 +311,8 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                     # Differences found - try larger datatype
                     continue
                 else:
-                    logger.info('Maximum mantissa difference: {}'.format(np.nanmax(np.abs(data_mantissa - smaller_mantissa))))
-                    logger.info('Maximum exponent difference: {}'.format(np.nanmax(np.abs(smaller_exponent - data_exponent))))
+                    logger.debug('Maximum mantissa difference: {}'.format(np.nanmax(np.abs(data_mantissa - smaller_mantissa))))
+                    logger.debug('Maximum exponent difference: {}'.format(np.nanmax(np.abs(smaller_exponent - data_exponent))))
                     aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(smaller_array, decimal_places)
 
                     if fill_value is not None:
