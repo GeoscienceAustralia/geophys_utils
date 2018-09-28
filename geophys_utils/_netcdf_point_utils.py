@@ -273,7 +273,7 @@ class NetCDFPointUtils(NetCDFUtils):
 
         # Skip points to reduce memory requirements
         #TODO: Implement function which grids spatial subsets.
-        point_subset_mask = np.zeros(shape= self.netcdf_dataset.variables['point'].shape, dtype=bool)
+        point_subset_mask = np.zeros(shape=(self.netcdf_dataset.dimensions['point'].size,), dtype=bool)
         point_subset_mask[0:-1:point_step] = True
         point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
         
