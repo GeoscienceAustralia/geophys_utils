@@ -399,6 +399,8 @@ def main():
                         action='store_const', 
                         const=True, default=False,
                         help='Copy netCDF files')
+    parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
+                        type=str, default='NETCDF4')
     parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
                         type=str)
     parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
@@ -440,7 +442,7 @@ def main():
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
              #dim_range_dict={},
-             #nc_format=None,
+             nc_format=args.format,
              #limit_dim_size=False
              invert_y=invert_y
              )
