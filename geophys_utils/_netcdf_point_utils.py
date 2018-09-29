@@ -55,13 +55,14 @@ class NetCDFPointUtils(NetCDFUtils):
     def __init__(self, 
                  netcdf_dataset, 
                  enable_disk_cache=None,
-                 enable_memory_cache=False,
+                 enable_memory_cache=True,
+                 cache_dir=None,
                  debug=False):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
         @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
-        @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not. Only used if enable_disk_cache == False
+        @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not.
         @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''
         # Start of init function - Call inherited constructor first
@@ -69,10 +70,13 @@ class NetCDFPointUtils(NetCDFUtils):
                              netcdf_dataset=netcdf_dataset, 
                              debug=debug)
         
-        self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
-                                     if 'point' in self.netcdf_dataset.variables[var_name].dimensions
-                                     and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
-                                     ])
+        self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
+        self.cache_basename = os.path.join(self.cache_dir, 
+                                           re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0]))
+        
+        self._xycoords = None # Initialise memory cache variable to None until set by property getter
+        
+        self.enable_memory_cache = enable_memory_cache
         
         # If caching is not explicitly specified, enable it for OPeNDAP access
         if enable_disk_cache is None:
@@ -80,39 +84,16 @@ class NetCDFPointUtils(NetCDFUtils):
         else:
             self.enable_disk_cache = enable_disk_cache
             
-        self.enable_memory_cache = enable_memory_cache
-        
-        self._nc_cache_dataset = None # This will only be defined if caching is enabled
-        
         self.point_count = self.netcdf_dataset.dimensions['point'].size # Will be zero for unlimited
 
-        if self.enable_disk_cache: # Create and populate xycoords variable in cache dataset if OPeNDAP
-            self.create_disk_cache()
-            
-            self._nc_cache_dataset.createDimension('xy', 2)
+        self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
+                                     if 'point' in self.netcdf_dataset.variables[var_name].dimensions
+                                     and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
+                                     ])
         
-            try:
-                x_variable = self.netcdf_dataset.variables['longitude']
-            except:
-                x_variable = self.netcdf_dataset.variables['easting']
-                
-                
-            var_options = x_variable.filters() or {}
-            var_options['zlib'] = False
-            if hasattr(x_variable, '_FillValue'):
-                var_options['fill_value'] = x_variable._FillValue
-    
-            self._nc_cache_dataset.createVariable('xycoords', 
-                                          x_variable.dtype, 
-                                          ('point', 'xy'),
-                                          **var_options
-                                          )
-            
-            self._nc_cache_dataset.variables['xycoords'] = self.get_xy_coord_values()
-        elif self.enable_memory_cache:
-            # Set in-memory array
-            self._xycoords = self.get_xy_coord_values()
-            
+        self.data_variable_list = [key for key, value in netcdf_dataset.variables.items()
+                                   if 'point' in value.dimensions]
+
         # Determine exact spatial bounds
         xycoords = self.xycoords
         xmin = np.nanmin(xycoords[:,0])
@@ -120,9 +101,6 @@ class NetCDFPointUtils(NetCDFUtils):
         ymin = np.nanmin(xycoords[:,1])
         ymax = np.nanmax(xycoords[:,1])
         
-        self.data_variable_list = [key for key, value in netcdf_dataset.variables.items()
-                                   if 'point' in value.dimensions]
-
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
         self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
@@ -132,35 +110,48 @@ class NetCDFPointUtils(NetCDFUtils):
                
         self.kdtree = None # Don't set up kdtree until required
         
-    def __del__(self):
-        '''
-        NetCDFPointUtils Destructor
-        '''
-        if self.enable_disk_cache:
-            try:
-                cache_file_path = self._nc_cache_dataset.filepath()
-                self._nc_cache_dataset.close()
-                os.remove(cache_file_path)
-            except:
-                pass
+    #===========================================================================
+    # def __del__(self):
+    #     '''
+    #     NetCDFPointUtils Destructor
+    #     '''
+    #     if self.enable_disk_cache:
+    #         try:
+    #             cache_file_path = self._nc_cache_dataset.filepath()
+    #             self._nc_cache_dataset.close()
+    #             os.remove(cache_file_path)
+    #         except:
+    #             pass
+    #===========================================================================
         
-    def fetch_array(self, source_array):
+    def fetch_array(self, source_variable):
         '''
         Helper function to retrieve entire 1D array in pieces < self.max_bytes in size
         '''
-        source_len = source_array.shape[0]
-        pieces_required = max(source_array[0].itemsize * source_len // self.max_bytes, 1)
+        source_len = source_variable.shape[0]
+        pieces_required = max((source_variable[0].itemsize * source_len) // self.max_bytes, 1)
         max_elements = source_len // pieces_required
         
-        cache_array = np.zeros((source_len,), dtype=source_array.dtype)
+        # Reduce max_elements to fit within chunk boundaries if possible
+        if hasattr(source_variable, '_ChunkSizes'):
+            chunk_size = source_variable._ChunkSizes if type(source_variable._ChunkSizes) in [int, np.int32] else source_variable._ChunkSizes[0]
+            logger.debug('chunk_size: {}'.format(chunk_size))
+            chunk_count = max(max_elements // chunk_size, 
+                              1)
+            max_elements = min(chunk_count * chunk_size, 
+                               max_elements) 
+        
+        logger.debug('{} pieces containing up to {} array elements required'.format(pieces_required, max_elements))
+        
+        cache_array = np.zeros((source_len,), dtype=source_variable.dtype)
 
         # Copy array in pieces
         start_index = 0
         while start_index < source_len:
             end_index = min(start_index + max_elements, source_len)
+            logger.debug('Retrieving array elements {}:{}'.format(start_index, end_index))
             array_slice = slice(start_index, end_index)
-            cache_array[array_slice] = source_array[array_slice]
-            cache_array[array_slice] = source_array[array_slice]
+            cache_array[array_slice] = source_variable[array_slice]
             start_index += max_elements
             
         return cache_array
@@ -802,8 +793,9 @@ class NetCDFPointUtils(NetCDFUtils):
 
     def get_xy_coord_values(self):
         '''
-        Function to return a full in-memory coordinate array
+        Function to return a full in-memory coordinate array from source dataset
         '''
+        logger.debug('Reading xy coordinates from source dataset')
         try:
             x_variable = self.netcdf_dataset.variables['longitude']
             y_variable = self.netcdf_dataset.variables['latitude']
@@ -819,24 +811,37 @@ class NetCDFPointUtils(NetCDFUtils):
 
     @property
     def xycoords(self):
-        if self.enable_disk_cache:
-            return self._nc_cache_dataset.variables['xycoords'][:]
-        elif self.enable_memory_cache:
+        '''
+        Property getter function to return pointwise array of XY coordinates
+        '''
+        if self.enable_memory_cache and self._xycoords is not None:
+            #logger.debug('Returning memory cached coordinates')
             return self._xycoords
-        else:
-            return self.get_xy_coord_values()
-        
+            
+        if self.enable_disk_cache:
+            coord_path = self.cache_basename + '_coords.dat'
+            if os.path.isfile(coord_path):
+                # Cached coordinate file exists - read it
+                logger.debug('Reading coordinate cache file {}'.format(coord_path))
+                with open(coord_path, 'rb') as coord_file:
+                    xycoords = np.fromfile(coord_file, dtype=np.float64)
+                    
+                xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
+            else:
+                xycoords = self.get_xy_coord_values()
+                logger.debug('Saving coordinate cache file {}'.format(coord_path))
+                os.makedirs(self.cache_dir, exist_ok=True)
+                with open(coord_path, 'wb') as coord_file:
+                    xycoords.astype(np.float64).tofile(coord_file) # Write to cache file
+            
+        else: # No caching - read coords from source file
+            xycoords = self.get_xy_coord_values()
 
-    def create_disk_cache(self):
-        # Create local cache for coordinates
-        nc_cache_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0] + '.nc'))
-        self._nc_cache_dataset = netCDF4.Dataset(nc_cache_path, mode="w", clobber=True, format='NETCDF4')
+        if self.enable_memory_cache:
+            self._xycoords = xycoords
+            
+        return xycoords
         
-        point_dimension = self.netcdf_dataset.dimensions['point']
-        self.unlimited_points = point_dimension.isunlimited()
-        
-        self._nc_cache_dataset.createDimension('point', self.point_count if not self.unlimited_points else None)
-
 
 def main(debug=True):
     '''

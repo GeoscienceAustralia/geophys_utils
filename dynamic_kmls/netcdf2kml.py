@@ -54,7 +54,8 @@ class NetCDF2kmlConverter(object):
         
         self.cache_dir = os.path.join((settings['global_settings'].get('cache_root_dir') or 
                           tempfile.gettempdir()),
-                          'kml_server_cache'
+                          'kml_server_cache',
+                          dataset_type
                           )
         os.makedirs(self.cache_dir, exist_ok=True)
         
@@ -83,7 +84,6 @@ class NetCDF2kmlConverter(object):
         self._point_utils = None
         self._line_utils = None
         self._grid_utils = None
-        self._point_coordinates = None
         
         self.colormap = mpl_cm.get_cmap(self.colormap_name, 
                                         self.color_count)
@@ -322,9 +322,9 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
 
-        if not visible_line_count:
-            dataset_folder_kml.name = '{} has no lines in view'.format(self.dataset_title)
-            dataset_folder_kml.visibility = False
+        if visible_line_count:
+            del dataset_folder_kml
+            dataset_folder_kml = None
             
         return dataset_folder_kml
 
@@ -338,15 +338,9 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         """        
         
-        visible_points_exist = False
-        if len(self.point_coordinates): # Points found in dataset - use cached coordinates instead of opening netCDF file or OPeNDAP endpoint
-            spatial_mask = self.get_spatial_mask(bounding_box)
-            #logger.debug('spatial_mask: {}'.format(spatial_mask))
-            visible_points_exist = np.any(spatial_mask)
-        else:
-            logger.debug('No points in dataset {}'.format(self.netcdf_path))
-            
-        if not visible_points_exist:   
+        spatial_mask = self.point_utils.get_spatial_mask(bounding_box)
+        #logger.debug('spatial_mask: {}'.format(spatial_mask))
+        if not np.any(spatial_mask):
             logger.debug('No points in view')
             return
         
@@ -725,61 +719,7 @@ class NetCDF2kmlConverter(object):
         if self.dataset_count:
             self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
             
-        
-    def get_spatial_mask(self, bounds, bounds_wkt=None):
-        '''
-        Function to retrieve spatial mask from point coordinates
-        Returns boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
-        '''
-        if not self.cache_point_coordinates:
-            return self.point_utils.get_spatial_mask(bounds, bounds_wkt)
-            
-        return np.logical_and(np.logical_and((bounds[0] <= self.point_coordinates[:,0]), (self.point_coordinates[:,0] <= bounds[2])), 
-                              np.logical_and((bounds[1] <= self.point_coordinates[:,1]), (self.point_coordinates[:,1] <= bounds[3]))
-                              )
-        
-        
-    @property
-    def point_coordinates(self, bounds_wkt=None):
-        '''
-        Function to return pointwise array of XY coordinates
-        '''
-        if self._point_coordinates is not None:
-            logger.debug('Returning memory cached coordinates')
-            return self._point_coordinates
-
-        if not self.cache_point_coordinates:
-            logger.debug('Returning dataset coordinates')
-            self._point_coordinates = self.point_utils.xycoords 
-            return self._point_coordinates     
-        
-        coord_dir = os.path.join(self.cache_dir, self.dataset_type)
-    
-        coord_path = os.path.join(coord_dir, os.path.splitext(self.netcdf_basename)[0] + '_coords.dat')
-    
-        logger.debug('Returning locally-cached coordinates')
-        if os.path.isfile(coord_path):
-            # Cached coordinate file exists - read it
-            logger.debug('Reading coordinate cache file {}'.format(coord_path))
-            coord_file = open(coord_path, 'rb')
-            self._point_coordinates = np.fromfile(coord_file, dtype=np.float64)
-            self._point_coordinates.shape = (len(self._point_coordinates)//2, 2) # Reshape into pointwise array of XY pairs
-        else:
-            os.makedirs(coord_dir, exist_ok=True)
-            logger.debug('Saving coordinate cache file {}'.format(coord_path))
-            coord_file = open(coord_path, 'wb')
-            self._point_coordinates = self.point_utils.xycoords.astype(np.float64)
-            
-            if bounds_wkt is not None:
-                self._point_coordinates = np.array(transform_coords(self._point_coordinates, self.wkt, bounds_wkt))
-    
-            self._point_coordinates.tofile(coord_file) # Write to cache file
-            
-        coord_file.close()    
-        logger.debug('Coordinates read')
-        
-        return self._point_coordinates
-
+               
     @property
     def netcdf_dataset(self):
         '''
@@ -797,8 +737,9 @@ class NetCDF2kmlConverter(object):
         '''
         if not self._point_utils:
             self._point_utils = NetCDFPointUtils(self.netcdf_dataset, 
-                                                 enable_disk_cache=False, 
+                                                 enable_disk_cache=True, 
                                                  enable_memory_cache=True,
+                                                 cache_dir=self.cache_dir,
                                                  debug=False #settings['global_settings']['debug']
                                                  )
         return self._point_utils
@@ -810,9 +751,10 @@ class NetCDF2kmlConverter(object):
         '''
         if not self._line_utils:
             self._line_utils = NetCDFLineUtils(self.netcdf_dataset, 
-                                               enable_disk_cache=False,
+                                               enable_disk_cache=True,
                                                enable_memory_cache=True,
-                                               debug=False #settings['global_settings']['debug']
+                                               cache_dir=self.cache_dir,
+                                               debug=self.debug
                                                )
         self._point_utils = self._line_utils # NetCDFLineUtils is a subclass of NetCDFPointUtils
         return self._line_utils
@@ -824,7 +766,7 @@ class NetCDF2kmlConverter(object):
         '''
         if not self._grid_utils:
             self._grid_utils = NetCDFGridUtils(self.netcdf_dataset,
-                                               debug=False #settings['global_settings']['debug']
+                                               debug=self.debug
                                                )
         return self._grid_utils
     
@@ -857,10 +799,6 @@ class NetCDF2kmlConverter(object):
                 # del self._grid_utils
                 logger.debug('Setting self._grid_utils = None')
                 self._grid_utils = None
-            if self._point_coordinates is not None:
-                # del self._grid_utils
-                logger.debug('Setting self._point_coordinates = None')
-                self._point_coordinates = None
                 
         self._netcdf_path = str(netcdf_path).strip()
                 

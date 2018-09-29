@@ -63,7 +63,8 @@ class NetCDFUtils(object):
         
         self.opendap = (re.match('^http.*', self.nc_path) is not None)
         if self.opendap:
-            self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
+            #self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
+            self.max_bytes = 5000000 # 5.0MB limit for NCI OPeNDAP
         else:
             self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
