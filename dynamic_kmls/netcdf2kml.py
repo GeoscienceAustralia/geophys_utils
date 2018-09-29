@@ -246,16 +246,11 @@ class NetCDF2kmlConverter(object):
         else:
             height_variable = [] # Empty string to return no variables, just 'coordinates'
         
-        dataset_folder_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
-        
         #dataset_folder_kml.style = self.dataset_type_folder.style
         #dataset_folder_kml.style = self.line_style
     
-        if self.timestamp_detail_view:
-            # Enable timestamps on lines
-            self.set_timestamps(dataset_folder_kml)
+        dataset_folder_kml = None
         
-        visible_line_count = 0 # Need to iterate through generator to count lines
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
                                                                 bounds=bounding_box_floats,
@@ -265,7 +260,12 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_data: {}".format(line_data))
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
-                visible_line_count += 1
+                if not dataset_folder_kml:
+                    dataset_folder_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+                    if self.timestamp_detail_view:
+                        # Enable timestamps on lines
+                        self.set_timestamps(dataset_folder_kml)
+        
                 line_string = dataset_folder_kml.newlinestring(name=str("Line number: {}".format(line_number)))
                 
                 #line_string.style = dataset_folder_kml.style
@@ -321,11 +321,7 @@ class NetCDF2kmlConverter(object):
 
             else:
                 logger.debug("line doesn't have any points in view")
-
-        if visible_line_count:
-            del dataset_folder_kml
-            dataset_folder_kml = None
-            
+           
         return dataset_folder_kml
 
     def build_points(self, bounding_box, visibility=True):
@@ -740,7 +736,7 @@ class NetCDF2kmlConverter(object):
                                                  enable_disk_cache=True, 
                                                  enable_memory_cache=True,
                                                  cache_dir=self.cache_dir,
-                                                 debug=False #settings['global_settings']['debug']
+                                                 debug=self.debug
                                                  )
         return self._point_utils
     

@@ -819,20 +819,26 @@ class NetCDFPointUtils(NetCDFUtils):
             return self._xycoords
             
         if self.enable_disk_cache:
-            coord_path = self.cache_basename + '_coords.dat'
+            coord_path = self.cache_basename + '_coords.npz'
             if os.path.isfile(coord_path):
                 # Cached coordinate file exists - read it
                 logger.debug('Reading coordinate cache file {}'.format(coord_path))
-                with open(coord_path, 'rb') as coord_file:
-                    xycoords = np.fromfile(coord_file, dtype=np.float64)
+                #===============================================================
+                # with open(coord_path, 'rb') as coord_file:
+                #     xycoords = np.fromfile(coord_file, dtype=np.float64)
+                #===============================================================
+                xycoords = np.load(coord_path)['xycoords']
                     
-                xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
+                #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
             else:
                 xycoords = self.get_xy_coord_values()
                 logger.debug('Saving coordinate cache file {}'.format(coord_path))
                 os.makedirs(self.cache_dir, exist_ok=True)
-                with open(coord_path, 'wb') as coord_file:
-                    xycoords.astype(np.float64).tofile(coord_file) # Write to cache file
+                #===============================================================
+                # with open(coord_path, 'wb') as coord_file:
+                #     xycoords.astype(np.float64).tofile(coord_file) # Write to cache file
+                #===============================================================
+                np.savez_compressed(coord_path, xycoords=xycoords) # Write to cache file
             
         else: # No caching - read coords from source file
             xycoords = self.get_xy_coord_values()

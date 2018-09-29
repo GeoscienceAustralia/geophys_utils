@@ -10,7 +10,8 @@ global_settings:
   # Define number of line segments to show across bounding box height for line sub-sampling
   line_segments_across_bbox: 100
   cache_root_dir: 'C:\Temp'
-  host: '0.0.0.0' # Comment this out for normal local host testing
+  #host: '0.0.0.0' # Comment this out for normal local host testing
+  #http_proxy: 'http://127.0.0.1:8888' # Comment this out for normal local host testing
 
 # Default dataset settings
 default_dataset_settings:

@@ -141,7 +141,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 if subsampling_distance:
                     line_length = pdist([self.xycoords[point_indices[0]], self.xycoords[point_indices[-1]]])[0]
                     logger.debug('line_length: {}'.format(line_length))
-                    stride = int(line_point_count/max(1, line_length/subsampling_distance))
+                    stride = max(1, int(line_point_count/max(1, line_length/subsampling_distance)))
                     logger.debug('stride: {}'.format(stride))
                     # Create array of subset indices, including the index of the last point if not already in subsample indices
                     subset_indices = np.unique(np.concatenate((np.arange(0, line_point_count, stride),
@@ -181,9 +181,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         if self.line.shape: # Multiple lines
             line_index_variable = self.netcdf_dataset.variables.get('line_index')
             if line_index_variable: # Lookup format lines - Current format
-                logger.debug('Line data is in lookup format (current)')
-                #line_indices = self.fetch_array(line_index_variable)
-                line_indices = line_index_variable[:]
+                line_indices = self.fetch_array(line_index_variable)
+                #line_indices = line_index_variable[:]
             else: # Indexing format lines - OLD FORMAT
                 raise BaseException('Line data is in indexing format (unsupported)')
             
@@ -217,19 +216,25 @@ class NetCDFLineUtils(NetCDFPointUtils):
             return self._line_index
             
         if self.enable_disk_cache:
-            line_index_path = self.cache_basename + '_lineindex.dat'
+            line_index_path = self.cache_basename + '_lineindex.npz'
             
             if os.path.isfile(line_index_path):
                 # Cached line_index file exists - read it
                 logger.debug('Reading line_index cache file {}'.format(line_index_path))
-                with open(line_index_path, 'rb') as line_index_file:
-                    line_index = np.fromfile(line_index_file, dtype=np.int16)
+                #===============================================================
+                # with open(line_index_path, 'rb') as line_index_file:
+                #     line_index = np.fromfile(line_index_file, dtype=np.int16)
+                #===============================================================
+                line_index = np.load(line_index_path)['line_index']
             else:
                 line_index = self.get_line_index_values()
                 logger.debug('Saving line_index cache file {}'.format(line_index_path))
                 os.makedirs(self.cache_dir, exist_ok=True)
-                with open(line_index_path, 'wb') as line_index_file:
-                    line_index.astype(np.int16).tofile(line_index_file) # Write to cache file
+                #===============================================================
+                # with open(line_index_path, 'wb') as line_index_file:
+                #     line_index.astype(np.int16).tofile(line_index_file) # Write to cache file
+                #===============================================================
+                np.savez_compressed(line_index_path, line_index=line_index) # Write to cache file
             
         else: # No caching - read line_index from source file
             line_index = self.get_line_index_values()

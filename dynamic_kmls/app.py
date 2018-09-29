@@ -4,6 +4,7 @@ Created on 7 Sep. 2018
 @author: Andrew Turner & Alex Ip, Geoscience Australia
 '''
 import sys
+import os
 from flask import Flask
 from flask_restful import Api
 from flask_compress import Compress
@@ -28,6 +29,12 @@ COMPRESS_MIMETYPES = ['application/vnd.google-earth.kml+xml',
                       ]
 DEFAULT_COMPRESS_LEVEL = 6
 DEFAULT_COMPRESS_MIN_SIZE = 2000 # Don't bother compressing small KML responses
+
+# Set proxy for outgoing traffic (used for testing with Fiddler)
+http_proxy = settings['global_settings'].get('http_proxy')
+if http_proxy:
+    logger.info('Setting proxy to {}'.format(http_proxy))
+    os.environ['http_proxy'] = http_proxy
 
 def configure_app_compression(app):
     '''
