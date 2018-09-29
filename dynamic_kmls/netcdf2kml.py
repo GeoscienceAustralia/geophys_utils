@@ -28,7 +28,7 @@ import netCDF4
 import numpy as np
 import os
 import tempfile
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils, transform_coords
+from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 from dynamic_kmls import cache_image_file
 
 logger = logging.getLogger(__name__)

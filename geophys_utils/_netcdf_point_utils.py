@@ -39,7 +39,7 @@ import logging
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get logger
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
