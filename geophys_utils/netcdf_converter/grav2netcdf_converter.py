@@ -264,7 +264,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                 convex_hull = points2convex_hull(coordinates)        
                 metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
                     ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in convex_hull]) + '))'
-            if len(coordinates) == 2: # Two points - make bounding box
+            elif len(coordinates) == 2: # Two points - make bounding box
                 bounding_box = [[min(coordinates[:,0]), min(coordinates[:,1])],
                                 [max(coordinates[:,0]), min(coordinates[:,1])],
                                 [max(coordinates[:,0]), max(coordinates[:,1])],
@@ -273,7 +273,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                                 ]
                 metadata_dict['geospatial_bounds'] = 'POLYGON((' + ', '.join([' '.join(
                     ['%.4f' % ordinate for ordinate in coordinates]) for coordinates in bounding_box]) + '))'
-            if len(coordinates) == 1: # Single point
+            elif len(coordinates) == 1: # Single point
                 #TODO: Check whether this is allowable under ACDD
                 metadata_dict['geospatial_bounds'] = 'POINT((' + ' '.join(
                     ['%.4f' % ordinate for ordinate in coordinates[0]]) + '))'
