@@ -49,12 +49,15 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''     
         # Start of init function - Call inherited constructor first
-        NetCDFPointUtils.__init__(self, netcdf_dataset=netcdf_dataset, 
-                                  enable_disk_cache=enable_disk_cache, 
-                                  enable_memory_cache=enable_memory_cache,
-                                  cache_dir=cache_dir,
-                                  debug=debug)
+        super().__init__(netcdf_dataset=netcdf_dataset, 
+                         enable_disk_cache=enable_disk_cache, 
+                         enable_memory_cache=enable_memory_cache,
+                         cache_dir=cache_dir,
+                         debug=debug)
 
+        logger.debug('Running NetCDFLineUtils constructor')
+        
+        # Initialise private property variables to None until set by property getter methods
         self._line = None
         self._line_index = None
             
@@ -70,7 +73,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         # Yield masks for all lines if not specified
         if line_numbers is None:
-            line_numbers = self.line[:]
+            line_numbers = self.line
 
         # Convert single line number to single element list
         try:
@@ -94,7 +97,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def get_lines(self, line_numbers=None, 
                   variables=None, 
                   bounds=None, 
-                  bounds_wkt=None,
+                  #bounds_wkt=None,
                   subsampling_distance=None
                   ):
         '''
@@ -110,7 +113,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         # Return all lines if not specified
         if line_numbers is None:
-            line_numbers = self.line[:]
+            line_numbers = self.line
 
         # Convert single line number to single element list
         try:
@@ -128,7 +131,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         bounds = bounds or self.bounds
         
-        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
+        #spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
+        spatial_subset_mask = self.get_spatial_mask(bounds)
         
         logger.debug('subsampling_distance: {}'.format(subsampling_distance))
         for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
@@ -178,7 +182,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Function to retrieve array of line_index indices from self.netcdf_dataset
         '''
-        if self.line.shape: # Multiple lines
+        if len(self.netcdf_dataset.variables['line']): # Multiple lines
             line_index_variable = self.netcdf_dataset.variables.get('line_index')
             if line_index_variable: # Lookup format lines - Current format
                 line_indices = self.fetch_array(line_index_variable)
@@ -194,17 +198,53 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return line_indices
       
-    
+    def get_cached_line_arrays(self):
+        '''
+        Helper function to cache both line & line_index
+        '''
+        line_cache_path = self.cache_basename + '_line.npz'
+        
+        if os.path.isfile(line_cache_path):
+            # Cached line file exists - read it
+            logger.debug('Reading line cache file {}'.format(line_cache_path))
+            cache_loader = np.load(line_cache_path)
+            
+            line = cache_loader['line']
+            line_index = cache_loader['line_index']
+        else:
+            # Read arrays from source dataset and write to cache
+            line = self.get_line_values()
+            line_index = self.get_line_index_values()
+            
+            logger.debug('Saving line cache file {}'.format(line_cache_path))
+            os.makedirs(self.cache_dir, exist_ok=True)
+            np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
+                
+        return line, line_index
+        
     @property
     def line(self):
         '''
         Property getter function to return array of all line numbers
         Always cache this in memory - should only be small
         '''
-        if self._line is None:
-            self._line = self.get_line_values()
+        if self.enable_memory_cache and self._line is not None:
+            #logger.debug('Returning memory cached line')
+            return self._line
             
-        return self._line
+        if self.enable_disk_cache:
+            line, line_index = self.get_cached_line_arrays()           
+        else: # No caching - read line from source file
+            line = self.get_line_values()
+            line_index = None
+
+        if self.enable_memory_cache:
+            self._line = line
+            if line_index is not None:
+                self._line_index = line_index
+                
+        #logger.debug('line: {}'.format(line))
+        return line
 
     @property
     def line_index(self):
@@ -216,31 +256,16 @@ class NetCDFLineUtils(NetCDFPointUtils):
             return self._line_index
             
         if self.enable_disk_cache:
-            line_index_path = self.cache_basename + '_lineindex.npz'
-            
-            if os.path.isfile(line_index_path):
-                # Cached line_index file exists - read it
-                logger.debug('Reading line_index cache file {}'.format(line_index_path))
-                #===============================================================
-                # with open(line_index_path, 'rb') as line_index_file:
-                #     line_index = np.fromfile(line_index_file, dtype=np.int16)
-                #===============================================================
-                line_index = np.load(line_index_path)['line_index']
-            else:
-                line_index = self.get_line_index_values()
-                logger.debug('Saving line_index cache file {}'.format(line_index_path))
-                os.makedirs(self.cache_dir, exist_ok=True)
-                #===============================================================
-                # with open(line_index_path, 'wb') as line_index_file:
-                #     line_index.astype(np.int16).tofile(line_index_file) # Write to cache file
-                #===============================================================
-                np.savez_compressed(line_index_path, line_index=line_index) # Write to cache file
-            
+            line, line_index = self.get_cached_line_arrays()           
         else: # No caching - read line_index from source file
+            line = None
             line_index = self.get_line_index_values()
 
         if self.enable_memory_cache:
+            if line is not None:
+                self._line = line
             self._line_index = line_index
             
+        #logger.debug('line_index: {}'.format(line_index))
         return line_index
     

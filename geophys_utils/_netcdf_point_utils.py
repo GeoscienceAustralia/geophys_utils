@@ -66,15 +66,15 @@ class NetCDFPointUtils(NetCDFUtils):
         @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''
         # Start of init function - Call inherited constructor first
-        NetCDFUtils.__init__(self, 
-                             netcdf_dataset=netcdf_dataset, 
-                             debug=debug)
+        super().__init__(netcdf_dataset=netcdf_dataset, 
+                         debug=debug
+                         )
+        
+        logger.debug('Running NetCDFPointUtils constructor')
         
         self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
         self.cache_basename = os.path.join(self.cache_dir, 
-                                           re.sub('\W', '_', os.path.splitext(self.netcdf_dataset.filepath())[0]))
-        
-        self._xycoords = None # Initialise memory cache variable to None until set by property getter
+                                           re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
         
         self.enable_memory_cache = enable_memory_cache
         
@@ -83,16 +83,12 @@ class NetCDFPointUtils(NetCDFUtils):
             self.enable_disk_cache = self.opendap
         else:
             self.enable_disk_cache = enable_disk_cache
-            
-        self.point_count = self.netcdf_dataset.dimensions['point'].size # Will be zero for unlimited
 
-        self.point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
-                                     if 'point' in self.netcdf_dataset.variables[var_name].dimensions
-                                     and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
-                                     ])
-        
-        self.data_variable_list = [key for key, value in netcdf_dataset.variables.items()
-                                   if 'point' in value.dimensions]
+        # Initialise private property variables to None until set by property getter methods
+        self._xycoords = None         
+        self._point_variables = None        
+        self._data_variable_list = None
+        self._kdtree = None
 
         # Determine exact spatial bounds
         xycoords = self.xycoords
@@ -103,12 +99,12 @@ class NetCDFPointUtils(NetCDFUtils):
         
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
-        self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
 
         # Define bounds
         self.bounds = [xmin, ymin, xmax, ymax]
+            
+        self.point_count = len(xycoords)
                
-        self.kdtree = None # Don't set up kdtree until required
         
     #===========================================================================
     # def __del__(self):
@@ -133,13 +129,14 @@ class NetCDFPointUtils(NetCDFUtils):
         max_elements = source_len // pieces_required
         
         # Reduce max_elements to fit within chunk boundaries if possible
-        if hasattr(source_variable, '_ChunkSizes'):
+        if pieces_required > 1 and hasattr(source_variable, '_ChunkSizes'):
             chunk_size = source_variable._ChunkSizes if type(source_variable._ChunkSizes) in [int, np.int32] else source_variable._ChunkSizes[0]
             logger.debug('chunk_size: {}'.format(chunk_size))
             chunk_count = max(max_elements // chunk_size, 
                               1)
             max_elements = min(chunk_count * chunk_size, 
-                               max_elements) 
+                               max_elements)
+            pieces_required = int(math.ceil(source_len / max_elements))
         
         logger.debug('{} pieces containing up to {} array elements required'.format(pieces_required, max_elements))
         
@@ -390,7 +387,7 @@ class NetCDFPointUtils(NetCDFUtils):
         else:
             assert secondary_mask.shape == (self.point_count,)        
 
-        if max_distance:
+        if max_distance: # max_distance has been specified
             logger.debug('Computing spatial subset mask...')
             spatial_mask = self.get_spatial_mask([reprojected_coords[0] - max_distance,
                                                   reprojected_coords[1] - max_distance,
@@ -412,12 +409,8 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Indexing spatial subset with {} points into KDTree...'.format(np.count_nonzero(spatial_mask)))
             kdtree = cKDTree(data=self.xycoords[point_indices])
             logger.debug('Finished indexing spatial subset into KDTree.')
-        else:
+        else: # Consider ALL points
             max_distance = np.inf
-            if not self.kdtree:
-                logger.debug('Indexing full dataset with {} points into KDTree...'.format(self.xycoords.shape[0]))
-                self.kdtree = cKDTree(data=self.xycoords[np.where(secondary_mask)[0]])
-                logger.debug('Finished indexing full dataset into KDTree.')
             kdtree = self.kdtree
 
             
@@ -582,7 +575,7 @@ class NetCDFPointUtils(NetCDFUtils):
                                lookup_variable_name='line',
                                indexing_variable_name=None, 
                                start_index=0, 
-                               end_index=0, 
+                               end_index=-1, 
                                mask=None,
                                indexing_dimension='point'):
         '''
@@ -803,7 +796,7 @@ class NetCDFPointUtils(NetCDFUtils):
             x_variable = self.netcdf_dataset.variables['easting']
             y_variable = self.netcdf_dataset.variables['northing']
             
-        xycoord_values = np.zeros(shape=(self.point_count, 2), dtype=x_variable.dtype)
+        xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
         xycoord_values[:,0] = self.fetch_array(x_variable)
         xycoord_values[:,1] = self.fetch_array(y_variable)
         
@@ -848,6 +841,54 @@ class NetCDFPointUtils(NetCDFUtils):
             
         return xycoords
         
+    @property
+    def point_variables(self):
+        '''
+        Property getter function to return point_variables as required
+        '''
+        if not self._point_variables:
+            logger.debug('Setting point_variables property')
+            self._point_variables = list([var_name for var_name in self.netcdf_dataset.variables.keys() 
+                                          if 'point' in self.netcdf_dataset.variables[var_name].dimensions
+                                          and var_name not in ['latitude', 'longitude', 'easting', 'northing', 'point', 'fiducial', 'flag_linetype']
+                                          ])
+        return self._point_variables
+         
+         
+    @property
+    def data_variable_list(self):
+        '''
+        Property getter function to return data_variable_list as required
+        '''
+        if not self._data_variable_list:
+            logger.debug('Setting data_variable_list property')
+            self._data_variable_list = [key for key, value in self.netcdf_dataset.variables.items()
+                                       if 'point' in value.dimensions]
+        return self._data_variable_list
+
+        
+    @property
+    def wgs84_bbox(self):
+        '''
+        Property getter function to return wgs84_bbox as required
+        '''
+        if not self._wgs84_bbox:
+            logger.debug('Setting wgs84_bbox property')
+            self._wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
+        return self._wgs84_bbox
+
+
+    @property
+    def kdtree(self):
+        '''
+        Property getter function to return data_variable_list as required
+        '''
+        if not self._kdtree:
+            logger.debug('Indexing full dataset with {} points into KDTree...'.format(self.xycoords.shape[0]))
+            self._kdtree = cKDTree(data=self.xycoords)
+            logger.debug('Finished indexing full dataset into KDTree.')
+        return self._kdtree
+
 
 def main(debug=True):
     '''

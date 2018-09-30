@@ -109,19 +109,12 @@ class NetCDFGridUtils(NetCDFUtils):
 
     
         # Start of init function - Call inherited constructor first
-        NetCDFUtils.__init__(self, netcdf_dataset)
+        super().__init__(netcdf_dataset)
+        
+        logger.debug('Running NetCDFGridUtils constructor')
+        
+        self._Geotransform = None
 
-        try:
-            # String representation of GeoTransform
-            self.GeoTransform = [float(number.strip())
-                                 for number in self.grid_mapping_variable.GeoTransform.strip().split(' ')]
-        except:
-            try:
-                # Array representation of GeoTransform
-                self.GeoTransform = self.grid_mapping_variable.GeoTransform
-            except:
-                #TODO: create GeoTransform from x & y variables
-                self.GeoTransform = None
 
 # assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
 # 2D' # This is not valid
@@ -376,5 +369,27 @@ class NetCDFGridUtils(NetCDFUtils):
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
+
+    @property
+    def GeoTransform(self):
+        '''
+        Property getter function to return geotransform as required
+        '''
+        if not self._GeoTransform:
+            try:
+                # Assume string or array representation of GeoTransform exists
+                self._GeoTransform = self.crs_variable.GeoTransform
+            except:
+                #TODO: create GeoTransform from x & y variables
+                raise BaseException('Unable to determine GeoTransform')
+
+            if type(self._GeoTransform) == str:
+                # Convert string representation of GeoTransform to array
+                self._GeoTransform = [float(number.strip())
+                                      for number in self.crs_variable.GeoTransform.strip().split(' ')
+                                      ]
+                   
+        return self._GeoTransform
+
 
         

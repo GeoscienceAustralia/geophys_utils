@@ -7,11 +7,15 @@ import os
 from flask_restful import Resource
 from flask import request, make_response
 from shapely.geometry import Polygon
+from datetime import datetime
 from dynamic_kmls import settings
 from dynamic_kmls.netcdf2kml import NetCDF2kmlConverter
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache
 import logging
 #from pprint import pformat
+
+# Set to true for info-level timing output
+REPORT_TIME = True
 
 logger = logging.getLogger(__name__)
     
@@ -44,6 +48,8 @@ class RestfulKMLQuery(Resource):
         '''
         logger.debug('dataset_type: {}'.format(dataset_type))
         
+        t0 = datetime.now()
+        
         dataset_settings = settings['dataset_settings'].get(dataset_type)
         
         #TODO: Handle this more gracefully
@@ -65,6 +71,8 @@ class RestfulKMLQuery(Resource):
             ll_ur_coords=[[bbox_list[0], bbox_list[1]], [bbox_list[2], bbox_list[3]]]
         )
         #  logger.debug("dataset_metadata_dict_list: {}".format(dataset_metadata_dict_list))
+        
+        t_db = datetime.now()
             
         # Insert modified netCDF file path into each dict in list
         for dataset_metadata_dict in dataset_metadata_dict_list:
@@ -80,6 +88,17 @@ class RestfulKMLQuery(Resource):
    
         response = make_response(netcdf2kml_obj.kml_string)
         response.headers['content-type'] = RestfulKMLQuery.CONTENT_TYPE
+
+        t_kml = datetime.now()
+        time_report = '{} request: Database query = {}. KML generation = {}. Total time = {}.'.format(dataset_type,
+                                                                                                      t_db - t0, 
+                                                                                                      t_kml - t_db, 
+                                                                                                      t_kml - t0)        
+        if REPORT_TIME:
+            logger.info(time_report)
+        else:
+            logger.debug(time_report)
+        
         return response
 
     

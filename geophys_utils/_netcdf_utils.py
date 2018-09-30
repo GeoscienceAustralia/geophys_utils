@@ -54,12 +54,16 @@ class NetCDFUtils(object):
         self._debug = None # Initialise private variable
         self.debug = debug # Set debug property
         
+        logger.debug('Running NetCDFUtils constructor')
+        
         if type(netcdf_dataset) == str: # String provided as path to netCDF file
             self.nc_path = netcdf_dataset
-            self.netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+            self._netcdf_dataset = None
         elif type(netcdf_dataset) == netCDF4.Dataset: # NetCDF4.Dataset object provided
-            self.netcdf_dataset = netcdf_dataset 
+            self._netcdf_dataset = netcdf_dataset 
             self.nc_path = netcdf_dataset.filepath()
+        else:
+            raise BaseException('Invalid netcdf_dataset type')
         
         self.opendap = (re.match('^http.*', self.nc_path) is not None)
         if self.opendap:
@@ -68,45 +72,47 @@ class NetCDFUtils(object):
         else:
             self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
-        # Identify all spatial grid variables by first finding the variable with 'grid_mapping'
-        # and then finding all variables with the same dimensionality
-        #TODO: Do something not specific to gridded datasets
-        self.data_variable_list = []
+        # Initialise private property variables to None until set by property getter methods
+        self._data_variable_list = None       
+        self._crs_variable = None
+        self._wkt = None
         
-        #TODO: Make sure this is general for all CRSs
-        self.x_variable = (self.netcdf_dataset.variables.get('lon') 
-                           or self.netcdf_dataset.variables.get('x')
-                           )
-        
-        self.y_variable = (self.netcdf_dataset.variables.get('lat') 
-                           or self.netcdf_dataset.variables.get('y')
-                           )
-        
-        self.y_inverted = (self.y_variable[-1] < self.y_variable[0]) if self.y_variable else False
-        
-        try:
-            self.grid_mapping_variable = self.netcdf_dataset.variables[
-                self.data_variable_list[0].grid_mapping]
-        except:
-            self.grid_mapping_variable = None
-            for grid_mapping_variable_name in ['crs',
-                                               'transverse_mercator'
-                                               ]:
-                try:
-                    self.grid_mapping_variable = self.netcdf_dataset.variables[grid_mapping_variable_name]
-                    break
-                except: 
-                    continue
-
-            
-        try:
-            self.wkt = self.grid_mapping_variable.spatial_ref
-        except:
-            try:
-                self.wkt = get_spatial_ref_from_wkt(self.grid_mapping_variable.epsg_code).ExportToWkt()
-            except:
-                #TODO: Do something a bit better than assuming unprojected WGS84
-                self.wkt = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
+#===============================================================================
+#         #TODO: Make sure this is general for all CRSs
+#         self.x_variable = (self.netcdf_dataset.variables.get('lon') 
+#                            or self.netcdf_dataset.variables.get('x')
+#                            )
+#         
+#         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
+#                            or self.netcdf_dataset.variables.get('y')
+#                            )
+#         
+#         self.y_inverted = (self.y_variable[-1] < self.y_variable[0]) if self.y_variable else False
+#         
+#         try:
+#             self.crs_variable = self.netcdf_dataset.variables[
+#                 self.data_variable_list[0].grid_mapping]
+#         except:
+#             self.crs_variable = None
+#             for grid_mapping_variable_name in ['crs',
+#                                                'transverse_mercator'
+#                                                ]:
+#                 try:
+#                     self.crs_variable = self.netcdf_dataset.variables[grid_mapping_variable_name]
+#                     break
+#                 except: 
+#                     continue
+# 
+#             
+#         try:
+#             self.wkt = self.crs_variable.spatial_ref
+#         except:
+#             try:
+#                 self.wkt = get_spatial_ref_from_wkt(self.crs_variable.epsg_code).ExportToWkt()
+#             except:
+#                 #TODO: Do something a bit better than assuming unprojected WGS84
+#                 self.wkt = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
+#===============================================================================
 
     def copy(self, nc_out_path, 
                  datatype_map_dict={},
@@ -189,7 +195,7 @@ class NetCDFUtils(object):
                 dtype = datatype_map_dict.get(str(input_variable.datatype)) or input_variable.datatype
                 
                 # Special case for "crs" or "transverse_mercator" - want byte datatype
-                if input_variable == self.grid_mapping_variable: 
+                if input_variable == self.crs_variable: 
                     dtype = 'i1'
                     
                 # Start off by copying options from input variable (if specified)
@@ -246,7 +252,7 @@ class NetCDFUtils(object):
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs() if not k.startswith('_')})
                 
                 #===============================================================
-                # if (flip_y and (input_variable == self.grid_mapping_variable)):                    
+                # if (flip_y and (input_variable == self.crs_variable)):                    
                 #     output_GeoTransform = list(self.GeoTransform)
                 #     output_GeoTransform[5] = - output_GeoTransform[5]
                 #     output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
@@ -370,6 +376,55 @@ class NetCDFUtils(object):
             
             
     @property
+    def netcdf_dataset(self):
+        '''
+        Property getter function to open netCDF dataset only when required
+        '''
+        if not self._netcdf_dataset:
+            logger.debug('Opening netCDF dataset {}'.format(self.nc_path))
+            self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+
+        return self._netcdf_dataset
+    
+    @property
+    def data_variable_list(self):
+        '''
+        Property getter function to return data_variable_list as required
+        '''
+        return self._data_variable_list
+
+    @property
+    def crs_variable(self):
+        '''
+        Property getter function to return crs_variable as required
+        '''
+        if not self._crs_variable:
+            logger.debug('Setting crs_variable property')
+            for crs_variable_name in ['crs',
+                                      'transverse_mercator'
+                                      ]:
+                self._crs_variable = self.netcdf_dataset.variables.get(crs_variable_name)
+                
+                if self._crs_variable is not None:
+                    break
+                
+            assert self._crs_variable is not None, 'Unable to determine crs_variable'
+                
+        return self._crs_variable
+
+
+    @property
+    def wkt(self):
+        '''
+        Property getter function to return wkt as required
+        '''
+        if not self._wkt:
+            logger.debug('Setting wkt property')
+            self._wkt = self.crs_variable.spatial_ref
+        return self._wkt
+
+
+    @property
     def debug(self):
         return self._debug
     
@@ -377,16 +432,23 @@ class NetCDFUtils(object):
     def debug(self, debug_value):
         if self._debug != debug_value or self._debug is None:
             self._debug = debug_value
-            
             if self._debug:
-                logger.setLevel(logging.DEBUG)
-                logging.getLogger(self.__module__).setLevel(logging.DEBUG)
+                log_level = logging.DEBUG
             else:
-                logger.setLevel(logging.INFO)
-                logging.getLogger(self.__module__).setLevel(logging.INFO)
+                log_level = logging.INFO
                 
-        logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
-        logging.getLogger(self.__module__).debug('Logger {} set to level {}'.format(self.__module__, logger.level))
+            logger.setLevel(log_level)
+            logger.debug('Logger {} set to level {}'.format(logger.name, log_level))
+                
+            logging.getLogger(self.__module__).setLevel(log_level)
+            logger.debug('Logger {} set to level {}'.format(self.__module__, log_level))
+            
+            for base_class in self.__class__.__bases__:
+                logging.getLogger(base_class.__module__).setLevel(log_level)
+                logger.debug('Logger {} set to level {}'.format(base_class.__module__, log_level))
+
+                
+        
 
 def main():
     '''

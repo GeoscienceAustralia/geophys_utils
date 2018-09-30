@@ -251,6 +251,7 @@ class NetCDF2kmlConverter(object):
     
         dataset_folder_kml = None
         
+        visible_line_count = 0
         for line_number, line_data in self.line_utils.get_lines(line_numbers=None, 
                                                                 variables=height_variable, 
                                                                 bounds=bounding_box_floats,
@@ -260,8 +261,11 @@ class NetCDF2kmlConverter(object):
             #logger.debug("line_data: {}".format(line_data))
             points_in_subset = len(line_data['coordinates'])
             if points_in_subset:
+                visible_line_count += 1
+                
+                # Create dataset_folder_kml as soon as we have one line, leav as None if no lines found
                 if not dataset_folder_kml:
-                    dataset_folder_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+                    dataset_folder_kml = self.dataset_type_folder.newfolder(name=self.dataset_title, visibility=visibility)
                     if self.timestamp_detail_view:
                         # Enable timestamps on lines
                         self.set_timestamps(dataset_folder_kml)
@@ -322,7 +326,11 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
            
+        if visible_line_count:
+            dataset_folder_kml.name = dataset_folder_kml.name + ' ({} lines in view)'.format(visible_line_count)
+            
         return dataset_folder_kml
+    
 
     def build_points(self, bounding_box, visibility=True):
         """
@@ -340,7 +348,7 @@ class NetCDF2kmlConverter(object):
             logger.debug('No points in view')
             return
         
-        dataset_folder_kml = self.dataset_type_folder.newfolder(name=str(self.dataset_title) + " " + str(self.ga_survey_id), visibility=visibility)
+        dataset_folder_kml = self.dataset_type_folder.newfolder(name=self.dataset_title, visibility=visibility)
         
         dataset_folder_kml.style = self.point_style
 
@@ -369,7 +377,8 @@ class NetCDF2kmlConverter(object):
             # add new points with netcdf file Obsno as title and long and lat as coordinatess
             # point_field_list: ['obsno', 'latitude', 'longitude', 'grav', 'freeair', 'bouguer', 'stattype', 'reliab', 'gridflag']
             point_kml = dataset_folder_kml.newpoint(name="Observation no. " + str(point_data['obsno']),
-                                                   coords=[(point_data['longitude'], point_data['latitude'])])
+                                                    coords=[(point_data['longitude'], point_data['latitude'])],
+                                                    visibility=visibility)
 
             point_kml.style = dataset_folder_kml.style
             
@@ -405,7 +414,10 @@ class NetCDF2kmlConverter(object):
                 point_kml.style = variant_point_style
 
         dataset_folder_kml.region = self.build_region(100, -1, 200, 800)
-            
+        
+        if visible_point_count:
+            dataset_folder_kml.name = dataset_folder_kml.name + ' ({} points in view)'.format(visible_point_count)
+                        
         return dataset_folder_kml
 
 
@@ -677,7 +689,7 @@ class NetCDF2kmlConverter(object):
         else:
             self.modified_dataset_link = None
             
-        # Set self.end_date if unknown and self.start_date is known
+        # Set self.end_date if unknown, and self.start_date is known
         if self.start_date and not self.end_date:
             self.end_date = self.start_date + timedelta(days=30)
         
@@ -716,15 +728,17 @@ class NetCDF2kmlConverter(object):
             self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
             
                
-    @property
-    def netcdf_dataset(self):
-        '''
-        Getter method for netcdf_dataset property. Will set self._netcdf_dataset if None
-        '''
-        if not self._netcdf_dataset:
-            # Don't connect to netCDF dataset until we have to
-            self._netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
-        return self._netcdf_dataset       
+    #===========================================================================
+    # @property
+    # def netcdf_dataset(self):
+    #     '''
+    #     Getter method for netcdf_dataset property. Will set self._netcdf_dataset if None
+    #     '''
+    #     if not self._netcdf_dataset:
+    #         # Don't connect to netCDF dataset until we have to
+    #         self._netcdf_dataset = netCDF4.Dataset(self.netcdf_path)
+    #     return self._netcdf_dataset       
+    #===========================================================================
             
     @property
     def point_utils(self):
@@ -732,7 +746,7 @@ class NetCDF2kmlConverter(object):
         Getter method for point_utils property. Will set self._point_utils if None
         '''
         if not self._point_utils:
-            self._point_utils = NetCDFPointUtils(self.netcdf_dataset, 
+            self._point_utils = NetCDFPointUtils(self.netcdf_path, 
                                                  enable_disk_cache=True, 
                                                  enable_memory_cache=True,
                                                  cache_dir=self.cache_dir,
@@ -746,7 +760,7 @@ class NetCDF2kmlConverter(object):
         Getter method for line_utils property. Will set self._line_utils if None
         '''
         if not self._line_utils:
-            self._line_utils = NetCDFLineUtils(self.netcdf_dataset, 
+            self._line_utils = NetCDFLineUtils(self.netcdf_path, 
                                                enable_disk_cache=True,
                                                enable_memory_cache=True,
                                                cache_dir=self.cache_dir,
@@ -761,7 +775,7 @@ class NetCDF2kmlConverter(object):
         Getter method for grid_utils property. Will set self._grid_utils if None
         '''
         if not self._grid_utils:
-            self._grid_utils = NetCDFGridUtils(self.netcdf_dataset,
+            self._grid_utils = NetCDFGridUtils(self.netcdf_path,
                                                debug=self.debug
                                                )
         return self._grid_utils
