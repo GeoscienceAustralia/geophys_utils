@@ -8,7 +8,7 @@ global_settings:
   compress_min_size: 2000 # Don't bother compressing small KML responses
   database_engine: SQLite
   # Define number of line segments to show across bounding box height for line sub-sampling
-  line_segments_across_bbox: 100
+  line_segments_across_bbox: 50
   cache_root_dir: 'C:\Temp'
   #host: '0.0.0.0' # Comment this out for normal local host testing
   #http_proxy: 'http://127.0.0.1:8888' # Comment this out for normal local host testing
@@ -149,7 +149,7 @@ dataset_settings:
     colormap_name: rainbow
     color_count: 256
     timestamp_detail_view: true
-radiometric_lines:
+  radiometric_lines:
     dataset_format: line
     min_polygon_bbox_width: 0.5 # maximum bounding box width for detailed display. Uses survey convex-hull polygons for anything larger.
     keyword_list: [line, radiometrics, airborne, geophysics]
