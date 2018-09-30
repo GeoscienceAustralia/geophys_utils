@@ -126,13 +126,15 @@ class NetCDFPointUtils(NetCDFUtils):
         @param source_variable: netCDF variable from which to retrieve data
         '''
         source_len = source_variable.shape[0]
-        pieces_required = max((source_variable[0].itemsize * source_len) // self.max_bytes, 1)
+        pieces_required = int(math.ceil((source_variable[0].itemsize * source_len) / self.max_bytes))
         max_elements = source_len // pieces_required
         
         # Reduce max_elements to fit within chunk boundaries if possible
         if pieces_required > 1 and hasattr(source_variable, '_ChunkSizes'):
-            chunk_size = source_variable._ChunkSizes if type(source_variable._ChunkSizes) in [int, np.int32] else source_variable._ChunkSizes[0]
-            logger.debug('chunk_size: {}'.format(chunk_size))
+            chunk_size = (source_variable._ChunkSizes 
+                          if type(source_variable._ChunkSizes) in [int, np.int32] 
+                          else source_variable._ChunkSizes[0]
+                          )
             chunk_count = max(max_elements // chunk_size, 
                               1)
             max_elements = min(chunk_count * chunk_size, 
