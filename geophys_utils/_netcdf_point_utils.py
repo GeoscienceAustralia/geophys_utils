@@ -120,9 +120,10 @@ class NetCDFPointUtils(NetCDFUtils):
     #             pass
     #===========================================================================
         
-    def fetch_array(self, source_variable):
+    def fetch_array(self, source_variable, dest_array=None):
         '''
         Helper function to retrieve entire 1D array in pieces < self.max_bytes in size
+        @param source_variable: netCDF variable from which to retrieve data
         '''
         source_len = source_variable.shape[0]
         pieces_required = max((source_variable[0].itemsize * source_len) // self.max_bytes, 1)
@@ -138,20 +139,21 @@ class NetCDFPointUtils(NetCDFUtils):
                                max_elements)
             pieces_required = int(math.ceil(source_len / max_elements))
         
-        logger.debug('{} pieces containing up to {} array elements required'.format(pieces_required, max_elements))
+        logger.debug('Fetching {} pieces containing up to {} {} array elements.'.format(pieces_required, max_elements, source_variable.name))
         
-        cache_array = np.zeros((source_len,), dtype=source_variable.dtype)
+        if dest_array is None:
+            dest_array = np.zeros((source_len,), dtype=source_variable.dtype)
 
         # Copy array in pieces
         start_index = 0
         while start_index < source_len:
             end_index = min(start_index + max_elements, source_len)
-            logger.debug('Retrieving array elements {}:{}'.format(start_index, end_index))
+            logger.debug('Retrieving {} array elements {}:{}'.format(source_variable.name, start_index, end_index))
             array_slice = slice(start_index, end_index)
-            cache_array[array_slice] = source_variable[array_slice]
+            dest_array[array_slice] = source_variable[array_slice]
             start_index += max_elements
             
-        return cache_array
+        return dest_array
         
     def get_polygon(self):
         '''
@@ -797,8 +799,8 @@ class NetCDFPointUtils(NetCDFUtils):
             y_variable = self.netcdf_dataset.variables['northing']
             
         xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
-        xycoord_values[:,0] = self.fetch_array(x_variable)
-        xycoord_values[:,1] = self.fetch_array(y_variable)
+        self.fetch_array(x_variable, xycoord_values[:,0])
+        self.fetch_array(y_variable, xycoord_values[:,1])
         
         return xycoord_values    
 
