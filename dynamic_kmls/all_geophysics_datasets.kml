@@ -76,7 +76,7 @@
 			</Link>
 		</NetworkLink>
 		<NetworkLink id="feat_3">
-			<name>Gravity Surveys from Local  KML Server</name>
+			<name>Gravity Survey Points from Local  KML Server</name>
 			<visibility>0</visibility>
 			<open>1</open>
 			<Link id="link_0">
@@ -87,7 +87,7 @@
 			</Link>
 		</NetworkLink>
 		<NetworkLink id="feat_3">
-			<name>AEM Surveys from Local  KML Server</name>
+			<name>AEM Survey Lines from Local  KML Server</name>
 			<visibility>0</visibility>
 			<open>1</open>
 			<Link id="link_0">
