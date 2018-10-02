@@ -176,17 +176,10 @@ class NetCDFPointUtils(NetCDFUtils):
         if bounds_wkt is not None:
             coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
 
-        #=======================================================================
-        # return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
-        #                       np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
-        #                       )
-        #=======================================================================
-            
         bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
         bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
         
         # Return true for each point which is <= bounds_half_size distance from bounds_centroid
-        #return np.all(abs(coordinates - bounds_centroid) <= bounds_half_size, axis=1)
         return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
             
         
@@ -829,23 +822,15 @@ class NetCDFPointUtils(NetCDFUtils):
             coord_path = self.cache_basename + '_coords.npz'
             if os.path.isfile(coord_path):
                 # Cached coordinate file exists - read it
-                logger.debug('Reading coordinate cache file {}'.format(coord_path))
-                #===============================================================
-                # with open(coord_path, 'rb') as coord_file:
-                #     xycoords = np.fromfile(coord_file, dtype=np.float64)
-                #===============================================================
                 xycoords = np.load(coord_path)['xycoords']
+                logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], coord_path))
                     
                 #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
             else:
                 xycoords = self.get_xy_coord_values()
-                logger.debug('Saving coordinate cache file {}'.format(coord_path))
                 os.makedirs(self.cache_dir, exist_ok=True)
-                #===============================================================
-                # with open(coord_path, 'wb') as coord_file:
-                #     xycoords.astype(np.float64).tofile(coord_file) # Write to cache file
-                #===============================================================
                 np.savez_compressed(coord_path, xycoords=xycoords) # Write to cache file
+                logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], coord_path))
             
         else: # No caching - read coords from source file
             xycoords = self.get_xy_coord_values()

@@ -206,19 +206,19 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         if os.path.isfile(line_cache_path):
             # Cached line file exists - read it
-            logger.debug('Reading line cache file {}'.format(line_cache_path))
             cache_loader = np.load(line_cache_path)
             
             line = cache_loader['line']
             line_index = cache_loader['line_index']
+            logger.debug('Read {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
         else:
             # Read arrays from source dataset and write to cache
             line = self.get_line_values()
             line_index = self.get_line_index_values()
             
-            logger.debug('Saving line cache file {}'.format(line_cache_path))
             os.makedirs(self.cache_dir, exist_ok=True)
             np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
+            logger.debug('Saved {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
                 
         return line, line_index
         
