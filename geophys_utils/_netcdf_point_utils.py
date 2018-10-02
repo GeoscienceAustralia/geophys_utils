@@ -175,9 +175,16 @@ class NetCDFPointUtils(NetCDFUtils):
         if bounds_wkt is not None:
             coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
 
-        return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
-                              np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
-                              )
+        #=======================================================================
+        # return np.logical_and(np.logical_and((bounds[0] <= coordinates[:,0]), (coordinates[:,0] <= bounds[2])), 
+        #                       np.logical_and((bounds[1] <= coordinates[:,1]), (coordinates[:,1] <= bounds[3]))
+        #                       )
+        #=======================================================================
+            
+        bounds_half_size = np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]]) / 2.0
+        bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
+        
+        return (abs(coordinates - bounds_centroid) <= bounds_half_size)
             
         
     
