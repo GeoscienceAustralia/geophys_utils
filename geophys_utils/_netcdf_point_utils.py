@@ -22,6 +22,7 @@ Created on 16/11/2016
 '''
 import netCDF4
 import numpy as np
+import numexpr as ne
 import math
 import os
 import sys
@@ -181,10 +182,12 @@ class NetCDFPointUtils(NetCDFUtils):
         #                       )
         #=======================================================================
             
-        bounds_half_size = np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]]) / 2.0
+        bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
         bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
         
-        return np.all(abs(coordinates - bounds_centroid) <= bounds_half_size)
+        # Return true for each point which is <= bounds_half_size distance from bounds_centroid
+        #return np.all(abs(coordinates - bounds_centroid) <= bounds_half_size, axis=1)
+        return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
             
         
     
