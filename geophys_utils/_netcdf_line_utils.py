@@ -138,7 +138,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         logger.debug('subsampling_distance: {}'.format(subsampling_distance))
         for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers, subset_mask=spatial_subset_mask):
         
-            point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
+            point_indices = np.where(line_mask)[0]
             #logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
             line_point_count = len(point_indices)
             if line_point_count: # This test should be redundant
