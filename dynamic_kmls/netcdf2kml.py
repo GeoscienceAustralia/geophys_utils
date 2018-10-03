@@ -668,16 +668,20 @@ class NetCDF2kmlConverter(object):
                         assert survey_year1 > 1900 and survey_year1 < 2020, '{} has survey_year1 ({}) <= 1900 or survey_year1 >= 2020'.format(self.dataset_title, survey_year1)
                         
                         if year_match.group(5): # Survey split over two or more years
-                            survey_year2 = int(year_match.group(1)[0:5-len(year_match.group(5))]+year_match.group(5)) # Substitute year2 characters at end of year one string
-                            assert survey_year2 > 1900 and survey_year2 < 2020, '{} has survey_year2 ({}) <= 1900 or survey_year2 >= 2020'.format(self.dataset_title, survey_year2)
-                            
-                            kml_entity.timespan.begin = str(survey_year1) + "-11-01"
-                            kml_entity.timespan.end = str(survey_year2) + "-02-01"
-                        else: # Only one year
-                            kml_entity.timespan.begin = str(survey_year1) + "-06-01"
-                            kml_entity.timespan.end = str(survey_year1) + "-07-01"
+                            try:
+                                survey_year2 = int(year_match.group(1)[0:5-len(year_match.group(5))]+year_match.group(5)) # Substitute year2 characters at end of year one string
+                                assert survey_year2 > 1900 and survey_year2 < 2020, '{} has survey_year2 ({}) <= 1900 or survey_year2 >= 2020'.format(self.dataset_title, survey_year2)
+                                
+                                kml_entity.timespan.begin = str(survey_year1) + "-11-01"
+                                kml_entity.timespan.end = str(survey_year2) + "-02-01"
+                                return
+                            except Exception as e:
+                                logger.debug('Unable to parse year 2 from end of dataset_title: {}'.format(e))
+                                
+                        kml_entity.timespan.begin = str(survey_year1) + "-06-01"
+                        kml_entity.timespan.end = str(survey_year1) + "-07-01"
                 except Exception as e:
-                    logger.debug('Unable to parse year from end of dataset_title: {}'.format(e))
+                    logger.debug('Unable to parse year 1 from end of dataset_title: {}'.format(e))
 
 
     def build_dataset_kml(self, kml_format, dataset_metadata_dict, bbox_list, visibility=True):
