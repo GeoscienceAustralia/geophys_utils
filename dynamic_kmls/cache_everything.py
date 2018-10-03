@@ -24,6 +24,11 @@ def main():
     for dataset_type, dataset_settings in settings['dataset_settings'].items():
         
         dataset_format = dataset_settings['dataset_format']
+
+        #=======================================================================
+        # if dataset_format != 'line': #TODO: REMOVE THIS - it's only to exclude stuff we already have
+        #     continue
+        #=======================================================================
         
         if dataset_format not in ['point', 'line', 'grid']:
             continue
@@ -94,7 +99,7 @@ def main():
                 
                 print('\t\tCached {} points'.format(len(netcdf_util.xycoords))) # Cause xycoords to be cached
                 
-                if dataset_type == 'line':
+                if dataset_format == 'line':
                     print('\t\tCached {} lines'.format(len(netcdf_util.line))) # Cause line & line_index to be cached
                     
                 netcdf_util.netcdf_dataset.close()
