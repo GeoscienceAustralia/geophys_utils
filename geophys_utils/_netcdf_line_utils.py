@@ -70,13 +70,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_number: line number for single line
         @return line_mask: boolean mask for single line
 
-        '''
+        '''       
         # Yield masks for all lines in subset if no line numbers specified
         if line_numbers is None:
-            if subset_mask is not None:
-                line_number_subset = self.line[np.unique(self.line_index[subset_mask])] #  Get subset of line numbers
-            else:
-                line_number_subset = self.line # All line numbers
+            line_number_subset = self.line # All line numbers
         else:
             # Convert single line number to single element list
             try:
@@ -85,15 +82,22 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 line_numbers = [line_numbers]
 
             line_number_subset = np.array(line_numbers)
-            if subset_mask is not None:
-                line_number_subset = line_number_subset[np.isin(line_number_subset, self.line[np.unique(self.line_index[subset_mask])])] # Exclude lines not in subset
-            else:    
-                line_number_subset = line_number_subset[np.isin(line_number_subset, self.line)] # Exclude bad line numbers 
-        
+            
+        if subset_mask is not None:
+            line_number_subset = line_number_subset[np.isin(line_number_subset, self.line[np.unique(self.line_index[subset_mask])])] # Exclude lines not in subset
+        else:    
+            line_number_subset = line_number_subset[np.isin(line_number_subset, self.line)] # Exclude bad line numbers 
+    
+        line_mask = np.zeros(shape=self.line_index.shape, dtype=np.bool) # Keep re-using same in-memory array
         for line_number in line_number_subset:
+            line_mask[:] = False
             line_index = int(np.where(self.line == line_number)[0])
             
-            line_mask = (self.line_index == line_index)
+            if subset_mask is not None:
+                line_mask[subset_mask] = (self.line_index[subset_mask] == line_index)
+            else:
+                line_mask[np.where(self.line_index == line_index)[0]] = True
+                
             #logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
             if np.any(line_mask): # This is probably redundant
