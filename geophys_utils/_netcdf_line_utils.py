@@ -62,7 +62,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line_index = None
             
         
-    def get_line_masks(self, line_numbers=None):
+    def get_line_masks(self, line_numbers=None, subset_mask=None):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
         @param line_numbers: list of integer line number or single integer line number
@@ -71,27 +71,33 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_mask: boolean mask for single line
 
         '''
-        # Yield masks for all lines if not specified
+        # Yield masks for all lines in subset if no line numbers specified
         if line_numbers is None:
-            line_numbers = self.line
-
-        # Convert single line number to single element list
-        try:
-            _line_numbers_iterator = iter(line_numbers)
-        except TypeError:
-            line_numbers = [line_numbers]
-
-        for line_number in line_numbers:
+            if subset_mask is not None:
+                line_number_subset = self.line[np.unique(self.line_index[subset_mask])] #  Get subset of line numbers
+            else:
+                line_number_subset = self.line # All line numbers
+        else:
+            # Convert single line number to single element list
             try:
-                line_index = int(np.where(self.line == line_number)[0])
+                _line_numbers_iterator = iter(line_numbers)
             except TypeError:
-                logger.warning('Invalid line number %d' % line_number)
-                continue # Should this be break?
+                line_numbers = [line_numbers]
+
+            line_number_subset = np.array(line_numbers)
+            if subset_mask is not None:
+                line_number_subset = line_number_subset[np.isin(line_number_subset, self.line[np.unique(self.line_index[subset_mask])])] # Exclude lines not in subset
+            else:    
+                line_number_subset = line_number_subset[np.isin(line_number_subset, self.line)] # Exclude bad line numbers 
+        
+        for line_number in line_number_subset:
+            line_index = int(np.where(self.line == line_number)[0])
             
             line_mask = (self.line_index == line_index)
             #logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
-            yield line_number, line_mask
+            if np.any(line_mask): # This is probably redundant
+                yield line_number, line_mask
     
     
     def get_lines(self, line_numbers=None, 
@@ -111,16 +117,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
-        # Return all lines if not specified
-        if line_numbers is None:
-            line_numbers = self.line
-
-        # Convert single line number to single element list
-        try:
-            _line_numbers_iterator = iter(line_numbers)
-        except TypeError:
-            line_numbers = [line_numbers]
-
         # Return all variables if specified variable is None
         variables = self.point_variables if variables is None else variables
         
@@ -135,12 +131,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
         spatial_subset_mask = self.get_spatial_mask(bounds)
         
         logger.debug('subsampling_distance: {}'.format(subsampling_distance))
-        for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers):
+        for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers, subset_mask=spatial_subset_mask):
         
             point_indices = np.where(np.logical_and(line_mask, spatial_subset_mask))[0]
             #logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
             line_point_count = len(point_indices)
-            if line_point_count:
+            if line_point_count: # This test should be redundant
                 # Use subset of indices if stride is set
                 if subsampling_distance:
                     line_length = pdist([self.xycoords[point_indices[0]], self.xycoords[point_indices[-1]]])[0]

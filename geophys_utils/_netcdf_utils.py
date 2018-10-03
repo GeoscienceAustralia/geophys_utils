@@ -29,7 +29,6 @@ import itertools
 import argparse
 import re
 from distutils.util import strtobool
-from geophys_utils._crs_utils import get_spatial_ref_from_wkt
 import logging
 
 logger = logging.getLogger(__name__)
