@@ -62,11 +62,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line_index = None
             
         
-    def get_line_masks(self, line_numbers=None, subset_mask=None):
+    def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
         @param line_numbers: list of integer line number or single integer line number, or None for all lines
         @param subset_mask: optional Boolean mask for subset (e.g. spatial mask)
+        @param get_contiguous_lines: Boolean flag indicating whether masked gaps in lines should be included
         
         @return line_number: line number for single line
         @return line_mask: Boolean mask for single line
@@ -90,12 +91,18 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_number_subset = line_number_subset[np.isin(line_number_subset, self.line)] # Exclude bad line numbers 
     
         line_mask = np.zeros(shape=self.line_index.shape, dtype=np.bool) # Keep re-using same in-memory array
+
         for line_number in line_number_subset:
             line_mask[:] = False
             line_index = int(np.where(self.line == line_number)[0])
             
             if subset_mask is not None:
                 line_mask[subset_mask] = (self.line_index[subset_mask] == line_index)
+                
+                if get_contiguous_lines:
+                    # Include all points in line from first to last in subset
+                    point_indices = np.where(line_mask)[0]
+                    line_mask[min(point_indices):max(point_indices)+1] = True
             else:
                 line_mask[(self.line_index == line_index)] = True
                 
@@ -109,7 +116,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                   variables=None, 
                   bounds=None, 
                   #bounds_wkt=None,
-                  subsampling_distance=None
+                  subsampling_distance=None,
+                  get_contiguous_lines=False
                   ):
         '''
         Generator to return coordinates and specified variable values for specified lines
@@ -118,6 +126,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param bounds: Spatial bounds for point selection
         @param bounds_wkt: WKT for bounds Coordinate Reference System 
         @param subsampling_distance: Minimum subsampling_distance expressed in native coordinate units (e.g. degrees)
+        @param get_contiguous_lines: Boolean flag indicating whether masked gaps in lines should be included
         
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
@@ -136,7 +145,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
         spatial_subset_mask = self.get_spatial_mask(bounds)
         
         logger.debug('subsampling_distance: {}'.format(subsampling_distance))
-        for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers, subset_mask=spatial_subset_mask):
+        
+        for line_number, line_mask in self.get_line_masks(line_numbers=line_numbers, 
+                                                          subset_mask=spatial_subset_mask,
+                                                          get_contiguous_lines=get_contiguous_lines
+                                                          ):
         
             point_indices = np.where(line_mask)[0]
             #logger.debug('Line {} has {} points in bounding box'.format(line_number, len(point_indices))) 
