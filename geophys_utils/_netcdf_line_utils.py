@@ -65,10 +65,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def get_line_masks(self, line_numbers=None, subset_mask=None):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
-        @param line_numbers: list of integer line number or single integer line number
+        @param line_numbers: list of integer line number or single integer line number, or None for all lines
+        @param subset_mask: optional Boolean mask for subset (e.g. spatial mask)
         
         @return line_number: line number for single line
-        @return line_mask: boolean mask for single line
+        @return line_mask: Boolean mask for single line
 
         '''       
         # Yield masks for all lines in subset if no line numbers specified
