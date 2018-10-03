@@ -96,7 +96,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             if subset_mask is not None:
                 line_mask[subset_mask] = (self.line_index[subset_mask] == line_index)
             else:
-                line_mask[np.where(self.line_index == line_index)[0]] = True
+                line_mask[(self.line_index == line_index)] = True
                 
             #logger.debug('Line {} has a total of {} points'.format(line_number, np.count_nonzero(line_mask))) 
             
