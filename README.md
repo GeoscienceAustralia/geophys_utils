@@ -16,8 +16,11 @@ The content of this repository is licensed for use under the [Apache 2.0 License
 
 **Alex Ip**  
 *Principal Author*  
-<alex.ip@ga.gov.au>  
+<alex.ip@ga.gov.au>
+https://orcid.org/0000-0001-8937-8904
+
 
 **Andrew Turner**  
 *Contributing Author*  
-<andrew.turner@ga.gov.au>  
+<andrew.turner@ga.gov.au>
+https://orcid.org/0000-0001-5085-8783
