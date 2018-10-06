@@ -135,14 +135,7 @@ class NetCDF2kmlConverter(object):
         
         self.dataset_count = 0
         
-
-    def __del__(self):
-        '''
-        NetCDF2kmlConverter destructor
-        '''
-        if self._netcdf_dataset:
-            self._netcdf_dataset.close()
-    
+           
     def build_region(self, 
                      dataset_metadata_dict,
                      min_lod_pixels=100, 
@@ -398,7 +391,7 @@ class NetCDF2kmlConverter(object):
 
             point_kml.style = dataset_folder_kml.style
             
-            description_string = self.build_html_description_string(variable_attributes, point_data)
+            description_string = self.build_html_description_string(dataset_metadata_dict, variable_attributes, point_data)
             logger.debug(description_string)
             point_kml.description = description_string  # set description of point
             
