@@ -74,11 +74,18 @@ class RestfulKMLQuery(Resource):
         
         t_db = datetime.now()
             
-        # Insert modified netCDF file path into each dict in list
+        # Add calculated values to each dataset_metadata_dict in list
         for dataset_metadata_dict in dataset_metadata_dict_list:
-            #TODO: Replace this hack for turning OPeNDAP endpoints into local pathnames
+            # Insert modified netCDF file path
             dataset_metadata_dict['netcdf_path'] = self.modify_nc_path(dataset_settings['netcdf_path_prefix'], 
                                                                        str(dataset_metadata_dict['distribution_url']))
+            dataset_metadata_dict['netcdf_basename'] = os.path.basename(dataset_metadata_dict['netcdf_path'])
+                                  
+            dataset_link = dataset_settings.get('dataset_link')
+            if dataset_link:
+                for key, value in dataset_metadata_dict.items():
+                    dataset_link = dataset_link.replace('{'+key+'}', str(value))
+            dataset_metadata_dict['dataset_link'] = dataset_link
             
         netcdf2kml_obj = NetCDF2kmlConverter(settings, 
                                              dataset_type, 
