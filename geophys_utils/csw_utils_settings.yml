@@ -33,7 +33,7 @@ ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
 #  HTTPS_PROXY: "https://sun-web-intdev.ga.gov.au:2710"
   
 DEFAULT_TIMEOUT: 30 # Timeout in seconds
-DEFAULT_CRS: "EPSG:4326" # Unprojected WGS84
+DEFAULT_CRS: "CRS84" # Unprojected WGS84 with lon-lat ordering. See https://gis.stackexchange.com/questions/124050/how-do-i-specify-the-lon-lat-ordering-in-csw-bounding-box-request
 DEFAULT_MAXQUERYRECORDS: 100 # Retrieve only this many datasets per CSW query per server
 DEFAULT_MAXTOTALRECORDS: 2000 # Maximum total number of records to retrieve per server
 DEFAULT_GET_LAYERS: False # Boolean flag indicating whether WMS & WCS layer names should be discovered (potentially slow)

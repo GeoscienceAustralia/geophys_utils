@@ -353,9 +353,8 @@ class CSWUtils(object):
             fes_filter_list += self.any_case_match_filters('type', record_type_list)
         
         if bounding_box:
-            #TODO: Make the coordinate order conditional on CRS
+            # N.B: Bounding box ordinate ordering must match CRS. Default CRS84 supports lon-lat ordering, not lat-lon
             # See https://gis.stackexchange.com/questions/124050/how-do-i-specify-the-lon-lat-ordering-in-csw-bounding-box-request
-            bounding_box = [bounding_box[1], bounding_box[0], bounding_box[3], bounding_box[2]] # Swap x & y ordinates
             fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
 
         assert fes_filter_list, 'No search criteria defined'
