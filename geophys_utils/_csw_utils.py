@@ -36,7 +36,7 @@ import logging
 import sys
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 if not logger.handlers:
     # Set handler for root logger to standard output
@@ -188,7 +188,7 @@ class CSWUtils(object):
                                          #outputschema="http://www.opengis.net/cat/csw/2.0.2",
                                          maxrecords=max_query_records,
                                          startposition=startposition)
-                    print('CSW request:\n{}'.format(csw.request))
+                    logger.debug('CSW request:\n{}'.format(csw.request))
                 except Exception as e:
                     logger.warning('CSW Query failed: {}'.format(e))
                     break
@@ -353,6 +353,9 @@ class CSWUtils(object):
             fes_filter_list += self.any_case_match_filters('type', record_type_list)
         
         if bounding_box:
+            #TODO: Make the coordinate order conditional on CRS
+            # See https://gis.stackexchange.com/questions/124050/how-do-i-specify-the-lon-lat-ordering-in-csw-bounding-box-request
+            bounding_box = [bounding_box[1], bounding_box[0], bounding_box[3], bounding_box[2]] # Swap x & y ordinates
             fes_filter_list += [fes.BBox(bounding_box, crs=bounding_box_crs)]
 
         assert fes_filter_list, 'No search criteria defined'
@@ -560,7 +563,7 @@ def main():
     parser.add_argument("-k", "--keywords", help="comma-separated list of keywords for search", type=str)
     parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords for search", type=str)
     parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets for search", type=str)
-    parser.add_argument("-b", "--bounds", help="comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for search",
+    parser.add_argument("-b", "--bounds", help='comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for search. N.B: A leading "-" sign on this list should NOT be preceded by a space',
                         type=str)
     parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Default determined by settings file.',
                         type=str)
