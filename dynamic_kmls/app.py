@@ -8,7 +8,8 @@ import os
 from flask import Flask
 from flask_restful import Api
 from flask_compress import Compress
-from dynamic_kmls import settings, RestfulKMLQuery, RestfulImageQuery, image_url_path
+from dynamic_kmls import settings
+from dynamic_kmls import RestfulKMLQuery, RestfulImageQuery, image_url_path
 import logging
 
 logger = logging.getLogger()
