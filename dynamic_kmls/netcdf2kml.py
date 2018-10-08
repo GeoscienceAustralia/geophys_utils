@@ -133,8 +133,6 @@ class NetCDF2kmlConverter(object):
         # Initialise point style cache for variant colors to cut down the number of style definitions required
         self.point_style_by_color = {}  
         
-        self.dataset_count = 0
-        
            
     def build_region(self, 
                      dataset_metadata_dict,
@@ -234,7 +232,7 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         '''
         line_utils = NetCDFLineUtils(dataset_metadata_dict['netcdf_path'], 
-                                               enable_disk_cache=True,
+                                               enable_disk_cache=self.cache_coordinates,
                                                enable_memory_cache=True,
                                                cache_dir=self.cache_dir,
                                                debug=self.debug
@@ -327,7 +325,7 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
            
-        line_utils.netcdf_dataset.close()
+        line_utils.netcdf_dataset.close() # Explicitly close netCDF file
         
         if visible_line_count:
             dataset_folder_kml.name = dataset_folder_kml.name + ' ({} lines in view)'.format(visible_line_count)
@@ -345,7 +343,7 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         """        
         point_utils = NetCDFPointUtils(dataset_metadata_dict['netcdf_path'], 
-                                       enable_disk_cache=True, 
+                                       enable_disk_cache=self.cache_coordinates, 
                                        enable_memory_cache=True,
                                        cache_dir=self.cache_dir,
                                        debug=self.debug
@@ -422,7 +420,7 @@ class NetCDF2kmlConverter(object):
             if variant_point_style:
                 point_kml.style = variant_point_style
                 
-        point_utils.netcdf_dataset.close()
+        point_utils.netcdf_dataset.close() # Explicitly close netCDF file
 
         dataset_folder_kml.region = self.build_region(dataset_metadata_dict, 100, -1, 200, 800)
         
@@ -709,14 +707,14 @@ class NetCDF2kmlConverter(object):
         self.kml = simplekml.Kml()
         self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
 
-        self.dataset_count = 0
+        dataset_count = 0
         for dataset_metadata_dict in dataset_metadata_dict_list: 
             # N.B: Could determine visibility from data here
             if self.build_dataset_kml(kml_format, dataset_metadata_dict, bbox_list, visibility):   
-                self.dataset_count += 1
+                dataset_count += 1
         
-        if self.dataset_count:
-            self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
+        if dataset_count:
+            self.dataset_type_folder.name = '{} {} in view'.format(dataset_count, self.dataset_type_name)
             
                
     @property
