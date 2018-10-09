@@ -21,7 +21,7 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
     '''
     SQLiteDatasetMetadataCache class definition
     '''
-    DEFAULT_SQLITE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'data', 'dataset_metadata_cache.sqlite')
+    DEFAULT_SQLITE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'data', 'dataset_metadata_cache.sqlite')
     DDL_SQL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sqlite_dataset_metadata_cache_ddl.sql')
     
     _db_engine = 'SQLite'
