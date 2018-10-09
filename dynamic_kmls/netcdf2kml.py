@@ -37,19 +37,19 @@ class NetCDF2kmlConverter(object):
     '''
     NetCDF2kmlConverter class definition
     '''
-    def __init__(self, settings, dataset_type, request_host=None, debug=False):
+    def __init__(self, settings, dataset_type, url_root=None, debug=False):
         '''
         Constructor for NetCDF2kmlConverter class
         @param settings: Dataset settings as read from netcdf2kml_settings.yml settings file
         @param dataset_type: String indicating dataset type
-        @param request_host: Optional host string needed for cached image URL
+        @param url_root: Optional host string needed for cached image URL
         @param debug: Boolean parameter used to turn debug output on/off
         '''
         # Initialise and set debug property
         self._debug = None
         self.debug = debug
         
-        self.request_host = request_host
+        self.url_root = url_root
         
         self.cache_dir = os.path.join((settings['global_settings'].get('cache_root_dir') or 
                           tempfile.gettempdir()),
@@ -132,8 +132,6 @@ class NetCDF2kmlConverter(object):
         
         # Initialise point style cache for variant colors to cut down the number of style definitions required
         self.point_style_by_color = {}  
-        
-        self.dataset_count = 0
         
            
     def build_region(self, 
@@ -234,7 +232,7 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         '''
         line_utils = NetCDFLineUtils(dataset_metadata_dict['netcdf_path'], 
-                                               enable_disk_cache=True,
+                                               enable_disk_cache=self.cache_coordinates,
                                                enable_memory_cache=True,
                                                cache_dir=self.cache_dir,
                                                debug=self.debug
@@ -327,7 +325,7 @@ class NetCDF2kmlConverter(object):
             else:
                 logger.debug("line doesn't have any points in view")
            
-        line_utils.netcdf_dataset.close()
+        line_utils.netcdf_dataset.close() # Explicitly close netCDF file
         
         if visible_line_count:
             dataset_folder_kml.name = dataset_folder_kml.name + ' ({} lines in view)'.format(visible_line_count)
@@ -345,7 +343,7 @@ class NetCDF2kmlConverter(object):
         @return: Dataset folder under parent folder
         """        
         point_utils = NetCDFPointUtils(dataset_metadata_dict['netcdf_path'], 
-                                       enable_disk_cache=True, 
+                                       enable_disk_cache=self.cache_coordinates, 
                                        enable_memory_cache=True,
                                        cache_dir=self.cache_dir,
                                        debug=self.debug
@@ -422,7 +420,7 @@ class NetCDF2kmlConverter(object):
             if variant_point_style:
                 point_kml.style = variant_point_style
                 
-        point_utils.netcdf_dataset.close()
+        point_utils.netcdf_dataset.close() # Explicitly close netCDF file
 
         dataset_folder_kml.region = self.build_region(dataset_metadata_dict, 100, -1, 200, 800)
         
@@ -474,7 +472,7 @@ class NetCDF2kmlConverter(object):
 
             wms_url = dataset_metadata_dict['distribution_url'].replace('/dodsC/', '/wms/') #TODO: Replace this hack
 
-            if self.cache_images and self.request_host:
+            if self.cache_images and self.url_root:
                 # Retrieve image for entire dataset
                 north = dataset_metadata_dict['latitude_max']
                 south = dataset_metadata_dict['latitude_min']
@@ -515,9 +513,9 @@ class NetCDF2kmlConverter(object):
 
             # dataset_kml.style = self.point_style
             
-            if self.cache_images and self.request_host:
+            if self.cache_images and self.url_root:
                 # Cache image and mModify URL for cached image file
-                wms_url = 'http://{}{}'.format(self.request_host,
+                wms_url = '{}{}'.format(self.url_root,
                     cache_image_file(dataset_type=self.dataset_type, 
                                      image_basename=os.path.splitext(dataset_metadata_dict['netcdf_basename'])[0]+'.png', 
                                      image_source_url=wms_url)
@@ -709,14 +707,14 @@ class NetCDF2kmlConverter(object):
         self.kml = simplekml.Kml()
         self.dataset_type_folder = self.kml.newfolder(name="No {} in view".format(self.dataset_type_name))
 
-        self.dataset_count = 0
+        dataset_count = 0
         for dataset_metadata_dict in dataset_metadata_dict_list: 
             # N.B: Could determine visibility from data here
             if self.build_dataset_kml(kml_format, dataset_metadata_dict, bbox_list, visibility):   
-                self.dataset_count += 1
+                dataset_count += 1
         
-        if self.dataset_count:
-            self.dataset_type_folder.name = '{} {} in view'.format(self.dataset_count, self.dataset_type_name)
+        if dataset_count:
+            self.dataset_type_folder.name = '{} {} in view'.format(dataset_count, self.dataset_type_name)
             
                
     @property

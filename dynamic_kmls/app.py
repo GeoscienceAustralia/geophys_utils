@@ -13,11 +13,14 @@ from dynamic_kmls import RestfulKMLQuery, RestfulImageQuery, image_url_path
 import logging
 
 logger = logging.getLogger()
+dynamic_kmls_logger = logging.getLogger('dynamic_kmls')
 
 if settings['global_settings']['debug']:
     logger.setLevel(logging.DEBUG)
+    dynamic_kmls_logger.setLevel(logging.DEBUG)
 else:
     logger.setLevel(logging.INFO)
+    dynamic_kmls_logger.setLevel(logging.INFO)
 logger.debug('Logger {} set to level {}'.format(logger.name, logger.level))
 
 # Compression defaults
@@ -57,9 +60,6 @@ if settings['global_settings']['http_compression']:
     configure_app_compression(app)
     Compress(app)
 
-app.run(host=settings['global_settings'].get('host'), 
-        debug=settings['global_settings']['debug'])
-
 if __name__ == '__main__':
     # Setup logging handlers if required
     if not logger.handlers:
@@ -70,3 +70,7 @@ if __name__ == '__main__':
         console_formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
+
+    app.run(host=settings['global_settings'].get('host'), 
+            debug=settings['global_settings']['debug'])
+

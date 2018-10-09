@@ -1,15 +1,15 @@
 # Global settings
 global_settings:
   debug: false
-  cache_images: true
-  cache_point_coordinates: true
+  cache_images: true # Set this to false to get images from NCI WMS endpoints
+  cache_coordinates: true # Set this to true to cache coordinates and lines on local disk
   http_compression: true # Set this to false for local use, true for remote
   compress_level: 6 # 6 = Maximum compression level
   compress_min_size: 2000 # Don't bother compressing small KML responses
-  database_engine: SQLite
+  database_engine: SQLite # SQLite or Postgres
   # Define number of line segments to show across bounding box height for line sub-sampling
-  line_segments_across_bbox: 50
-  cache_root_dir: 'C:\Temp'
+  line_segments_across_bbox: 50 # Maximum number of line segments to show across bounding box
+  cache_root_dir: 'C:\Temp' # Root directory for disk cache (if enabled)
   #host: '0.0.0.0' # Comment this out for normal local host testing
   #http_proxy: 'http://127.0.0.1:8888' # Comment this out for normal local host testing
 

@@ -38,15 +38,6 @@ import sys
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
-if not logger.handlers:
-    # Set handler for root logger to standard output
-    console_handler = logging.StreamHandler(sys.stdout)
-    #console_handler.setLevel(logging.INFO)
-    console_handler.setLevel(logging.DEBUG)
-    console_formatter = logging.Formatter('%(message)s')
-    console_handler.setFormatter(console_formatter)
-    logger.addHandler(console_handler)
-        
 class CSWUtils(object):
     '''
     CSW query utilities
@@ -189,12 +180,12 @@ class CSWUtils(object):
                                          maxrecords=max_query_records,
                                          startposition=startposition)
                     logger.debug('CSW request:\n{}'.format(csw.request))
-                except Exception as e:
-                    logger.warning('CSW Query failed: {}'.format(e))
-                    break
-                finally:
-                    logger.debug('CSW request:\n{}'.format(csw.request))
                     logger.debug('CSW response:\n {}'.format(csw.response))
+                except Exception as e:
+                    logger.warning('CSW request failed: {}'.format(e))
+                    logger.debug('Bad CSW request:\n{}'.format(csw.request))
+                    break
+                    
     
                 query_record_count = len(csw.records)
     
@@ -659,7 +650,7 @@ def main():
             header_printed = True;
         
         # Decode and quote fields if required
-        print(delimiter.join([quote_delimitedtext(distribution.get(field) or '', delimiter)
+        print(delimiter.join([quote_delimitedtext(str(distribution.get(field) or ''), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )
@@ -668,4 +659,13 @@ def main():
     logger.debug('{} results found.'.format(distribution_count))
 
 if __name__ == '__main__':
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+        
     main()
