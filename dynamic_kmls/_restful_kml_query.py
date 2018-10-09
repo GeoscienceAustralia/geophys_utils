@@ -89,7 +89,7 @@ class RestfulKMLQuery(Resource):
             
         netcdf2kml_obj = NetCDF2kmlConverter(settings, 
                                              dataset_type, 
-                                             request_host = request.host,
+                                             url_root = request.url_root,
                                              debug=settings['global_settings']['debug'])        
         netcdf2kml_obj.build_bbox_kml(dataset_metadata_dict_list, bbox_list)
    
