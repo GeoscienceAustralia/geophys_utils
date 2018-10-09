@@ -1,7 +1,9 @@
 '''
-Created on 20 Jul. 2018
+Created on 9 Oct. 2018
 
-@author: Alex
+@author: Alex Ip
+
+Utility to read metadata from CSW query and/or netCDF file into dataset metadata cache
 '''
 import sys
 import re
@@ -9,7 +11,7 @@ from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache, Dat
 import logging
 import netCDF4
 import numpy as np
-from datetime import datetime, date
+from datetime import datetime
 from geophys_utils import CSWUtils
 
 logger = logging.getLogger(__name__)
