@@ -27,12 +27,10 @@ setup(name='geophys_utils',
           'geophys_utils.test',
           'geophys_utils.netcdf_converter',
           'geophys_utils.dataset_metadata_cache',
-          'dynamic_kmls'
       ],
       package_data={'geophys_utils': ['csw_utils_settings.yml'],
                     'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml'],
                     'geophys_utils.dataset_metadata_cache': ['dataset_metadata_cache_settings.yml'],
-                    'dynamic_kmls': ['dynamic_kml_settings.yml']
                     },
       scripts=(['bin/csw_find',
                 'bin/rechunk',
@@ -68,5 +66,5 @@ setup(name='geophys_utils',
       maintainer_email='alex.ip@ga.gov.au',
       description='Geophysics data access utilities',
       long_description='Geophysics data access utilities',
-      license='Creative Commons Attribution 4.0 International'
+      license='Apache License Version 2.0'
       )
