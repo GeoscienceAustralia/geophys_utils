@@ -1,18 +1,16 @@
 '''
 Created on 20 Jul. 2018
 
-@author: Alex Ip
-
-Utility to read metadata from netCDF files under a specified directory into dataset metadata cache
+@author: Alex
 '''
 import sys
-import os
-from glob import glob
+import re
 from geophys_utils.dataset_metadata_cache import get_dataset_metadata_cache, Dataset, Distribution
 import logging
 import netCDF4
 import numpy as np
-from datetime import datetime
+from datetime import datetime, date
+from geophys_utils import CSWUtils
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -22,19 +20,15 @@ DEBUG = True
 DATABASE_ENGINE = 'SQLite'
 #DATABASE_ENGINE = 'Postgres'
 
-# Set this to change file path - THIS IS A HACK!!!!
-#FILE_PATH_MAPS = None
-FILE_PATH_MAPS = {'D:\\Temp\\gravity point_datasets\\': '/g/data2/uc0/rr2_dev/axi547/ground_gravity/point_datasets/',
-                  'D:\\Temp\\AEM conductivity datasets\\': '/g/data2/uc0/rr2_dev/axi547/aem/'
-                  }
+DEFAULT_CSW_URL = 'https://ecat.ga.gov.au/geonetwork/srv/eng/csw'
 
-# Set this to derive OPeNDAP endpoint URL from file path - THIS IS A HACK!!!!
+# Set this to derive file path from OPeNDAP endpoint URL - THIS IS A HACK!!!!
 #OPENDAP_PATH_MAPS = None
-OPENDAP_PATH_MAPS = {'/g/data2/uc0/rr2_dev/': 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/',
-                     '/g/data1/rr2/': 'http://dapds00.nci.org.au/thredds/dodsC/rr2/'
+FILE_PATH_MAPS = {'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/': '/g/data2/uc0/rr2_dev/',
+                     'http://dapds00.nci.org.au/thredds/dodsC/rr2/': '/g/data1/rr2/'
                      }
 
-class NetCDF2DatasetMetadataCache(object):
+class CSW2DatasetMetadataCache(object):
     '''
     classdocs
     '''
@@ -47,37 +41,18 @@ class NetCDF2DatasetMetadataCache(object):
         self.dataset_metadata_cache = get_dataset_metadata_cache(db_engine=DATABASE_ENGINE, debug=debug)
         
         
-    def find_files(self, root_dir, file_template, extension_filter='.nc'):
-        '''
-        Function to simulate the result of a filtered Linux find command
-        Uses glob with user-friendly file system wildcards instead of regular expressions for template matching
-        @param root_dir: Top level directory to be searched
-        @param file_template: glob-style filename template similar to -name argument of linux find command
-        @param extension_filter: single file extension (including ".") on which to filter files
-        @return file_path_list: List of file paths
-        '''
-        #===========================================================================
-        # file_path_list = sorted([filename for filename in subprocess.check_output(
-        #     ['find', args.netcdf_dir, '-name', args.file_template]).split('\n') if re.search('\.nc$', filename)])
-        #===========================================================================
-        root_dir = os.path.abspath(root_dir)
-        file_path_list = glob(os.path.join(root_dir, file_template))
-        for topdir, subdirs, _files in os.walk(root_dir, topdown=True):
-            for subdir in subdirs:
-                file_path_list += [file_path 
-                                   for file_path in glob(os.path.join(topdir, subdir, file_template))
-                                   if os.path.isfile(file_path)
-                                   and os.path.splitext(file_path)[1] == extension_filter
-                                   ]
-        file_path_list = sorted(file_path_list)    
-        return file_path_list
-
     def populate_db(self,
-                    nc_root_dir,
-                    nc_file_template=None
+                    keyword_list=None,
+                    anytext=None,
+                    titleword_list=None,
+                    bounding_box=None,
+                    start_datetime=None,
+                    stop_datetime=None,
+                    record_type_list=None,
+                    csw_url=None
                     ):
         '''
-        Function to populate DB with metadata from netCDF files
+        Function to populate DB with metadata from CSW query and/or netCDF files via OPeNDAP
         '''
         
         def datetimestring2date(datetime_string):
@@ -100,19 +75,45 @@ class NetCDF2DatasetMetadataCache(object):
             
             return result
         
-            
-        nc_file_template = nc_file_template or '*.nc'
+        csw_url = csw_url or DEFAULT_CSW_URL
+        csw_utils = CSWUtils(csw_url_list=[csw_url], 
+                             timeout=None,
+                             debug=DEBUG,
+                             settings_path=None
+                             )
         
-        for nc_path in self.find_files(nc_root_dir, file_template=nc_file_template):
-            logger.info('Reading attributes from {}'.format(nc_path))
-            nc_dataset = netCDF4.Dataset(nc_path, 'r')
+        record_generator = csw_utils.query_csw(keyword_list=keyword_list,
+                                     anytext_list=anytext,
+                                     titleword_list=titleword_list,
+                                     bounding_box=bounding_box,
+                                     start_datetime=start_datetime,
+                                     stop_datetime=stop_datetime,
+                                     record_type_list=record_type_list,
+                                     max_total_records=None,
+                                     get_layers=None
+                                     )
+        
+        distribution_count = 0
+        for distribution_dict in csw_utils.get_distributions(['opendap'], record_generator):
+            distribution_count += 1
             
-            nc_attribute = dict(nc_dataset.__dict__)
-    
+            opendap_url = re.sub('\.html$', '', distribution_dict['url']) # Strip trailing ".html"
+            
+            # Derive NCI file path from OPeNDAP URL
+            nc_path = opendap_url
             if FILE_PATH_MAPS:
                 for file_path_map in FILE_PATH_MAPS.items():
                     nc_path = nc_path.replace(*file_path_map)
-                
+        
+            logger.info('Reading attributes from {}'.format(opendap_url))
+            nc_dataset = netCDF4.Dataset(opendap_url, 'r')
+             
+            nc_attribute = dict(nc_dataset.__dict__)
+     
+            if FILE_PATH_MAPS:
+                for file_path_map in FILE_PATH_MAPS.items():
+                    nc_path = nc_path.replace(*file_path_map)
+                 
             nc_attribute['nc_path'] = nc_path
             
 #===============================================================================
@@ -145,28 +146,21 @@ class NetCDF2DatasetMetadataCache(object):
 #                 :_Format = "netCDF-4" ;
 # }
 #===============================================================================
-            distribution_list = [Distribution(url='file://'+nc_attribute['nc_path'],
+            distribution_list = [Distribution(url=opendap_url,
+                                              protocol='opendap'
+                                              ),
+                                 Distribution(url='file://'+nc_attribute['nc_path'],
                                               protocol='file'
-                                              )
-                                 ]
-            
-            if OPENDAP_PATH_MAPS:
-                # Replace directory with URL prefix
-                opendap_url=nc_attribute['nc_path']
-                for opendap_path_map in OPENDAP_PATH_MAPS.items():
-                    opendap_url = opendap_url.replace(*opendap_path_map)
-                    
-                distribution_list.append(Distribution(url=opendap_url,
-                                                      protocol='opendap'
-                                                      )
-                                         )
-                
+                                              )            
+                                 
+                                 ]                
             try:
                 point_count = nc_dataset.dimensions['point'].size
             except:
                 point_count = None
             
             try:
+                #TODO: Read stuff from CSW result as well as netCDF dataset
                 dataset = Dataset(dataset_title=nc_attribute['title'],
                                   ga_survey_id=nc_attribute.get('survey_id'),
                                   longitude_min=np.asscalar(nc_attribute['geospatial_lon_min']),
@@ -189,17 +183,12 @@ class NetCDF2DatasetMetadataCache(object):
         
 
 def main():
-    assert len(sys.argv) >= 2 and len(sys.argv) <= 3, 'Usage: {} <root_dir> [<file_template>]'.format(sys.argv[0])
-    nc_root_dir = sys.argv[1]
-    if len(sys.argv) == 3:
-        nc_file_template = sys.argv[2]
-    else:
-        nc_file_template = '*.nc'
-    
+    assert len(sys.argv) >= 2 and len(sys.argv) <= 3, 'Usage: {} <keyword_list>'.format(sys.argv[0])
+    keyword_list = sys.argv[1] # Should be comma-separated keyword list
+    #TODO: Allow for more command line options for CSW search (copy stuff from _csw_utils.py?)
 
-    nc2dmc = NetCDF2DatasetMetadataCache(debug=DEBUG)
-    nc2dmc.populate_db(nc_root_dir,
-                       nc_file_template=nc_file_template,
+    csw2dmc = CSW2DatasetMetadataCache(debug=DEBUG)
+    csw2dmc.populate_db(keyword_list=keyword_list
                        )
     
         
