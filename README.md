@@ -1,4 +1,4 @@
-# geophys_utils - Utilities for Accessing netCDF Encoded Geophysics Data
+# geophys\_utils - Utilities for Accessing netCDF Encoded Geophysics Data
 The geophys_utils Python library is a collection of utilities for discovering, accessing and using geophysics data via web services or from netCDF files.
 
 Details on the netCDF encoding for point and line data can be viewed at <https://docs.google.com/document/d/1C-SsT1vOcAaPT_4jdY1S_NjUjbk-WbUjb1FCw7uPrxw/edit?usp=sharing>
