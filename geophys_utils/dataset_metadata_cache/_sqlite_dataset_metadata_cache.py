@@ -26,13 +26,7 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
     DDL_SQL_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sqlite_dataset_metadata_cache_ddl.sql')
     
     sqlite_db_path = settings.get('SQLITE_DB_PATH') or DEFAULT_SQLITE_DB_PATH
-    sqlite_db_path = str(Path(sqlite_db_path)) # Ensure that correct directory separator is used
-    
-    if sqlite_db_path[0] != os.path.sep and sqlite_db_path[1] != ':': # If path is relative
-        sqlite_db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), sqlite_db_path) # DB is located in the same directory as this file
-        
-    logger.debug('SQLite DB path set to {}'.format(sqlite_db_path))
-        
+
     _db_engine = 'SQLite'
 
     def __init__(self, sqlite_path=None, debug=False, force_recreate=False):
@@ -44,6 +38,13 @@ class SQLiteDatasetMetadataCache(DatasetMetadataCache):
         super(SQLiteDatasetMetadataCache, self).__init__(debug)
         
         self.sqlite_path = sqlite_path or SQLiteDatasetMetadataCache.sqlite_db_path 
+        
+        self.sqlite_path = str(Path(self.sqlite_path)) # Ensure that correct directory separator is used
+        
+        if self.sqlite_path[0] != os.path.sep and self.sqlite_path[1] != ':': # If path is relative
+            self.sqlite_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), self.sqlite_path) # DB is located in the same directory as this file
+            
+        logger.debug('SQLite DB path set to {}'.format(self.sqlite_path))
             
         self.db_connection = None
         
