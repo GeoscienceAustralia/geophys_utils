@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from networkx.generators.classic import balanced_tree
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -52,6 +53,12 @@ class NetCDFPointUtils(NetCDFUtils):
     '''
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
     '''
+    CACHE_VARIABLE_PARAMETERS = {'complevel': 4, 
+                                   'zlib': True, 
+                                   'fletcher32': True,
+                                   'shuffle': True,
+                                   'endian': 'little',
+                                   }
 
     def __init__(self, 
                  netcdf_dataset, 
@@ -74,8 +81,8 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.debug('Running NetCDFPointUtils constructor')
         
         self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
-        self.cache_basename = os.path.join(self.cache_dir, 
-                                           re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
+        self.cache_path = os.path.join(self.cache_dir, 
+                                           re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
         
         self.enable_memory_cache = enable_memory_cache
         
@@ -818,19 +825,66 @@ class NetCDFPointUtils(NetCDFUtils):
             #logger.debug('Returning memory cached coordinates')
             return self._xycoords
             
+        #=======================================================================
+        # if self.enable_disk_cache:
+        #     self.cache_path = self.cache_basename + '_coords.npz'
+        #     if os.path.isfile(self.cache_path):
+        #         # Cached coordinate file exists - read it
+        #         xycoords = np.load(self.cache_path)['xycoords']
+        #         logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
+        #             
+        #         #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
+        #     else:
+        #         xycoords = self.get_xy_coord_values()
+        #         os.makedirs(self.cache_dir, exist_ok=True)
+        #         np.savez_compressed(self.cache_path, xycoords=xycoords) # Write to cache file
+        #         logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], self.cache_path))
+        #=======================================================================
+            
+        xycoords = None
         if self.enable_disk_cache:
-            coord_path = self.cache_basename + '_coords.npz'
-            if os.path.isfile(coord_path):
+            if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
-                xycoords = np.load(coord_path)['xycoords']
-                logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], coord_path))
-                    
-                #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
-            else:
-                xycoords = self.get_xy_coord_values()
+                cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
+                
+                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                
+                if 'xycoords' in cache_dataset.variables.keys():
+                    xycoords = cache_dataset.variables['xycoords'][:]
+                    logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
+                else:
+                    logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))                
+                cache_dataset.close()    
+                
+            if xycoords is None:
+                xycoords = self.get_xy_coord_values() # read coords from source file
+                
                 os.makedirs(self.cache_dir, exist_ok=True)
-                np.savez_compressed(coord_path, xycoords=xycoords) # Write to cache file
-                logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], coord_path))
+                if os.path.isfile(self.cache_path):
+                    cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
+                else:
+                    cache_dataset = netCDF4.Dataset(self.cache_path, 'w')
+                    
+                if not hasattr(cache_dataset, 'source'):
+                    cache_dataset.source = self.nc_path
+                    
+                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+
+                if 'point' not in cache_dataset.dimensions.keys():
+                    cache_dataset.createDimension(dimname='point', size=xycoords.shape[0])
+                    
+                if 'xy' not in cache_dataset.dimensions.keys():
+                    cache_dataset.createDimension(dimname='xy', size=xycoords.shape[1]) 
+                    
+                if 'xycoords' not in cache_dataset.variables.keys():
+                    cache_dataset.createVariable('xycoords',
+                                                 xycoords.dtype,
+                                                 dimensions=['point', 'xy'],
+                                                 **self.CACHE_VARIABLE_PARAMETERS
+                                                 )
+                cache_dataset.variables['xycoords'][:] = xycoords # Write coords to cache file
+                cache_dataset.close() 
+                logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], self.cache_path))
             
         else: # No caching - read coords from source file
             xycoords = self.get_xy_coord_values()
@@ -884,7 +938,7 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         if not self._kdtree:
             logger.debug('Indexing full dataset with {} points into KDTree...'.format(self.xycoords.shape[0]))
-            self._kdtree = cKDTree(data=self.xycoords)
+            self._kdtree = cKDTree(data=self.xycoords, balanced_tree=False)
             logger.debug('Finished indexing full dataset into KDTree.')
         return self._kdtree
 
