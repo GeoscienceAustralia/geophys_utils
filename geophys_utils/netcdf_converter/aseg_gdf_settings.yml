@@ -93,3 +93,6 @@ aseg_field_mapping:
   latitude: LATITUDE
   easting: EASTING
   northing: NORTHING
+  
+# WKT for unprojected CRS if only UTM provided
+default_crs_wkt: GDA94

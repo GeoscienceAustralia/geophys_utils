@@ -39,13 +39,14 @@ from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
 from geophys_utils import points2convex_hull
+from geophys_utils import transform_coords
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-#TEMP_DIR = tempfile.gettempdir()
+TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'D:\Temp'
-TEMP_DIR = 'U:\Alex\Temp'
+#TEMP_DIR = 'U:\Alex\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -1077,8 +1078,55 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         '''
         Function to perform post-processing on netCDF file after dimensions and variables
         have been created. Overrides base class.
+        
+        This will create GDA94 coordinates 
         '''
-        return
+        default_crs_wkt = self.settings['default_crs_wkt']
+        
+        crs_var = self.nc_output_dataset.variables.get('crs')
+        transverse_mercator_var = self.nc_output_dataset.variables.get('transverse_mercator')
+        logger.debug('crs_var: {}'.format(crs_var))
+        logger.debug('transverse_mercator_var: {}'.format(transverse_mercator_var))
+        
+        # If dataset has UTM coordinates and not unprojected ones
+        if transverse_mercator_var is not None and crs_var is None:
+            # Build GDA94 crs variable and write it to self.nc_output_dataset
+            logger.info('Creating crs, longitude and latitude variables for unprojected CRS')
+            point_count = self.nc_output_dataset.dimensions['point'].size
+            logger.debug('point_count: {}'.format(point_count))
+            
+            utm_coords = np.ones(shape=(point_count, 2), dtype=np.float64) * -999
+            utm_coords[:,0] = self.nc_output_dataset.variables['easting'][:]
+            utm_coords[:,1] = self.nc_output_dataset.variables['northing'][:]
+            
+            gda94_coords = transform_coords(utm_coords, 
+                                            transverse_mercator_var.spatial_ref, 
+                                            default_crs_wkt
+                                            )
+            
+            # Create and write crs variable
+            logger.info('Creating new crs variable for unprojected CRS')
+            self.build_crs_variable(get_spatial_ref_from_wkt(default_crs_wkt)
+                                    ).create_var_in_dataset(self.nc_output_dataset)
+                                    
+            # Create and write longitude variable
+            logger.info('Creating new longitude variable')
+            NetCDFVariable('longitude', 
+                           gda94_coords[:,0], 
+                           ['point'], 
+                           fill_value=-999, 
+                           attributes={'long_name': 'Longitude', 'units': 'degrees East'}
+                           ).create_var_in_dataset(self.nc_output_dataset)
+            
+            # Create and write latitude variable
+            logger.info('Creating new latitude variable')
+            NetCDFVariable('latitude', 
+                           gda94_coords[:,1], 
+                           ['point'], 
+                           fill_value=-999, 
+                           attributes={'long_name': 'Latitude', 'units': 'degrees North'}
+                           ).create_var_in_dataset(self.nc_output_dataset)
+            
     
 
 def main():
