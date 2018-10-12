@@ -738,36 +738,36 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             }
             
         try:
-            if set(['longitude', 'latitude']) <= set(self._nc_cache_dataset.variables.keys()):
+            point_count = self.nc_output_dataset.dimensions['point'].size
+            coordinates = np.zeros(shape=(point_count, 2), dtype=np.float64)
+            
+            if set(['longitude', 'latitude']) <= set(self.nc_output_dataset.variables.keys()):
+                coordinates[:,0] = self.nc_output_dataset.variables['longitude'][:]
+                coordinates[:,1] = self.nc_output_dataset.variables['latitude'][:]
+                
                 metadata_dict.update({
-                    'geospatial_lon_min': np.min(self.get_raw_data('longitude')),
-                    'geospatial_lon_max': np.max(self.get_raw_data('longitude')),
+                    'geospatial_lon_min': np.min(coordinates[:,0]),
+                    'geospatial_lon_max': np.max(coordinates[:,0]),
                     'geospatial_lon_units': "degrees East",
-                    'geospatial_lat_min': np.min(self.get_raw_data('latitude')),
-                    'geospatial_lat_max': np.max(self.get_raw_data('latitude')),
+                    'geospatial_lat_min': np.min(coordinates[:,1]),
+                    'geospatial_lat_max': np.max(coordinates[:,1]),
                     'geospatial_lat_units': "degrees North",
                     })
-            
-                coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
-                                                self.nc_output_dataset.variables['latitude'][:]
-                                                )
-                                            )
-                                       )
-            elif set(['easting', 'northing']) <= set(self._nc_cache_dataset.variables.keys()): # CRS is in UTM
+
+
+            elif set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys()): # CRS is in UTM
+                coordinates[:,0] = self.nc_output_dataset.variables['easting'][:]
+                coordinates[:,1] = self.nc_output_dataset.variables['northing'][:]
+                
                 metadata_dict.update({
-                    'geospatial_east_min': np.min(self.get_raw_data('easting')),
-                    'geospatial_east_max': np.max(self.get_raw_data('easting')),
+                    'geospatial_east_min': np.min(coordinates[:,0]),
+                    'geospatial_east_max': np.max(coordinates[:,0]),
                     'geospatial_east_units': "m",
-                    'geospatial_north_min': np.min(self.get_raw_data('northing')),
-                    'geospatial_north_max': np.max(self.get_raw_data('northing')),
+                    'geospatial_north_min': np.min(coordinates[:,1]),
+                    'geospatial_north_max': np.max(coordinates[:,1]),
                     'geospatial_north_units': "m",
                     })
             
-                coordinates = np.array(list(zip(self.nc_output_dataset.variables['easting'][:],
-                                                self.nc_output_dataset.variables['northing'][:]
-                                                )
-                                            )
-                                       )
             else:
                 raise BaseException('Unrecognised coordinates')
             
@@ -783,6 +783,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         if self.settings.get('keywords'):
             metadata_dict['keywords'] = self.settings['keywords']
 
+        logger.debug('metadata_dict: {}'.format(metadata_dict))
         return metadata_dict
     
     
@@ -1079,7 +1080,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         Function to perform post-processing on netCDF file after dimensions and variables
         have been created. Overrides base class.
         
-        This will create GDA94 coordinates 
+        This will create crs, longitude and latitude variables for unprojected CRS, 
+        and recompute global attributes
         '''
         default_crs_wkt = self.settings['default_crs_wkt']
         
@@ -1089,7 +1091,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         logger.debug('transverse_mercator_var: {}'.format(transverse_mercator_var))
         
         # If dataset has UTM coordinates and not unprojected ones
-        if transverse_mercator_var is not None and crs_var is None:
+        if (transverse_mercator_var is not None 
+            and crs_var is None
+            and set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys())
+            ):
             # Build GDA94 crs variable and write it to self.nc_output_dataset
             logger.info('Creating crs, longitude and latitude variables for unprojected CRS')
             point_count = self.nc_output_dataset.dimensions['point'].size
@@ -1126,6 +1131,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                            fill_value=-999, 
                            attributes={'long_name': 'Latitude', 'units': 'degrees North'}
                            ).create_var_in_dataset(self.nc_output_dataset)
+                           
+            logger.info('Re-writing new global attributes for new CRS')
+            for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
+                setattr(self.nc_output_dataset, attribute_name, attribute_value or '')
             
     
 
