@@ -64,7 +64,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  netcdf_dataset, 
                  enable_disk_cache=None,
                  enable_memory_cache=True,
-                 cache_dir=None,
+                 cache_path=None,
                  debug=False):
         '''
         NetCDFPointUtils Constructor
@@ -80,9 +80,10 @@ class NetCDFPointUtils(NetCDFUtils):
         
         logger.debug('Running NetCDFPointUtils constructor')
         
-        self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
-        self.cache_path = os.path.join(self.cache_dir, 
-                                           re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
+        self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
+                                                     re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
+                                                     
+        logger.debug('self.cache_path: {}'.format(self.cache_path))
         
         self.enable_memory_cache = enable_memory_cache
         
@@ -836,7 +837,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #         #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
         #     else:
         #         xycoords = self.get_xy_coord_values()
-        #         os.makedirs(self.cache_dir, exist_ok=True)
+        #         os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
         #         np.savez_compressed(self.cache_path, xycoords=xycoords) # Write to cache file
         #         logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], self.cache_path))
         #=======================================================================
@@ -847,7 +848,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
                 
-                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
                 
                 if 'xycoords' in cache_dataset.variables.keys():
                     xycoords = cache_dataset.variables['xycoords'][:]
@@ -859,7 +860,7 @@ class NetCDFPointUtils(NetCDFUtils):
             if xycoords is None:
                 xycoords = self.get_xy_coord_values() # read coords from source file
                 
-                os.makedirs(self.cache_dir, exist_ok=True)
+                os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
                 if os.path.isfile(self.cache_path):
                     cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
                 else:
@@ -868,7 +869,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 if not hasattr(cache_dataset, 'source'):
                     cache_dataset.source = self.nc_path
                     
-                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
 
                 if 'point' not in cache_dataset.dimensions.keys():
                     cache_dataset.createDimension(dimname='point', size=xycoords.shape[0])

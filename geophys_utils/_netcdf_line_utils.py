@@ -40,7 +40,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  netcdf_dataset, 
                  enable_disk_cache=None,
                  enable_memory_cache=True,
-                 cache_dir=None,
+                 cache_path=None,
                  debug=False):
         '''
         NetCDFLineUtils Constructor
@@ -53,7 +53,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         super().__init__(netcdf_dataset=netcdf_dataset, 
                          enable_disk_cache=enable_disk_cache, 
                          enable_memory_cache=enable_memory_cache,
-                         cache_dir=cache_dir,
+                         cache_path=cache_path,
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
@@ -217,9 +217,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Helper function to cache both line & line_index
         '''
-        line_cache_path = self.cache_basename + '_line.npz'
-        
         #=======================================================================
+        # line_cache_path = self.cache_basename + '_line.npz'
+        #
         # if os.path.isfile(line_cache_path):
         #     # Cached line file exists - read it
         #     cache_loader = np.load(line_cache_path)
@@ -232,7 +232,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         #     line = self.get_line_values()
         #     line_index = self.get_line_index_values()
         #     
-        #     os.makedirs(self.cache_dir, exist_ok=True)
+        #     os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
         #     np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
         #     logger.debug('Saved {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
         #=======================================================================
@@ -244,7 +244,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
                 
-                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
                 
                 if 'line' in cache_dataset.variables.keys():
                     line = cache_dataset.variables['line'][:]
@@ -261,10 +261,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 cache_dataset.close()    
                 
             if line is None or line_index is None:
-                line = line or self.get_line_values()
-                line_index = line_index or self.get_line_index_values()
+                if line is None:
+                    line = self.get_line_values()
+                if line_index is None:
+                    line_index = self.get_line_index_values()
                 
-                os.makedirs(self.cache_dir, exist_ok=True)
+                os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
                 if os.path.isfile(self.cache_path):
                     cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
                 else:
@@ -273,7 +275,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 if not hasattr(cache_dataset, 'source'):
                     cache_dataset.source = self.nc_path
                     
-                assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
                 
                 if 'point' not in cache_dataset.dimensions.keys():
                     cache_dataset.createDimension(dimname='point', size=line_index.shape[0]) 
