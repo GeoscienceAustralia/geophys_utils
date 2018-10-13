@@ -382,6 +382,8 @@ class NetCDFUtils(object):
                 self._netcdf_dataset.close()
             except Exception as e:
                 logger.warning('Unable to close {}: {}'.format(self.netcdf_path, e))
+                
+            self._netcdf_dataset = None
            
     @property
     def netcdf_dataset(self):
