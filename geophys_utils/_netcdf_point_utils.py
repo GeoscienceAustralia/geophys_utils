@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from networkx.generators.classic import balanced_tree
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
