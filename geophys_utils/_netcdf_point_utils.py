@@ -54,7 +54,8 @@ class NetCDFPointUtils(NetCDFUtils):
     '''
 
     def __init__(self, 
-                 netcdf_dataset, 
+                 netcdf_dataset,
+                 memcached_connection=None,
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_dir=None,
@@ -72,7 +73,7 @@ class NetCDFPointUtils(NetCDFUtils):
                          )
         
         logger.debug('Running NetCDFPointUtils constructor')
-        
+        self.memcached_connection = memcached_connection
         self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
         self.cache_basename = os.path.join(self.cache_dir, 
                                            re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
@@ -814,6 +815,15 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         Property getter function to return pointwise array of XY coordinates
         '''
+        if self.memcached_connection is not None:
+            #coord_path = self.cache_basename + '_coords.npz'
+            if self.memcached_connection.get(self.cache_basename):
+                xycoords = mc.get(self.cache_basename)
+            else:
+                xycoords = self.get_xy_coord_values()
+                self.memcached_connection.set(self.cache_basename, xycoords)
+
+
         if self.enable_memory_cache and self._xycoords is not None:
             #logger.debug('Returning memory cached coordinates')
             return self._xycoords
