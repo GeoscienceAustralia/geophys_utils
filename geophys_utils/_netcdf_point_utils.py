@@ -37,6 +37,7 @@ from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
+import memcache
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get logger
@@ -59,7 +60,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_dir=None,
-                 debug=False):
+                 debug=True):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
@@ -75,7 +76,7 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.debug('Running NetCDFPointUtils constructor')
         self.memcached_connection = memcached_connection
         self.cache_dir = cache_dir or os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils')
-        self.cache_basename = os.path.join(self.cache_dir, 
+        self.cache_basename = os.path.join(self.cache_dir,
                                            re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
         
         self.enable_memory_cache = enable_memory_cache
@@ -818,7 +819,7 @@ class NetCDFPointUtils(NetCDFUtils):
         if self.memcached_connection is not None:
             #coord_path = self.cache_basename + '_coords.npz'
             if self.memcached_connection.get(self.cache_basename):
-                xycoords = mc.get(self.cache_basename)
+                xycoords = self.memcached_connection.get(self.cache_basename)
             else:
                 xycoords = self.get_xy_coord_values()
                 self.memcached_connection.set(self.cache_basename, xycoords)
