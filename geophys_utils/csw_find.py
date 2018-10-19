@@ -27,8 +27,8 @@ from datetime import datetime
 from geophys_utils import CSWUtils
 import logging
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Initial logging level for this module
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO) # Initial logging level for this module
 
 def date_string2datetime(date_string):
     '''
@@ -182,16 +182,16 @@ def main():
                              )
               )
 
-    logger.debug('{} results found.'.format(distribution_count))
+    root_logger.debug('{} results found.'.format(distribution_count))
 
 if __name__ == '__main__':
-    if not logger.handlers:
-        # Set handler for root logger to standard output
+    if not root_logger.handlers:
+        # Set handler for root root_logger to standard output
         console_handler = logging.StreamHandler(sys.stdout)
         #console_handler.setLevel(logging.INFO)
         console_handler.setLevel(logging.DEBUG)
         console_formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
+        root_logger.addHandler(console_handler)
         
     main()
