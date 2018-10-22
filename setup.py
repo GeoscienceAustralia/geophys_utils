@@ -18,7 +18,7 @@
 from distutils.core import setup
 import os
 
-version = '0.0.0'
+version = '0.0.1'
 
 setup(name='geophys_utils',
       version=version,
@@ -27,18 +27,22 @@ setup(name='geophys_utils',
           'geophys_utils.test',
           'geophys_utils.netcdf_converter',
           'geophys_utils.dataset_metadata_cache',
-          'dynamic_kmls'
-      ],
+          ],
       package_data={'geophys_utils': ['csw_utils_settings.yml'],
                     'geophys_utils.netcdf_converter': ['aseg_gdf_settings.yml'],
-                    'geophys_utils.dataset_metadata_cache': ['dataset_metadata_cache_settings.yml'],
-                    'dynamic_kmls': ['dynamic_kml_settings.yml']
+                    'geophys_utils.dataset_metadata_cache': ['dataset_metadata_cache_settings.yml',
+                                                             ('data/dataset_metadata_cache.sqlite'
+                                                              if (os.name == 'posix')
+                                                              else ('data\\dataset_metadata_cache.sqlite'
+                                                                    if (os.name == 'nt')
+                                                                    else []))
+                                                             ],
                     },
       scripts=(['bin/csw_find',
                 'bin/rechunk',
                 'bin/aseg2nc',
                 'bin/nc2aseg',
-                ] 
+                ]
                if (os.name == 'posix')
                else (['bin\\csw_find.bat',
                       'bin\\rechunk.bat',
@@ -68,5 +72,5 @@ setup(name='geophys_utils',
       maintainer_email='alex.ip@ga.gov.au',
       description='Geophysics data access utilities',
       long_description='Geophysics data access utilities',
-      license='Creative Commons Attribution 4.0 International'
+      license='Apache License Version 2.0'
       )

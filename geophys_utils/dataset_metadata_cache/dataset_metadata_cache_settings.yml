@@ -1,11 +1,9 @@
 --- 
 DEBUG: True
 DB_ENGINE: "Postgres"
-APP_DIR: ""
-APP_PORT: 5000
-SECRET_KEY: "Geoscience Australia Rocks" # Fake key for development and testing
 LOGFILE: "dataset_metadata_cache.log"
 LOGLEVEL: "WARNING"
+SQLITE_DB_PATH: "data/dataset_metadata_cache.sqlite"
 POSTGRES_SERVER: "localhost"
 POSTGRES_PORT: 5432
 POSTGRES_DBNAME: "dataset_metadata_cache"

@@ -360,8 +360,10 @@ def truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_plac
         if decimal_places > 0:
             integer_digits -= 1 # Allow for decimal point
             
+        fill_value_str = (fill_value)
+        assert 'e' not in fill_value_str.lower(), 'Unable to truncate value in exponential notation'
         pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(integer_digits) + '}\.\d{0,' + '{}'.format(decimal_places) + '})')
-        search = re.search(pattern, str(fill_value))
+        search = re.search(pattern, fill_value_str)
         truncated_fill_value = float(search.group(1)+search.group(2))
         # Check for any ambiguity introduced by truncation
         assert not np.any(data_array[~no_data_mask] == truncated_fill_value), 'Truncated fill value of {} is ambiguous'.format(truncated_fill_value)

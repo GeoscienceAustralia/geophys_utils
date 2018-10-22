@@ -25,6 +25,7 @@ import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from scipy.spatial.distance import pdist
 import logging
+import netCDF4
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get __main__ logger
@@ -39,7 +40,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  netcdf_dataset, 
                  enable_disk_cache=None,
                  enable_memory_cache=True,
-                 cache_dir=None,
+                 cache_path=None,
                  debug=False):
         '''
         NetCDFLineUtils Constructor
@@ -52,7 +53,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         super().__init__(netcdf_dataset=netcdf_dataset, 
                          enable_disk_cache=enable_disk_cache, 
                          enable_memory_cache=enable_memory_cache,
-                         cache_dir=cache_dir,
+                         cache_path=cache_path,
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
@@ -216,24 +217,91 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Helper function to cache both line & line_index
         '''
-        line_cache_path = self.cache_basename + '_line.npz'
-        
-        if os.path.isfile(line_cache_path):
-            # Cached line file exists - read it
-            cache_loader = np.load(line_cache_path)
-            
-            line = cache_loader['line']
-            line_index = cache_loader['line_index']
-            logger.debug('Read {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
-        else:
-            # Read arrays from source dataset and write to cache
-            line = self.get_line_values()
-            line_index = self.get_line_index_values()
-            
-            os.makedirs(self.cache_dir, exist_ok=True)
-            np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
-            logger.debug('Saved {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
+        #=======================================================================
+        # line_cache_path = self.cache_basename + '_line.npz'
+        #
+        # if os.path.isfile(line_cache_path):
+        #     # Cached line file exists - read it
+        #     cache_loader = np.load(line_cache_path)
+        #     
+        #     line = cache_loader['line']
+        #     line_index = cache_loader['line_index']
+        #     logger.debug('Read {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
+        # else:
+        #     # Read arrays from source dataset and write to cache
+        #     line = self.get_line_values()
+        #     line_index = self.get_line_index_values()
+        #     
+        #     os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+        #     np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
+        #     logger.debug('Saved {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
+        #=======================================================================
                 
+        line = None
+        line_index = None
+        if self.enable_disk_cache:
+            if os.path.isfile(self.cache_path):
+                # Cached coordinate file exists - read it
+                cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
+                
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                
+                if 'line' in cache_dataset.variables.keys():
+                    line = cache_dataset.variables['line'][:]
+                    logger.debug('Read {} lines from cache file {}'.format(line.shape[0], self.cache_path))
+                else:
+                    logger.debug('Unable to read line variable from netCDF cache file {}'.format(self.cache_path))                
+
+                if 'line_index' in cache_dataset.variables.keys():
+                    line_index = cache_dataset.variables['line_index'][:]
+                    logger.debug('Read {} line_indices from cache file {}'.format(line_index.shape[0], self.cache_path))
+                else:
+                    logger.debug('Unable to read line variable from netCDF cache file {}'.format(self.cache_path))  
+                                  
+                cache_dataset.close()    
+                
+            if line is None or line_index is None:
+                if line is None:
+                    line = self.get_line_values()
+                if line_index is None:
+                    line_index = self.get_line_index_values()
+                
+                os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+                if os.path.isfile(self.cache_path):
+                    cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
+                else:
+                    cache_dataset = netCDF4.Dataset(self.cache_path, 'w')
+                
+                if not hasattr(cache_dataset, 'source'):
+                    cache_dataset.source = self.nc_path
+                    
+                #assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
+                
+                if 'point' not in cache_dataset.dimensions.keys():
+                    cache_dataset.createDimension(dimname='point', size=line_index.shape[0]) 
+                    
+                if 'line' not in cache_dataset.dimensions.keys():
+                    cache_dataset.createDimension(dimname='line', size=line.shape[0]) 
+                    
+                if 'line' not in cache_dataset.variables.keys():
+                    cache_dataset.createVariable('line',
+                                                 line.dtype,
+                                                 dimensions=['line'],
+                                                 **self.CACHE_VARIABLE_PARAMETERS
+                                                 )
+                cache_dataset.variables['line'][:] = line # Write lines to cache file
+                
+                if 'line_index' not in cache_dataset.variables.keys():
+                    cache_dataset.createVariable('line_index',
+                                                 line_index.dtype,
+                                                 dimensions=['point'],
+                                                 **self.CACHE_VARIABLE_PARAMETERS
+                                                 )
+                cache_dataset.variables['line_index'][:] = line_index # Write lines to cache file
+                
+                cache_dataset.close() 
+                logger.debug('Saved {} lines for {} points to cache file {}'.format(line.shape[0], line_index.shape[0], self.cache_path))
+
         return line, line_index
         
     @property

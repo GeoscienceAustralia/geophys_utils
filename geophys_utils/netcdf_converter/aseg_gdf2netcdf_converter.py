@@ -39,13 +39,14 @@ from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
 from geophys_utils import points2convex_hull
+from geophys_utils import transform_coords
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-#TEMP_DIR = tempfile.gettempdir()
+TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'D:\Temp'
-TEMP_DIR = 'U:\Alex\Temp'
+#TEMP_DIR = 'U:\Alex\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
 POINT_LIMIT = 0
@@ -737,36 +738,36 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             }
             
         try:
-            if set(['longitude', 'latitude']) <= set(self._nc_cache_dataset.variables.keys()):
+            point_count = self.nc_output_dataset.dimensions['point'].size
+            coordinates = np.zeros(shape=(point_count, 2), dtype=np.float64)
+            
+            if set(['longitude', 'latitude']) <= set(self.nc_output_dataset.variables.keys()):
+                coordinates[:,0] = self.nc_output_dataset.variables['longitude'][:]
+                coordinates[:,1] = self.nc_output_dataset.variables['latitude'][:]
+                
                 metadata_dict.update({
-                    'geospatial_lon_min': np.min(self.get_raw_data('longitude')),
-                    'geospatial_lon_max': np.max(self.get_raw_data('longitude')),
+                    'geospatial_lon_min': np.min(coordinates[:,0]),
+                    'geospatial_lon_max': np.max(coordinates[:,0]),
                     'geospatial_lon_units': "degrees East",
-                    'geospatial_lat_min': np.min(self.get_raw_data('latitude')),
-                    'geospatial_lat_max': np.max(self.get_raw_data('latitude')),
+                    'geospatial_lat_min': np.min(coordinates[:,1]),
+                    'geospatial_lat_max': np.max(coordinates[:,1]),
                     'geospatial_lat_units': "degrees North",
                     })
-            
-                coordinates = np.array(list(zip(self.nc_output_dataset.variables['longitude'][:],
-                                                self.nc_output_dataset.variables['latitude'][:]
-                                                )
-                                            )
-                                       )
-            elif set(['easting', 'northing']) <= set(self._nc_cache_dataset.variables.keys()): # CRS is in UTM
+
+
+            elif set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys()): # CRS is in UTM
+                coordinates[:,0] = self.nc_output_dataset.variables['easting'][:]
+                coordinates[:,1] = self.nc_output_dataset.variables['northing'][:]
+                
                 metadata_dict.update({
-                    'geospatial_east_min': np.min(self.get_raw_data('easting')),
-                    'geospatial_east_max': np.max(self.get_raw_data('easting')),
+                    'geospatial_east_min': np.min(coordinates[:,0]),
+                    'geospatial_east_max': np.max(coordinates[:,0]),
                     'geospatial_east_units': "m",
-                    'geospatial_north_min': np.min(self.get_raw_data('northing')),
-                    'geospatial_north_max': np.max(self.get_raw_data('northing')),
+                    'geospatial_north_min': np.min(coordinates[:,1]),
+                    'geospatial_north_max': np.max(coordinates[:,1]),
                     'geospatial_north_units': "m",
                     })
             
-                coordinates = np.array(list(zip(self.nc_output_dataset.variables['easting'][:],
-                                                self.nc_output_dataset.variables['northing'][:]
-                                                )
-                                            )
-                                       )
             else:
                 raise BaseException('Unrecognised coordinates')
             
@@ -782,6 +783,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         if self.settings.get('keywords'):
             metadata_dict['keywords'] = self.settings['keywords']
 
+        logger.debug('metadata_dict: {}'.format(metadata_dict))
         return metadata_dict
     
     
@@ -1077,8 +1079,63 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         '''
         Function to perform post-processing on netCDF file after dimensions and variables
         have been created. Overrides base class.
+        
+        This will create crs, longitude and latitude variables for unprojected CRS, 
+        and recompute global attributes
         '''
-        return
+        default_crs_wkt = self.settings['default_crs_wkt']
+        
+        crs_var = self.nc_output_dataset.variables.get('crs')
+        transverse_mercator_var = self.nc_output_dataset.variables.get('transverse_mercator')
+        logger.debug('crs_var: {}'.format(crs_var))
+        logger.debug('transverse_mercator_var: {}'.format(transverse_mercator_var))
+        
+        # If dataset has UTM coordinates and not unprojected ones
+        if (transverse_mercator_var is not None 
+            and crs_var is None
+            and set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys())
+            ):
+            # Build GDA94 crs variable and write it to self.nc_output_dataset
+            logger.info('Creating crs, longitude and latitude variables for unprojected CRS')
+            point_count = self.nc_output_dataset.dimensions['point'].size
+            logger.debug('point_count: {}'.format(point_count))
+            
+            utm_coords = np.ones(shape=(point_count, 2), dtype=np.float64) * -999
+            utm_coords[:,0] = self.nc_output_dataset.variables['easting'][:]
+            utm_coords[:,1] = self.nc_output_dataset.variables['northing'][:]
+            
+            gda94_coords = transform_coords(utm_coords, 
+                                            transverse_mercator_var.spatial_ref, 
+                                            default_crs_wkt
+                                            )
+            
+            # Create and write crs variable
+            logger.info('Creating new crs variable for unprojected CRS')
+            self.build_crs_variable(get_spatial_ref_from_wkt(default_crs_wkt)
+                                    ).create_var_in_dataset(self.nc_output_dataset)
+                                    
+            # Create and write longitude variable
+            logger.info('Creating new longitude variable')
+            NetCDFVariable('longitude', 
+                           gda94_coords[:,0], 
+                           ['point'], 
+                           fill_value=-999, 
+                           attributes={'long_name': 'Longitude', 'units': 'degrees East'}
+                           ).create_var_in_dataset(self.nc_output_dataset)
+            
+            # Create and write latitude variable
+            logger.info('Creating new latitude variable')
+            NetCDFVariable('latitude', 
+                           gda94_coords[:,1], 
+                           ['point'], 
+                           fill_value=-999, 
+                           attributes={'long_name': 'Latitude', 'units': 'degrees North'}
+                           ).create_var_in_dataset(self.nc_output_dataset)
+                           
+            logger.info('Re-writing new global attributes for new CRS')
+            for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
+                setattr(self.nc_output_dataset, attribute_name, attribute_value or '')
+            
     
 
 def main():

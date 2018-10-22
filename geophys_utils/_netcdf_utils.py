@@ -67,7 +67,6 @@ class NetCDFUtils(object):
         self.opendap = (re.match('^http.*', self.nc_path) is not None)
         if self.opendap:
             self.max_bytes = 500000000 # 500MB limit for NCI OPeNDAP
-            #self.max_bytes = 5000000 # 5.0MB limit
         else:
             self.max_bytes = 4000000000 # 4GB limit for direct netCDF file access
         
@@ -373,7 +372,19 @@ class NetCDFUtils(object):
         finally:
             nc_output_dataset.close()
             
-            
+    
+    def close(self):
+        '''
+        Function to close netCDF dataset if opened
+        '''
+        if self._netcdf_dataset:
+            try:
+                self._netcdf_dataset.close()
+            except Exception as e:
+                logger.warning('Unable to close {}: {}'.format(self.netcdf_path, e))
+                
+            self._netcdf_dataset = None
+           
     @property
     def netcdf_dataset(self):
         '''
