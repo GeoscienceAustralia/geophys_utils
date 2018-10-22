@@ -87,8 +87,9 @@ class NetCDFPointUtils(NetCDFUtils):
 
         self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
                                                      re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
-
-        logger.debug('self.cache_path: {}'.format(self.cache_path))
+        logger.debug('self.cache_path')
+        logger.debug(self.cache_path)
+        #logger.debug('self.cache_path: {}'.format(self.cache_path))
 
         self.enable_memory_cache = enable_memory_cache
         
