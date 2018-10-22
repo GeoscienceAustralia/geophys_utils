@@ -834,16 +834,25 @@ class NetCDFPointUtils(NetCDFUtils):
         if self.memcached_connection is not None:
             logger.debug(self.memcached_connection)
             #coord_path = self.cache_basename + '_coords.npz'
-            if self.memcached_connection.get(self.cache_basename):
+
+            logger.debug(self.cache_path)
+
+            if self.memcached_connection.get(self.cache_path) is True:
                 xycoords = self.memcached_connection.get(self.cache_basename)
+                logger.debug('memcached key found')
+                logger.debug(xycoords)
             else:
                 xycoords = self.get_xy_coord_values()
-                self.memcached_connection.set(self.cache_basename, xycoords)
-        logger.debug("no memcached_connection")
+                logger.debug("key not found. adding key and value")
+                self.memcached_connection.add(self.cache_basename, xycoords)
 
-        if self.enable_memory_cache and self._xycoords is not None:
-            #logger.debug('Returning memory cached coordinates')
-            return self._xycoords
+
+        # if self.enable_memory_cache and self._xycoords is not None:
+        #     logger.debug("hit xycoords propery code")
+        #     if self.memcached_connection is not None:
+        #         xycoords = self.memcached_connection.get(self.cache_basename)
+        #         #logger.debug('Returning memory cached coordinates')
+        #         return self._xycoords
             
         #=======================================================================
         # if self.enable_disk_cache:
