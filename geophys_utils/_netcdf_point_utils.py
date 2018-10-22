@@ -837,13 +837,15 @@ class NetCDFPointUtils(NetCDFUtils):
 
             logger.debug(self.cache_path)
 
-            if self.memcached_connection.get(self.cache_path) is True:
+            try:
+
+               # self.memcached_connection.get(self.cache_path) is True:
                 xycoords = self.memcached_connection.get(self.cache_basename)
-                logger.debug('memcached key found')
+                logger.debug('memcached key found at {}'.format(self.cache_basename))
                 logger.debug(xycoords)
-            else:
+            except:
                 xycoords = self.get_xy_coord_values()
-                logger.debug("key not found. adding key and value")
+                logger.debug("key not found at {}. adding key and value".format(self.cache_basename))
                 self.memcached_connection.add(self.cache_basename, xycoords)
 
 
