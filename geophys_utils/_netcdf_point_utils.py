@@ -831,6 +831,13 @@ class NetCDFPointUtils(NetCDFUtils):
         Property getter function to return pointwise array of XY coordinates
         '''
         logger.debug("hit xycoords propery code")
+
+
+        if self.enable_memory_cache and self._xycoords is not None:
+            #logger.debug('Returning memory cached coordinates')
+            return self._xycoords
+
+
         if self.memcached_connection is not None:
             logger.debug(self.memcached_connection)
             #coord_path = self.cache_basename + '_coords.npz'
