@@ -243,26 +243,24 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line = None
         line_index = None
 
-        if self.memcached_connection is not None:
-            # gets
-            try:
-                # self.memcached_connection.get(self.cache_path) is True:
-                line = self.memcached_connection.get(self.cache_basename)
-                logger.debug('memcached key found at {}'.format(self.cache_basename))
-                logger.debug(xycoords)
-
-            except:
-                if line is None or line_index is None:
-                    if line is None:
-                        line = self.get_line_values()
-                        self.memcached_connection.add('line_{}'.format(self.cache_basename, line))
-                    if line_index is None:
-                        line_index = self.get_line_index_values()
-                        self.memcached_connection.add('line_index_{}'.format(self.cache_basename, line_index))
-
-
-
-
+        # if self.memcached_connection is not None:
+        #     # gets
+        #     try:
+        #         # self.memcached_connection.get(self.cache_path) is True:
+        #         line = self.memcached_connection.get(self.cache_basename)
+        #         logger.debug('memcached key found at {}'.format(self.cache_basename))
+        #         logger.debug(xycoords)
+        #
+        #     except:
+        #         if line is None or line_index is None:
+        #             if line is None:
+        #                 line = self.get_line_values()
+        #                 self.memcached_connection.add('line_{}'.format(self.cache_basename, line))
+        #             if line_index is None:
+        #                 line_index = self.get_line_index_values()
+        #                 self.memcached_connection.add('line_index_{}'.format(self.cache_basename, line_index))
+        #
+        #
         if self.enable_disk_cache:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
