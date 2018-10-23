@@ -829,24 +829,22 @@ class NetCDFPointUtils(NetCDFUtils):
     def xycoords(self):
         '''
         Property getter function to return pointwise array of XY coordinates
+        The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
-        logger.debug("hit xycoords propery code")
-
-
         if self.enable_memory_cache and self._xycoords is not None:
-            #logger.debug('Returning memory cached coordinates')
+            logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
-
+        xycoords = None
         if self.memcached_connection is not None:
+            logger.debug("hit xycoords propery code")
             logger.debug(self.memcached_connection)
             #coord_path = self.cache_basename + '_coords.npz'
 
             logger.debug(self.cache_path)
 
             try:
-
-               # self.memcached_connection.get(self.cache_path) is True:
+                # self.memcached_connection.get(self.cache_path) is True:
                 xycoords = self.memcached_connection.get(self.cache_basename)
                 logger.debug('memcached key found at {}'.format(self.cache_basename))
                 logger.debug(xycoords)
@@ -856,31 +854,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 self.memcached_connection.add(self.cache_basename, xycoords)
 
 
-        # if self.enable_memory_cache and self._xycoords is not None:
-        #     logger.debug("hit xycoords propery code")
-        #     if self.memcached_connection is not None:
-        #         xycoords = self.memcached_connection.get(self.cache_basename)
-        #         #logger.debug('Returning memory cached coordinates')
-        #         return self._xycoords
-            
-        #=======================================================================
-        # if self.enable_disk_cache:
-        #     self.cache_path = self.cache_basename + '_coords.npz'
-        #     if os.path.isfile(self.cache_path):
-        #         # Cached coordinate file exists - read it
-        #         xycoords = np.load(self.cache_path)['xycoords']
-        #         logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
-        #
-        #         #xycoords.shape = (len(xycoords)//2, 2) # Reshape into pointwise array of XY pairs
-        #     else:
-        #         xycoords = self.get_xy_coord_values()
-        #         os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
-        #         np.savez_compressed(self.cache_path, xycoords=xycoords) # Write to cache file
-        #         logger.debug('Saved {} coordinates to cache file {}'.format(xycoords.shape[0], self.cache_path))
-        #=======================================================================
-
-        xycoords = None
-        if self.enable_disk_cache:
+        if self.enable_disk_cache and xycoords is None:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
