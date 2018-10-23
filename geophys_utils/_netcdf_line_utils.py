@@ -344,7 +344,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             # gets
             try:
                 # self.memcached_connection.get(self.cache_path) is True:
-                line = self.memcached_connection.get('line_{}'.format(self.cache_basename)
+                line = self.memcached_connection.get('line_{}'.format(self.cache_basename))
                 logger.debug('memcached key found at {}'.format(self.cache_basename))
             except:
                 line = self.get_line_values()
