@@ -345,9 +345,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
             try:
                 # self.memcached_connection.get(self.cache_path) is True:
                 line = self.memcached_connection.get('line_{}'.format(self.cache_basename))
-                logger.debug('memcached key found at {}'.format(self.cache_basename))
+                logger.debug('memcached key found at line_{}'.format(self.cache_basename))
             except:
                 line = self.get_line_values()
+                logger.debug('memcached key not found. Adding endtry with key line_{}'.format(self.cache_basename))
                 self.memcached_connection.add('line_{}'.format(self.cache_basename, line))
 
             
@@ -376,9 +377,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
         try:
             line_index = self.memcached_connection.get('line_index_{}'.format(self.cache_basename))
-            logger.debug('memcached key found at {}'.format(self.cache_basename))
+            logger.debug('memcached key found at line_index_{}'.format(self.cache_basename))
         except:
             line_index = self.get_line_index_values()
+            logger.debug('memcached key not found. Adding endtry with key line_index_{}'.format(self.cache_basename))
             self.memcached_connection.add('line_index_{}'.format(self.cache_basename, line_index))
 
 
