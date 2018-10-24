@@ -855,8 +855,8 @@ class NetCDFPointUtils(NetCDFUtils):
             if xycoords is not None:
                 # self.memcached_connection.get(self.cache_path) is True:
                 logger.debug('memcached key found at {}'.format(coord_cache_key))
-                logger.debug('xycoords: {}'.format(xycoords))
-            else: #TODO: make this more specific
+                #logger.debug('xycoords: {}'.format(xycoords))
+            else:
                 xycoords = self.get_xy_coord_values()
                 logger.debug("key not found at {}. adding key and value".format(coord_cache_key))
                 self.memcached_connection.add(coord_cache_key, xycoords)

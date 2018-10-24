@@ -311,13 +311,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
             #     line = self.get_line_index_values()
             #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_cache_key))
             #     self.memcached_connection.add(line_cache_key, line)
-            try:
-                # self.memcached_connection.get(self.cache_path) is True:
-                line = self.memcached_connection.get(line_cache_key)
+            line = self.memcached_connection.get(line_cache_key)
+            if line is not None:    
                 logger.debug('memcached key found at {}'.format(line_cache_key))
-            except: #TODO: make this more specific
+            else:
                 line = self.get_line_values()
-                logger.debug('memcached key not found. Adding endtry with key {}'.format(line_cache_key))
+                logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
                 self.memcached_connection.add(line_cache_key, line)
             
         elif self.enable_disk_cache:
@@ -356,10 +355,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
             #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_index_cache_key))
             #     self.memcached_connection.add(line_index_cache_key, line_index)
 
-            try:
-                line_index = self.memcached_connection.get(line_index_cache_key)
+            line_index = self.memcached_connection.get(line_index_cache_key)
+            if line_index is not None:
                 logger.debug('memcached key found at {}'.format(line_index_cache_key))
-            except: #TODO: make this more specific
+            else:
                 line_index = self.get_line_index_values()
                 logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
                 self.memcached_connection.add(line_index_cache_key, line_index)
