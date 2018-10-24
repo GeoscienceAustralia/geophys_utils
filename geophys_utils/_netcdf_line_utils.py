@@ -52,14 +52,13 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''     
         # Start of init function - Call inherited constructor first
         super().__init__(netcdf_dataset=netcdf_dataset, 
+                         memcached_connection=memcached_connection,
                          enable_disk_cache=enable_disk_cache, 
                          enable_memory_cache=enable_memory_cache,
                          cache_path=cache_path,
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
-
-        self.memcached_connection = memcached_connection
 
         # Initialise private property variables to None until set by property getter methods
         self._line = None
@@ -220,47 +219,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Helper function to cache both line & line_index
         '''
-        #=======================================================================
-        # line_cache_path = self.cache_basename + '_line.npz'
-        #
-        # if os.path.isfile(line_cache_path):
-        #     # Cached line file exists - read it
-        #     cache_loader = np.load(line_cache_path)
-        #     
-        #     line = cache_loader['line']
-        #     line_index = cache_loader['line_index']
-        #     logger.debug('Read {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
-        # else:
-        #     # Read arrays from source dataset and write to cache
-        #     line = self.get_line_values()
-        #     line_index = self.get_line_index_values()
-        #     
-        #     os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
-        #     np.savez_compressed(line_cache_path, line=line, line_index=line_index) # Write to cache file
-        #     logger.debug('Saved {} lines for {} points from line cache file {}'.format(line.shape[0], line_index.shape[0], line_cache_path))
-        #=======================================================================
-
         line = None
         line_index = None
 
-        # if self.memcached_connection is not None:
-        #     # gets
-        #     try:
-        #         # self.memcached_connection.get(self.cache_path) is True:
-        #         line = self.memcached_connection.get(self.cache_basename)
-        #         logger.debug('memcached key found at {}'.format(self.cache_basename))
-        #         logger.debug(xycoords)
-        #
-        #     except:
-        #         if line is None or line_index is None:
-        #             if line is None:
-        #                 line = self.get_line_values()
-        #                 self.memcached_connection.add('line_{}'.format(self.cache_basename, line))
-        #             if line_index is None:
-        #                 line_index = self.get_line_index_values()
-        #                 self.memcached_connection.add('line_index_{}'.format(self.cache_basename, line_index))
-        #
-        #
         if self.enable_disk_cache:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
@@ -281,6 +242,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     logger.debug('Unable to read line variable from netCDF cache file {}'.format(self.cache_path))  
                                   
                 cache_dataset.close()
+            else:
+                logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
 
 
             if line is None or line_index is None:
@@ -332,25 +295,25 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         Property getter function to return array of all line numbers
         Always cache this in memory - should only be small
+        The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
+        line = None
         if self.enable_memory_cache and self._line is not None:
             #logger.debug('Returning memory cached line')
             return self._line
 
-
-        if self.memcached_connection is not None:
-            # gets
+        elif self.memcached_connection is not None:
+            line_cache_key = self.cache_basename + '_line'
             try:
                 # self.memcached_connection.get(self.cache_path) is True:
-                line = self.memcached_connection.get('line_{}'.format(self.cache_basename))
-                logger.debug('memcached key found at line_{}'.format(self.cache_basename))
-            except:
+                line = self.memcached_connection.get(line_cache_key)
+                logger.debug('memcached key found at {}'.format(line_cache_key))
+            except: #TODO: make this more specific
                 line = self.get_line_values()
-                logger.debug('memcached key not found. Adding endtry with key line_{}'.format(self.cache_basename))
-                self.memcached_connection.add('line_{}'.format(self.cache_basename, line))
-
+                logger.debug('memcached key not found. Adding endtry with key {}'.format(line_cache_key))
+                self.memcached_connection.add(line_cache_key, line)
             
-        if self.enable_disk_cache:
+        elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
         else: # No caching - read line from source file
             line = self.get_line_values()
@@ -368,22 +331,24 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def line_index(self):
         '''
         Property getter function to return line_indices for all points
+        The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
+        line_index = None
         if self.enable_memory_cache and self._line_index is not None:
             #logger.debug('Returning memory cached line_index')
             return self._line_index
 
-        try:
-            line_index = self.memcached_connection.get('line_index_{}'.format(self.cache_basename))
-            logger.debug('memcached key found at line_index_{}'.format(self.cache_basename))
-        except:
-            line_index = self.get_line_index_values()
-            logger.debug('memcached key not found. Adding endtry with key line_index_{}'.format(self.cache_basename))
-            self.memcached_connection.add('line_index_{}'.format(self.cache_basename, line_index))
+        elif self.memcached_connection is not None:
+            line_index_cache_key = self.cache_basename + '_line_index'
+            try:
+                line_index = self.memcached_connection.get(line_index_cache_key)
+                logger.debug('memcached key found at {}'.format(line_index_cache_key))
+            except: #TODO: make this more specific
+                line_index = self.get_line_index_values()
+                logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
+                self.memcached_connection.add(line_index_cache_key, line_index)
 
-
-            
-        if self.enable_disk_cache:
+        elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
         else:  # No caching - read line_index from source file
             line = None

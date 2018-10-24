@@ -37,11 +37,16 @@ from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
-import memcache
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
+
+try:
+    import memcache
+except ModuleNotFoundError:
+    logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
+    memcache = None
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
@@ -66,7 +71,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
-                 debug=True):
+                 debug=False):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
@@ -80,7 +85,11 @@ class NetCDFPointUtils(NetCDFUtils):
                          )
         
         logger.debug('Running NetCDFPointUtils constructor')
-        self.memcached_connection = memcached_connection
+        
+        if memcache is not None:
+            self.memcached_connection = memcached_connection
+        else:
+            self.memcached_connection = None
 
         self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
                                                      re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
@@ -831,30 +840,29 @@ class NetCDFPointUtils(NetCDFUtils):
         Property getter function to return pointwise array of XY coordinates
         The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
+        xycoords = None
         if self.enable_memory_cache and self._xycoords is not None:
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
-        xycoords = None
-        if self.memcached_connection is not None:
+        elif self.memcached_connection is not None:
+            coord_cache_key = self.cache_basename + '_xycoords'
+            
             logger.debug("hit xycoords propery code")
             logger.debug(self.memcached_connection)
-            #coord_path = self.cache_basename + '_coords.npz'
-
-            logger.debug(self.cache_path)
 
             try:
                 # self.memcached_connection.get(self.cache_path) is True:
-                xycoords = self.memcached_connection.get(self.cache_basename)
-                logger.debug('memcached key found at {}'.format(self.cache_basename))
+                xycoords = self.memcached_connection.get(coord_cache_key)
+                logger.debug('memcached key found at {}'.format(coord_cache_key))
                 logger.debug(xycoords)
-            except:
+            except: #TODO: make this more specific
                 xycoords = self.get_xy_coord_values()
-                logger.debug("key not found at {}. adding key and value".format(self.cache_basename))
-                self.memcached_connection.add(self.cache_basename, xycoords)
+                logger.debug("key not found at {}. adding key and value".format(coord_cache_key))
+                self.memcached_connection.add(coord_cache_key, xycoords)
 
 
-        if self.enable_disk_cache and xycoords is None:
+        elif self.enable_disk_cache:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
@@ -867,6 +875,8 @@ class NetCDFPointUtils(NetCDFUtils):
                 else:
                     logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))
                 cache_dataset.close()
+            else:
+                logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
 
             if xycoords is None:
                 xycoords = self.get_xy_coord_values() # read coords from source file
