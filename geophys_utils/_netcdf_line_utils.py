@@ -298,6 +298,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
         line = None
+        line_index = None
         if self.enable_memory_cache and self._line is not None:
             #logger.debug('Returning memory cached line')
             return self._line
@@ -339,6 +340,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         Property getter function to return line_indices for all points
         The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
+        line = None
         line_index = None
         if self.enable_memory_cache and self._line_index is not None:
             #logger.debug('Returning memory cached line_index')
