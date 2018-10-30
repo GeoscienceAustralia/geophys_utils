@@ -49,10 +49,10 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 #     memcache = None
 
 try:
-    import cottoncandy as cc
+    import cottoncandy
 except:
     logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
-    cc = None
+    cottoncandy = None
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
@@ -855,16 +855,16 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         xycoords = None
         # assert np.allclose(arr, arr_down)
-
+        logger.debug(cottoncandy)
         if self.enable_memory_cache and self._xycoords is not None:
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
         elif self.s3_bucket is not None:
             coord_path = self.cache_basename + '_coords.npz'
-            cci = cc.get_interface(self.s3_bucket, endpoint_url='https://s3.amazonaws.com')
+            cci = cottoncandy.get_interface(self.s3_bucket, endpoint_url='https://s3.amazonaws.com')
             try:
-                xycoords = cci.download_raw_array('coord_path')
+                xycoords = cci.download_raw_array(coord_path)
             except:
                 xycoords = cci.upload_raw_array(coord_path, xycoords)
 
