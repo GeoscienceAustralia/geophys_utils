@@ -48,11 +48,6 @@ except ModuleNotFoundError:
     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
     memcache = None
 
-try:
-    import cottoncandy as cc
-except ModuleNotFoundError:
-    logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
-    cc = None
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
@@ -855,14 +850,6 @@ class NetCDFPointUtils(NetCDFUtils):
         if self.enable_memory_cache and self._xycoords is not None:
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
-
-        elif self.s3_bucket is not None:
-            coord_path = self.cache_basename + '_coords.npz'
-            cci = cc.get_interface(self.s3_bucket, endpoint_url='https://s3.amazonaws.com')
-            try:
-                xycoords = cci.download_raw_array('coord_path')
-            except:
-                xycoords = cci.upload_raw_array(coord_path, xycoords)
 
         elif self.memcached_connection is not None:
             coord_cache_key = self.cache_basename + '_xycoords'
