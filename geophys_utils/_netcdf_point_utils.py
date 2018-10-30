@@ -865,16 +865,18 @@ class NetCDFPointUtils(NetCDFUtils):
 
         elif self.s3_bucket is not None:
             logger.debug("uploading test array")
-            xycoords = self.cci.upload_raw_array('test', np.array([1,2,3]))
-            logger.debug(xycoords)
-            xycoords = self.cci.download_raw_array('test')
-            logger.debug(xycoords)
+            # xycoords = self.cci.upload_raw_array('test', np.array([1,2,3]))
+            # logger.debug(xycoords)
+            # xycoords = self.cci.download_raw_array('test')
+            # logger.debug(xycoords)
 
             coord_path = self.cache_basename + '_coords.npz'
 
             try:
                 xycoords = self.cci.download_raw_array(coord_path)
             except:
+                xycoords = self.get_xy_coord_values()
+                logger.debug(xycoords)
                 xycoords = self.cci.upload_raw_array(coord_path, xycoords)
 
         # elif self.memcached_connection is not None:
