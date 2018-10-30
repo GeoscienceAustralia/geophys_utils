@@ -50,7 +50,7 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 
 try:
     import cottoncandy as cc
-except ModuleNotFoundError:
+except:
     logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
     cc = None
 
