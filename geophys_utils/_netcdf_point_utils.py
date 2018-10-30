@@ -48,11 +48,11 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 #     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
 #     memcache = None
 
-try:
-    import cottoncandy
-except:
-    logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
-    cottoncandy = None
+# try:
+#     import cottoncandy
+# except:
+#     logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
+#     cottoncandy = None
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
