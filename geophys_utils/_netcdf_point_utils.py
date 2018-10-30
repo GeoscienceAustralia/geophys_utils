@@ -872,11 +872,15 @@ class NetCDFPointUtils(NetCDFUtils):
 
             coord_path = self.cache_basename + '_coords.npz'
 
-            try:
+            if self.cci.exists_object(coord_path) is True:
+                logger.debug(self.cci.exists_object(coord_path))
+                logger.debug('attempting to download array')
                 xycoords = self.cci.download_raw_array(coord_path)
-            except:
+            else:
+                logger.debug('getting xycoords')
                 xycoords = self.get_xy_coord_values()
                 logger.debug(xycoords)
+                logger.debug('attempting to upload array')
                 xycoords = self.cci.upload_raw_array(coord_path, xycoords)
 
         # elif self.memcached_connection is not None:
