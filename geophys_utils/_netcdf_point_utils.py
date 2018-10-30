@@ -48,6 +48,12 @@ except ModuleNotFoundError:
     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
     memcache = None
 
+try:
+    import cottoncandy as cc
+except ModuleNotFoundError:
+    logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
+    cc = None
+
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
 
@@ -71,6 +77,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
+                 s3_bucket=None,
                  debug=False):
         '''
         NetCDFPointUtils Constructor
@@ -90,6 +97,8 @@ class NetCDFPointUtils(NetCDFUtils):
             self.memcached_connection = memcached_connection
         else:
             self.memcached_connection = None
+
+        self.s3_bucket = s3_bucket
 
         self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
                                                      re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
@@ -841,9 +850,19 @@ class NetCDFPointUtils(NetCDFUtils):
         The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
         xycoords = None
+            # assert np.allclose(arr, arr_down)
+
         if self.enable_memory_cache and self._xycoords is not None:
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
+
+        elif self.s3_bucket is not None:
+            coord_path = self.cache_basename + '_coords.npz'
+            cci = cc.get_interface(self.s3_bucket, endpoint_url='https://s3.amazonaws.com')
+            try:
+                xycoords = cci.download_raw_array('coord_path')
+            except:
+                xycoords = cci.upload_raw_array(coord_path, xycoords)
 
         elif self.memcached_connection is not None:
             coord_cache_key = self.cache_basename + '_xycoords'
