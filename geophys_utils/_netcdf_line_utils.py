@@ -52,7 +52,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''     
         # Start of init function - Call inherited constructor first
         super().__init__(netcdf_dataset=netcdf_dataset, 
-                         memcached_connection=memcached_connection,
+                         #memcached_connection=memcached_connection,
                          enable_disk_cache=enable_disk_cache, 
                          enable_memory_cache=enable_memory_cache,
                          cache_path=cache_path,
