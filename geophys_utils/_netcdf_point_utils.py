@@ -37,6 +37,7 @@ from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
+import cottoncandy
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
@@ -48,11 +49,9 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 #     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
 #     memcache = None
 
-try:
-    import cottoncandy
-except:
-    logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
-    cottoncandy = None
+
+
+
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
