@@ -79,6 +79,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  enable_memory_cache=True,
                  cache_path=None,
                  s3_bucket=None,
+                 cci=None,
                  debug=False):
         '''
         NetCDFPointUtils Constructor
@@ -100,7 +101,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #     self.memcached_connection = None
 
         self.s3_bucket = s3_bucket
-        self.cci = cottoncandy.get_interface('kml-server-cache', endpoint_url='https://s3.amazonaws.com')
+        self.cci = cci
 
         self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
                                                      re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
