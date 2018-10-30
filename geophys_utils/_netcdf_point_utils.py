@@ -37,7 +37,6 @@ from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
 import logging
-import cottoncandy
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__)  # Get logger
@@ -49,9 +48,11 @@ logger.setLevel(logging.INFO)  # Initial logging level for this module
 #     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
 #     memcache = None
 
-
-
-
+try:
+    import cottoncandy
+except:
+    logger.warning('Unable to import cottoncandy. AWS-specific functionality will not be enabled')
+    cottoncandy = None
 
 # Default number of points to read per chunk when retrieving data
 DEFAULT_READ_CHUNK_SIZE = 8192
@@ -855,13 +856,14 @@ class NetCDFPointUtils(NetCDFUtils):
         xycoords = None
         # assert np.allclose(arr, arr_down)
         logger.debug(cottoncandy)
+        logger.debug(self.s3_bucket)
         if self.enable_memory_cache and self._xycoords is not None:
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
         elif self.s3_bucket is not None:
             coord_path = self.cache_basename + '_coords.npz'
-            cci = cottoncandy.get_interface(self.s3_bucket, endpoint_url='https://s3.amazonaws.com')
+            cci = cottoncandy.get_interface('kml-server-cache', endpoint_url='https://s3.amazonaws.com')
             try:
                 xycoords = cci.download_raw_array(coord_path)
             except:
