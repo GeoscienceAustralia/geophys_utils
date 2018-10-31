@@ -348,9 +348,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         #         logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
         #         self.memcached_connection.add(line_cache_key, line)
 
-
-
-            
         elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
         else: # No caching - read line from source file
@@ -374,11 +371,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line = None
         line_index = None
 
-
         if self.enable_memory_cache and self._line_index is not None:
             #logger.debug('Returning memory cached line_index')
             return self._line_index
-
 
         elif self.s3_bucket is not None:
             self.cache_path = self.cache_path + '_line_index'
