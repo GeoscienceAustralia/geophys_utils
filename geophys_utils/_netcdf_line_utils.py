@@ -42,6 +42,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
+                 s3_bucket=None,
+                 cci=None,
                  debug=False):
         '''
         NetCDFLineUtils Constructor
@@ -63,6 +65,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         # Initialise private property variables to None until set by property getter methods
         self._line = None
         self._line_index = None
+        self.s3_bucket = s3_bucket
+        self.cache_path = cache_path
             
         
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
@@ -303,22 +307,47 @@ class NetCDFLineUtils(NetCDFPointUtils):
             #logger.debug('Returning memory cached line')
             return self._line
 
-        elif self.memcached_connection is not None:
-            line_cache_key = self.cache_basename + '_line'
-            # line = self.memcached_connection.get(line_cache_key)
-            # if line is not None:
-            #     logger.debug('memcached key found at {}'.format(line_cache_key))
-            # else:
-            #     line = self.get_line_index_values()
-            #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_cache_key))
-            #     self.memcached_connection.add(line_cache_key, line)
-            line = self.memcached_connection.get(line_cache_key)
-            if line is not None:    
-                logger.debug('memcached key found at {}'.format(line_cache_key))
+
+
+        elif self.s3_bucket is not None:
+            if self.cci.exists_object(self.cache_path) is True:
+                logger.debug(self.cci.exists_object(self.cache_path))
+                logger.debug('attempting to download array')
+                line = self.cci.download_raw_array(self.cache_path)
+                logger.debug('download success')
+                logger.debug(np.shape(line))
+                logger.debug(line)
+
             else:
-                line = self.get_line_values()
-                logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
-                self.memcached_connection.add(line_cache_key, line)
+                logger.debug('getting xycoords')
+                line = self.get_line_index_values()
+                logger.debug(type(line))
+                logger.debug(np.shape(line))
+                logger.debug(line)
+                logger.debug('attempting to upload array')
+                self.cci.upload_raw_array(self.cache_path, line)
+                logger.debug('upload success')
+                return line
+
+        # elif self.memcached_connection is not None:
+        #     line_cache_key = self.cache_basename + '_line'
+        #     # line = self.memcached_connection.get(line_cache_key)
+        #     # if line is not None:
+        #     #     logger.debug('memcached key found at {}'.format(line_cache_key))
+        #     # else:
+        #     #     line = self.get_line_index_values()
+        #     #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_cache_key))
+        #     #     self.memcached_connection.add(line_cache_key, line)
+        #     line = self.memcached_connection.get(line_cache_key)
+        #     if line is not None:
+        #         logger.debug('memcached key found at {}'.format(line_cache_key))
+        #     else:
+        #         line = self.get_line_values()
+        #         logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
+        #         self.memcached_connection.add(line_cache_key, line)
+
+
+
             
         elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
