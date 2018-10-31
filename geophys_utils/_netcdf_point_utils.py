@@ -879,6 +879,8 @@ class NetCDFPointUtils(NetCDFUtils):
             else:
                 logger.debug('getting xycoords')
                 xycoords = self.get_xy_coord_values()
+                logger.debug(type(xycoords))
+                logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
                 logger.debug('attempting to upload array')
                 xycoords = self.cci.upload_raw_array(coord_path, xycoords)
