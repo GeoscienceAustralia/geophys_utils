@@ -311,11 +311,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
 
         elif self.s3_bucket is not None:
-            self.cache_path = self.cache_path + '_line'
-            if self.cci.exists_object(self.cache_path) is True:
-                logger.debug(self.cci.exists_object(self.cache_path))
+            s3_key = self.cache_path + '_line'
+            if self.cci.exists_object(s3_key) is True:
+                logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
-                line = self.cci.download_raw_array(self.cache_path)
+                line = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
                 logger.debug(np.shape(line))
                 logger.debug(line)
@@ -327,7 +327,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.debug(np.shape(line))
                 logger.debug(line)
                 logger.debug('attempting to upload array')
-                self.cci.upload_raw_array(self.cache_path, line)
+                self.cci.upload_raw_array(s3_key, line)
                 logger.debug('upload success')
                 return line
 
@@ -376,11 +376,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
             return self._line_index
 
         elif self.s3_bucket is not None:
-            self.cache_path = self.cache_path + '_line_index'
-            if self.cci.exists_object(self.cache_path) is True:
-                logger.debug(self.cci.exists_object(self.cache_path))
+            s3_key = self.cache_path + '_line_index'
+            if self.cci.exists_object(s3_key) is True:
+                logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
-                line_index = self.cci.download_raw_array(self.cache_path)
+                line_index = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
                 logger.debug(np.shape(line_index))
                 logger.debug(line_index)
@@ -392,7 +392,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.debug(np.shape(line_index))
                 logger.debug(line_index)
                 logger.debug('attempting to upload array')
-                self.cci.upload_raw_array(self.cache_path, line_index)
+                self.cci.upload_raw_array(s3_key, line_index)
                 logger.debug('upload success')
                 return line_index
         # elif self.memcached_connection is not None:
