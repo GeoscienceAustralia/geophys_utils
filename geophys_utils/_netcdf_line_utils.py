@@ -303,6 +303,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         line = None
         line_index = None
+
         if self.enable_memory_cache and self._line is not None:
             #logger.debug('Returning memory cached line')
             return self._line
@@ -310,6 +311,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
 
         elif self.s3_bucket is not None:
+            self.cache_path = self.cache_path + '_line'
             if self.cci.exists_object(self.cache_path) is True:
                 logger.debug(self.cci.exists_object(self.cache_path))
                 logger.debug('attempting to download array')
@@ -371,28 +373,51 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         line = None
         line_index = None
+
+
         if self.enable_memory_cache and self._line_index is not None:
             #logger.debug('Returning memory cached line_index')
             return self._line_index
 
-        elif self.memcached_connection is not None:
-            line_index_cache_key = self.cache_basename + '_line_index'
 
-            # line_index = self.memcached_connection.get(line_index_cache_key)
-            # if line_index is not None:
-            #     logger.debug('memcached key found at {}'.format(line_index_cache_key))
-            # else:
-            #     line_index = self.get_line_index_values()
-            #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_index_cache_key))
-            #     self.memcached_connection.add(line_index_cache_key, line_index)
+        elif self.s3_bucket is not None:
+            self.cache_path = self.cache_path + '_line_index'
+            if self.cci.exists_object(self.cache_path) is True:
+                logger.debug(self.cci.exists_object(self.cache_path))
+                logger.debug('attempting to download array')
+                line_index = self.cci.download_raw_array(self.cache_path)
+                logger.debug('download success')
+                logger.debug(np.shape(line_index))
+                logger.debug(line_index)
 
-            line_index = self.memcached_connection.get(line_index_cache_key)
-            if line_index is not None:
-                logger.debug('memcached key found at {}'.format(line_index_cache_key))
             else:
+                logger.debug('getting xycoords')
                 line_index = self.get_line_index_values()
-                logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
-                self.memcached_connection.add(line_index_cache_key, line_index)
+                logger.debug(type(line_index))
+                logger.debug(np.shape(line_index))
+                logger.debug(line_index)
+                logger.debug('attempting to upload array')
+                self.cci.upload_raw_array(self.cache_path, line_index)
+                logger.debug('upload success')
+                return line_index
+        # elif self.memcached_connection is not None:
+        #     line_index_cache_key = self.cache_basename + '_line_index'
+        #
+        #     # line_index = self.memcached_connection.get(line_index_cache_key)
+        #     # if line_index is not None:
+        #     #     logger.debug('memcached key found at {}'.format(line_index_cache_key))
+        #     # else:
+        #     #     line_index = self.get_line_index_values()
+        #     #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_index_cache_key))
+        #     #     self.memcached_connection.add(line_index_cache_key, line_index)
+        #
+        #     line_index = self.memcached_connection.get(line_index_cache_key)
+        #     if line_index is not None:
+        #         logger.debug('memcached key found at {}'.format(line_index_cache_key))
+        #     else:
+        #         line_index = self.get_line_index_values()
+        #         logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
+        #         self.memcached_connection.add(line_index_cache_key, line_index)
 
         elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
