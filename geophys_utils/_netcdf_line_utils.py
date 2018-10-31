@@ -67,6 +67,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line = None
         self._line_index = None
         self.s3_bucket = s3_bucket
+        self.cci = cci
 
         
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
