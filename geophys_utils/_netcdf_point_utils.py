@@ -859,9 +859,9 @@ class NetCDFPointUtils(NetCDFUtils):
         # assert np.allclose(arr, arr_down)
         logger.debug(cottoncandy)
         logger.debug(self.s3_bucket)
-        if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates')
-            return self._xycoords
+        # if self.enable_memory_cache and self._xycoords is not None:
+        #     logger.debug('Returning memory cached coordinates')
+        #     return self._xycoords
 
         if self.s3_bucket is not None:
 
