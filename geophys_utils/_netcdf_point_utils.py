@@ -103,11 +103,11 @@ class NetCDFPointUtils(NetCDFUtils):
         self.s3_bucket = s3_bucket
         self.cci = cci
 
-        self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
-                                                     re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
-
-        self.cache_basename = os.path.join(self.cache_path,
-                                           re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
+        # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
+        #                                              re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
+        self.cache_path = cache_path
+        #self.cache_basename = os.path.join(self.cache_path,
+                                          # re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
 
         logger.debug('self.cache_path')
         logger.debug(self.cache_path)
@@ -864,18 +864,11 @@ class NetCDFPointUtils(NetCDFUtils):
             return self._xycoords
 
         elif self.s3_bucket is not None:
-            logger.debug("uploading test array")
-            # xycoords = self.cci.upload_raw_array('test', np.array([1,2,3]))
-            # logger.debug(xycoords)
-            # xycoords = self.cci.download_raw_array('test')
-            # logger.debug(xycoords)
 
-            coord_path = self.cache_basename + '_coords.npz'
-
-            if self.cci.exists_object(coord_path) is True:
-                logger.debug(self.cci.exists_object(coord_path))
+            if self.cci.exists_object(self.cache_path) is True:
+                logger.debug(self.cci.exists_object(self.cache_path))
                 logger.debug('attempting to download array')
-                xycoords = self.cci.download_raw_array(coord_path)
+                xycoords = self.cci.download_raw_array(self.cache_path)
                 logger.debug('download success')
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
@@ -887,7 +880,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
                 logger.debug('attempting to upload array')
-                self.cci.upload_raw_array(coord_path, xycoords)
+                self.cci.upload_raw_array(self.cache_path, xycoords)
                 logger.debug('upload success')
                 return xycoords
 
