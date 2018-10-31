@@ -67,8 +67,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line = None
         self._line_index = None
         self.s3_bucket = s3_bucket
-        cache_path=os.path.join(self.cache_dir, re.sub('\.nc$', '_cache.nc', dataset_metadata_dict['netcdf_basename']))
-            
+
         
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''
