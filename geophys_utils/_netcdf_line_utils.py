@@ -320,7 +320,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
             else:
                 logger.debug('getting xycoords')
-                line = self.get_line_index_values()
+                line = self.get_line_values()
                 logger.debug(type(line))
                 logger.debug(np.shape(line))
                 logger.debug(line)
