@@ -165,6 +165,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
             if line_point_count: # This test should be redundant
                 # Use subset of indices if stride is set
                 if subsampling_distance:
+                    self.cache_path = re.sub('/tmp', '', self.cache_path)
+                    logger.debug(self.xycoords)
                     line_length = pdist([self.xycoords[point_indices[0]], self.xycoords[point_indices[-1]]])[0]
                     logger.debug('line_length: {}'.format(line_length))
                     stride = max(1, int(line_point_count/max(1, line_length/subsampling_distance)))

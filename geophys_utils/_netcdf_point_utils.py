@@ -859,12 +859,16 @@ class NetCDFPointUtils(NetCDFUtils):
         # assert np.allclose(arr, arr_down)
         logger.debug(cottoncandy)
         logger.debug(self.s3_bucket)
+
         # if self.enable_memory_cache and self._xycoords is not None:
         #     logger.debug('Returning memory cached coordinates')
         #     return self._xycoords
 
         if self.s3_bucket is not None:
-
+            s3_key = self.cache_path
+            # if _ point:
+            #     s3_key = re.sub('/tmp', '', self.cache_path)
+            #     s3_key = re.sub('.nc', '_line_narray', s3_key)
             if self.cci.exists_object(self.cache_path) is True:
                 logger.debug(self.cci.exists_object(self.cache_path))
                 logger.debug('attempting to download array')
