@@ -863,7 +863,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
-        elif self.s3_bucket is not None:
+        if self.s3_bucket is not None:
 
             if self.cci.exists_object(self.cache_path) is True:
                 logger.debug(self.cci.exists_object(self.cache_path))
