@@ -879,6 +879,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('download success')
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
+
             else:
                 logger.debug('getting xycoords')
                 xycoords = self.get_xy_coord_values()
@@ -888,6 +889,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('attempting to upload array')
                 xycoords = self.cci.upload_raw_array(coord_path, xycoords)
                 logger.debug('upload success')
+                return xycoords
 
         # elif self.memcached_connection is not None:
         #     coord_cache_key = self.cache_basename + '_xycoords'
