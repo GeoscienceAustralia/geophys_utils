@@ -876,6 +876,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('download success')
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
+                return xycoords
 
             else:
                 logger.debug('getting xycoords')
