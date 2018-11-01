@@ -321,6 +321,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.debug('download success')
                 logger.debug(np.shape(line))
                 logger.debug(line)
+                return line
 
             else:
                 logger.debug('getting xycoords')
@@ -386,6 +387,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.debug('download success')
                 logger.debug(np.shape(line_index))
                 logger.debug(line_index)
+                #return line_index
 
             else:
                 logger.debug('getting xycoords')
@@ -396,7 +398,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 logger.debug('attempting to upload array')
                 self.cci.upload_raw_array(s3_key, line_index)
                 logger.debug('upload success')
-                return line_index
+                #return line_index
         # elif self.memcached_connection is not None:
         #     line_index_cache_key = self.cache_basename + '_line_index'
         #
