@@ -39,11 +39,11 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
     def __init__(self, 
                  netcdf_dataset,
-                 memcached_connection=None,
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
                  s3_bucket=None,
+                 s3_path_key=None,
                  cci=None,
                  debug=False):
         '''
@@ -67,6 +67,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line = None
         self._line_index = None
         self.s3_bucket = s3_bucket
+        self.s3_path_key = s3_path_key
         self.cci = cci
 
         
@@ -312,8 +313,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
 
         elif self.s3_bucket is not None:
-            s3_key = re.sub('/tmp', '', self.cache_path)
-            s3_key = re.sub('.nc', '_line_narray', s3_key)
+            s3_key = self.s3_path_key + '_line_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
@@ -378,8 +378,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             return self._line_index
 
         elif self.s3_bucket is not None:
-            s3_key = re.sub('/tmp', '', self.cache_path)
-            s3_key = re.sub('.nc', '_line_index_narray', s3_key)
+            s3_key = self.s3_path_key + '_line_index_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')

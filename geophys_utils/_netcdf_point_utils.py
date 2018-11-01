@@ -79,6 +79,7 @@ class NetCDFPointUtils(NetCDFUtils):
                  enable_memory_cache=True,
                  cache_path=None,
                  s3_bucket=None,
+                 s3_path_key=None,
                  cci=None,
                  debug=False):
         '''
@@ -99,7 +100,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #     self.memcached_connection = memcached_connection
         # else:
         #     self.memcached_connection = None
-
+        self.s3_path_key = s3_path_key
         self.s3_bucket = s3_bucket
         self.cci = cci
 
@@ -865,14 +866,12 @@ class NetCDFPointUtils(NetCDFUtils):
         #     return self._xycoords
 
         if self.s3_bucket is not None:
-            s3_key = self.cache_path
-            # if _ point:
-            #     s3_key = re.sub('/tmp', '', self.cache_path)
-            #     s3_key = re.sub('.nc', '_line_narray', s3_key)
-            if self.cci.exists_object(self.cache_path) is True:
-                logger.debug(self.cci.exists_object(self.cache_path))
+            s3_key = self.s3_path_key + '_xycoords'
+
+            if self.cci.exists_object(s3_key) is True:
+                logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
-                xycoords = self.cci.download_raw_array(self.cache_path)
+                xycoords = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
@@ -884,7 +883,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
                 logger.debug('attempting to upload array')
-                self.cci.upload_raw_array(self.cache_path, xycoords)
+                self.cci.upload_raw_array(s3_key, xycoords)
                 logger.debug('upload success')
                 return xycoords
 
