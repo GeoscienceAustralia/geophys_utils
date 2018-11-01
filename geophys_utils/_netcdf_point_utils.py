@@ -876,7 +876,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('download success')
                 logger.debug(np.shape(xycoords))
                 logger.debug(xycoords)
-                return xycoords
+                #return xycoords
 
             else:
                 logger.debug('getting xycoords')
@@ -887,7 +887,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('attempting to upload array')
                 self.cci.upload_raw_array(s3_key, xycoords)
                 logger.debug('upload success')
-                return xycoords
+                #return xycoords
 
         # elif self.memcached_connection is not None:
         #     coord_cache_key = self.cache_basename + '_xycoords'
