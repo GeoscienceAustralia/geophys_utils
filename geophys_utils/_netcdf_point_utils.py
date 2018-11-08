@@ -868,6 +868,7 @@ class NetCDFPointUtils(NetCDFUtils):
         if self.s3_bucket is not None:
             s3_key = re.sub('.nc', '_xycoords_narray', self.s3_path_key)
             logger.debug(s3_key)
+            logger.debug(self.cci)
 
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
