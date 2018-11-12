@@ -872,6 +872,8 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug("exists?: " + str(self.cci.exists_object(s3_key)))
             dict1 = self.cci.cloud2dict(s3_key)
             logger.debug("DICT: " + str(dict1))
+            objects = self.cci.show_objects()
+            logger.debug("OBJECTS IN BUCKET: " + str(objects))
             #cottoncandy.cloud2dict()
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
