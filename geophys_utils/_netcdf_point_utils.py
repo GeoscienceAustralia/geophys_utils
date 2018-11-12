@@ -870,7 +870,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug(s3_key)
             logger.debug(self.cci)
             logger.debug(self.cci.exists_object(s3_key))
-            dict1 = self.cci.cloud2dict('magnetic_lines')
+            dict1 = self.cci.cloud2dict(s3_key)
             print("DICT: " + str(dict1))
             #cottoncandy.cloud2dict()
             if self.cci.exists_object(s3_key) is True:
