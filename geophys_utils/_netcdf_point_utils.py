@@ -869,7 +869,10 @@ class NetCDFPointUtils(NetCDFUtils):
             s3_key = re.sub('.nc', '_xycoords_narray', self.s3_path_key)
             logger.debug(s3_key)
             logger.debug(self.cci)
-
+            logger.debug(self.cci.exists_object(s3_key))
+            dict1 = self.cci.cloud2dict('magnetic_lines')
+            print("DICT: " + str(dict1))
+            #cottoncandy.cloud2dict()
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
