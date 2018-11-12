@@ -201,7 +201,7 @@ class NetCDFGridUtils(NetCDFUtils):
         wkt = wkt or self.wkt
         native_coordinates = transform_coords(coordinates, self.wkt, wkt)
 
-        self.pixel_size
+        #self.pixel_size
 
         # Convert coordinates to same order as array
         if self.YX_order:
@@ -303,7 +303,7 @@ class NetCDFGridUtils(NetCDFUtils):
         # TODO: Check behaviour of scipy.ndimage.map_coordinates adjacent to no-data areas. Should not interpolate no-data value
         # TODO: Make this work for arrays > memory
         max_bytes = max_bytes or 100
-        NetCDFGridUtils.DEFAULT_MAX_BYTES
+        #NetCDFGridUtils.DEFAULT_MAX_BYTES
 
         if variable_name:
             data_variable = self.netcdf_dataset.variables[variable_name]
