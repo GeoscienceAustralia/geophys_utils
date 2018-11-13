@@ -117,10 +117,10 @@ class NetCDFPointUtils(NetCDFUtils):
         self.enable_memory_cache = enable_memory_cache
 
         # If caching is not explicitly specified, enable it for OPeNDAP access
-        if enable_disk_cache is None:
-            self.enable_disk_cache = self.opendap
-        else:
-            self.enable_disk_cache = enable_disk_cache
+        # if enable_disk_cache is None:
+        #     self.enable_disk_cache = self.opendap
+        # else:
+        #     self.enable_disk_cache = enable_disk_cache
 
         # Initialise private property variables to None until set by property getter methods
         self._xycoords = None
