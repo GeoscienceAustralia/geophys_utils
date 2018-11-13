@@ -324,7 +324,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 return line
 
             else:
-                logger.debug('getting xycoords')
+                logger.debug('uploading line')
                 line = self.get_line_values()
                 logger.debug(type(line))
                 logger.debug(np.shape(line))
@@ -390,7 +390,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 #return line_index
 
             else:
-                logger.debug('getting xycoords')
+                logger.debug('getting line_idex')
                 line_index = self.get_line_index_values()
                 logger.debug(type(line_index))
                 logger.debug(np.shape(line_index))
