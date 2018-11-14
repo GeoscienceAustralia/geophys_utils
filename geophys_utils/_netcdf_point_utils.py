@@ -949,17 +949,6 @@ class NetCDFPointUtils(NetCDFUtils):
 
         
     @property
-    def wgs84_bbox(self):
-        '''
-        Property getter function to return wgs84_bbox as required
-        '''
-        if not self._wgs84_bbox:
-            logger.debug('Setting wgs84_bbox property')
-            self._wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
-        return self._wgs84_bbox
-
-
-    @property
     def kdtree(self):
         '''
         Property getter function to return data_variable_list as required

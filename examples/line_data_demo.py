@@ -14,7 +14,7 @@ import requests
 import math
 from scipy.interpolate import griddata
 from geophys_utils import transform_coords, get_utm_wkt, get_spatial_ref_from_wkt
-from geophys_utils._csw_utils import date_string2datetime
+from geophys_utils import date_string2datetime
 
 
 # Setup proxy as required

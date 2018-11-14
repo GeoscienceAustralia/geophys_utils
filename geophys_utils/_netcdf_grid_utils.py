@@ -159,8 +159,6 @@ class NetCDFGridUtils(NetCDFUtils):
                                                                    ]
                             ]
         
-        self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
-
         # Create bounds
         self.bounds = self.native_bbox[0] + self.native_bbox[2]
 
