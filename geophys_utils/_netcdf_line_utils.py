@@ -42,6 +42,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
+                 enable_s3_cache=None,
                  s3_bucket=None,
                  s3_path_key=None,
                  cci=None,
