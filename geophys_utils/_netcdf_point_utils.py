@@ -912,7 +912,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #         self.memcached_connection.add(coord_cache_key, xycoords)
 
 
-        elif self.enable_disk_cache is True:
+        elif self.enable_disk_cache is True and self.s3_bucket is None:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
