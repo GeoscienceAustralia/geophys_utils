@@ -106,7 +106,6 @@ class NetCDFPointUtils(NetCDFUtils):
         # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
         #                                              re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
         self.cache_path = cache_path
-        self.enable_s3_cache = enable_s3_cache
         #=self.cache_basename = os.path.join(self.cache_path,
                                           # re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
 
@@ -117,7 +116,7 @@ class NetCDFPointUtils(NetCDFUtils):
         self.enable_memory_cache = enable_memory_cache
 
         # If caching is not explicitly specified, enable it for OPeNDAP access
-        if enable_disk_cache is False and enable_s3_cache is None:
+        if enable_disk_cache is False:
             self.enable_disk_cache = self.opendap
         else:
             self.enable_disk_cache = enable_disk_cache
