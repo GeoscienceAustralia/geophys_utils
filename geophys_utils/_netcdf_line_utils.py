@@ -256,7 +256,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 if line_index is None:
                     line_index = self.get_line_index_values()
                 
-                os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+                #os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
                 if os.path.isfile(self.cache_path):
                     cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
                 else:
