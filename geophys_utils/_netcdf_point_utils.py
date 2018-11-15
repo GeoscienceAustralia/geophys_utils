@@ -866,6 +866,9 @@ class NetCDFPointUtils(NetCDFUtils):
             return self._xycoords
 
         if self.s3_bucket is not None:
+            logger.debug("S3 ----------------------------------------")
+            logger.debug(self.enable_disk_cache)
+            logger.debug(self.s3_bucket)
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
             logger.debug(s3_key)
             logger.debug(self.cci)
@@ -913,6 +916,10 @@ class NetCDFPointUtils(NetCDFUtils):
 
 
         elif self.enable_disk_cache is True and self.s3_bucket is None:
+
+            logger.debug("CACHE -----------------------------------")
+            logger.debug(self.enable_disk_cache)
+            logger.debug(self.s3_bucket)
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
