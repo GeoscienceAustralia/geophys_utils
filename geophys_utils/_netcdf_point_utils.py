@@ -74,11 +74,9 @@ class NetCDFPointUtils(NetCDFUtils):
 
     def __init__(self,
                  netcdf_dataset,
-                 # memcached_connection=None,
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
-                 enable_s3_cache=None,
                  s3_bucket=None,
                  cci=None,
                  debug=False):
