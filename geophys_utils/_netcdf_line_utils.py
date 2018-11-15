@@ -226,7 +226,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line = None
         line_index = None
 
-        if self.enable_disk_cache:
+        if self.enable_disk_cache is True:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
@@ -356,7 +356,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         #         logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
         #         self.memcached_connection.add(line_cache_key, line)
 
-        elif self.enable_disk_cache:
+        elif self.enable_disk_cache is True:
             line, line_index = self.get_cached_line_arrays()           
         else: # No caching - read line from source file
             line = self.get_line_values()
@@ -423,7 +423,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         #         logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
         #         self.memcached_connection.add(line_index_cache_key, line_index)
 
-        elif self.enable_disk_cache:
+        elif self.enable_disk_cache is True:
             line, line_index = self.get_cached_line_arrays()           
         else:  # No caching - read line_index from source file
             line = None
