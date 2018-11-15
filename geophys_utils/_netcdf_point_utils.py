@@ -861,9 +861,9 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.debug(cottoncandy)
         logger.debug(self.s3_bucket)
 
-        # if self.enable_memory_cache and self._xycoords is not None:
-        #     logger.debug('Returning memory cached coordinates')
-        #     return self._xycoords
+        if self.enable_memory_cache and self._xycoords is not None:
+            logger.debug('Returning memory cached coordinates')
+            return self._xycoords
 
         if self.enable_s3_cache is not None and self.s3_bucket is not None:
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
