@@ -117,7 +117,7 @@ class NetCDFPointUtils(NetCDFUtils):
         self.enable_memory_cache = enable_memory_cache
 
         # If caching is not explicitly specified, enable it for OPeNDAP access
-        if enable_disk_cache is None and enable_s3_cache is None:
+        if enable_disk_cache is False and enable_s3_cache is None:
             self.enable_disk_cache = self.opendap
         else:
             self.enable_disk_cache = enable_disk_cache
@@ -912,7 +912,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #         self.memcached_connection.add(coord_cache_key, xycoords)
 
 
-        elif self.enable_disk_cache is not None:
+        elif self.enable_disk_cache is True:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
