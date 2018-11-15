@@ -100,7 +100,9 @@ class NetCDFPointUtils(NetCDFUtils):
         #     self.memcached_connection = memcached_connection
         # else:
         #     self.memcached_connection = None
-        self.s3_bucket = s3_bucket
+        self.s3_bucket = 'kml-server-cache'
+        logger.debug("BUCKET NAME")
+        logger.debug(self.s3_bucket)
         self.cci = cci
 
         # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
