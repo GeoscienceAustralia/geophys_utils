@@ -387,11 +387,13 @@ class NetCDFPointUtils(NetCDFUtils):
         return coords2distance(utm_coord_array)
 
 
-    def get_convex_hull(self):
+    def get_convex_hull(self, to_wkt=None):
         '''
         Function to return vertex coordinates of a convex hull polygon around all points
         '''
-        return points2convex_hull(self.xycoords)
+        convex_hull = points2convex_hull(self.xycoords)
+    
+        return transform_coords(convex_hull, self.wkt, to_wkt)
     
     
     def nearest_neighbours(self, coordinates, 

@@ -117,7 +117,10 @@ def points2convex_hull(point_list, dilation=0, tolerance=0):
         convex_hull = convex_hull.simplify(tolerance)
     
     # Convert polygon to list
-    return [coordinates for coordinates in convex_hull.exterior.coords]
+    try:
+        return [coordinates for coordinates in convex_hull.exterior.coords]
+    except AttributeError:
+        return [coordinates for coordinates in convex_hull.coords]
 
 
 def netcdf2convex_hull(netcdf_dataset, max_bytes=None):
