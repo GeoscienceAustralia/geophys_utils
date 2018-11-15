@@ -932,6 +932,13 @@ class NetCDFPointUtils(NetCDFUtils):
                 xycoords = self.get_xy_coord_values()  # read coords from source file
 
                 #os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
+                try:
+                    original_umask = os.umask(0)
+                    os.makedirs(self.cache_path, mode=0o777, exist_ok=True)
+                finally:
+                    os.umask(original_umask)
+
+
                 if os.path.isfile(self.cache_path):
                     cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
                 else:
