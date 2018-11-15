@@ -42,7 +42,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  enable_disk_cache=None,
                  enable_memory_cache=True,
                  cache_path=None,
-                 enable_s3_cache=None,
                  s3_bucket=None,
                  cci=None,
                  debug=False):
@@ -68,6 +67,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self.s3_bucket = s3_bucket
         #self.s3_path_key = s3_path_key
         self.cci = cci
+        self.cache_path = cache_path
 
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''
@@ -315,10 +315,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
             #logger.debug('Returning memory cached line')
             return self._line
 
-
-
         elif self.s3_bucket is not None:
-            s3_key = self.s3_path_key + '_line_narray'
+            s3_key = self.cache_path + '_line_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
@@ -384,7 +382,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             return self._line_index
 
         elif self.s3_bucket is not None:
-            s3_key = self.s3_path_key + '_line_index_narray'
+            s3_key = self.cache_path + '_line_index_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
                 logger.debug('attempting to download array')
