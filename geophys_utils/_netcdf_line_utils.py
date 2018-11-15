@@ -44,7 +44,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
                  cache_path=None,
                  enable_s3_cache=None,
                  s3_bucket=None,
-                 s3_path_key=None,
                  cci=None,
                  debug=False):
         '''
@@ -56,8 +55,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''     
         # Start of init function - Call inherited constructor first
         super().__init__(netcdf_dataset=netcdf_dataset, 
-                         #memcached_connection=memcached_connection,
-                         enable_disk_cache=enable_disk_cache, 
+                         enable_disk_cache=enable_disk_cache,
                          enable_memory_cache=enable_memory_cache,
                          cache_path=cache_path,
                          debug=debug)
@@ -68,10 +66,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         self._line = None
         self._line_index = None
         self.s3_bucket = s3_bucket
-        self.s3_path_key = s3_path_key
+        #self.s3_path_key = s3_path_key
         self.cci = cci
 
-        
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
@@ -85,7 +82,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''       
         # Yield masks for all lines in subset if no line numbers specified
         if line_numbers is None:
-            line_number_subset = self.line # All line numbers
+            line_number_subset = self.line  # All line numbers
         else:
             # Convert single line number to single element list
             try:

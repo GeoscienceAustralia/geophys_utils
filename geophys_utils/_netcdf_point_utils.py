@@ -80,7 +80,6 @@ class NetCDFPointUtils(NetCDFUtils):
                  cache_path=None,
                  enable_s3_cache=None,
                  s3_bucket=None,
-                 s3_path_key=None,
                  cci=None,
                  debug=False):
         '''
@@ -101,14 +100,14 @@ class NetCDFPointUtils(NetCDFUtils):
         #     self.memcached_connection = memcached_connection
         # else:
         #     self.memcached_connection = None
-        self.s3_path_key = s3_path_key
         self.s3_bucket = s3_bucket
         self.cci = cci
 
         # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
         #                                              re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
         self.cache_path = cache_path
-        #self.cache_basename = os.path.join(self.cache_path,
+        self.enable_s3_cache = enable_s3_cache
+        #=self.cache_basename = os.path.join(self.cache_path,
                                           # re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
 
         logger.debug('self.cache_path')
@@ -867,7 +866,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #     return self._xycoords
 
         if self.enable_s3_cache is not None and self.s3_bucket is not None:
-            s3_key = re.sub('.nc', '_xycoords_narray', self.s3_path_key)
+            s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
             logger.debug(s3_key)
             logger.debug(self.cci)
             logger.debug("exists?: " + str(self.cci.exists_object(s3_key)))
