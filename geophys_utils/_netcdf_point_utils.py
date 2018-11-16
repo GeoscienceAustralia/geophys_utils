@@ -870,7 +870,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug(self.enable_disk_cache)
             logger.debug(self.s3_bucket)
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
-            logger.debug(s3_key)
+            logger.debug("s3_key: {}".format(s3_key))
             logger.debug(self.cci)
             logger.debug("exists?: " + str(self.cci.exists_object(s3_key)))
             #dict1 = self.cci.cloud2dict(s3_key)
