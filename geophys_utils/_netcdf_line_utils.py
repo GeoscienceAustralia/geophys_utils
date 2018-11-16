@@ -321,20 +321,20 @@ class NetCDFLineUtils(NetCDFPointUtils):
             s3_key = self.cache_path + '_line_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
-                logger.debug('attempting to download array')
+                logger.debug('attempting to download line array')
                 line = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
-                logger.debug(np.shape(line))
-                logger.debug(line)
+                # logger.debug(np.shape(line))
+                # logger.debug(line)
                 return line
 
             else:
                 logger.debug('uploading line')
                 line = self.get_line_values()
-                logger.debug(type(line))
-                logger.debug(np.shape(line))
-                logger.debug(line)
-                logger.debug('attempting to upload array')
+                # logger.debug(type(line))
+                # logger.debug(np.shape(line))
+                # logger.debug(line)
+                logger.debug('attempting to upload line array')
                 self.cci.upload_raw_array(s3_key, line)
                 logger.debug('upload success')
                 return line
@@ -387,20 +387,20 @@ class NetCDFLineUtils(NetCDFPointUtils):
             s3_key = self.cache_path + '_line_index_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug(self.cci.exists_object(s3_key))
-                logger.debug('attempting to download array')
+                logger.debug('attempting to download line index array')
                 line_index = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
                 logger.debug(np.shape(line_index))
-                logger.debug(line_index)
+                # logger.debug(line_index)
                 #return line_index
 
             else:
                 logger.debug('getting line_idex')
                 line_index = self.get_line_index_values()
-                logger.debug(type(line_index))
-                logger.debug(np.shape(line_index))
-                logger.debug(line_index)
-                logger.debug('attempting to upload array')
+                # logger.debug(type(line_index))
+                # logger.debug(np.shape(line_index))
+                # logger.debug(line_index)
+                logger.debug('attempting to upload line index array')
                 self.cci.upload_raw_array(s3_key, line_index)
                 logger.debug('upload success')
                 #return line_index
