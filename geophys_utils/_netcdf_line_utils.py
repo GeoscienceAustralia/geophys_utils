@@ -57,6 +57,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                          enable_disk_cache=enable_disk_cache,
                          enable_memory_cache=enable_memory_cache,
                          cache_path=cache_path,
+                         s3_bucket=s3_bucket,
+                         cci=cci,
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
