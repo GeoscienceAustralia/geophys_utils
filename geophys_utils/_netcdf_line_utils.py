@@ -314,9 +314,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_index = None
 
         # Memory Caching
-        # if self.enable_memory_cache and self._line is not None:
-        #     logger.debug('Returning memory cached line')
-        #     return self._line
+        if self.enable_memory_cache and self._line is not None:
+            logger.debug('Returning memory cached line')
+            return self._line
 
         # S3 Caching
         if self.s3_bucket is not None:
@@ -358,9 +358,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_index = None
 
         # Memory Caching
-        # if self.enable_memory_cache and self._line_index is not None:
-        #     logger.debug('Returning memory cached line_index')
-        #     return self._line_index
+        if self.enable_memory_cache and self._line_index is not None:
+            logger.debug('Returning memory cached line_index')
+            return self._line_index
 
         # S3 Caching
         if self.s3_bucket is not None:
