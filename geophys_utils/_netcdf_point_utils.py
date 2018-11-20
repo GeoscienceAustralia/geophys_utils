@@ -880,12 +880,12 @@ class NetCDFPointUtils(NetCDFUtils):
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
                 if 'xycoords' in cache_dataset.variables.keys():
                     xycoords = cache_dataset.variables['xycoords'][:]
-                    #logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
+                    logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
                 else:
-                   # logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))
+                    logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))
                 cache_dataset.close()
             else:
-                #logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
+                logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
 
             if xycoords is None:
                 xycoords = self.get_xy_coord_values()  # read coords from source file
