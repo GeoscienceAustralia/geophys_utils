@@ -315,24 +315,24 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
         # Memory Caching
         if self.enable_memory_cache and self._line is not None:
-            logger.debug('Returning memory cached line')
+            #logger.debug('Returning memory cached line')
             return self._line
 
         # S3 Caching
         if self.s3_bucket is not None:
             s3_key = self.cache_path + '_line_narray'
             if self.cci.exists_object(s3_key) is True:
-                logger.debug('attempting to download line array')
+                #logger.debug('attempting to download line array')
                 line = self.cci.download_raw_array(s3_key)
-                logger.debug('download success')
+                #logger.debug('download success')
                 return line
 
             else:
-                logger.debug('uploading line array')
+                #logger.debug('uploading line array')
                 line = self.get_line_values()
-                logger.debug('attempting to upload line array')
+                #logger.debug('attempting to upload line array')
                 self.cci.upload_raw_array(s3_key, line)
-                logger.debug('upload success')
+                #logger.debug('upload success')
                 return line
 
         elif self.enable_disk_cache is True:
