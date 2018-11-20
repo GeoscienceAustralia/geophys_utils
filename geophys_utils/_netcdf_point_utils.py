@@ -866,7 +866,6 @@ class NetCDFPointUtils(NetCDFUtils):
             return self._xycoords
 
         if self.s3_bucket is not None:
-            logger.debug('attempting to download xycoords array from s3.')
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
             if self.cci.exists_object(s3_key) is True:
                 logger.debug('attempting to download xycoords array from s3.')
