@@ -99,11 +99,7 @@ class NetCDFPointUtils(NetCDFUtils):
         # else:
         #     self.memcached_connection = None
         self.s3_bucket = 'kml-server-cache'
-        logger.debug("BUCKET NAME")
-        logger.debug(self.s3_bucket)
         self.cci = cci
-        logger.debug("CCI")
-        logger.debug(cci)
         # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
         #                                              re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
         self.cache_path = cache_path
