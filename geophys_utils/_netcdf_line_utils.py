@@ -314,12 +314,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_index = None
 
         # Memory Caching
-        if self.enable_memory_cache and self._line is not None:
-            logger.debug('Returning memory cached line')
-            return self._line
+        # if self.enable_memory_cache and self._line is not None:
+        #     logger.debug('Returning memory cached line')
+        #     return self._line
 
         # S3 Caching
-        elif self.s3_bucket is not None:
+        if self.s3_bucket is not None:
             s3_key = self.cache_path + '_line_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug('attempting to download line array')
@@ -340,7 +340,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         else:  # No caching - read line from source file
             line = self.get_line_values()
             line_index = None
-            
+
         # Disk Caching
         if self.enable_memory_cache:
             self._line = line
@@ -358,12 +358,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_index = None
 
         # Memory Caching
-        if self.enable_memory_cache and self._line_index is not None:
-            logger.debug('Returning memory cached line_index')
-            return self._line_index
+        # if self.enable_memory_cache and self._line_index is not None:
+        #     logger.debug('Returning memory cached line_index')
+        #     return self._line_index
 
         # S3 Caching
-        elif self.s3_bucket is not None:
+        if self.s3_bucket is not None:
             s3_key = self.cache_path + '_line_index_narray'
             if self.cci.exists_object(s3_key) is True:
                 logger.debug('attempting to download line index array')
