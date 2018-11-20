@@ -853,42 +853,39 @@ class NetCDFPointUtils(NetCDFUtils):
         The order of priority for retrieval is memory, memcached, disk cache then dataset.
         '''
         xycoords = None
-        # assert np.allclose(arr, arr_down)
-        logger.debug(cottoncandy)
-        logger.debug(self.s3_bucket)
 
         if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates.')
+            #logger.debug('Returning memory cached coordinates.')
             return self._xycoords
 
         if self.s3_bucket is not None:
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
             if self.cci.exists_object(s3_key) is True:
-                logger.debug('attempting to download xycoords array from s3.')
+                #logger.debug('attempting to download xycoords array from s3.')
                 xycoords = self.cci.download_raw_array(s3_key)
-                logger.debug('download success')
+                #logger.debug('download success')
 
             else:
-                logger.debug('getting xycoord values')
+                #logger.debug('getting xycoord values')
                 xycoords = self.get_xy_coord_values()
-                logger.debug('attempting to upload xycoords array to s3.')
+               # logger.debug('attempting to upload xycoords array to s3.')
                 self.cci.upload_raw_array(s3_key, xycoords)
-                logger.debug('Upload success')
+                #logger.debug('Upload success')
 
         elif self.enable_disk_cache is True and self.s3_bucket is None:
-            logger.debug("Retrieving xycoords array from local cache.")
+           # logger.debug("Retrieving xycoords array from local cache.")
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
-                logger.debug("Reading values.")
+                #logger.debug("Reading values.")
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
                 if 'xycoords' in cache_dataset.variables.keys():
                     xycoords = cache_dataset.variables['xycoords'][:]
-                    logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
+                    #logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
                 else:
-                    logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))
+                   # logger.debug('Unable to read xycoords variable from netCDF cache file {}'.format(self.cache_path))
                 cache_dataset.close()
             else:
-                logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
+                #logger.debug('NetCDF cache file {} does not exist'.format(self.cache_path))
 
             if xycoords is None:
                 xycoords = self.get_xy_coord_values()  # read coords from source file
