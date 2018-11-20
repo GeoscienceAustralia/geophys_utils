@@ -862,70 +862,30 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.debug(self.s3_bucket)
 
         if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates')
+            logger.debug('Returning memory cached coordinates.')
             return self._xycoords
 
         if self.s3_bucket is not None:
-            # logger.debug("S3 ----------------------------------------")
-            # logger.debug(self.enable_disk_cache)
-            # logger.debug(self.s3_bucket)
+            logger.debug('attempting to download xycoords array from s3.')
             s3_key = re.sub('.nc', '_xycoords_narray', self.cache_path)
-            # logger.debug("s3_key: {}".format(s3_key))
-            # logger.debug(self.cci)
-            # logger.debug("exists?: " + str(self.cci.exists_object(s3_key)))
-            #dict1 = self.cci.cloud2dict(s3_key)
-            #logger.debug("DICT: " + str(dict1))
-            #objects = self.cci.show_objects()
-            #logger.debug("OBJECTS IN BUCKET: " + str(objects))
-            #cottoncandy.cloud2dict()
             if self.cci.exists_object(s3_key) is True:
-                # logger.debug(self.cci.exists_object(s3_key))
-                logger.debug('attempting to download array')
+                logger.debug('attempting to download xycoords array from s3.')
                 xycoords = self.cci.download_raw_array(s3_key)
                 logger.debug('download success')
-                # logger.debug(np.shape(xycoords))
-                # logger.debug(xycoords)
-                #return xycoords
 
             else:
-                logger.debug('getting xycoords')
+                logger.debug('getting xycoord values')
                 xycoords = self.get_xy_coord_values()
-                # logger.debug(type(xycoords))
-                # logger.debug(np.shape(xycoords))
-                # logger.debug(xycoords)
-                logger.debug('attempting to upload array')
+                logger.debug('attempting to upload xycoords array to s3.')
                 self.cci.upload_raw_array(s3_key, xycoords)
-                logger.debug('upload success')
-                #return xycoords
-
-        # elif self.memcached_connection is not None:
-        #     coord_cache_key = self.cache_basename + '_xycoords'
-        #
-        #     logger.debug("hit xycoords propery code")
-        #     logger.debug(self.memcached_connection)
-        #
-        #     xycoords = self.memcached_connection.get(coord_cache_key)
-        #     if xycoords is not None:
-        #         # self.memcached_connection.get(self.cache_path) is True:
-        #         logger.debug('memcached key found at {}'.format(coord_cache_key))
-        #         #logger.debug('xycoords: {}'.format(xycoords))
-        #     else:
-        #         xycoords = self.get_xy_coord_values()
-        #         logger.debug("key not found at {}. adding key and value".format(coord_cache_key))
-        #         self.memcached_connection.add(coord_cache_key, xycoords)
-
+                logger.debug('Upload success')
 
         elif self.enable_disk_cache is True and self.s3_bucket is None:
-
-            logger.debug("CACHE -----------------------------------")
-            logger.debug(self.enable_disk_cache)
-            logger.debug(self.s3_bucket)
+            logger.debug("Retrieving xycoords array from local cache.")
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
+                logger.debug("Reading values.")
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
-
-                # assert cache_dataset.source == self.nc_path, 'Source mismatch: cache {} vs. dataset {}'.format(cache_dataset.source, self.nc_path)
-
                 if 'xycoords' in cache_dataset.variables.keys():
                     xycoords = cache_dataset.variables['xycoords'][:]
                     logger.debug('Read {} coordinates from cache file {}'.format(xycoords.shape[0], self.cache_path))
@@ -937,7 +897,6 @@ class NetCDFPointUtils(NetCDFUtils):
 
             if xycoords is None:
                 xycoords = self.get_xy_coord_values()  # read coords from source file
-
                 #os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
                 try:
                     original_umask = os.umask(0)
