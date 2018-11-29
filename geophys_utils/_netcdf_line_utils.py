@@ -40,7 +40,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def __init__(self, 
                  netcdf_dataset,
                  enable_disk_cache=None,
-                 enable_memory_cache=True,
+                 enable_memory_cache=None,
                  cache_path=None,
                  s3_bucket=None,
                  cci=None,
@@ -66,10 +66,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
         # Initialise private property variables to None until set by property getter methods
         self._line = None
         self._line_index = None
-        self.s3_bucket = s3_bucket
-        #self.s3_path_key = s3_path_key
-        self.cci = cci
-        self.cache_path = cache_path
+
+        # self.s3_bucket = s3_bucket
+        # self.cci = cci
+        # self.cache_path = cache_path
 
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''

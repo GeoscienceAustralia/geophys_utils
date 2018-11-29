@@ -75,7 +75,7 @@ class NetCDFPointUtils(NetCDFUtils):
     def __init__(self,
                  netcdf_dataset,
                  enable_disk_cache=None,
-                 enable_memory_cache=True,
+                 enable_memory_cache=None,
                  cache_path=None,
                  s3_bucket=None,
                  cci=None,
@@ -98,7 +98,7 @@ class NetCDFPointUtils(NetCDFUtils):
         #     self.memcached_connection = memcached_connection
         # else:
         #     self.memcached_connection = None
-        self.s3_bucket = 'kml-server-cache'
+        self.s3_bucket = s3_bucket
         self.cci = cci
         # self.cache_path = cache_path or os.path.join(os.path.join(tempfile.gettempdir(), 'NetCDFPointUtils'),
         #                                              re.sub('\W', '_', os.path.splitext(self.nc_path)[0])) + '_cache.nc'
