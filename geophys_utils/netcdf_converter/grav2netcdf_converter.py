@@ -608,7 +608,7 @@ def main():
         #try:
         #g2n = Grav2NetCDFConverter(nc_out_path + "/" + "P" + str(survey) + '.nc', survey, con, sql_strings_dict)
         # put a P in front of file names for consistency with other datasets. P for project.
-        g2n = Grav2NetCDFConverter("{0}/P{1}.nc".format(nc_out_path, str(survey)), survey, con, sql_strings_dict)
+        g2n = Grav2NetCDFConverter("{0}/P{1}_GNDGRAV.nc".format(nc_out_path, str(survey)), survey, con, sql_strings_dict)
 
         g2n.convert2netcdf()
         logger.info('Finished writing netCDF file {}'.format(nc_out_path))
