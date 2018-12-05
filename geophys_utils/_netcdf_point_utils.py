@@ -44,7 +44,7 @@ logger.setLevel(logging.INFO) # Initial logging level for this module
 
 try:
     import memcache
-except ModuleNotFoundError:
+except ImportError:
     logger.warning('Unable to import memcache. AWS-specific functionality will not be enabled')
     memcache = None
 
