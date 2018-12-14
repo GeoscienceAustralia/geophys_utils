@@ -50,9 +50,11 @@ def main():
     # Define command line arguments
     parser = argparse.ArgumentParser()
     
-    parser.add_argument("-k", "--keywords", help="comma-separated list of keywords for search", type=str)
-    parser.add_argument("-t", "--titlewords", help="comma-separated list of titlewords for search", type=str)
-    parser.add_argument("-a", "--anytext", help="comma-separated list of text snippets for search", type=str)
+    parser.add_argument("-i", "--identifiers", help="comma separated list of possible metadata identifiers (UUID) for search", type=str)
+    parser.add_argument("-j", "--alt_identifiers", help="comma separated list of possible metadata alternate identifiers (eCat ID) for search", type=str)
+    parser.add_argument("-k", "--keywords", help="comma-separated list of required keywords for search", type=str)
+    parser.add_argument("-t", "--titlewords", help="comma-separated list of required titlewords for search", type=str)
+    parser.add_argument("-a", "--anytext", help="comma-separated list of required text snippets for search", type=str)
     parser.add_argument("-b", "--bounds", help='comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for search. N.B: A leading "-" sign on this list should NOT be preceded by a space',
                         type=str)
     parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Default determined by settings file.',
@@ -60,7 +62,7 @@ def main():
     parser.add_argument("-s", "--start_date", help="start date for search", type=str)
     parser.add_argument("-e", "--end_date", help="end date for search", type=str)
     # Parameters to define output
-    parser.add_argument("-p", "--protocols", help='comma-separated list of distribution protocols for output. Default determined by settings file, "*" = wildcard, "None" = no distributions.', type=str)
+    parser.add_argument("-p", "--protocols", help='comma-separated list of possible distribution protocols for output. Default determined by settings file, "*" = wildcard, "None" = no distributions.', type=str)
     parser.add_argument("-f", "--fields", help='comma-separated list of fields for output. Default determined by settings file, "*" = wildcard.', type=str)
     parser.add_argument("-d", "--delimiter", help='field delimiter for output. Defaults to "\t"', type=str)
     parser.add_argument("-u", "--urls", help="CSW URL(s) to query (comma separated list). Default determined by settings file.", type=str)
@@ -71,7 +73,7 @@ def main():
                         help='get WMS/WCS layer names. Default determined by settings file')
     parser.add_argument('--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
-    parser.add_argument("-y", "--types", help="comma-separated list of record types for search", type=str)
+    parser.add_argument("-y", "--types", help="comma-separated list of possible record types for search", type=str)
     
     args = parser.parse_args()
 
@@ -119,16 +121,19 @@ def main():
     # Set default delimiter to tab character
     delimiter = args.delimiter or cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_DELIMITER']
     
-    record_generator = cswu.query_csw(keyword_list=args.keywords,
-                                 anytext_list=args.anytext,
-                                 titleword_list=args.titlewords,
-                                 bounding_box=bounds,
-                                 start_datetime=start_date,
-                                 stop_datetime=end_date,
-                                 record_type_list=args.types,
-                                 max_total_records=args.max_results,
-                                 get_layers=args.get_layers
-                                 )
+    record_generator = cswu.query_csw(identifier_list=args.identifiers,
+                                      alt_identifier_list=args.alt_identifiers,
+                                      keyword_list=args.keywords,
+                                      anytext_list=args.anytext,
+                                      titleword_list=args.titlewords,
+                                      bounding_box=bounds,
+                                      start_datetime=start_date,
+                                      stop_datetime=end_date,
+                                      record_type_list=args.types,
+                                      max_total_records=args.max_results,
+                                      get_layers=args.get_layers
+                                      )
+    
     header_row_required = (cswu.settings['OUTPUT_DEFAULTS']['DEFAULT_SHOW_HEADER_ROW'] 
                            if args.header_row is None 
                            else args.header_row)
