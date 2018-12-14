@@ -273,6 +273,8 @@ class CSWUtils(object):
 
 
     def query_csw(self,
+                  identifier_list=None,
+                  alt_identifier_list=None,
                   keyword_list=None,
                   bounding_box=None,
                   bounding_box_crs=None,
@@ -287,6 +289,8 @@ class CSWUtils(object):
         '''
         Function to query CSW using AND combination of provided search parameters and return generator object
             yielding nested dicts containing information about each record including distributions
+        @param identifier_list: List of strings or comma-separated string containing metadata identifiers (UUID)
+        @param alt_identifier: List of strings or comma-separated string containing metadata alternate identifiers (eCat ID)
         @param keyword_list: List of strings or comma-separated string containing keyword search terms
         @param bounding_box: Bounding box to search as a list of ordinates [bbox.minx, bbox.minx, bbox.maxx, bbox.maxy]
         @param bounding_box_crs: Coordinate reference system for bounding box. Defaults to value of self.settings['DEFAULT_CRS']
@@ -304,6 +308,12 @@ class CSWUtils(object):
         get_layers = self.settings['DEFAULT_GET_LAYERS'] if get_layers is None else get_layers
 
         # Convert strings to lists if required
+        if type(identifier_list) == str:
+            identifier_list = self.list_from_comma_separated_string(identifier_list)
+
+        if type(alt_identifier_list) == str:
+            alt_identifier_list = self.list_from_comma_separated_string(alt_identifier_list)
+
         if type(keyword_list) == str:
             keyword_list = self.list_from_comma_separated_string(keyword_list)
 
@@ -319,6 +329,18 @@ class CSWUtils(object):
 
         # Build filter list
         fes_filter_list = []
+        
+        if identifier_list:
+            if len(identifier_list) == 1:
+                fes_filter_list += [fes.PropertyIsLike(propertyname='Identifier', literal=identifier_list[0], matchCase=False)]
+            else:
+                fes_filter_list.append(fes.Or([fes.PropertyIsLike(propertyname='Identifier', literal=identifier, matchCase=False) for identifier in identifier_list]))
+        
+        if alt_identifier_list:
+            if len(alt_identifier_list) == 1:
+                fes_filter_list += [fes.PropertyIsLike(propertyname='AlternateIdentifier', literal=alt_identifier_list[0], matchCase=False)]
+            else:
+                fes_filter_list.append(fes.Or([fes.PropertyIsLike(propertyname='AlternateIdentifier', literal=alt_identifier, matchCase=False) for alt_identifier in alt_identifier_list]))
         
         # Check for unchanged, upper-case, lower-case and capitalised keywords 
         # with single-character wildcards substituted for whitespace characters
