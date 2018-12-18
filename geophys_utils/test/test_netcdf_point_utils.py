@@ -31,9 +31,10 @@ from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 
 netcdf_point_utils = None
 
-#NC_PATH = '/g/data2/uc0/rr2_dev/axi547/GSSA_P1255MAG_Marree.nc'
-NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
+NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/magnetic_line/GSSA_P1255MAG_Marree.nc'
+#NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
 NC_TITLE = 'Marree Airborne Magnetic & Radiometric Survey, SA, 2012'
+#NC_TITLE = 'Murray - Riverina, NSW, 2003 (Area Y)'
 #NC_PATH = 'test_line.nc'
 #NC_PATH = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/rcb547/AWAGS_Levelled_Line_Databases/mag_database_reformat_2016_adjusted/netcdf/GSSA_P1255MAG_Marree.nc'
 
