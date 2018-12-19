@@ -613,7 +613,7 @@ class NetCDFPointUtils(NetCDFUtils):
                                lookup_variable_name='line',
                                indexing_variable_name=None, 
                                start_index=0, 
-                               end_index=-1, 
+                               end_index=0, 
                                mask=None,
                                indexing_dimension='point'):
         '''
@@ -719,7 +719,7 @@ class NetCDFPointUtils(NetCDFUtils):
  
         logger.debug('field_list: {}'.format(field_list))
         
-        variable_attributes = {}
+        variable_attributes = OrderedDict()
         memory_cache = OrderedDict()
         for variable_name in field_list:
             variable = self.netcdf_dataset.variables.get(variable_name)
