@@ -136,9 +136,13 @@ def plot_point_dataset(netcdf_point_utils,
                     )
 
     # set the colour bar ticks and labels
-    cb = plt.colorbar(sc, ticks=[0, 1])
-    cb.ax.set_yticklabels([str(np.min(variable[spatial_mask])), str(np.max(variable[spatial_mask]))])  # vertically oriented colorbar
-    cb.set_label("{} {}".format(variable.long_name, variable.units))
+    try: # not all variables have units. These will fail on the try and produce the map without tick labels.
+        cb = plt.colorbar(sc, ticks=[0, 1])
+        cb.ax.set_yticklabels([str(np.min(variable[spatial_mask])), str(np.max(variable[spatial_mask]))])  # vertically oriented colorbar
+
+        cb.set_label("{} {}".format(variable.long_name, variable.units))
+    except:
+        pass
 
     plt.show()
     
