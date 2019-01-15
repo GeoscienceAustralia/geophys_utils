@@ -411,7 +411,7 @@ class NetCDFUtils(object):
         '''
         Property getter function to return crs_variable as required
         '''
-        if not self._crs_variable:
+        if self._crs_variable is None:
             logger.debug('Setting crs_variable property')
             for crs_variable_name in ['crs',
                                       'transverse_mercator'
