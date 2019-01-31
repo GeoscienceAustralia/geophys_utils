@@ -86,15 +86,6 @@ class NetCDFGridUtils(NetCDFUtils):
             self.nominal_pixel_degrees = [round(abs(centre_pixel_wgs84_coords[1][
                         dim_index] - centre_pixel_wgs84_coords[0][dim_index]), 8) for dim_index in range(2)]
 
-            try:
-                data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
-                                           if hasattr(variable, 'grid_mapping')][0].dimensions
-                self.data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
-                                           if variable.dimensions == data_variable_dimensions]
-            except:
-                logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
-                raise
-            
         def get_default_sample_metres():
             '''
             Function to return average nominal pixel size in metres rounded up to nearest 10^x or 5*10^x
@@ -113,12 +104,24 @@ class NetCDFGridUtils(NetCDFUtils):
         
         logger.debug('Running NetCDFGridUtils constructor')
         
-        self._Geotransform = None
+        self._GeoTransform = None
 
 
 # assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
 # 2D' # This is not valid
 
+        try:
+            data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
+                                       if hasattr(variable, 'grid_mapping')][0].dimensions
+            print(data_variable_dimensions)
+            self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
+                                       if variable.dimensions == data_variable_dimensions]
+            print(self.data_variable_list)
+        except:
+            logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+            raise
+            
+        #TODO: Make this work for multi-variate grids
         assert len(self.data_variable_list) == 1, 'Unable to determine single data variable (must have "grid_mapping" attribute)'
         self.data_variable = self.data_variable_list[0]
         
@@ -159,8 +162,6 @@ class NetCDFGridUtils(NetCDFUtils):
                                                                    ]
                             ]
         
-        self.wgs84_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
-
         # Create bounds
         self.bounds = self.native_bbox[0] + self.native_bbox[2]
 

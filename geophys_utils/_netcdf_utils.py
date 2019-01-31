@@ -31,6 +31,8 @@ import re
 from distutils.util import strtobool
 import logging
 
+from geophys_utils._crs_utils import transform_coords
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
@@ -74,6 +76,7 @@ class NetCDFUtils(object):
         self._data_variable_list = None       
         self._crs_variable = None
         self._wkt = None
+        self._wgs84_bbox = None
         
 #===============================================================================
 #         #TODO: Make sure this is general for all CRSs
@@ -408,7 +411,7 @@ class NetCDFUtils(object):
         '''
         Property getter function to return crs_variable as required
         '''
-        if not self._crs_variable:
+        if self._crs_variable is None:
             logger.debug('Setting crs_variable property')
             for crs_variable_name in ['crs',
                                       'transverse_mercator'
@@ -458,6 +461,22 @@ class NetCDFUtils(object):
                 logger.debug('Logger {} set to level {}'.format(base_class.__module__, log_level))
 
                 
+    @property
+    def wgs84_bbox(self):
+        '''
+        Property getter function to return wgs84_bbox as required
+        '''
+        if self._wgs84_bbox is None:
+            logger.debug('Setting wgs84_bbox property')
+            transformed_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
+            self._wgs84_bbox = [[min(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
+                                [max(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
+                                [max(transformed_bbox[:,0]), max(transformed_bbox[:,1])],
+                                [min(transformed_bbox[:,0]), max(transformed_bbox[:,1])]
+                                ]
+        return self._wgs84_bbox
+
+
         
 
 def main():
