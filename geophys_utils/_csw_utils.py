@@ -30,7 +30,7 @@ from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
 import netCDF4
 import yaml
-from pprint import pformat
+from pprint import pformat, pprint
 import logging
 
 logger = logging.getLogger(__name__)
@@ -184,8 +184,8 @@ class CSWUtils(object):
                     logger.debug('Bad CSW request:\n{}'.format(csw.request))
                     break
                     
-    
-                query_record_count = len(csw.records)
+                if not csw.results['returned']: # Don't go around again for another query - should be the end
+                    break
     
                 for uuid in [uuid for uuid in csw.records.keys() if uuid not in uuid_list]:
                     record = csw.records[uuid]
@@ -263,11 +263,8 @@ class CSWUtils(object):
                     if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
                         raise Exception('Maximum number of records retrieved ({})'.format(max_total_records))
         
-                if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
-                    break
-    
                 # Increment start position and repeat query
-                startposition += max_query_records
+                startposition = csw.results['nextrecord']
     
         logger.debug('{} records found.'.format(record_count))
 
