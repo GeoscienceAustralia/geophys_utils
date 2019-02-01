@@ -396,10 +396,12 @@ class CSWUtils(object):
         # Convert lists to strings
         dataset_distribution_dict['keywords'] = ', '.join(sorted(dataset_distribution_dict['keywords']))
         
-        bbox = dataset_distribution_dict.get('bbox')
-        if bbox:
+        bbox = dataset_distribution_dict.get('bbox') # Retrieve tuple of multiple bounding boxes
+        if bbox and any(bbox[0]):
             dataset_distribution_dict['bbox'] = ', '.join(bbox[0]) #TODO: Cater for multiple bounding boxes
-
+        else:
+            dataset_distribution_dict['bbox'] = None
+            
         # Merge distribution info into copy of record dict
         if distribution_dict:
             dataset_distribution_dict.update(distribution_dict)
