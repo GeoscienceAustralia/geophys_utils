@@ -212,7 +212,8 @@ class CSWUtils(object):
                                   }
     
                     if record.bbox:
-                        record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
+                        print(record.bbox.__dict__)
+                        record_dict['bbox'] = [record.bbox.minx, record.bbox.miny, record.bbox.maxx, record.bbox.maxy],
                         record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
     
                     # Deal with weird OWSLib behaviour where a single dict containing 'None' string values is returned
