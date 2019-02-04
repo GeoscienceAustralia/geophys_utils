@@ -212,7 +212,6 @@ class CSWUtils(object):
                                   }
     
                     if record.bbox:
-                        print(record.bbox.__dict__)
                         record_dict['bbox'] = [record.bbox.minx, record.bbox.miny, record.bbox.maxx, record.bbox.maxy],
                         record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
     
