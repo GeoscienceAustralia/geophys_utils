@@ -212,8 +212,22 @@ class CSWUtils(object):
                                   }
     
                     if record.bbox:
-                        record_dict['bbox'] = [record.bbox.minx, record.bbox.miny, record.bbox.maxx, record.bbox.maxy],
-                        record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
+                        record_dict['bbox'] = [float(ordinate) for ordinate in [record.bbox.minx, record.bbox.miny, record.bbox.maxx, record.bbox.maxy]]
+                        record_dict['bbox_crs'] = str(record.bbox.crs) or 'urn:ogc:def:crs:EPSG::4283' # Default to GDA94
+                        
+#TODO: REMOVE HACK BELOW THIS LINE WHEN GEONETWORK CSW OUTPUT HAS BEEN FIXED                        
+                        #print(record_dict['bbox'], record_dict['bbox_crs'])
+
+                        if record_dict['bbox_crs'][-1] == ')': # Hack for invalid CRS code "urn:ogc:def:crs:EPSG::GDA94 (EPSG:4283)"
+                            record_dict['bbox_crs'] = record_dict['bbox_crs'][:-1]
+                        else: # Hack for incorrect XY coordinate order in response
+                            record_dict['bbox'] = [record_dict['bbox'][1], record_dict['bbox'][0], record_dict['bbox'][3], record_dict['bbox'][2]]
+                        
+                        # Hack to change incorrect(?) lower-right, upper-left points to lower-left, upper-right
+                        record_dict['bbox'] = [min(record_dict['bbox'][::2]), min(record_dict['bbox'][1::2]), max(record_dict['bbox'][::2]), max(record_dict['bbox'][1::2])]
+                        
+                        #print(record_dict['bbox'], record_dict['bbox_crs'])
+#TODO: REMOVE HACK ABOVE THIS LINE WHEN GEONETWORK CSW OUTPUT HAS BEEN FIXED
     
                     # Deal with weird OWSLib behaviour where a single dict containing 'None' string values is returned
                     # when no distributions exist
@@ -393,9 +407,9 @@ class CSWUtils(object):
         # Convert lists to strings
         dataset_distribution_dict['keywords'] = ', '.join(sorted(dataset_distribution_dict['keywords']))
         
-        bbox = dataset_distribution_dict.get('bbox') # Retrieve tuple of multiple bounding boxes
-        if bbox and any(bbox[0]):
-            dataset_distribution_dict['bbox'] = ', '.join(bbox[0]) #TODO: Cater for multiple bounding boxes
+        bbox = dataset_distribution_dict.get('bbox') # Retrieve bounding box
+        if bbox:
+            dataset_distribution_dict['bbox'] = ', '.join(str(ordinate) for ordinate in bbox)
         else:
             dataset_distribution_dict['bbox'] = None
             
