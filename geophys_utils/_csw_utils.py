@@ -32,6 +32,7 @@ import netCDF4
 import yaml
 from pprint import pformat, pprint
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -508,7 +509,10 @@ class CSWUtils(object):
                         match = re.match('(.*\.nc)(\.html)*$', opendap_distribution['url'])
                         try:
                             opendap_distribution['url'] = match.group(1) # Ignore any trailing ".html"
-                            if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                            #if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                            #TODO: Make a better test for a valid OPeNDAP URL
+                            response = requests.get(opendap_distribution['url'])
+                            if response.status_code == 400: # Test for valid OPeNDAP endpoint
                                 distribution_dict = opendap_distribution
                                 break
                         except:
