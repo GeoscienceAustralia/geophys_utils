@@ -169,7 +169,7 @@ class CSWUtils(object):
             record_count = 0
     
             # Keep querying until all results have been retrieved
-            while record_count < max_total_records:
+            while startposition and record_count < max_total_records:
                 # apply all the filters using the "and" syntax: [[filter1, filter2]]
                 try:
                     csw.getrecords2(constraints=[fes_filters],
@@ -279,6 +279,8 @@ class CSWUtils(object):
         
                 # Increment start position and repeat query
                 startposition = csw.results['nextrecord']
+                if not startposition:
+                    break
     
         logger.debug('{} records found.'.format(record_count))
 
