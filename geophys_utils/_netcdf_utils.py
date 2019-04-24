@@ -122,8 +122,7 @@ class NetCDFUtils(object):
                  nc_format=None,
                  limit_dim_size=False,
                  empty_var_list=[],
-                 invert_y=None,
-                 complevel=0):
+                 invert_y=None):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -141,7 +140,6 @@ class NetCDFUtils(object):
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
             @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
-            @param complevel: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
           
@@ -395,7 +393,10 @@ class NetCDFUtils(object):
         '''
         if not self._netcdf_dataset:
             logger.debug('Opening netCDF dataset {}'.format(self.nc_path))
-            self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+            if self.opendap:
+                self._netcdf_dataset = netCDF4.Dataset(self.nc_path + '#fillmismatch', mode="r") # Work-around for _FillValue mismatch: https://github.com/Unidata/netcdf-c/issues/1299
+            else:
+                self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
 
         return self._netcdf_dataset
     
