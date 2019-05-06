@@ -24,6 +24,7 @@ import re
 import numpy as np
 #from osgeo.osr import SpatialReference, CoordinateTransformation
 import pyproj
+import pycrs
 
 
 # Define CRS name mappings for 
@@ -33,9 +34,9 @@ CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
 
 def get_spatial_ref_from_wkt(wkt_or_crs_name):
     '''
-    Function to return SpatialReference object for supplied WKT
+    Function to return Proj object for supplied WKT
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
-    @return spatial_ref: SpatialReference from WKT
+    @return spatial_ref: Proj from WKT
     '''
     #spatial_ref = SpatialReference()
     
@@ -46,9 +47,9 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     #     return spatial_ref
     #===========================================================================
     try:
-        result = pyproj.Proj(init=wkt_or_crs_name)
+        result = pyproj.Proj(pycrs.parse.from_unknown_text(wkt_or_crs_name).to_proj4())
         return result
-    except:
+    except pycrs.parse.FormatError:
         pass
     
     #===========================================================================
@@ -59,9 +60,9 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     #===========================================================================
     # Try to resolve CRS name - either mapped or original
     try:
-        result = pyproj.Proj(init=(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name))
+        result = pyproj.Proj(pycrs.parse.from_unknown_text(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name).to_proj4())
         return result
-    except:
+    except pycrs.parse.FormatError:
         pass
 
     # Try common formulations for UTM zones
@@ -84,33 +85,38 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
         modified_crs_name = utm_match.group(1)
         utm_zone = int(utm_match.group(2))
         try:
-            result = pyproj.Proj(init=(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name))
+            result = pyproj.Proj('+proj=utm +zone={utm_zone} +south +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=utm_zone))
             return result
         except:
             pass
 
     assert not result, 'Invalid WKT or CRS name'
+    
+def get_wkt_from_spatial_ref(spatial_ref):
+    '''
+    Function to return OGC WKT for supplied Proj instance
+    '''
+    return pycrs.parse.from_proj4(spatial_ref.definition_string()).to_ogc_wkt()
 
-#===============================================================================
-# def get_coordinate_transformation(from_wkt, to_wkt):
-#     '''
-#     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
-#     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
-#     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
-#     '''
-#     # Assume native coordinates if no wkt given
-#     if from_wkt == to_wkt:
-#         return None
-#     
-#     from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
-#     to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
-# 
-#     # This is probably redundant
-#     if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
-#         return None
-# 
-#     return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
-#===============================================================================
+def get_coordinate_transformation(from_wkt, to_wkt):
+    '''
+    Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
+    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
+    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
+    '''
+    # Assume native coordinates if no wkt given
+    if from_wkt == to_wkt:
+        return None
+     
+    from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
+    to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
+ 
+    # This is probably redundant
+    if get_wkt_from_spatial_ref(from_spatial_ref) == get_wkt_from_spatial_ref(to_spatial_ref):
+        return None
+ 
+    return lambda x, y: pyproj.transform(from_spatial_ref, to_spatial_ref, x, y, z=None, radians=False)
+
 
 def get_utm_wkt(coordinate, from_wkt):
     '''
@@ -118,36 +124,39 @@ def get_utm_wkt(coordinate, from_wkt):
     Used to transform coords to metres
     @param coordinate: single coordinate pair
     '''
-    def utm_getZone(longitude):
+    def get_utm_zone_from_longitude(longitude):
         return (int(1 + (longitude + 180.0) / 6.0))
 
-    def utm_isNorthern(latitude):
+    def get_hemisphere_from_latitude(latitude):
         if (latitude < 0.0):
-            return 0
+            return 'south'
         else:
-            return 1
+            return 'north'
         
     coordinate_array = np.array(coordinate).reshape((1,2))
 
     latlon_coord_trans = get_coordinate_transformation(
-        from_wkt, 'EPSG:4326')
-    latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.TransformPoints(
+        from_wkt, 'EPSG:4283')
+    latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.transform(
         coordinate_array)[0][0:2]
         
     # Set UTM coordinate reference system
-    utm_spatial_ref = SpatialReference()
-    utm_spatial_ref.SetWellKnownGeogCS('WGS84')
-    utm_spatial_ref.SetUTM(utm_getZone(
-        latlon_coord[0]), utm_isNorthern(latlon_coord[1]))
-
-    return utm_spatial_ref.ExportToWkt()
+    #===========================================================================
+    # utm_spatial_ref = SpatialReference()
+    # utm_spatial_ref.SetWellKnownGeogCS('WGS84')
+    # utm_spatial_ref.SetUTM(utm_getZone(
+    #     latlon_coord[0]), utm_isNorthern(latlon_coord[1]))
+    #===========================================================================
+    utm_spatial_ref = pyproj.Proj('+proj=utm +zone={utm_zone} +{hemisphere} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=get_utm_zone_from_longitude(latlon_coord[1]),
+                                                                                                                                          hemisphere=get_hemisphere_from_latitude(latlon_coord[0])))
+    return get_wkt_from_spatial_ref(utm_spatial_ref)
 
 def transform_coords(coordinates, from_wkt, to_wkt):
     '''
     Convert coordinates between specified coordinate reference systems
     @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
-    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
-    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
+    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform.
+    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform.
     '''
     coord_trans = get_coordinate_transformation(
         from_wkt, to_wkt)  # Transform from specified CRS to native CRS
