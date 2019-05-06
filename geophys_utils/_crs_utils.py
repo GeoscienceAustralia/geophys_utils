@@ -22,7 +22,9 @@ Created on 16Nov.,2016
 '''
 import re
 import numpy as np
-from osgeo.osr import SpatialReference, CoordinateTransformation
+#from osgeo.osr import SpatialReference, CoordinateTransformation
+import pyproj
+
 
 # Define CRS name mappings for 
 CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
@@ -35,17 +37,32 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: SpatialReference from WKT
     '''
-    spatial_ref = SpatialReference()
+    #spatial_ref = SpatialReference()
     
-    # Try to resolve WKT
-    result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
-    if not result:
-        return spatial_ref
-
+    #===========================================================================
+    # # Try to resolve WKT
+    # result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
+    # if not result:
+    #     return spatial_ref
+    #===========================================================================
+    try:
+        result = pyproj.Proj(init=wkt_or_crs_name)
+        return result
+    except:
+        pass
+    
+    #===========================================================================
+    # # Try to resolve CRS name - either mapped or original
+    # result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
+    # if not result:
+    #     return spatial_ref
+    #===========================================================================
     # Try to resolve CRS name - either mapped or original
-    result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
-    if not result:
-        return spatial_ref
+    try:
+        result = pyproj.Proj(init=(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name))
+        return result
+    except:
+        pass
 
     # Try common formulations for UTM zones
     #TODO: Fix this so it works in the Northern hemisphere 
@@ -54,34 +71,46 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
                  re.match('(\w+)/(\d+)S', modified_crs_name) or
                  re.match('(EPSG:283)(\d{2})', modified_crs_name) 
                  )
+    #===========================================================================
+    # if utm_match:
+    #     modified_crs_name = utm_match.group(1)
+    #     utm_zone = int(utm_match.group(2))
+    #     result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name)
+    # if not result:
+    #     spatial_ref.SetUTM(utm_zone, False) # Put this here to avoid potential side effects in downstream code
+    #     return spatial_ref
+    #===========================================================================
     if utm_match:
         modified_crs_name = utm_match.group(1)
         utm_zone = int(utm_match.group(2))
-        result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name)
-    if not result:
-        spatial_ref.SetUTM(utm_zone, False) # Put this here to avoid potential side effects in downstream code
-        return spatial_ref
+        try:
+            result = pyproj.Proj(init=(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name))
+            return result
+        except:
+            pass
 
     assert not result, 'Invalid WKT or CRS name'
 
-def get_coordinate_transformation(from_wkt, to_wkt):
-    '''
-    Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
-    @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
-    @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
-    '''
-    # Assume native coordinates if no wkt given
-    if from_wkt == to_wkt:
-        return None
-    
-    from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
-    to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
-
-    # This is probably redundant
-    if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
-        return None
-
-    return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
+#===============================================================================
+# def get_coordinate_transformation(from_wkt, to_wkt):
+#     '''
+#     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
+#     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
+#     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
+#     '''
+#     # Assume native coordinates if no wkt given
+#     if from_wkt == to_wkt:
+#         return None
+#     
+#     from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
+#     to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
+# 
+#     # This is probably redundant
+#     if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
+#         return None
+# 
+#     return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
+#===============================================================================
 
 def get_utm_wkt(coordinate, from_wkt):
     '''
