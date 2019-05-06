@@ -176,7 +176,8 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     if is_single_coordinate:
         coordinate_array = coordinate_array.reshape((1,2))
         
-    new_coordinate_array = np.array(coord_trans(coordinate_array))[:,0:2]
+    new_coordinate_array = np.array(coord_trans(coordinate_array[:,0],
+                                                coordinate_array[:,1]))[:,0:2]
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
     else: 
