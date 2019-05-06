@@ -96,7 +96,8 @@ def get_wkt_from_spatial_ref(spatial_ref):
     '''
     Function to return OGC WKT for supplied Proj instance
     '''
-    return pycrs.parse.from_proj4(spatial_ref.definition_string()).to_ogc_wkt()
+    #TODO: Find a better way of doing this - it's a bit ugly as it is
+    return pycrs.parse.from_proj4('+' + re.sub('(\s)', '\\1+', spatial_ref.definition_string())).to_ogc_wkt()
 
 def get_coordinate_transformation(from_wkt, to_wkt):
     '''
