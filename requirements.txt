@@ -1,4 +1,3 @@
-distutils
 functools
 itertools
 netCDF4
