@@ -54,4 +54,4 @@ try:
     from geophys_utils._array2file import array2file
     from geophys_utils._dem_utils import DEMUtils
 except:
-    logger.warning('Unable to import get_gdal_wcs_dataset, get_gdal_grid_values, DEMUtils or array2file (no GDAL available')
+    logger.warning('Unable to import get_gdal_wcs_dataset, get_gdal_grid_values, DEMUtils or array2file (GDAL not installed)')
