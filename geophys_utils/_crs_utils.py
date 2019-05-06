@@ -96,8 +96,12 @@ def get_wkt_from_spatial_ref(spatial_ref):
     '''
     Function to return OGC WKT for supplied Proj instance
     '''
-    #TODO: Find a better way of doing this - it's a bit ugly as it is
-    return pycrs.parse.from_proj4('+' + re.sub('(\s)', '\\1+', spatial_ref.definition_string())).to_ogc_wkt()
+    proj_definition_string =spatial_ref.definition_string()
+    
+    #TODO: Fix this ugly work-around for missing "+"
+    proj_definition_string = re.sub('(\s|^)([^\+])', '\\1+\\2', proj_definition_string)
+    
+    return pycrs.parse.from_proj4(proj_definition_string).to_ogc_wkt()
 
 def get_coordinate_transformation(from_wkt, to_wkt):
     '''
@@ -172,7 +176,7 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     if is_single_coordinate:
         coordinate_array = coordinate_array.reshape((1,2))
         
-    new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
+    new_coordinate_array = np.array(coord_trans(coordinate_array))[:,0:2]
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
     else: 
