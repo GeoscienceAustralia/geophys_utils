@@ -1,0 +1,16 @@
+distutils
+functools
+itertools
+netCDF4
+numpy
+owslib
+pycrs
+pyproj
+scikit-image
+scipy
+shapely
+tempfile
+unittest
+yaml
+unidecode
+#gdal
