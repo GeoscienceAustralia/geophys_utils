@@ -140,8 +140,9 @@ def get_utm_wkt(coordinate, from_wkt):
         
     latlon_coord_trans = get_coordinate_transformation(
         from_wkt, 'EPSG:4283')
+    
     latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans(
-        coordinate[0], coordinate[1])[0][0:2]
+        coordinate[0], coordinate[1])
         
     # Set UTM coordinate reference system
     #===========================================================================
