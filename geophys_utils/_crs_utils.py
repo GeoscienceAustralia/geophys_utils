@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from _pylief import NONE
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -38,6 +39,8 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: Proj from WKT
     '''
+    result = NONE
+    
     #spatial_ref = SpatialReference()
     
     #===========================================================================
@@ -46,6 +49,12 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     # if not result:
     #     return spatial_ref
     #===========================================================================
+    try:
+        result = pyproj.Proj(wkt_or_crs_name)
+        return result
+    except RuntimeError:
+        pass
+    
     try:
         result = pyproj.Proj(pycrs.parse.from_unknown_text(wkt_or_crs_name).to_proj4())
         return result
@@ -90,7 +99,7 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
         except:
             pass
 
-    assert not result, 'Invalid WKT or CRS name'
+    assert result, 'Invalid WKT or CRS name'
     
 def get_wkt_from_spatial_ref(spatial_ref):
     '''
@@ -99,7 +108,7 @@ def get_wkt_from_spatial_ref(spatial_ref):
     proj_definition_string = spatial_ref.definition_string()
     
     #TODO: Fix this ugly work-around for missing "+"
-    proj_definition_string = re.sub('(\s|^)([^\+])', '\\1+\\2', proj_definition_string)
+    proj_definition_string = re.sub('(\s|^)([^\+\s])', '\\1+\\2', proj_definition_string)
     #print('proj_definition_string = {}'.format(proj_definition_string))
     return pycrs.parse.from_proj4(proj_definition_string).to_ogc_wkt()
 
@@ -132,11 +141,11 @@ def get_utm_wkt(coordinate, from_wkt):
     def get_utm_zone_from_longitude(longitude):
         return (int(1 + (longitude + 180.0) / 6.0))
 
-    def get_hemisphere_from_latitude(latitude):
+    def get_south_from_latitude(latitude):
         if (latitude < 0.0):
-            return 'south'
+            return 'True'
         else:
-            return 'north'
+            return 'False'
         
     latlon_coord_trans = get_coordinate_transformation(
         from_wkt, 'EPSG:4283')
@@ -152,9 +161,11 @@ def get_utm_wkt(coordinate, from_wkt):
     # utm_spatial_ref.SetUTM(utm_getZone(
     #     latlon_coord[0]), utm_isNorthern(latlon_coord[1]))
     #===========================================================================
-    utm_spatial_ref = pyproj.Proj('+proj=utm +zone={utm_zone} +{hemisphere} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=get_utm_zone_from_longitude(latlon_coord[1]),
-                                                                                                                                          hemisphere=get_hemisphere_from_latitude(latlon_coord[0])))
-    return get_wkt_from_spatial_ref(utm_spatial_ref)
+    utm_spatial_ref = pyproj.Proj('+proj=utm +zone={utm_zone} +south={south} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=get_utm_zone_from_longitude(latlon_coord[1]),
+                                                                                                                                          south=get_south_from_latitude(latlon_coord[0])))
+    print('utm_spatial_ref.definition_string() = {}'.format(utm_spatial_ref.definition_string()))
+    #return get_wkt_from_spatial_ref(utm_spatial_ref)
+    return utm_spatial_ref.definition_string()
 
 def transform_coords(coordinates, from_wkt, to_wkt):
     '''
