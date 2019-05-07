@@ -96,11 +96,11 @@ def get_wkt_from_spatial_ref(spatial_ref):
     '''
     Function to return OGC WKT for supplied Proj instance
     '''
-    proj_definition_string =spatial_ref.definition_string()
+    proj_definition_string = spatial_ref.definition_string()
     
     #TODO: Fix this ugly work-around for missing "+"
     proj_definition_string = re.sub('(\s|^)([^\+])', '\\1+\\2', proj_definition_string)
-    
+    #print('proj_definition_string = {}'.format(proj_definition_string))
     return pycrs.parse.from_proj4(proj_definition_string).to_ogc_wkt()
 
 def get_coordinate_transformation(from_wkt, to_wkt):
@@ -141,8 +141,9 @@ def get_utm_wkt(coordinate, from_wkt):
     latlon_coord_trans = get_coordinate_transformation(
         from_wkt, 'EPSG:4283')
     
+    # Note reversed coordinates for GDA94
     latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans(
-        coordinate[0], coordinate[1])
+        coordinate[1], coordinate[0]) 
         
     # Set UTM coordinate reference system
     #===========================================================================
@@ -176,10 +177,10 @@ def transform_coords(coordinates, from_wkt, to_wkt):
         coordinate_array = coordinate_array.reshape((1,2))
         
     new_coordinate_array = np.array(coord_trans(coordinate_array[:,0],
-                                                coordinate_array[:,1]))[:,0:2]
+                                                coordinate_array[:,1]))
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
     else: 
-        return new_coordinate_array
+        return new_coordinate_array.transpose()
 
 

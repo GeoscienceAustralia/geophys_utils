@@ -141,7 +141,8 @@ def grid_points(coordinates,
     
     print("Reprojecting coordinates")
     grid_coordinates = np.array(transform_coords(coordinates, coordinate_wkt, grid_wkt))
-
+    #print('grid_coordinates = {}'.format(grid_coordinates))
+    
     print("Computing spatial mask")
     spatial_subset_mask = np.logical_and(np.logical_and((grid_bounds[0] <= grid_coordinates[:,0]), 
                                                         (grid_coordinates[:,0] <= grid_bounds[2])), 
