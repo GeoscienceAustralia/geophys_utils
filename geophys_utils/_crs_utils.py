@@ -108,7 +108,7 @@ def get_wkt_from_spatial_ref(spatial_ref):
     
     #TODO: Fix this ugly work-around for missing "+"
     proj_definition_string = re.sub('(\s|^)([^\+\s])', '\\1+\\2', proj_definition_string)
-    proj_definition_string = re.sub('+south(\s)', '+south=True\\1', proj_definition_string)
+    proj_definition_string = re.sub('\+south(\s)', '\+south=True\\1', proj_definition_string)
     #print('proj_definition_string = {}'.format(proj_definition_string))
     return pycrs.parse.from_proj4(proj_definition_string).to_ogc_wkt()
 
