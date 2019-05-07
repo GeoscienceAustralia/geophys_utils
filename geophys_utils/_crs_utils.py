@@ -152,7 +152,7 @@ def get_utm_wkt(coordinate, from_wkt):
     
     # Note reversed coordinates for GDA94
     latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans(
-        coordinate[1], coordinate[0]) 
+        coordinate[0], coordinate[1]) 
         
     # Set UTM coordinate reference system
     #===========================================================================
