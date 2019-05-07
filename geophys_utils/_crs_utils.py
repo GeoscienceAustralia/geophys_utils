@@ -161,8 +161,8 @@ def get_utm_wkt(coordinate, from_wkt):
     # utm_spatial_ref.SetUTM(utm_getZone(
     #     latlon_coord[0]), utm_isNorthern(latlon_coord[1]))
     #===========================================================================
-    definition_string = '+proj=utm +zone={utm_zone} +south={south} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=get_utm_zone_from_longitude(latlon_coord[1]),
-                                                                                                                                 south=get_south_from_latitude(latlon_coord[0]))
+    definition_string = '+proj=utm +zone={utm_zone} +south={south} +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs'.format(utm_zone=get_utm_zone_from_longitude(latlon_coord[0]),
+                                                                                                                                 south=get_south_from_latitude(latlon_coord[1]))
     #utm_spatial_ref = pyproj.Proj(definition_string)
     #print('utm_spatial_ref.definition_string() = {}'.format(utm_spatial_ref.definition_string()))
     #return get_wkt_from_spatial_ref(utm_spatial_ref)
