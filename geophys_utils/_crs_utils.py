@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from _pylief import NONE
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -39,7 +38,7 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: Proj from WKT
     '''
-    result = NONE
+    result = None
     
     #spatial_ref = SpatialReference()
     
