@@ -6,6 +6,5 @@ pyproj
 scikit-image
 scipy
 shapely
-tempfile
 unidecode
 #gdal
