@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
@@ -20,14 +19,15 @@ Created on 18Jun.,2018
 
 @author: Andrew Turner & Alex Ip
 '''
+import re
 import netCDF4
 from geophys_utils import NetCDFPointUtils
 import numpy as np
-from geophys_utils import get_spatial_ref_from_wkt
 import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.io.img_tiles as cimgt
 from math import log10, floor, pow
+#from geophys_utils import get_spatial_ref_from_wkt, get_wkt_from_spatial_ref
 
 def plot_point_dataset(netcdf_point_utils,
                        variable_to_map,
@@ -63,12 +63,17 @@ def plot_point_dataset(netcdf_point_utils,
             plot_title = netcdf_point_utils.netcdf_dataset.filepath()
 
     utm_wkt, utm_coords = netcdf_point_utils.utm_coords(netcdf_point_utils.xycoords)
-
-    utm_zone = get_spatial_ref_from_wkt(utm_wkt).GetUTMZone() # -ve for Southern Hemisphere
-    southern_hemisphere = (utm_zone < 0)
-    utm_zone = abs(utm_zone)
+    print('utm_wkt = {}'.format(utm_wkt))
+    #===========================================================================
+    # #utm_zone = get_spatial_ref_from_wkt(utm_wkt).GetUTMZone() # -ve for Southern Hemisphere
+    # utm_zone = get_spatial_ref_from_wkt(utm_wkt).GetUTMZone() # -ve for Southern Hemisphere
+    # southern_hemisphere = (utm_zone < 0)
+    # utm_zone = abs(utm_zone)
+    # projection = ccrs.UTM(zone=utm_zone, southern_hemisphere=southern_hemisphere)
+    #===========================================================================
+    utm_zone = int(re.search('\+zone=(\d+)', utm_wkt).group(1))
+    southern_hemisphere = re.search('\+south=True', utm_wkt) is not None
     projection = ccrs.UTM(zone=utm_zone, southern_hemisphere=southern_hemisphere)
-    print('utm_zone = {}'.format(utm_zone))
     #print(utm_coords)
 
     variable = netcdf_point_utils.netcdf_dataset.variables[variable_to_map]
@@ -152,7 +157,8 @@ def main():
     main function for quick and dirty testing
     '''
     # Create NetCDFPointUtils object for specified netCDF dataset
-    netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
+    #netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
+    netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/P198122_GNDGRAV.nc'
     #netcdf_path = 'E:\\Temp\\gravity_point_test\\201780.nc'
     
     netcdf_dataset = netCDF4.Dataset(netcdf_path)
@@ -160,8 +166,8 @@ def main():
 
     # Plot spatial subset
     plot_point_dataset(npu, 
-                       'Bouguer', 
-                       utm_bbox=[630000,7980000,680000,8030000],
+                       'bouguer', 
+                       utm_bbox=None,#[630000,7980000,680000,8030000],
                        colour_scheme='gist_heat',
                        point_size=50
                        )
