@@ -67,7 +67,6 @@ def get_netcdf_datasets(keywords,
 def dataset_value_generator(variable_name_list,
                             dataset_list, 
                             bounding_box, 
-                            coordinate_wkt,
                             min_points=None,
                             max_points=None
                             ):
@@ -142,32 +141,43 @@ def grid_points(coordinates,
     print("Reprojecting coordinates")
     grid_coordinates = np.array(transform_coords(coordinates, coordinate_wkt, grid_wkt))
     #print('grid_coordinates = {}'.format(grid_coordinates))
-    
-    print("Computing spatial mask")
-    spatial_subset_mask = np.logical_and(np.logical_and((grid_bounds[0] <= grid_coordinates[:,0]), 
-                                                        (grid_coordinates[:,0] <= grid_bounds[2])), 
-                                         np.logical_and((grid_bounds[1] <= grid_coordinates[:,1]), 
-                                                        (grid_coordinates[:,1] <= grid_bounds[3]))
-                                        )    
+
     # Create grids of Y and X values. Note YX ordering and inverted Y for image
     # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
     print("Generating grid coordinates")
     grid_y, grid_x = np.mgrid[pixel_centre_bounds[3]:pixel_centre_bounds[1]-grid_resolution/2.0:-grid_resolution, 
                               pixel_centre_bounds[0]:pixel_centre_bounds[2]+grid_resolution/2.0:grid_resolution]
-
+ 
+    
     # Skip points to reduce memory requirements
-    print("Generating spatial subset mask")
+    print("Generating point subset mask")
     point_subset_mask = np.zeros(shape=values.shape, dtype=bool)
     point_subset_mask[0:-1:point_step] = True
-    point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
-    assert point_subset_mask.any(), 'No points found within grid bounds %s' % grid_bounds
-    
+     
     grid_coordinates = grid_coordinates[point_subset_mask]
+    values = values[point_subset_mask]
 
-    # Interpolate required values to the grid - Note yx ordering for image
+#===============================================================================
+#     print("Computing spatial mask")
+#     spatial_subset_mask = np.logical_and(np.logical_and((grid_bounds[0] <= grid_coordinates[:,0]), 
+#                                                         (grid_coordinates[:,0] <= grid_bounds[2])), 
+#                                          np.logical_and((grid_bounds[1] <= grid_coordinates[:,1]), 
+#                                                         (grid_coordinates[:,1] <= grid_bounds[3]))
+#                                         )    
+#     # Skip points to reduce memory requirements
+#     print("Generating point subset mask")
+#     point_subset_mask = np.zeros(shape=values.shape, dtype=bool)
+#     point_subset_mask[0:-1:point_step] = True
+#     point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
+#     assert point_subset_mask.any(), 'No points found within grid bounds %s' % grid_bounds
+#     
+#     grid_coordinates = grid_coordinates[point_subset_mask]
+#===============================================================================
+
+    # Interpolate required values to the grid - Note yx ordering and inverted y for image
     print("Interpolating {} points".format(grid_coordinates.shape[0]))
     grid_array = griddata(grid_coordinates[:,::-1],
-                          values[point_subset_mask],
+                          values,
                           (grid_y, grid_x), 
                           method=resampling_method
                           )
