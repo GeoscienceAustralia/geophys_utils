@@ -195,12 +195,12 @@ def grid_points(coordinates,
     return grid_array, grid_wkt, geotransform
 
 
-def hillshade(array, azimuth, angle_altitude):
+def hillshade(array, azimuth, angle_altitude, vertical_exaggeration=1):
     '''
     Hillshade function adapted from:
     http://geoexamples.blogspot.com/2014/03/shaded-relief-images-using-gdal-python.html
     '''       
-    x, y = np.gradient(array)
+    x, y = np.gradient(array*vertical_exaggeration)
     slope = np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
     aspect = np.arctan2(-x, y)
     azimuthrad = azimuth * np.pi / 180.
