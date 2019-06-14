@@ -192,10 +192,8 @@ class TileGridder(object):
                 
                 #print netcdf_point_utils.__dict__
                 #print(nc_dataset.variables.keys())
-                print(bounding_box, self.grid_crs_wkt)
                 #print('Computing spatial mask')
                 spatial_mask = netcdf_point_utils.get_spatial_mask(bounding_box, self.grid_crs_wkt)
-                print(spatial_mask)
                 point_count = np.count_nonzero(spatial_mask)
     
                 print('{}/{} points found in expanded bounding box for {}'.format(point_count, netcdf_point_utils.point_count, dataset))
@@ -343,9 +341,11 @@ def main():
     
     pprint(tg.dataset_values)
     
-    tg.grid_tile(grid_resolution=100, 
-                 resampling_method=resampling_method, 
-                 point_step=1)
+    grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=100, 
+                                                      resampling_method=resampling_method, 
+                                                      point_step=1)
+    
+    print(grid_array.shape, grid_wkt, geotransform)
 
 if __name__ == '__main__':
     main()
