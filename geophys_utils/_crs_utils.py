@@ -64,6 +64,13 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
 
     assert not result, 'Invalid WKT or CRS name'
 
+def get_wkt_from_spatial_ref(spatial_ref):
+    '''
+    Function to return OGC WKT for supplied Proj instance
+    '''
+    return spatial_ref.ExportToWkt()
+
+
 def get_coordinate_transformation(from_wkt, to_wkt):
     '''
     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
