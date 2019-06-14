@@ -326,6 +326,7 @@ def main():
     filter_variable_name = 'gridflag'
     filter_value_list = ['Station used in the production of GA grids.']
     bounds_extra=None # Absolute extra per side. Defaults to 5% extra on each side
+    grid_resolution=0.001
     resampling_method='cubic'
     
     tg = TileGridder(dataset_keyword_list, 
@@ -341,7 +342,7 @@ def main():
     
     pprint(tg.dataset_values)
     
-    grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=100, 
+    grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=grid_resolution, 
                                                       resampling_method=resampling_method, 
                                                       point_step=1)
     
