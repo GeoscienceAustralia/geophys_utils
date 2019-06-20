@@ -12,6 +12,7 @@ from geophys_utils import CSWUtils
 from geophys_utils import NetCDFPointUtils
 from geophys_utils import array2file
 import os
+import sys
 from pprint import pprint
 
 DEBUG = True
@@ -319,6 +320,7 @@ class TileGridder(object):
         
     def output_points(self, point_path):
         '''
+        Write CSV containing all points to point_path
         '''
         with open(point_path, 'w') as output_file:
             output_file.write(', '.join(['Dataset', 'X', 'Y', self.grid_variable_name]) + '\n')
@@ -354,6 +356,11 @@ def main():
     tile_path = '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif'
     point_path = os.path.splitext(tile_path)[0] + '.csv'
     
+    # Skip processing if already done
+    if os.path.isfile(point_path):
+        print('Already processed {}'.format(tile_path))
+        sys.exit(0)
+    
     tg = TileGridder(dataset_keyword_list, 
                      grid_variable_name, # Name of data variable to grid
                      grid_bounds, # Grid bounds as [xmin, ymin, xmax, ymax]
@@ -367,19 +374,23 @@ def main():
     
     pprint(tg.dataset_values)
     
-    grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=grid_resolution, 
-                                                      resampling_method=resampling_method, 
-                                                      point_step=1)
+    if len(tg.dataset_values):
+        grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=grid_resolution, 
+                                                          resampling_method=resampling_method, 
+                                                          point_step=1)
+        
+        print(grid_array.shape, grid_wkt, geotransform)
+        
+        array2file(data_arrays=[grid_array], 
+                   projection=grid_crs_wkt, 
+                   geotransform=geotransform, 
+                   file_path=tile_path, 
+                   file_format='GTiff')
+    else:
+        print('No points to grid')
     
-    print(grid_array.shape, grid_wkt, geotransform)
+    tg.output_points(point_path) # Output even if no points
     
-    array2file(data_arrays=[grid_array], 
-               projection=grid_crs_wkt, 
-               geotransform=geotransform, 
-               file_path=tile_path, 
-               file_format='GTiff')
     
-    tg.output_points(point_path)
-
 if __name__ == '__main__':
     main()
