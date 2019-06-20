@@ -28,7 +28,7 @@ class TileGridder(object):
     DEFAULT_FILTER_VALUE_LIST = ['Station used in the production of GA grids.']
 
     def __init__(self, 
-                 dataset_keyword_list, 
+                 dataset_keywords, 
                  grid_variable_name, # Name of data variable to grid
                  grid_bounds, # Grid bounds as [xmin, ymin, xmax, ymax]
                  grid_crs_wkt = None, # Defaults to GDA94 
@@ -41,7 +41,7 @@ class TileGridder(object):
         '''
         TileGridder Constructor
         '''
-        self.dataset_keyword_list = dataset_keyword_list
+        self.dataset_keywords = dataset_keywords
         self.grid_variable_name = grid_variable_name
         self.grid_bounds = grid_bounds
         self.grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt(grid_crs_wkt or TileGridder.GDA94_CRS_WKT))
@@ -67,7 +67,7 @@ class TileGridder(object):
         
         print(self.expanded_gda94_grid_bounds)
         
-        self.dataset_list = self.get_netcdf_datasets(self.dataset_keyword_list, 
+        self.dataset_list = self.get_netcdf_datasets(self.dataset_keywords, 
                                                      bounding_box=self.expanded_gda94_grid_bounds, 
                                                      start_datetime=start_datetime, 
                                                      end_datetime=end_datetime, 
@@ -339,19 +339,33 @@ class TileGridder(object):
             
         
 def main():
-    dataset_keyword_list = 'point, gravity, point located data, ground digital data, geophysical survey' 
-    grid_variable_name = 'bouguer' # Name of data variable to grid
-    #grid_bounds = (118.75, -28.5, 119.5, -27.75) # Sandstone, WA
-    grid_bounds = (141.0, -32.5, 142.0, -31.5) # Broken Hill, NSW (~40k points - takes a while)
-    #grid_bounds = (136.5, -31.0, 137.5, -30.0) # Roxby Downs, SA (possibly some levelling issues?)
-    grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt('EPSG:4283')) # Defaults to GDA94 
+    #===========================================================================
+    # dataset_keywords = 'point, gravity, point located data, ground digital data, geophysical survey' 
+    # grid_variable_name = 'bouguer' # Name of data variable to grid
+    # #grid_bounds = (118.75, -28.5, 119.5, -27.75) # Sandstone, WA
+    # grid_bounds = (141.0, -32.5, 142.0, -31.5) # Broken Hill, NSW (~40k points - takes a while)
+    # #grid_bounds = (136.5, -31.0, 137.5, -30.0) # Roxby Downs, SA (possibly some levelling issues?)
+    # grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt('EPSG:4283')) # Defaults to GDA94 
+    # start_datetime = None
+    # end_datetime = None
+    # filter_variable_name = 'gridflag'
+    # filter_value_list = ['Station used in the production of GA grids.']
+    # bounds_extra=None # Absolute extra per side. Defaults to 5% extra on each side
+    # grid_resolution=0.001
+    # resampling_method='cubic'
+    #===========================================================================
+
+    dataset_keywords = os.environ['dataset_keywords'] 
+    grid_variable_name = os.environ['grid_variable_name']
+    grid_bounds = [float(ordinate.strip()) for ordinate in os.environ['grid_bounds'].split(',')]
+    grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt(os.environ.get('grid_crs_wkt') or 'EPSG:4283')) # Defaults to GDA94
     start_datetime = None
     end_datetime = None
-    filter_variable_name = 'gridflag'
-    filter_value_list = ['Station used in the production of GA grids.']
-    bounds_extra=None # Absolute extra per side. Defaults to 5% extra on each side
-    grid_resolution=0.001
-    resampling_method='cubic'
+    filter_variable_name = os.environ.get('filter_variable_name') or 'gridflag'
+    filter_value_list = [value.strip() for value in (os.environ.get('filter_value_list') or 'Station used in the production of GA grids.').split(',')]
+    bounds_extra = float(os.environ.get('grid_resolution') or 0) or None # Absolute extra per side. Defaults to 5% extra on each side
+    grid_resolution = float(os.environ.get('grid_resolution') or 0.001)
+    resampling_method = os.environ.get('filter_variable_name') or 'cubic'
     
     tile_path = '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif'
     point_path = os.path.splitext(tile_path)[0] + '.csv'
@@ -361,7 +375,7 @@ def main():
         print('Already processed {}'.format(tile_path))
         sys.exit(0)
     
-    tg = TileGridder(dataset_keyword_list, 
+    tg = TileGridder(dataset_keywords, 
                      grid_variable_name, # Name of data variable to grid
                      grid_bounds, # Grid bounds as [xmin, ymin, xmax, ymax]
                      grid_crs_wkt, # Defaults to GDA94 
