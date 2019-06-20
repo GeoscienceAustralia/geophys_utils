@@ -321,16 +321,16 @@ class TileGridder(object):
         '''
         '''
         with open(point_path, 'w') as output_file:
-            output_file.writeline(', '.join(['Dataset', 'X', 'Y', self.grid_variable_name]))
+            output_file.write(', '.join(['Dataset', 'X', 'Y', self.grid_variable_name]) + '\n')
             for dataset in sorted(self.dataset_values.keys()):
                 #for array_name in sorted(self.dataset_values[dataset].keys()):
                 arrays = self.dataset_values[dataset]
                 for point_index in range(len(arrays['coordinates'])):
-                    output_file.writeline(','.join([os.path.basename(dataset),
+                    output_file.write(','.join([os.path.basename(dataset),
                                                     ','.join(arrays['coordinates'][point_index]),
                                                     arrays[self.grid_variable_name][point_index]
                                                     ]
-                                                    )
+                                                    ) + '\n'
                                        )
                                              
                 
