@@ -10,6 +10,8 @@ from netCDF4 import Dataset
 from scipy.interpolate import griddata
 from geophys_utils import CSWUtils
 from geophys_utils import NetCDFPointUtils
+from geophys_utils import array2file
+import os
 from pprint import pprint
 
 DEBUG = True
@@ -314,6 +316,26 @@ class TileGridder(object):
                                 resampling_method=resampling_method, 
                                 point_step=point_step)
         
+        
+    def output_points(self, point_path):
+        '''
+        '''
+        with open(point_path, 'w') as output_file:
+            output_file.writeline(', '.join(['Dataset', 'X', 'Y', self.grid_variable_name]))
+            for dataset in sorted(self.dataset_values.keys()):
+                #for array_name in sorted(self.dataset_values[dataset].keys()):
+                arrays = self.dataset_values[dataset]
+                for point_index in range(len(arrays['coordinates'])):
+                    output_file.writeline(','.join([os.path.basename(dataset),
+                                                    ','.join(arrays['coordinates'][point_index]),
+                                                    arrays[self.grid_variable_name][point_index]
+                                                    ]
+                                                    )
+                                       )
+                                             
+                
+            
+        
 def main():
     dataset_keyword_list = 'point, gravity, point located data, ground digital data, geophysical survey' 
     grid_variable_name = 'bouguer' # Name of data variable to grid
@@ -328,6 +350,9 @@ def main():
     bounds_extra=None # Absolute extra per side. Defaults to 5% extra on each side
     grid_resolution=0.001
     resampling_method='cubic'
+    
+    tile_path = '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif'
+    point_path = os.path.splitext(tile_path)[0] + '.csv'
     
     tg = TileGridder(dataset_keyword_list, 
                      grid_variable_name, # Name of data variable to grid
@@ -347,6 +372,14 @@ def main():
                                                       point_step=1)
     
     print(grid_array.shape, grid_wkt, geotransform)
+    
+    array2file(data_arrays=[grid_array], 
+               projection=grid_crs_wkt, 
+               geotransform=geotransform, 
+               file_path=tile_path, 
+               file_format='GTiff')
+    
+    tg.output_points(point_path)
 
 if __name__ == '__main__':
     main()
