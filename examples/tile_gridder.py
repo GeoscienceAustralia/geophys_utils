@@ -342,7 +342,7 @@ def main():
     #grid_bounds = (118.75, -28.5, 119.5, -27.75) # Sandstone, WA
     grid_bounds = (141.0, -32.5, 142.0, -31.5) # Broken Hill, NSW (~40k points - takes a while)
     #grid_bounds = (136.5, -31.0, 137.5, -30.0) # Roxby Downs, SA (possibly some levelling issues?)
-    grid_crs_wkt = 'EPSG:4283' # Defaults to GDA94 
+    grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt('EPSG:4283')) # Defaults to GDA94 
     start_datetime = None
     end_datetime = None
     filter_variable_name = 'gridflag'
