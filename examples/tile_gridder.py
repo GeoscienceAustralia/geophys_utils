@@ -15,7 +15,9 @@ import os
 import sys
 import re
 import argparse
+import itertools
 from pprint import pprint
+from _pylief import NONE
 
 DEBUG = True
 
@@ -43,12 +45,18 @@ class TileGridder(object):
         '''
         TileGridder Constructor
         '''
+        self._dataset_list = None
+        self._dataset_values = None
+        
         self.dataset_keywords = dataset_keywords
         self.grid_variable_name = grid_variable_name
         self.grid_bounds = grid_bounds
         self.grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt(grid_crs_wkt or TileGridder.GDA94_CRS_WKT))
         self.filter_variable_name = filter_variable_name or TileGridder.DEFAULT_FILTER_VARIABLE_NAME
         self.filter_value_list = filter_value_list or TileGridder.DEFAULT_FILTER_VALUE_LIST
+        self.start_datetime = start_datetime
+        self.end_datetime = end_datetime
+        
         
         if tile_extra is None: # Expand bounds by TileGridder.DEFAULT_TILE_EXPANSION_PERCENT percent each side
             self.expanded_grid_bounds = [grid_bounds[0] - (grid_bounds[2] - grid_bounds[0]) * TileGridder.DEFAULT_TILE_EXPANSION_PERCENT,
@@ -67,24 +75,40 @@ class TileGridder(object):
                                                                 self.grid_crs_wkt,
                                                                 TileGridder.GDA94_CRS_WKT)
         
-        print(self.expanded_gda94_grid_bounds)
+        print('expanded_gda94_grid_bounds = {}'.format(self.expanded_gda94_grid_bounds))
+
+
+    @property
+    def dataset_list(self):
+        '''
+        list of individual datasets which intersect bounding box
+        '''
+        if self._dataset_list is None:
         
-        self.dataset_list = self.get_netcdf_datasets(self.dataset_keywords, 
-                                                     bounding_box=self.expanded_gda94_grid_bounds, 
-                                                     start_datetime=start_datetime, 
-                                                     end_datetime=end_datetime, 
-                                                     csw_url=None,
-                                                     )
+            self._dataset_list = self.get_netcdf_datasets(self.dataset_keywords, 
+                                                         bounding_box=self.expanded_gda94_grid_bounds, 
+                                                         start_datetime=self.start_datetime, 
+                                                         end_datetime=self.end_datetime, 
+                                                         csw_url=None,
+                                                         )
         
-        self.dataset_values = {dataset: dataset_value_dict
-            for dataset, dataset_value_dict in self.dataset_value_generator([self.grid_variable_name, self.filter_variable_name],
-                                                                            self.dataset_list, 
-                                                                            self.expanded_gda94_grid_bounds,
-                                                                            )
-                                }
-        
-        self.filter_points()
-        
+        return self._dataset_list
+
+    @property
+    def dataset_values(self):
+        '''
+        Read and filter points from individual datasets
+        '''
+        if self._dataset_values is None:
+            self._dataset_values = {dataset: dataset_value_dict
+                for dataset, dataset_value_dict in self.dataset_value_generator([self.grid_variable_name, self.filter_variable_name],
+                                                                                self.dataset_list, 
+                                                                                self.expanded_gda94_grid_bounds,
+                                                                                )
+                                    }
+            self.filter_points()
+            
+        return self._dataset_values
         
 
     def filter_points(self):        
@@ -296,23 +320,27 @@ class TileGridder(object):
         
         
     def grid_tile(self, 
-                  grid_resolution=100, 
+                  grid_resolution, 
+                  coordinates=None,
+                  values=None,
                   resampling_method='linear', 
                   point_step=1):
         
-        all_coordinates = np.concatenate([self.dataset_values[dataset]['coordinates']
+        if coordinates is None:
+            coordinates = np.concatenate([self.dataset_values[dataset]['coordinates']
                                           for dataset in sorted(self.dataset_values.keys())
                                           ]
                                          )
                                          
-        all_values = np.concatenate([self.dataset_values[dataset][self.grid_variable_name]
+        if values is None:
+            values = np.concatenate([self.dataset_values[dataset][self.grid_variable_name]
                                           for dataset in sorted(self.dataset_values.keys())
                                           ]
                                          )
                                          
-        return self.grid_points(coordinates=all_coordinates,
+        return self.grid_points(coordinates=coordinates,
                                 coordinate_wkt=self.grid_crs_wkt,
-                                values=all_values,
+                                values=values,
                                 grid_wkt=self.grid_crs_wkt, 
                                 grid_bounds=self.grid_bounds,
                                 grid_resolution=grid_resolution, 
@@ -338,6 +366,20 @@ class TileGridder(object):
                                        )
                                              
                 
+    def output_dataset_list(self, dataset_list_path):
+        '''
+        Write a text file containing all dataset paths or URLs to dataset_list_path
+        '''
+        with open(dataset_list_path, 'w') as output_file:
+            for dataset in sorted(self.dataset_list):
+                output_file.write(dataset + '\n')
+            
+    def read_dataset_list(self, dataset_list_path):
+        '''
+        Write a text file containing all dataset paths or URLs to dataset_list_path
+        '''
+        with open(dataset_list_path, 'r') as input_file:
+            self._dataset_list = list([dataset.strip() for dataset in input_file.readlines()])
             
         
 def main():
@@ -393,6 +435,8 @@ def main():
                         required=False)
     #parser.add_argument("-s", "--start_date", help="start date for search", type=str)
     #parser.add_argument("-e", "--end_date", help="end date for search", type=str)
+    parser.add_argument('-p', '--process', action='store_const', const=True, default=False,
+                        help='Process tiles. Default is not to process, but just to create point CSV files')
     parser.add_argument('--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     parser.add_argument("-o", "--output_dir", help='output directory. Defaults to ".".', type=str, default='.')   
@@ -414,46 +458,103 @@ def main():
     filter_value_list = [value.strip() for value in args.filter_values.split(',')]
     tile_extra = args.tile_extra # Absolute extra per side. Defaults to 5% extra on each side
     resampling_method = os.environ.get('filter_variable_name') or 'cubic'
-    
+        
     assert os.path.isdir(args.output_dir), 'Invalid output directory'
     output_dir = os.path.abspath(args.output_dir)
-    tile_path = os.path.join(output_dir, '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif')
-    point_path = os.path.splitext(tile_path)[0] + '.csv'
     
-    # Skip processing if already done
-    if os.path.isfile(point_path):
-        print('Already processed {}'.format(tile_path))
-        sys.exit(0)
+    for ll_point in itertools.product(*[np.arange(grid_bounds[0+dim_index], grid_bounds[2+dim_index], tile_size[dim_index]) for dim_index in range(2)]):
+        tile_bounds = [ll_point[0], ll_point[1], ll_point[0]+tile_size[0], ll_point[1]+tile_size[1]]
+        print(tile_bounds)
     
-    tg = TileGridder(dataset_keywords, 
-                     grid_variable_name, # Name of data variable to grid
-                     grid_bounds, # Grid bounds as [xmin, ymin, xmax, ymax]
-                     grid_crs_wkt, # Defaults to GDA94 
-                     start_datetime,
-                     end_datetime,
-                     filter_variable_name, # e.g. 'gridflag'
-                     filter_value_list, # e.g. ['Station used in the production of GA grids.']
-                     tile_extra, # Absolute extra per side. Defaults to 5% extra on each side
-                     )
-    
-    pprint(tg.dataset_values)
-    
-    if len(tg.dataset_values):
-        grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=grid_resolution, 
-                                                          resampling_method=resampling_method, 
-                                                          point_step=1)
+        tile_path = os.path.join(output_dir, '_'.join([grid_variable_name] + [str(ordinate) for ordinate in tile_bounds]) + '.tif')
+        point_path = os.path.splitext(tile_path)[0] + '.csv'
+        dataset_list_path = os.path.splitext(tile_path)[0] + '.txt'
         
-        print(grid_array.shape, grid_wkt, geotransform)
+        tg = TileGridder(dataset_keywords, 
+                         grid_variable_name, # Name of data variable to grid
+                         tile_bounds, # Grid bounds as [xmin, ymin, xmax, ymax]
+                         grid_crs_wkt, # Defaults to GDA94 
+                         start_datetime,
+                         end_datetime,
+                         filter_variable_name, # e.g. 'gridflag'
+                         filter_value_list, # e.g. ['Station used in the production of GA grids.']
+                         tile_extra, # Absolute extra per side. Defaults to 5% extra on each side
+                         )
         
-        array2file(data_arrays=[grid_array], 
-                   projection=grid_crs_wkt, 
-                   geotransform=geotransform, 
-                   file_path=tile_path, 
-                   file_format='GTiff')
-    else:
-        print('No points to grid')
-    
-    tg.output_points(point_path) # Output even if no points
+        
+        if not os.path.isfile(dataset_list_path): # No dataset list file exists - try to make one
+            try:
+                # pprint(tg.dataset_values)
+                tg.output_dataset_list(dataset_list_path)
+                print('Finished writing dataset list file {}'.format(dataset_list_path))
+            except Exception as e:
+                print('Unable to create dataset list file {}: {}'.format(dataset_list_path, e))
+                
+        # Process tiles if required
+        if args.process and os.path.isfile(dataset_list_path):
+            # Skip processing tile if already done
+            if os.path.isfile(tile_path):
+                print('Already created tile file {}'.format(tile_path))
+                continue
+            
+            if os.path.isfile(dataset_list_path): # No point file exists - try to make one
+                try:
+                    # pprint(tg.dataset_values)
+                    tg.read_dataset_list(dataset_list_path)
+                    print('Finished read dataset list file {}'.format(dataset_list_path))
+                except Exception as e:
+                    print('Unable to read dataset list file {}: {}'.format(dataset_list_path, e))
+                    continue
+                
+            if not len(tg.dataset_list):
+                print('No datasets to process')
+                continue
+            
+            if not os.path.isfile(point_path): # No point file exists - try to make one
+                try:
+                    # pprint(tg.dataset_values)
+                    tg.output_points(point_path)
+                    print('Finished writing point file {}'.format(point_path))
+                except Exception as e:
+                    print('Unable to create point file {}: {}'.format(point_path, e))
+                    continue
+                
+            # Process tile
+            point_coordinates = []
+            point_values = []
+            with open(point_path, 'r') as csv_file:
+                _header = csv_file.readline() # Read header
+                
+                for line in csv_file.readlines():
+                    line_values = [value.strip() for value in line.split(',')]
+                    point_coordinates.append(tuple(float(ordinate) for ordinate in line_values[1:3]))
+                    point_values.append(float(line_values[3]))
+                                  
+            point_coordinates = np.array(point_coordinates)
+            point_values = np.array(point_values)
+            print('Finished reading point file {}'.format(point_path))
+            print(point_coordinates)
+                    
+            if not len(point_values):
+                print('No points to grid')
+                continue
+            
+            grid_array, grid_wkt, geotransform = tg.grid_tile(grid_resolution=grid_resolution, 
+                                                              coordinates=point_coordinates,
+                                                              values=point_values,
+                                                              resampling_method=resampling_method, 
+                                                              point_step=1)
+             
+            print(grid_array.shape, grid_wkt, geotransform)
+             
+            array2file(data_arrays=[grid_array], 
+                       projection=grid_crs_wkt, 
+                       geotransform=geotransform, 
+                       file_path=tile_path, 
+                       file_format='GTiff')
+
+            
+
     
     
 if __name__ == '__main__':
