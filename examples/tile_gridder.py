@@ -17,7 +17,6 @@ import re
 import argparse
 import itertools
 from pprint import pprint
-from _pylief import NONE
 
 DEBUG = True
 
