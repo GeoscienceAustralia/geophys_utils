@@ -13,6 +13,8 @@ from geophys_utils import NetCDFPointUtils
 from geophys_utils import array2file
 import os
 import sys
+import re
+import argparse
 from pprint import pprint
 
 DEBUG = True
@@ -36,7 +38,7 @@ class TileGridder(object):
                  end_datetime=None,
                  filter_variable_name=None, # e.g. 'gridflag'
                  filter_value_list=None, # e.g. ['Station used in the production of GA grids.']
-                 bounds_extra=None, # Absolute extra per side. Defaults to 5% extra on each side
+                 tile_extra=None, # Absolute extra per side. Defaults to 5% extra on each side
                  ):
         '''
         TileGridder Constructor
@@ -48,17 +50,17 @@ class TileGridder(object):
         self.filter_variable_name = filter_variable_name or TileGridder.DEFAULT_FILTER_VARIABLE_NAME
         self.filter_value_list = filter_value_list or TileGridder.DEFAULT_FILTER_VALUE_LIST
         
-        if bounds_extra is None: # Expand bounds by TileGridder.DEFAULT_TILE_EXPANSION_PERCENT percent each side
+        if tile_extra is None: # Expand bounds by TileGridder.DEFAULT_TILE_EXPANSION_PERCENT percent each side
             self.expanded_grid_bounds = [grid_bounds[0] - (grid_bounds[2] - grid_bounds[0]) * TileGridder.DEFAULT_TILE_EXPANSION_PERCENT,
                                          grid_bounds[1] - (grid_bounds[3] - grid_bounds[1]) * TileGridder.DEFAULT_TILE_EXPANSION_PERCENT,
                                          grid_bounds[2] + (grid_bounds[2] - grid_bounds[0]) * TileGridder.DEFAULT_TILE_EXPANSION_PERCENT,
                                          grid_bounds[3] + (grid_bounds[3] - grid_bounds[1]) * TileGridder.DEFAULT_TILE_EXPANSION_PERCENT,
                                          ]
         else: # Expand bounds by absolute amount
-            self.expanded_grid_bounds = [grid_bounds[0] - bounds_extra,
-                                         grid_bounds[1] - bounds_extra,
-                                         grid_bounds[2] + bounds_extra,
-                                         grid_bounds[3] + bounds_extra,
+            self.expanded_grid_bounds = [grid_bounds[0] - tile_extra,
+                                         grid_bounds[1] - tile_extra,
+                                         grid_bounds[2] + tile_extra,
+                                         grid_bounds[3] + tile_extra,
                                          ]
 
         self.expanded_gda94_grid_bounds = self.reproject_bounds(self.expanded_grid_bounds,
@@ -247,10 +249,10 @@ class TileGridder(object):
         '''
         
         # Determine spatial grid bounds rounded out to nearest GRID_RESOLUTION multiple
-        pixel_centre_bounds = (round(math.floor(grid_bounds[0] / grid_resolution) * grid_resolution, 6),
-                       round(math.floor(grid_bounds[1] / grid_resolution) * grid_resolution, 6),
-                       round(math.floor(grid_bounds[2] / grid_resolution - 1.0) * grid_resolution + grid_resolution, 6),
-                       round(math.floor(grid_bounds[3] / grid_resolution - 1.0) * grid_resolution + grid_resolution, 6)
+        pixel_centre_bounds = (round((math.floor(grid_bounds[0] / grid_resolution) + 0.5) * grid_resolution, 6),
+                       round((math.floor(grid_bounds[1] / grid_resolution) + 0.5) * grid_resolution, 6),
+                       round((math.floor(grid_bounds[2] / grid_resolution) - 0.5) * grid_resolution, 6),
+                       round((math.floor(grid_bounds[3] / grid_resolution) - 0.5) * grid_resolution, 6)
                        )
         
         print("Reprojecting coordinates")
@@ -339,6 +341,21 @@ class TileGridder(object):
             
         
 def main():
+    '''
+    '''
+    def quote_delimitedtext(text, delimiter, quote_char='"'):
+        '''
+        Helper function to quote text containing delimiters or whitespace
+        '''
+        if delimiter in text or quote_char in text or re.search('\s', text):
+            if delimiter == ',': # Use double quote to escape quote character for CSV
+                return quote_char + text.replace(quote_char, quote_char + quote_char) + quote_char
+            else: # Use backslash to escape quote character for tab or space delimited text
+                return quote_char + text.replace(quote_char, '\\' + quote_char) + quote_char
+        else:
+            return text
+            
+        
     #===========================================================================
     # dataset_keywords = 'point, gravity, point located data, ground digital data, geophysical survey' 
     # grid_variable_name = 'bouguer' # Name of data variable to grid
@@ -350,24 +367,57 @@ def main():
     # end_datetime = None
     # filter_variable_name = 'gridflag'
     # filter_value_list = ['Station used in the production of GA grids.']
-    # bounds_extra=None # Absolute extra per side. Defaults to 5% extra on each side
+    # tile_extra=None # Absolute extra per side. Defaults to 5% extra on each side
     # grid_resolution=0.001
     # resampling_method='cubic'
     #===========================================================================
 
-    dataset_keywords = os.environ['dataset_keywords'] 
-    grid_variable_name = os.environ['grid_variable_name']
-    grid_bounds = [float(ordinate.strip()) for ordinate in os.environ['grid_bounds'].split(',')]
-    grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt(os.environ.get('grid_crs_wkt') or 'EPSG:4283')) # Defaults to GDA94
-    start_datetime = None
-    end_datetime = None
-    filter_variable_name = os.environ.get('filter_variable_name') or 'gridflag'
-    filter_value_list = [value.strip() for value in (os.environ.get('filter_value_list') or 'Station used in the production of GA grids.').split(',')]
-    bounds_extra = float(os.environ.get('grid_resolution') or 0) or None # Absolute extra per side. Defaults to 5% extra on each side
-    grid_resolution = float(os.environ.get('grid_resolution') or 0.001)
+    # Define command line arguments
+    parser = argparse.ArgumentParser()
+    # Required arguments
+    parser.add_argument("-k", "--keywords", help="comma-separated list of required keywords for search", type=str, required=True)
+    parser.add_argument("-b", "--bounds", help='comma-separated <minx>,<miny>,<maxx>,<maxy> ordinates of bounding box for gridding. N.B: A leading "-" sign on this list should NOT be preceded by a space',
+                        type=str, required=True)
+    parser.add_argument("-t", "--tilesize", help="single value or comma-separated pair of x,y values for tile size", type=str, required=True)
+    parser.add_argument("-d", "--data_variable", help="data variable name", type=str, required=True)
+    parser.add_argument("-r", "--grid_resolution", help='grid resolution', type=float, required=True)
+    
+    parser.add_argument("-c", "--crs", help='coordinate reference system for bounding box coordinates for search. Defaults to "EPSG:4283".',
+                        type=str, default='EPSG:4283')
+    parser.add_argument("-f", "--filter_variable", help='name of filter variable. Defaults to "gridflag"', type=str, default='gridflag')    
+    parser.add_argument("-v", "--filter_values", 
+                        help='comma separated list of allowed filter values. Defaults to "Station used in the production of GA grids."', 
+                        type=str, default='Station used in the production of GA grids.')
+    parser.add_argument("-m", "--resampling_method", help='resampling method. Defaults to "cubic"', type=str)
+    parser.add_argument("-x", "--tile_extra", help='absolute extra per side for tiling. Defaults to 5% extra on each side', type=float, 
+                        required=False)
+    #parser.add_argument("-s", "--start_date", help="start date for search", type=str)
+    #parser.add_argument("-e", "--end_date", help="end date for search", type=str)
+    parser.add_argument('--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
+    parser.add_argument("-o", "--output_dir", help='output directory. Defaults to ".".', type=str, default='.')   
+    args = parser.parse_args()
+
+
+    dataset_keywords = args.keywords
+    grid_variable_name = args.data_variable
+    grid_resolution = args.grid_resolution
+    grid_bounds = [round(float(ordinate.strip()) / grid_resolution) * grid_resolution for ordinate in args.bounds.split(',')]
+    tile_size = [round(float(size.strip()) / grid_resolution) * grid_resolution for size in args.tilesize.split(',')]
+    if len(tile_size) == 1: # Only one size given
+        tile_size.append(tile_size[0]) # Use same size for X and Y
+    
+    grid_crs_wkt = get_wkt_from_spatial_ref(get_spatial_ref_from_wkt(args.crs)) # Defaults to GDA94
+    start_datetime = None # args.start_date
+    end_datetime = None # args.end_date
+    filter_variable_name = args.filter_variable
+    filter_value_list = [value.strip() for value in args.filter_values.split(',')]
+    tile_extra = args.tile_extra # Absolute extra per side. Defaults to 5% extra on each side
     resampling_method = os.environ.get('filter_variable_name') or 'cubic'
     
-    tile_path = '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif'
+    assert os.path.isdir(args.output_dir), 'Invalid output directory'
+    output_dir = os.path.abspath(args.output_dir)
+    tile_path = os.path.join(output_dir, '_'.join([grid_variable_name] + [str(ordinate) for ordinate in grid_bounds]) + '.tif')
     point_path = os.path.splitext(tile_path)[0] + '.csv'
     
     # Skip processing if already done
@@ -383,7 +433,7 @@ def main():
                      end_datetime,
                      filter_variable_name, # e.g. 'gridflag'
                      filter_value_list, # e.g. ['Station used in the production of GA grids.']
-                     bounds_extra, # Absolute extra per side. Defaults to 5% extra on each side
+                     tile_extra, # Absolute extra per side. Defaults to 5% extra on each side
                      )
     
     pprint(tg.dataset_values)
