@@ -461,9 +461,19 @@ def main():
     assert os.path.isdir(args.output_dir), 'Invalid output directory'
     output_dir = os.path.abspath(args.output_dir)
     
-    os.makedirs(os.path.join(output_dir, 'tiles'))
-    os.makedirs(os.path.join(output_dir, 'point_lists'))
-    os.makedirs(os.path.join(output_dir, 'dataset_lists'))
+    # Make subdirectories if required
+    try:
+        os.makedirs(os.path.join(output_dir, 'tiles'))
+    except:
+        pass
+    try:
+        os.makedirs(os.path.join(output_dir, 'point_lists'))
+    except:
+        pass
+    try:
+        os.makedirs(os.path.join(output_dir, 'dataset_lists'))
+    except:
+        pass
     
     for ll_point in itertools.product(*[np.arange(grid_bounds[0+dim_index], grid_bounds[2+dim_index], tile_size[dim_index]) for dim_index in range(2)]):
         tile_bounds = [ll_point[0], ll_point[1], ll_point[0]+tile_size[0], ll_point[1]+tile_size[1]]
