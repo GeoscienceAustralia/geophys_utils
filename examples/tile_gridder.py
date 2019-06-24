@@ -347,11 +347,11 @@ class TileGridder(object):
                                 point_step=point_step)
         
         
-    def output_points(self, point_path):
+    def output_points(self, point_list_path):
         '''
-        Write CSV containing all points to point_path
+        Write CSV containing all points to point_list_path
         '''
-        with open(point_path, 'w') as output_file:
+        with open(point_list_path, 'w') as output_file:
             output_file.write(', '.join(['Dataset', 'X', 'Y', self.grid_variable_name]) + '\n')
             for dataset in sorted(self.dataset_values.keys()):
                 #for array_name in sorted(self.dataset_values[dataset].keys()):
@@ -461,13 +461,17 @@ def main():
     assert os.path.isdir(args.output_dir), 'Invalid output directory'
     output_dir = os.path.abspath(args.output_dir)
     
+    os.makedirs(os.path.join(output_dir, 'tiles'))
+    os.makedirs(os.path.join(output_dir, 'point_lists'))
+    os.makedirs(os.path.join(output_dir, 'dataset_lists'))
+    
     for ll_point in itertools.product(*[np.arange(grid_bounds[0+dim_index], grid_bounds[2+dim_index], tile_size[dim_index]) for dim_index in range(2)]):
         tile_bounds = [ll_point[0], ll_point[1], ll_point[0]+tile_size[0], ll_point[1]+tile_size[1]]
         print(tile_bounds)
     
-        tile_path = os.path.join(output_dir, '_'.join([grid_variable_name] + [str(ordinate) for ordinate in tile_bounds]) + '.tif')
-        point_path = os.path.splitext(tile_path)[0] + '.csv'
-        dataset_list_path = os.path.splitext(tile_path)[0] + '.txt'
+        tile_path = os.path.join(output_dir, 'tiles', '_'.join([grid_variable_name] + [str(ordinate) for ordinate in tile_bounds]) + '.tif')
+        point_list_path = os.path.join(output_dir, 'point_lists', '_'.join([grid_variable_name] + [str(ordinate) for ordinate in tile_bounds]) + '.csv')
+        dataset_list_path = os.path.join(output_dir, 'dataset_lists', '_'.join([grid_variable_name] + [str(ordinate) for ordinate in tile_bounds]) + '.txt')
         
         tg = TileGridder(dataset_keywords, 
                          grid_variable_name, # Name of data variable to grid
@@ -509,19 +513,19 @@ def main():
                 print('No datasets to process')
                 continue
             
-            if not os.path.isfile(point_path): # No point file exists - try to make one
+            if not os.path.isfile(point_list_path): # No point file exists - try to make one
                 try:
                     # pprint(tg.dataset_values)
-                    tg.output_points(point_path)
-                    print('Finished writing point file {}'.format(point_path))
+                    tg.output_points(point_list_path)
+                    print('Finished writing point file {}'.format(point_list_path))
                 except Exception as e:
-                    print('Unable to create point file {}: {}'.format(point_path, e))
+                    print('Unable to create point file {}: {}'.format(point_list_path, e))
                     continue
                 
             # Process tile
             point_coordinates = []
             point_values = []
-            with open(point_path, 'r') as csv_file:
+            with open(point_list_path, 'r') as csv_file:
                 _header = csv_file.readline() # Read header
                 
                 for line in csv_file.readlines():
@@ -531,7 +535,7 @@ def main():
                                   
             point_coordinates = np.array(point_coordinates)
             point_values = np.array(point_values)
-            print('Finished reading point file {}'.format(point_path))
+            print('Finished reading point file {}'.format(point_list_path))
             print(point_coordinates)
                     
             if not len(point_values):
