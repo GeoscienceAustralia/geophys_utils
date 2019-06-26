@@ -143,11 +143,6 @@ class NetCDFUtils(object):
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
           
-        if invert_y is None: # Default y-axis inversion to same as source
-            invert_y = self.y_inverted
-            
-        flip_y = (invert_y != self.y_inverted)
-        
         # Override default variable options with supplied ones for all data variables
         for data_variable in self.data_variable_list:
             variable_dict = dict(NetCDFUtils.DEFAULT_COPY_OPTIONS)
@@ -278,12 +273,14 @@ class NetCDFUtils(object):
                             len(input_variable.dimensions) != 2): 
                             # No chunking - Try to copy in one hit
                             
-                            if ((input_variable == self.y_variable) and flip_y): 
-                                # Y-axis flip required
-                                assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
-                                overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
-                                logger.info('\tInverting y-axis variable %s' % variable_name)
-                                
+                            #===================================================
+                            # if ((input_variable == self.y_variable) and flip_y): 
+                            #     # Y-axis flip required
+                            #     assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
+                            #     overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
+                            #     logger.info('\tInverting y-axis variable %s' % variable_name)
+                            #     
+                            #===================================================
                             output_variable[...] = input_variable[overall_slices]
                         
                         else: # Chunked - perform copy in pieces
@@ -343,12 +340,14 @@ class NetCDFUtils(object):
                                                 for dimension_index in range(len(input_variable.dimensions))
                                                ]
                                 
-                                if flip_y and ydim_index is not None:
-                                    # Flip required
-                                    piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
-                                                                          output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
-                                                                            if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
-                                                                            else None, -1)
+                                #===============================================
+                                # if flip_y and ydim_index is not None:
+                                #     # Flip required
+                                #     piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
+                                #                                           output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
+                                #                                             if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
+                                #                                             else None, -1)
+                                #===============================================
                                 
                                 #logger.debug(piece_read_slices, piece_write_slices)
                                 
@@ -498,18 +497,12 @@ def main():
                         type=str)
     parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
                         type=int, default=4)
-    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
     parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     parser.add_argument("input_path")
     parser.add_argument("output_path")
     
     args = parser.parse_args()
-    
-    if args.invert_y is not None:
-        invert_y = bool(strtobool(args.invert_y))
-    else:
-        invert_y = None # Default to same as source
     
     if args.do_copy:
         if args.chunkspec:
@@ -537,7 +530,6 @@ def main():
              #dim_range_dict={},
              nc_format=args.format,
              #limit_dim_size=False
-             invert_y=invert_y
              )
         
 

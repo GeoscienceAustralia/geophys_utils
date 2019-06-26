@@ -28,6 +28,8 @@ from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._netcdf_utils import NetCDFUtils
 import logging
+import argparse
+from distutils.util import strtobool
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -43,7 +45,7 @@ class NetCDFGridUtils(NetCDFUtils):
     DEFAULT_MAX_BYTES = 500000000  # Default to 500,000,000 bytes for NCI's OPeNDAP
     FLOAT_TOLERANCE = 0.000001
 
-    def __init__(self, netcdf_dataset):
+    def __init__(self, netcdf_dataset, debug=False):
         '''
         NetCDFGridUtils Constructor - wraps a NetCDF dataset
         '''
@@ -100,7 +102,7 @@ class NetCDFGridUtils(NetCDFUtils):
 
     
         # Start of init function - Call inherited constructor first
-        super().__init__(netcdf_dataset)
+        super().__init__(netcdf_dataset, debug=debug)
         
         logger.debug('Running NetCDFGridUtils constructor')
         
@@ -393,4 +395,67 @@ class NetCDFGridUtils(NetCDFUtils):
         return self._GeoTransform
 
 
+    
+def main():
+    '''
+    Main function for quick and dirty testing
+    '''
+    # Define command line arguments
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('-c', '--copy', 
+                        dest='do_copy', 
+                        action='store_const', 
+                        const=True, default=False,
+                        help='Copy netCDF files')
+    parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
+                        type=str, default='NETCDF4')
+    parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
+                        type=str)
+    parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
+                        type=int, default=4)
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
+    parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
+    parser.add_argument("input_path")
+    parser.add_argument("output_path")
+    
+    args = parser.parse_args()
+    
+    if args.invert_y is not None:
+        invert_y = bool(strtobool(args.invert_y))
+    else:
+        invert_y = None # Default to same as source
+    
+    if args.do_copy:
+        if args.chunkspec:
+            chunk_spec = {dim_name: int(chunk_size) 
+                        for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
+        else:
+            chunk_spec = None
+            
+    ncgu = NetCDFGridUtils(args.input_path,
+                      debug=args.debug
+                      )   
+    
+    ncgu.copy(args.output_path, 
+             #datatype_map_dict={},
+             # Compress all chunked variables
+             variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension) 
+                                                                   for dimension in variable.dimensions
+                                                                   ],
+                                                    'zlib': bool(args.complevel),
+                                                    'complevel': args.complevel
+                                                    }
+                               for variable_name, variable in ncgu.netcdf_dataset.variables.items()
+                               if (set(variable.dimensions) & set(chunk_spec.keys()))
+                               } if chunk_spec else {},
+             #dim_range_dict={},
+             nc_format=args.format,
+             #limit_dim_size=False
+             invert_y=invert_y
+             )
         
+
+if __name__ == '__main__':
+    main()        
