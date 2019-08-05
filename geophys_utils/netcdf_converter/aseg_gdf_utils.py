@@ -373,3 +373,12 @@ def truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_plac
     except Exception as e:
         logger.debug('Unable to truncate fill value from {} to {} ({}). Keeping original value.'.format(fill_value, truncated_fill_value, e))
         return fill_value
+
+def find_null_columns(fill_value, data_array):
+    """
+    A function for finding which columns are entirely fill values. It returns the index of the null columns
+    :param fill_value:
+    :param data_array:
+    :return:
+    """
+    return np.where(np.sum(data_array == fill_value, axis=0) == data_array.shape[0])[0]

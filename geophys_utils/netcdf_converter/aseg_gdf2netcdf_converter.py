@@ -37,7 +37,7 @@ import logging
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
-from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
+from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate, find_null_columns
 from geophys_utils import points2convex_hull
 from geophys_utils import transform_coords
 
@@ -68,7 +68,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  default_variable_parameters=None,
                  settings_path=None,
                  fix_precision=True,
-                 space_delimited=False
+                 space_delimited=False,
+                 remove_null_cols=True
                  ):
         '''
         Concrete constructor for subclass ASEGGDF2NetCDFConverter
@@ -106,9 +107,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 elif len(definition) == 1:
                                     positional_value_list.append(definition[0])
     
-                    logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
-                
+                    logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list)))
                     # Column definition
+
+
                     if key_value_pairs.get('RT') in ['', 'DATA'] and (positional_value_list 
                                                             and positional_value_list[0] != 'END DEFN'): 
                         short_name = positional_value_list[0].lower()
@@ -147,8 +149,42 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             field_definition['variable_attributes'] = variable_attribute_dict    
                         
                         self.field_definitions.append(field_definition)
-                        
-                                    
+                    # Dealing with comments in the dfn file
+                    elif key_value_pairs.get('RT') in ['COMM']:
+                        short_name = positional_value_list[2].lower()
+                        long_name = positional_value_list[2]
+                        fmt = positional_value_list[1]
+                        units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
+                        dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
+                        fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get(
+                            'NULL') is not None else None
+                        field_definition = {'short_name': short_name,
+                                            'format': fmt,
+                                            'long_name': long_name,
+                                            'dtype': dtype,
+                                            'columns': columns,
+                                            'width_specifier': width_specifier,
+                                            'decimal_places': decimal_places
+                                            }
+                        if units:
+                            field_definition['units'] = units
+                        if fill_value is not None:
+                            field_definition['fill_value'] = fill_value
+
+                        # Set variable attributes in field definition
+                        variable_attribute_dict = {attribute_name: key_value_pairs.get(key.upper())
+                                                   for key, attribute_name in self.settings['variable_attributes'].items()
+                                                   if key_value_pairs.get(key.upper()) is not None
+                                                   }
+
+                        # Store aseg_gdf_format in variable attributes
+                        variable_attribute_dict['aseg_gdf_format'] = fmt
+
+                        if variable_attribute_dict:
+                            field_definition['variable_attributes'] = variable_attribute_dict
+
+                        self.field_definitions.append(field_definition)
+
                     # Set CRS from projection name
                     elif not self.spatial_ref:
                         if (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'COORDSYS'): # As per ASEG standard                       
@@ -169,10 +205,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
                                 logger.debug('CRS set from .dfn file DATUM NAME attribute {}'.format(projection_name))
                                 break # Nothing more to do
-                            
+
             # Start of get_field_definitions function
             parse_dfn_file(dfn_path)
-            
             # Read overriding field definition values from settings
             if self.settings.get('field_definitions'):
                 for field_definition in self.field_definitions:
@@ -464,10 +499,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     field_dimension_size = int(match.group(0))
                     field_definition['format'] = re.sub('^\d+', '', field_definition['format'])
                     default_dimension_names = field_definition.get('dimensions') # Look for default dimension name
+
                     #logger.debug('default_dimension_names: {}'.format(default_dimension_names))
                     #logger.debug('self.dimensions: {}'.format(self.dimensions))
                     if default_dimension_names: # Default dimension name(s) found from settings
+
                         if type(default_dimension_names) == str: # Only one dimension specified as a string
+
                             actual_dimension_size = self.dimensions.get(default_dimension_names)
                             logger.debug('actual_dimension_size: {}'.format(actual_dimension_size))
                             if actual_dimension_size is None: # Default dimension not already defined - create it
@@ -484,6 +522,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         # N.B: This could be considered to be encouraging bad behaviour - the .dfn file should 
                         # ideally be re-written
                         elif type(default_dimension_names) == list: # Multiple part-dimensions specified
+
+                            # If the dimension is not defined (i.e. may not be in the .dfn file, then add it as a dimension
+                            # Added to allow dimensions to be created without being specified in the .dfn file
+                            for dim_name in set(default_dimension_names):
+                                if not dim_name in set(self.dimensions.keys()):
+                                    self.dimensions[dim_name] = int(field_dimension_size)
+
                             assert set(default_dimension_names) <= set(self.dimensions.keys()), 'Dimensions {} not all defined in {}'.format(default_dimension_names, self.dimensions.keys())
                             combined_dimension_size = sum([self.dimensions[key] for key in default_dimension_names])
                             assert combined_dimension_size == field_dimension_size, 'Incorrect dimension sizes. Expected {}, found {}'.format(combined_dimension_size, field_dimension_size)
@@ -496,15 +541,18 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 columns = self.dimensions[part_dimension_name]
                                 new_field_definition = dict(field_definition) # Copy original field definition
                                 new_field_definition['cache_variable_name'] = field_definition['short_name']
+                                # No longer needed
                                 new_field_definition['short_name'] += '_by_' + part_dimension_name
                                 new_field_definition['dimensions'] = part_dimension_name
                                 new_field_definition['column_offset'] = column_offset
                                 new_field_definition['columns'] = columns
                                 new_field_definition['column_start_index'] += column_offset
                                 new_field_definition['dimension_size'] = self.dimensions[part_dimension_name]
-                                
+
+
                                 field_definition_index += 1
                                 logger.debug('Inserting new part-dimension field definition for {} at index {}'.format(new_field_definition['short_name'], field_definition_index))
+
                                 self.field_definitions.insert(field_definition_index, new_field_definition)
                                 column_offset += columns # Offset next column 
                             
@@ -552,16 +600,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 # Skip dimension fields
                 if short_name in self.settings['dimension_fields']:
                     continue
-                
+
                 dtype = field_definition['dtype']
-                
+
                 if cache_variable_name: # Part dimension  - shared cache variable
                     cache_variable = self._nc_cache_dataset.variables[cache_variable_name]
                     data_array = cache_variable[:,field_definition['column_offset']:field_definition['columns']]
                 else: # Normal data variable
                     cache_variable = self._nc_cache_dataset.variables[short_name]
                     data_array = cache_variable[:]
-                
+
                 # Include fill value if required
                 if type(data_array) == np.ma.core.MaskedArray:
                     logger.debug('Array is masked. Including fill value.')
@@ -570,30 +618,33 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     data_array = data_array.data # Include mask value
                 else:
                     fill_value = field_definition.get('fill_value')
-                    
+
                 if fill_value is None:
                     no_data_mask = []
                 else:
                     no_data_mask = (data_array == fill_value)
-            
+
                 #logger.debug('short_name: {}, data_array: {}'.format(short_name, data_array))
-                precision_change_result = fix_field_precision(data_array, dtype, 
+                precision_change_result = fix_field_precision(data_array, dtype,
                                                               field_definition['decimal_places'],
                                                               no_data_mask,
                                                               fill_value
-                                                              ) 
+                                                              )
+
+
+
                 # aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, modified_fill_value
-                if precision_change_result:    
+                if precision_change_result:
                     logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
                     #logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
                     field_definition['width_specifier'] = precision_change_result[3]
                     field_definition['decimal_places'] = precision_change_result[4]
-                    
+
                     # Try truncating modified fill value
                     modified_fill_value = precision_change_result[6]
-                    
+
                     # Update the format string in variable attributes
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
@@ -602,12 +653,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 else: # Data type unchanged
                     logger.debug('Datatype for variable {} not changed'.format(short_name))
                     # Try truncating original fill value
-                    modified_fill_value = truncate(fill_value, 
-                                                   data_array, 
-                                                   no_data_mask, 
-                                                   field_definition['width_specifier'], 
+                    modified_fill_value = truncate(fill_value,
+                                                   data_array,
+                                                   no_data_mask,
+                                                   field_definition['width_specifier'],
                                                    field_definition['decimal_places'])
-                    
+
                 #logger.debug('(fill_value: {} modified_fill_value: {}'.format(fill_value, modified_fill_value))
                 # Fill value has been modified                     
                 if (fill_value is not None 
@@ -626,8 +677,55 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                                              field_definition['format'])
                                                                              )
             
-                
-                
+        def remove_null_cols():
+            '''
+            Helper function to remove columns from 2D arrays that are entriely nulls (i.e. the fill value
+            '''
+            # WE do this on a dimension basis
+            for dim in self.dimensions:
+                dim_nulls = []
+                inds = []
+                # Iterate through the field and find which belong to the dimension
+                for i, field_definition in enumerate(self.field_definitions):
+                    short_name = field_definition['short_name']
+                    # TODO test this works with part dimensions
+                    cache_variable_name = field_definition.get('cache_variable_name')
+                    fill_value = field_definition.get('fill_value')
+                    if field_definition.get('dimensions') == dim:
+                        # Find if the variable has a mask
+                        if cache_variable_name:  # Part dimension  - shared cache variable
+                            cache_variable = self._nc_cache_dataset.variables[cache_variable_name]
+                            data_array = cache_variable[:,
+                                         field_definition['column_offset']:field_definition['columns']]
+                        else:  # Normal data variable
+                            cache_variable = self._nc_cache_dataset.variables[short_name]
+                            data_array = cache_variable[:]
+                        # Find any null columns
+                        null_cols = find_null_columns(fill_value, data_array)
+                        # If they exist add them to the dictionary
+                        if null_cols.shape[0] > 0:
+                            # Append to the null columns list
+                            dim_nulls.append(null_cols)
+                            inds.append(i)
+                        # Otherwise break to the next dimension
+                        else:
+                            dim_nulls = None
+                            break
+                # If the length of the dimension null is zero continue to the next dimension
+                if len(dim_nulls) == 0:
+                    continue
+                # Create an array from the list
+                dim_nulls = np.array(dim_nulls)
+                # If that all row are the same
+                if np.all(np.all(dim_nulls == dim_nulls[0,:], axis = 1)):
+                    # Then we add the null columns to a class variable
+                    self.dimensions[dim] -= dim_nulls.shape[1]
+                    # Make changes ot the field_definitions dictionary
+                    for i in inds:
+                        self.field_definitions[i]["null_columns"] = dim_nulls[0]
+
+
+
         # Start of actual __init__() definition
         self.nc_cache_path = None
         self._nc_cache_dataset = None
@@ -663,17 +761,21 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         
         try:
             # Parse .dfn file and apply overrides
-            get_field_definitions() 
+            get_field_definitions()
+
+
     
             # Read data from self.dfn_path into temporary netCDF variable
             read_data_file()
             
             # Needs to be done after data file has been read in order to access dimension data in first row
             modify_field_definitions()
-            
             # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
             if fix_precision:
                 fix_all_field_precisions()
+            if remove_null_cols:
+                remove_null_cols()
+            print(self.dimensions)
         except Exception as e:
             logger.error('Unable to create ASEGGDF2NetCDFConverter object: {}'.format(e))
             self.__del__()
@@ -930,7 +1032,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
-            
+
                         
         # Start of variable_generator function
         # Create crs variable
@@ -950,13 +1052,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             field_attributes = OrderedDict()
             
             raw_data = self.get_raw_data(short_name)
+
+            # Check if there were nulls in the dimension
+
             
             lookup_array, index_start_indices, index_array, index_point_counts = np.unique(raw_data, 
                                                                               return_index=True, 
                                                                               return_inverse=True, 
                                                                               return_counts=True
-                                                                              )            
-            
+                                                                            )
             unique_value_count = lookup_array.shape[0]
             logger.debug('{} unique values found for {}'.format(unique_value_count, short_name))
 
@@ -1060,6 +1164,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     # Don't mess with values
                     data_array = self.get_raw_data(short_name)
                     fill_value = None
+
+                # Finally mask the array if required
+                if field_definition.get("null_columns") is not None:
+                    non_nulls_cols = field_definition["null_columns"]
+
+                    data_array = np.delete(data_array, non_nulls_cols, axis=1)
+
                                           
                 logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
     
@@ -1103,34 +1214,39 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             utm_coords = np.ones(shape=(point_count, 2), dtype=np.float64) * -999
             utm_coords[:,0] = self.nc_output_dataset.variables['easting'][:]
             utm_coords[:,1] = self.nc_output_dataset.variables['northing'][:]
-            
-            gda94_coords = transform_coords(utm_coords, 
-                                            transverse_mercator_var.spatial_ref, 
+
+            # If longittude and latitude are not already supplied then project them and add them as variables
+            if not np.logical_and('longitude' in self.nc_output_dataset.variables.keys(),
+                                  'latitude' in self.nc_output_dataset.variables.keys()):
+                gda94_coords = transform_coords(utm_coords,
+                                            transverse_mercator_var.spatial_ref,
                                             default_crs_wkt
                                             )
-            
-            # Create and write crs variable
-            logger.info('Creating new crs variable for unprojected CRS')
-            self.build_crs_variable(get_spatial_ref_from_wkt(default_crs_wkt)
-                                    ).create_var_in_dataset(self.nc_output_dataset)
+
+                # Create and write crs variable
+                logger.info('Creating new crs variable for unprojected CRS')
+                self.build_crs_variable(get_spatial_ref_from_wkt(default_crs_wkt)
+                                        ).create_var_in_dataset(self.nc_output_dataset)
                                     
-            # Create and write longitude variable
-            logger.info('Creating new longitude variable')
-            NetCDFVariable('longitude', 
-                           gda94_coords[:,0], 
-                           ['point'], 
-                           fill_value=-999, 
-                           attributes={'long_name': 'Longitude', 'units': 'degrees East'}
-                           ).create_var_in_dataset(self.nc_output_dataset)
+                # Create and write longitude variable
+                logger.info('Creating new longitude variable')
+
+                NetCDFVariable('longitude',
+                               gda94_coords[:,0],
+                               ['point'],
+                               fill_value=-999,
+                               attributes={'long_name': 'Longitude', 'units': 'degrees East'}
+                               ).create_var_in_dataset(self.nc_output_dataset)
+
             
-            # Create and write latitude variable
-            logger.info('Creating new latitude variable')
-            NetCDFVariable('latitude', 
-                           gda94_coords[:,1], 
-                           ['point'], 
-                           fill_value=-999, 
-                           attributes={'long_name': 'Latitude', 'units': 'degrees North'}
-                           ).create_var_in_dataset(self.nc_output_dataset)
+                # Create and write latitude variable
+                logger.info('Creating new latitude variable')
+                NetCDFVariable('latitude',
+                               gda94_coords[:,1],
+                               ['point'],
+                               fill_value=-999,
+                               attributes={'long_name': 'Latitude', 'units': 'degrees North'}
+                               ).create_var_in_dataset(self.nc_output_dataset)
                            
             logger.info('Re-writing new global attributes for new CRS')
             for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
@@ -1186,6 +1302,7 @@ def main():
                             nargs=argparse.REMAINDER,
                             help='<dat_in_path> [<nc_out_path>]')
 
+
         return parser.parse_args()
     
     args = get_args()
@@ -1216,6 +1333,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       default_chunk_size=args.chunking,
                                       settings_path=args.settings_path,
                                       fix_precision=args.optimise,
+                                      remove_null_cols = args.optimise,
                                       space_delimited=args.space_delimited
                                       )
         d2n.convert2netcdf()

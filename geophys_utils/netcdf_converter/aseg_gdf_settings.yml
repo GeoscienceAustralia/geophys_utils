@@ -5,20 +5,39 @@
 # N.B: overriding short_name will effectively rename field for subsequent use
 field_definitions: 
   # 1D Variables
+  anglex: {long_name: Tilt of frame from horizontal in flight direction, short_name: x_tilt,
+    units: degrees}
+  angley: {long_name: Tilt of frame from horizontal perpendicular to flight direction, short_name: y_tilt,
+    units: degrees}
   doi: {short_name: depth_of_investigation, units: m}
+  doi_conservative: {short_name: depth_of_investigation_conservative, units: m}
   dataresidual: {long_name: Data residual, short_name: data_residual}
   residual2: {long_name: Data residual 2, short_name: data_residual2}
   residual3: {long_name: Data residual 3, short_name: data_residual3}
   stddev_TxHeightInverted: {long_name: Uncertainty of the inverted height
       of the TXRX frame, short_name: stddev_tx_height_inverted, units: m}
   totalresidual: {long_name: Total Residual, short_name: total_residual}
-  txheightinverted: {long_name: Inverted height of the TXRX frame, short_name: tx_height_inverted,
+  txheightinverted: {long_name: Laser altimeter inverted height of the Tx loop centre above ground, short_name: tx_height_inverted,
     units: m}
-  txheightmeasured: {long_name: Measured height of the TXRX frame, short_name: tx_height_measured,
+  txheightmeasured: {long_name: Laser altimeter measured height of the Tx loop centre above ground, short_name: tx_height_measured,
     units: m}
+  datetime: {long_name: Decimal days since midnight December 31st 1899, short_name: DateTime,
+    units: days}
+  date_utc: {long_name: UTC date, short_name: utc_date, units: yyyymmdd}
+  time_utc: {long_name: UTC time, short_name: utc_time, units: hhmmss.ss}
+  date_local: {long_name: Local date, short_name: local_date, units: yyyymmdd}
+  time_local: {long_name: Local time, short_name: local_time, units: hhmmss.ss}
   easting: {long_name: UTM Easting (x) ordinate, short_name: easting, units: m}
   elevation: {long_name: Ground elevation relative to sea-level, short_name: elevation,
     units: m}
+  dtm_ahd: {long_name: Ground elevation relative to sea-level, short_name: elevation,
+    units: m}
+  gps_alt: {long_name: GPS height of Tx loop centre, short_name: gps_height,
+    units: m}
+  gdSpeed: {long_name: Ground speed, short_name: ground_speed, units: km/h}
+  curr_lm: {long_name: Low Moment peak transmitter current, short_name: LM_current, units: A}
+  curr_hm: {long_name: High Moment peak transmitter current, short_name: HM_current, units: A}
+  plni: {long_name: Power line noise indicator, short_name: powerline_noise}
   lat: {long_name: Latitude, short_name: latitude, units: degrees North}
   lon: {long_name: Longitude, short_name: longitude, units: degrees East}
   gda94lat: {long_name: Latitude, short_name: latitude, units: degrees North}
@@ -29,8 +48,10 @@ field_definitions:
   longda94: {long_name: Longitude, short_name: longitude, units: degrees East}
   longgda94: {long_name: Longitude, short_name: longitude, units: degrees East}
   line: {long_name: Line number, short_name: line}
+  fiducial: {long_name: Fiducial, short_name: fiducial}
   flight: {long_name: Flight number, short_name: flight}
   flt: {long_name: Flight number, short_name: flight}
+  fltline: {long_name: Flight line number, short_name: flight_line}
   nlayers: {long_name: layers, short_name: layer}
   ndatlm: {long_name: low moment gates, short_name: low_moment_gate}
   ndathm: {long_name: high moment gates, short_name: high_moment_gate}
@@ -44,6 +65,22 @@ field_definitions:
     units: ohm.m, dimensions: layer}
   conductivity: {long_name: Layer conductivity, short_name: conductivity,
     units: S/m, dimensions: layer}
+  conductivity_mean: {long_name: Conductivity of mean model, short_name: conductivity_mean,
+    units: S/m, dimensions: layer}
+  conductivity_mode: {long_name: Conductivity of mode model, short_name: conductivity_mode,
+    units: S/m, dimensions: layer}
+  conductivity_p50: {long_name: Conductivity at 50th percentile or median, short_name: conductivity_p50,
+    units: S/m, dimensions: layer}
+  conductivity_p10: {long_name: Conductivity at 10th percentile, short_name: conductivity_p10,
+    units: S/m, dimensions: layer}
+  conductivity_p90: {long_name: Conductivity at 90th percentile, short_name: conductivity_p90,
+    units: S/m, dimensions: layer}
+  conductivity_highestlikelihood: {long_name: Conductivity of highest likelihood model, short_name: conductivity__highestlikelihood,
+    units: S/m, dimensions: layer}
+  conductivity_lowestmisfit: {long_name: Conductivity of lowest misfit mode, short_name: conductivity_lowestmisfit,
+    units: S/m, dimensions: layer}
+  changepoint: {long_name: Layer boundary during , short_name: change_point, units: count, dimensions: layer}
+  layer_boundary_hierachy: {long_name: Hierarchy of layer boundary during CWT, short_name: layer_boundary_hierachy, dimensions: layer}
   resistivity_uncertainty: {long_name: Uncertainty of the layer resistivity,
     short_name: resistivity_uncertainty, dimensions: layer}
   data_values: {long_name: Data values measured at each gate, short_name: data_values, units: V/(A.turns.m4), 
@@ -60,6 +97,22 @@ field_definitions:
   emz_hprg: {dimensions: emx_window} 
   cond_xz: {dimensions: layer}
   cond_xz_depth: {dimensions: layer}
+  lm_z: {long_name: Z-component Low Moment dB/dt processed and normalised, short_name: low_moment_Z-component_EM_data, units: V/(A.turns.m4),
+    dimensions: low_moment_gate}
+  hm_z: {long_name: Z-component High Moment dB/dt processed and normalised, short_name: high_moment_Z-component_EM_data, units: V/(A.turns.m4),
+    dimensions: high_moment_gate}
+  lm_x: {long_name: X-component Low Moment dB/dt processed and normalised, short_name: low_moment_X-component_EM_data, units: V/(A.turns.m4),
+    dimensions: low_moment_gate}
+  hm_x: {long_name: X-component High Moment dB/dt processed and normalised, short_name: high_moment_X-component_EM_data, units: V/(A.turns.m4),
+    dimensions: high_moment_gate}
+  runc_lm_z: {long_name: Z-component Low Moment gates relative uncertainty, short_name: rel_uncertainty_low_moment_Z-component,
+    dimensions: low_moment_gate}
+  runc_hm_z: {long_name: Z-component High Moment gates relative uncertainty, short_name: rel_uncertainty_high_moment_Z-component,
+    dimensions: high_moment_gate}
+  runc_lm_x: {long_name: X-component Low Moment gates relative uncertainty, short_name: rel_uncertainty_low_moment_X-component,
+    dimensions: low_moment_gate}
+  runc_hm_x: {long_name: X-component High Moment gates relative uncertainty, short_name: rel_uncertainty_high_moment_X-component,
+    dimensions: high_moment_gate}
 
 # Known custom .dfn attributes to write into variable attributes with mappings to new names
 # N.B: Do NOT include standard attributes like "NAME", "UNIT" or "UNITS"

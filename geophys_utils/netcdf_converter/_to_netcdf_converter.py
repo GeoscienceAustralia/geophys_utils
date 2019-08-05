@@ -414,9 +414,10 @@ class ToNetCDFConverter(object):
         Concrete method to output netCDF
         '''
         self.preprocess_netcdf()
-        
+
         # Create dimensions in netCDF output file
         for dimension_name, dimension_size in iter(self.get_dimensions().items()):
+
             self.nc_output_dataset.createDimension(dimname=dimension_name, size=dimension_size)
             
         # Create variables in netCDF output file
