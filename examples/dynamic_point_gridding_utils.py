@@ -111,7 +111,7 @@ def dataset_value_generator(variable_name_list,
                     dataset_value_dict[variable_name] = netcdf_point_utils.expand_lookup_variable(lookup_variable_name=variable_name, 
                                                                                                   mask=spatial_mask)                     
                 else: # 'point' is in variable.dimensions - "normal" variable                
-                    dataset_value_dict[variable_name] = variable[spatial_mask]
+                    dataset_value_dict[variable_name] = variable[:][spatial_mask]
             
             yield dataset, dataset_value_dict
     
@@ -193,3 +193,21 @@ def grid_points(coordinates,
                     ] 
 
     return grid_array, grid_wkt, geotransform
+
+
+def hillshade(array, azimuth, angle_altitude, vertical_exaggeration=1):
+    '''
+    Hillshade function adapted from:
+    http://geoexamples.blogspot.com/2014/03/shaded-relief-images-using-gdal-python.html
+    '''       
+    x, y = np.gradient(array*vertical_exaggeration)
+    slope = np.pi/2. - np.arctan(np.sqrt(x*x + y*y))
+    aspect = np.arctan2(-x, y)
+    azimuthrad = azimuth * np.pi / 180.
+    altituderad = angle_altitude * np.pi / 180.
+ 
+    shaded = np.sin(altituderad) * np.sin(slope)\
+     + np.cos(altituderad) * np.cos(slope)\
+     * np.cos(azimuthrad - aspect)
+    
+    return 255 * (shaded + 1) / 2    
