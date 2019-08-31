@@ -659,6 +659,9 @@ class NetCDFPointUtils(NetCDFUtils):
         else:
             subset_mask = mask[start_index:end_index]
             
+        lookup_variable.set_auto_mask(False)
+        indexing_variable.set_auto_mask(False)
+            
         result_array = lookup_variable[:][indexing_variable[start_index:end_index][subset_mask]] # Need to index numpy array, not netCDF variable
 
         # Convert 2D byte array into 1D array of unicode strings - needed for OPeNDAP
