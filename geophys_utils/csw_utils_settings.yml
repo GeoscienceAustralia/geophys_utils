@@ -19,7 +19,7 @@ DEFAULT_CSW_URLS: # List of CSW URLs to query
   - "https://ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's externally-facing eCat
 #  - "https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's internal eCat
 #  - "https://geonetwork.nci.org.au/geonetwork/srv/eng/csw" # NCI's GeoNetwork
-
+#  - "http://localhost:8080/geonetwork/srv/eng/csw" # Local GeoNetwork
 ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
