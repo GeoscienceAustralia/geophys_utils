@@ -20,7 +20,7 @@ def dfrexp(f):
     '''
     Decimal version of frexp or np.frexp function to return mantissa & exponent
     @param f: Floating point scalar or array
-    @return fman: Scalar or array decimal mantissa between 0.0 and 1.0 
+    @return fman: Scalar or array decimal mantissa between 0.0 and 1.0
     @return fexp: Scalar or array decimal exponent
     '''
     # Compute decimal exponent
@@ -29,13 +29,13 @@ def dfrexp(f):
         fexp[f != 0] = np.ceil(np.log10(np.abs(f[f != 0]))).astype('int32')
     else: # Scalar
         fexp = int(ceil(log10(abs(f)))) if f != 0 else 0
-            
+
     # Compute decimal mantissa between 0.0 and 1.0
     fman = f/10.0**fexp
-    
+
     logger.debug('fman: {}'.format(fman))
     logger.debug('fexp: {}'.format(fexp))
-    
+
     return fman, fexp
 
 
@@ -58,7 +58,7 @@ DTYPE_REDUCTION_LISTS = [['int64', 'int32', 'int16', 'int8'], # Integer dtypes
                          ['uint64', 'uint32', 'uint16', 'uint8'], # Unsigned integer dtypes
                          ['float64', 'float32'] #, 'int16', 'int8'] # Floating point dtypes - do NOT try casting to integer types
                          ]
-    
+
 ASEG_DTYPE_CODE_MAPPING = {'uint8': 'I',
                            'uint16': 'I',
                            'uint32': 'I',
@@ -67,7 +67,7 @@ ASEG_DTYPE_CODE_MAPPING = {'uint8': 'I',
                            'int16': 'I',
                            'int32': 'I',
                            'int64': 'I',
-                           'float32': 'E', # real in exponent form
+                           'float32': 'F', # real in exponent form
                            'float64': 'D', # double precision real in exponent form
                            'str': 'A'
                            }
@@ -80,29 +80,29 @@ def decode_aseg_gdf_format(aseg_gdf_format):
     @return columns: Number of columns (i.e. 1 for 1D data, or read from format string for 2D data)
     @return aseg_dtype_code: ASEG-GDF data type character, e.g. "F" or "I"
     @return width_specifier:  Width of field in number of characters read from format string
-    @return decimal_places: Number of fractional digits read from format string    
+    @return decimal_places: Number of fractional digits read from format string
     '''
     if not aseg_gdf_format:
-        raise BaseException('No ASEG-GDF format string to decode')  
+        raise BaseException('No ASEG-GDF format string to decode')
 
     match = re.match('(\d+)*(\w)(\d+)\.*(\d+)*', aseg_gdf_format)
-    
+
     if not match:
-        raise BaseException('Invalid ASEG-GDF format string {}'.format(aseg_gdf_format))  
-      
+        raise BaseException('Invalid ASEG-GDF format string {}'.format(aseg_gdf_format))
+
     columns = int(match.group(1)) if match.group(1) is not None else 1
     aseg_dtype_code = match.group(2).upper()
     width_specifier = int(match.group(3))
     decimal_places = int(match.group(4)) if match.group(4) is not None else 0
-    
-    logger.debug('aseg_gdf_format: {}, columns: {}, aseg_dtype_code: {}, width_specifier: {}, decimal_places: {}'.format(aseg_gdf_format, 
-                                                                                                                      columns, 
-                                                                                                                      aseg_dtype_code, 
-                                                                                                                      width_specifier, 
+
+    logger.debug('aseg_gdf_format: {}, columns: {}, aseg_dtype_code: {}, width_specifier: {}, decimal_places: {}'.format(aseg_gdf_format,
+                                                                                                                      columns,
+                                                                                                                      aseg_dtype_code,
+                                                                                                                      width_specifier,
                                                                                                                       decimal_places
                                                                                                                       )
-                 ) 
-    return columns, aseg_dtype_code, width_specifier, decimal_places  
+                 )
+    return columns, aseg_dtype_code, width_specifier, decimal_places
 
 def aseg_gdf_format2dtype(aseg_gdf_format):
     '''
@@ -112,11 +112,11 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
     @return dtype: Data type string, e.g. int8 or float32
     @return columns: Number of columns (i.e. 1 for 1D data, or read from format string for 2D data)
     @return width_specifier:  Width of field in number of characters read from format string
-    @return decimal_places: Number of fractional digits read from format string    
+    @return decimal_places: Number of fractional digits read from format string
     '''
     columns, aseg_dtype_code, width_specifier, decimal_places = decode_aseg_gdf_format(aseg_gdf_format)
     dtype = None # Initially unknown datatype
-    
+
     # Determine type and size for required significant figures
     # Integer type - N.B: Only signed types available
     if aseg_dtype_code == 'I':
@@ -125,8 +125,8 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
             if test_dtype.startswith('int') and sig_figs >= width_specifier:
                 dtype = test_dtype
                 break
-        assert dtype, 'Invalid width_specifier of {}'.format(width_specifier)     
-    
+        assert dtype, 'Invalid width_specifier of {}'.format(width_specifier)
+
     # Floating point type - use approximate sig. figs. to determine length
     #TODO: Remove 'A' after string field handling has been properly implemented
     elif aseg_dtype_code in ['D', 'E', 'F']: # Floating point
@@ -134,21 +134,21 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
             if test_dtype.startswith('float') and sig_figs >= width_specifier-2: # Allow for sign and decimal place
                 dtype = test_dtype
                 break
-        assert dtype, 'Invalid floating point format of {}.{}'.format(width_specifier, decimal_places)                                    
-    
+        assert dtype, 'Invalid floating point format of {}.{}'.format(width_specifier, decimal_places)
+
     elif aseg_dtype_code == 'A':
         assert not decimal_places, 'String format cannot be defined with fractional digits'
         dtype = '<U{}'.format(width_specifier) # Numpy fixed-length string type
-        
+
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
-    
-    logger.debug('aseg_dtype_code: {}, columns: {}, width_specifier: {}, decimal_places: {}'.format(dtype, 
-                                                                                                 columns, 
-                                                                                                 width_specifier, 
+
+    logger.debug('aseg_dtype_code: {}, columns: {}, width_specifier: {}, decimal_places: {}'.format(dtype,
+                                                                                                 columns,
+                                                                                                 width_specifier,
                                                                                                  decimal_places
                                                                                                  )
-                 ) 
+                 )
     return dtype, columns, width_specifier, decimal_places
 
 
@@ -157,7 +157,7 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
     Function to return ASEG-GDF format string and other info from data array or netCDF array variable
     @param array_variable: data array or netCDF array variable
     @param decimal_places: Number of decimal places to respect, or None for value derived from datatype and values
-    
+
     @return aseg_gdf_format: ASEG-GDF format string
     @return dtype: Data type string, e.g. int8 or float32
     @return columns: Number of columns (i.e. 1 for 1D data, or second dimension size for 2D data)
@@ -171,15 +171,16 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         columns = array_variable.shape[1]
     else:
         raise BaseException('Unable to handle arrays with dimensionality > 2')
-        
+
     data_array = array_variable[:]
-    
+
     # Try to determine the dtype string from the variable and data_array type
     if not len(array_variable.shape): # Scalar
         dtype = type(data_array).__name__
+
         if dtype == 'str':
             width_specifier = len(data_array) + 1
-            decimal_places = 0 
+            decimal_places = 0
         elif dtype == 'ndarray': # Single-element array
             dtype = str(array_variable.dtype)
             data = np.asscalar(data_array)
@@ -187,26 +188,36 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
             sign_width = 1 if data < 0 else 0
             integer_digits = ceil(log10(np.abs(data) + 1.0))
+        elif dtype == 'MaskedArray':
+            logger.debug('Array is masked. Including fill value.')
+            data_array = data_array.data
+            dtype = str(data_array.dtype)
+            sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
+            sign_width = 1 if data_array < 0 else 0
+            integer_digits = ceil(log10(np.abs(data_array) + 1.0))
+
     else: # Array
         dtype = str(array_variable.dtype)
+        #print(dtype)
         if dtype in ['str', "<class 'str'>"]: # String array or string array variable
             dtype = 'str'
             width_specifier = max([len(string.strip()) for string in data_array]) + 1
             decimal_places = 0
-            
+
         else:  # Numeric datatype array
             # Include fill value if required
             if type(data_array) == np.ma.core.MaskedArray:
                 logger.debug('Array is masked. Including fill value.')
                 data_array = data_array.data
-                
+
             sig_figs = SIG_FIGS[dtype] + 1 # Look up approximate significant figures and add 1
             sign_width = 1 if np.nanmin(data_array) < 0 else 0
             integer_digits = ceil(log10(np.nanmax(np.abs(data_array)) + 1.0))
-    
+
     aseg_dtype_code = ASEG_DTYPE_CODE_MAPPING.get(dtype)
+
     assert aseg_dtype_code, 'Unhandled dtype {}'.format(dtype)
-    
+
     if aseg_dtype_code == 'I': # Integer
         decimal_places = 0
         width_specifier = integer_digits + sign_width + 1
@@ -218,18 +229,18 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
         if decimal_places is not None:
             decimal_places = min(decimal_places, abs(sig_figs-integer_digits))
             logger.debug('decimal_places set to {} from decimal_places {}'.format(decimal_places, decimal_places))
-        elif hasattr(array_variable, 'aseg_gdf_format'): 
+        elif hasattr(array_variable, 'aseg_gdf_format'):
             _columns, _aseg_dtype_code, _integer_digits, decimal_places = decode_aseg_gdf_format(array_variable.aseg_gdf_format)
             decimal_places = min(decimal_places, abs(sig_figs-integer_digits))
             logger.debug('decimal_places set to {} from variable attribute aseg_gdf_format {}'.format(decimal_places, array_variable.aseg_gdf_format))
         else: # No aseg_gdf_format variable attribute
             decimal_places = abs(sig_figs-integer_digits) # Allow for full precision of datatype
             logger.debug('decimal_places set to {} from sig_figs {} and integer_digits {}'.format(decimal_places, sig_figs, integer_digits))
-        
+
         width_specifier = min(sign_width + integer_digits + decimal_places + 2,
                               sign_width + sig_figs + 2
                               )
-                                  
+
         aseg_gdf_format = '{}{}.{}'.format(aseg_dtype_code, width_specifier, decimal_places)
         if aseg_dtype_code == 'F': # Floating point notation
             python_format = '{' + ':>{:d}.{:d}f'.format(width_specifier, decimal_places) + '}' # Add 1 to width for decimal point
@@ -242,15 +253,15 @@ def variable2aseg_gdf_format(array_variable, decimal_places=None):
             aseg_gdf_format = array_variable.aseg_gdf_format
         else:
             aseg_gdf_format = 'A{}'.format(width_specifier)
-            
+
         python_format = '{' + ':>{:d}s'.format(width_specifier) + '}'
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
-    
+
     # Pre-pend column count to start of aseg_gdf_format
     if columns > 1:
         aseg_gdf_format = '{}{}'.format(columns, aseg_gdf_format)
-        
+
     return aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format
 
 
@@ -265,7 +276,7 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
     @param current_dtype: Current data type string, e.g. int8 or float32
     @param decimal_places: Number of fractional digits for precision checking
     @param fill_value: fill value or None
-    
+
     Returns None if no precision change required.
     @return aseg_gdf_format: ASEG-GDF format string
     @return dtype: Data type string, e.g. int8 or float32
@@ -276,29 +287,29 @@ def fix_field_precision(data_array, current_dtype, decimal_places, no_data_mask=
     @return fill_value: Potentially modified fill value
     '''
     logger.debug('data_array: {}, current_dtype: {}, decimal_places: {}'.format(data_array, current_dtype, decimal_places))
-    
+
     try:
         data_mantissa, data_exponent = dfrexp(data_array)
     except:
         logger.debug('Unable to compute data_mantissa & data_exponent')
         return
-    
+
     for dtype_reduction_list in DTYPE_REDUCTION_LISTS:
         try:
             current_dtype_index = dtype_reduction_list.index(current_dtype)
 
             # Try types from smallest to largest
-            for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:                
+            for smaller_dtype in dtype_reduction_list[:current_dtype_index:-1]:
                 smaller_array = data_array.astype(smaller_dtype)
                 difference_array = data_array - smaller_array
                 logger.debug('current_dtype: {}\nsmaller_dtype: {}\narray_variable\n{}\nsmaller_array\n{}\n\
-difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype, 
-                                                                                               smaller_dtype, 
-                                                                                               data_array, 
-                                                                                               smaller_array, 
-                                                                                               difference_array, 
-                                                                                               decimal_places, 
-                                                                                               np.count_nonzero(difference_array >= pow(10, -decimal_places)), 
+difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference values: '.format(current_dtype,
+                                                                                               smaller_dtype,
+                                                                                               data_array,
+                                                                                               smaller_array,
+                                                                                               difference_array,
+                                                                                               decimal_places,
+                                                                                               np.count_nonzero(difference_array >= pow(10, -decimal_places)),
                                                                                                difference_array[difference_array != 0]
                                                                                                )
                       )
@@ -306,7 +317,7 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                                                                                  smaller_dtype,
                                                                                  np.nanmax(np.abs(difference_array))))
                 smaller_mantissa, smaller_exponent = dfrexp(smaller_array)
-                if np.any(np.logical_or((smaller_exponent != data_exponent), 
+                if np.any(np.logical_or((smaller_exponent != data_exponent),
                                         (np.abs(data_mantissa - smaller_mantissa) >= pow(10, -decimal_places)))):
                     # Differences found - try larger datatype
                     continue
@@ -318,23 +329,23 @@ difference_array\n{}\ndecimal_places: {}\ndifference count: {}\ndifference value
                     if fill_value is not None:
                         # Use reduced precision fill_value if available and unambiguous
                         if np.any(no_data_mask):
-                            reduced_precision_fill_value = data_array[no_data_mask][0] 
-                            
+                            reduced_precision_fill_value = data_array[no_data_mask][0]
+
                             # Check for ambiguity introduced by reduced precision
                             if np.any(data_array[~no_data_mask] == reduced_precision_fill_value):
                                 logger.debug('Reduced precision fill value of {} is ambiguous'.format(reduced_precision_fill_value))
                                 continue # Can't use this datatype - try the next bigger one
                             elif fill_value != reduced_precision_fill_value:
-                                logger.debug('fill_value precision reduced from {} to {}'.format(fill_value, 
+                                logger.debug('fill_value precision reduced from {} to {}'.format(fill_value,
                                                                                                 reduced_precision_fill_value)
                                                                                                 )
                                 fill_value = reduced_precision_fill_value
-                        
+
                         fill_value = truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_places)
-                        
+
                     return aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, fill_value
 
-            
+
         except ValueError: # current_dtype not in dtype_reduction_list
             continue
 
@@ -348,18 +359,18 @@ def truncate(fill_value, data_array, no_data_mask, width_specifier, decimal_plac
     @param no_data_mask: Boolean mask array (true for valid data)
     @param width_specifier:  Width of field in number of characters
     @param decimal_places: Number of fractional digits for precision checking
-    
+
     @return fill_value: Potentially modified fill value
     '''
     try:
         truncated_fill_value = None
-        
+
         integer_digits = width_specifier - decimal_places
         if fill_value < 0:
             integer_digits -= 1 # Allow for sign
         if decimal_places > 0:
             integer_digits -= 1 # Allow for decimal point
-            
+
         fill_value_str = (fill_value)
         assert 'e' not in fill_value_str.lower(), 'Unable to truncate value in exponential notation'
         pattern = re.compile('(-?)\d*?(\d{0,' + '{}'.format(integer_digits) + '}\.\d{0,' + '{}'.format(decimal_places) + '})')
@@ -381,4 +392,5 @@ def find_null_columns(fill_value, data_array):
     :param data_array:
     :return:
     """
-    return np.where(np.sum(data_array == fill_value, axis=0) == data_array.shape[0])[0]
+    return np.where(np.sum(data_array == fill_value,
+                         axis=0) == data_array.shape[0])[0]
