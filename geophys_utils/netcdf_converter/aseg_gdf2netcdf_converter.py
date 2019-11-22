@@ -206,7 +206,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
                                 logger.debug('CRS set from .dfn file DATUM NAME attribute {}'.format(projection_name))
                                 break # Nothing more to do
-
+                print(self.field_definitions)
             # Start of get_field_definitions function
             parse_dfn_file(dfn_path)
             # Read overriding field definition values from settings
@@ -925,7 +925,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.info('\t\tWriting {} values'.format(field_definition['short_name']))
 
             variable_attributes = (field_definition.get('variable_attributes') or {})
-            print(variable_attributes)
+
             if field_definition.get('long_name'):
                 variable_attributes['long_name'] = field_definition['long_name']
 

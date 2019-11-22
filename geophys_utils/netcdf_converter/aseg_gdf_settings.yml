@@ -12,7 +12,7 @@ field_definitions:
   doi: {short_name: depth_of_investigation, units: m}
   doi_conservative: {short_name: depth_of_investigation_conservative, units: m}
   dataresidual: {long_name: Data residual, short_name: data_residual}
-  resi1dat {long_name: Data residual, short_name: data_residual}
+  resi1dat: {long_name: Data residual, short_name: data_residual}
   residual2: {long_name: Data residual 2, short_name: data_residual2}
   residual3: {long_name: Data residual 3, short_name: data_residual3}
   stddev_TxHeightInverted: {long_name: Uncertainty of the inverted height of the TXRX frame, short_name: stddev_tx_height_inverted, units: m}
