@@ -393,7 +393,10 @@ class NetCDFUtils(object):
         if not self._netcdf_dataset:
             logger.debug('Opening netCDF dataset {}'.format(self.nc_path))
             if self.opendap:
-                self._netcdf_dataset = netCDF4.Dataset(self.nc_path + '#fillmismatch', mode="r") # Work-around for _FillValue mismatch: https://github.com/Unidata/netcdf-c/issues/1299
+                try:
+                    self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+                except OSError:
+                    self._netcdf_dataset = netCDF4.Dataset(self.nc_path + '#fillmismatch', mode="r") # Work-around for _FillValue mismatch: https://github.com/Unidata/netcdf-c/issues/1299
             else:
                 self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
 

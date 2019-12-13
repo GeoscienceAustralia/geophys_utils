@@ -115,10 +115,8 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if hasattr(variable, 'grid_mapping')][0].dimensions
-            print(data_variable_dimensions)
             self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
-            print(self.data_variable_list)
         except:
             logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
             raise
