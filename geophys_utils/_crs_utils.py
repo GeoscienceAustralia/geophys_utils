@@ -46,6 +46,13 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
     if not result:
         return spatial_ref
+    
+    match = re.match('EPSG:(\d{4})', wkt_or_crs_name, re.IGNORECASE)
+    if match:
+        result = spatial_ref.ImportFromEPSG(int(match.group(1)))
+        if not result:
+            return spatial_ref
+        
 
     # Try common formulations for UTM zones
     #TODO: Fix this so it works in the Northern hemisphere 
@@ -62,7 +69,7 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
         spatial_ref.SetUTM(utm_zone, False) # Put this here to avoid potential side effects in downstream code
         return spatial_ref
 
-    assert not result, 'Invalid WKT or CRS name'
+    assert not result, 'Invalid WKT or CRS name: "{}"'.format(wkt_or_crs_name)
 
 def get_wkt_from_spatial_ref(spatial_ref):
     '''
