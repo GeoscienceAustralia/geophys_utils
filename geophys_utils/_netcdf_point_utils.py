@@ -231,18 +231,7 @@ class NetCDFPointUtils(NetCDFUtils):
         if bounds_wkt is not None:
             coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
     
-        try: # Process four-element bounds iterable if possible
-            iterator = iter(bounds)
-            assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
-        
-            bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
-            bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
-            
-            # Return true for each point which is <= bounds_half_size distance from bounds_centroid
-            return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
-            
-        except TypeError as te: # Process shapely (multi)polygon bounds
-            assert isinstance(bounds, BaseGeometry), 'Invalid bounds object: {}'.format(bounds)
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds
         
             bounds_half_size = abs(np.array([bounds.bounds[2] - bounds.bounds[0], bounds.bounds[3] - bounds.bounds[1]])) / 2.0
             bounds_centroid = np.array(bounds.centroid.coords[0])
@@ -255,7 +244,15 @@ class NetCDFPointUtils(NetCDFUtils):
             (mask[mask])[~get_intersection_mask(coordinates[mask], bounds)] = False
             
             return mask
+        else: # Process four-element bounds iterable if possible
+            iterator = iter(bounds)
+            assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
+        
+            bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
+            bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
             
+            # Return true for each point which is <= bounds_half_size distance from bounds_centroid
+            return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)            
     
     def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
         '''

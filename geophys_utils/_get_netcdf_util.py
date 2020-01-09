@@ -13,7 +13,7 @@ from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
 logger = logging.getLogger(__name__)
 
 
-def get_netcdf_util(netcdf_dataset):
+def get_netcdf_util(netcdf_dataset, debug=False):
     '''
     Function to take a netCDF4 Dataset object, a path to a netCDF file, or an OPeNDAP endpoint
     and return a NetCDFUtils subclass object (i.e. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
@@ -34,7 +34,7 @@ def get_netcdf_util(netcdf_dataset):
     
     # Dataset has line and line_index variables => must be a line dataset
     if set(['line', 'line_index']) <= set(netcdf_dataset.variables.keys()): 
-        return NetCDFLineUtils(netcdf_dataset)
+        return NetCDFLineUtils(netcdf_dataset, debug=debug)
     
     # Dataset has 2D (or higher dimensionality) variable with grid_mapping attribute and indexing variables   
     elif len([variable 
@@ -44,10 +44,10 @@ def get_netcdf_util(netcdf_dataset):
                   and len(variable.dimensions) >= 2 # Data variable is a grid
                   and set(variable.dimensions) <= set(netcdf_dataset.variables.keys()) # Indexing variables exist
               ]) > 0:
-        return NetCDFGridUtils(netcdf_dataset)
+        return NetCDFGridUtils(netcdf_dataset, debug=debug)
     
     #TODO: Make sure that there are no other tests we could apply here for point datasets
     else:
-        return NetCDFPointUtils(netcdf_dataset)
+        return NetCDFPointUtils(netcdf_dataset, debug=debug)
     
     
