@@ -233,7 +233,7 @@ class NetCDFPointUtils(NetCDFUtils):
     
         try: # Process four-element bounds iterable if possible
             iterator = iter(bounds)
-            assert len(bounds) == 4, 'Invalid bounds iterable: {}'.format(bounds)
+            assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
         
             bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
             bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
@@ -251,10 +251,8 @@ class NetCDFPointUtils(NetCDFUtils):
             # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
             
-            masked_coords = coordinates[mask]
-            
             # Apply sub-mask for all points within bounds geometry
-            (mask[mask])[~get_intersection_mask(masked_coords, bounds)] = False
+            (mask[mask])[~get_intersection_mask(coordinates[mask], bounds)] = False
             
             return mask
             
