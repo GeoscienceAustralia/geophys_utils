@@ -254,25 +254,6 @@ class NetCDFPointUtils(NetCDFUtils):
             # Return true for each point which is <= bounds_half_size distance from bounds_centroid
             return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)            
     
-    def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
-        '''
-        Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
-        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
-        @parameter from_wkt: WKT for CRS from which to transform bounds
-        @parameter to_wkt: WKT for CRS to which to transform bounds
-        
-        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
-        '''
-        if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
-            return bounds
-        
-        # Need to look at all four bounding box corners, not just LL & UR
-        original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
-        
-        return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
-            
-            
     def grid_points(self, grid_resolution, 
                     variables=None, 
                     native_grid_bounds=None, 

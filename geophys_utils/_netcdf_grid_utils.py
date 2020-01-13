@@ -30,6 +30,7 @@ from geophys_utils._netcdf_utils import NetCDFUtils
 import logging
 import argparse
 from distutils.util import strtobool
+from shapely.geometry.base import BaseGeometry
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -370,6 +371,56 @@ class NetCDFGridUtils(NetCDFUtils):
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
+    
+    def get_dimension_ranges(self, bounds, bounds_wkt=None):
+        '''
+        Function to dict of (start, end+1) tuples keyed by dimension name from a bounds geometry or ordinates
+        @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
+        @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
+        @return dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+        '''
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds        
+            bounds_ordinates = bounds.bounds # Obtain [<xmin>, <ymin>, <xmax>, <ymax>] from Shapely geometry
+        else:
+            bounds_ordinates = bounds # Use provided [<xmin>, <ymin>, <xmax>, <ymax>] parameter
+            
+        if bounds_wkt is not None: # Reproject bounds to native CRS if required
+            bounds_ordinates = self.get_reprojected_bounds(bounds_ordinates, bounds_wkt, self.wkt)
+
+        #=======================================================================
+        # bounds_half_size = abs(np.array([bounds_ordinates[2] - bounds_ordinates[0], bounds_ordinates[3] - bounds_ordinates[1]])) / 2.0
+        # bounds_centroid = np.array([bounds_ordinates[0], bounds_ordinates[1]]) + bounds_half_size
+        #=======================================================================
+        
+        dimension_names = self.data_variable.dimensions
+            
+        dim_range_dict = {}
+        if True:# try:
+            logger.debug('self.dimension_arrays = {}'.format(self.dimension_arrays))
+            for dim_index in range(2):
+                #TODO: Maybe make this work for pixel edges, not centres
+                #TODO: Fix indexing in self.dimension_arrays where 1-dim_index only works for lon-lat array
+                subset_indices = np.where(np.logical_and(self.dimension_arrays[1-dim_index] >= bounds_ordinates[dim_index],
+                                                         self.dimension_arrays[1-dim_index] <= bounds_ordinates[dim_index+2]))[0]
+                                                         
+                logger.debug('subset_indices = {}'.format(subset_indices))
+                
+                logger.debug('self.dimension_arrays[{}].shape = {}'.format(1-dim_index, self.dimension_arrays[1-dim_index].shape))
+                                                         
+                dim_range_dict[dimension_names[1-dim_index]] = (subset_indices[0], min(subset_indices[-1]+1,
+                                                                                     self.dimension_arrays[1-dim_index].shape[0]
+                                                                                     ) # add 1 to upper index
+                                                              )
+                
+                logger.debug('dim_range_dict["{}"] = {}'.format(dimension_names[1-dim_index], dim_range_dict[dimension_names[1-dim_index]]))
+            
+            return dim_range_dict
+        else:# except Exception as e:
+            logger.debug('Unable to determine range indices: {}'.format(e))
+            return None
+
+    
+        
 
     @property
     def GeoTransform(self):

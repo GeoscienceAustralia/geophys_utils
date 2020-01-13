@@ -29,6 +29,9 @@ from osgeo import gdal
 from geophys_utils._crs_utils import transform_coords
 
 def get_gdal_wcs_dataset(wcs_url):
+    '''\
+    Helper function to return a GDAL dataset for a WCS endpoint
+    '''
     clean_url = re.match('http[^?]+', wcs_url).group(0)
     temp_xml_path = os.path.join(tempfile.gettempdir(), re.sub('\W', '_', clean_url) + '.xml')
     
