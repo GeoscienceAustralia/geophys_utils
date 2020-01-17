@@ -23,6 +23,10 @@ Created on 16Nov.,2016
 import re
 import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
+from osgeo import __version__ as osgeo_version
+
+if osgeo_version >= '3.':
+    from osgeo.osr import OAMS_TRADITIONAL_GIS_ORDER
 
 # Define CRS name mappings for 
 CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
@@ -87,6 +91,11 @@ def get_coordinate_transformation(from_wkt, to_wkt):
     # This is probably redundant
     if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
         return None
+    
+    # Hack to make sure that traditional x-y coordinate order is always used
+    if osgeo_version >= '3.':
+        from_spatial_ref.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER)
+        to_spatial_ref.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER)
 
     return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
 
