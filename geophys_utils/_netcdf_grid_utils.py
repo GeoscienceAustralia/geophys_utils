@@ -25,8 +25,10 @@ import math
 from scipy.ndimage import map_coordinates
 from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 from geophys_utils._transect_utils import sample_transect
-from geophys_utils._polygon_utils import netcdf2convex_hull
+from geophys_utils._polygon_utils import netcdf2convex_hull, get_grid_edge_points
 from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._concave_hull import concaveHull
+from shapely.geometry import shape
 import logging
 import argparse
 from distutils.util import strtobool
@@ -371,6 +373,15 @@ class NetCDFGridUtils(NetCDFUtils):
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
 
+    def get_concave_hull(self):
+        """ Returns the concave hull (as a shapely polygon) of points with data. """
+        edge_points = np.array(get_grid_edge_points(self.data_variable,
+                                                    self.dimension_arrays,
+                                                    self.data_variable._FillValue))
+        hull = concaveHull(edge_points, 3)
+        return shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+
+
     @property
     def GeoTransform(self):
         '''
@@ -456,4 +467,4 @@ def main():
         
 
 if __name__ == '__main__':
-    main()        
+    main()
