@@ -381,7 +381,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         #logger.debug('line_index: {}'.format(line_index))
         return line_index
 
-    def get_concave_hull(self, buffer=None):
+    def get_concave_hull(self, smoothness=None):
         def end_points(ld):
             coords = ld['coordinates']
             assert len(coords.shape) == 2
@@ -393,6 +393,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         points = np.concatenate([end_points(ld) for _, ld in self.get_lines(variables=[])])
         hull = concaveHull(points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-        if buffer is None:
+        if smoothness is None:
             return result
-        return Polygon(result.buffer(buffer).exterior).buffer(-buffer)
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)

@@ -35,6 +35,8 @@ from geophys_utils._crs_utils import transform_coords, get_utm_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
+from geophys_utils._concave_hull import concaveHull
+from shapely.geometry import shape
 from scipy.spatial.ckdtree import cKDTree
 import logging
 
@@ -964,6 +966,10 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Finished indexing full dataset into KDTree.')
         return self._kdtree
 
+    def get_concave_hull(self):
+        hull = concaveHull(self.xycoords)
+        return shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+
 
 def main(debug=True):
     '''
@@ -1013,4 +1019,3 @@ if __name__ == '__main__':
         logger.debug('Logging handlers set up for logger {}'.format(logger.name))
 
     main()        
-    
