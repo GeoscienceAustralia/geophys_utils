@@ -245,7 +245,7 @@ def concave_hull_indices(dataset, k):
     return hull
 
 
-def concaveHull(dataset, k):
+def concaveHull(dataset, k=3):
     assert k >= 3, 'k has to be greater or equal to 3.'
 
     return dataset[concave_hull_indices(dataset, k), :]

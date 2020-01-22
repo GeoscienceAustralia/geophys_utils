@@ -28,6 +28,7 @@ import re
 import netCDF4
 import numpy as np
 from geophys_utils._netcdf_line_utils import NetCDFLineUtils
+from shapely.geometry.polygon import Polygon
 
 netcdf_line_utils = None
 
@@ -82,6 +83,10 @@ class TestNetCDFLineUtilsFunctions1(unittest.TestCase):
             count += 1
             if count >= 2:
                 break
+
+    def test_concave_hull(self):
+        print('Testing concave hull')
+        assert isinstance(netcdf_line_utils.get_concave_hull(), Polygon)
 
 
 class TestNetCDFLineUtilsFunctions2(unittest.TestCase):
