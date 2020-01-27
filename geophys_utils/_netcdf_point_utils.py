@@ -863,6 +863,12 @@ class NetCDFPointUtils(NetCDFUtils):
         self.fetch_array(x_variable, xycoord_values[:,0])
         self.fetch_array(y_variable, xycoord_values[:,1])
         
+        # Deal with netCDF4 Datasets that have had set_auto_mask(False) called
+        if hasattr(x_variable, '_FillValue'):
+            xycoord_values[:,0][xycoord_values[:,0] == x_variable._FillValue] = np.nan
+        if hasattr(y_variable, '_FillValue'):
+            xycoord_values[:,1][xycoord_values[:,1] == y_variable._FillValue] = np.nan
+        
         return xycoord_values    
 
     @property
