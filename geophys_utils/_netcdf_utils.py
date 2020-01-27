@@ -150,7 +150,6 @@ class NetCDFUtils(object):
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
             
-            @param nc_in_path: path to existing netCDF input file 
             @param nc_out_path: path to netCDF output file 
             @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
                 e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
@@ -174,7 +173,7 @@ class NetCDFUtils(object):
             variable_options_dict[variable_name] = variable_dict
                                 
         nc_format = nc_format or self.netcdf_dataset.file_format 
-        logger.info('Output format is %s' % nc_format)
+        logger.debug('Output format is %s' % nc_format)
         
         nc_output_dataset = netCDF4.Dataset(nc_out_path, mode="w", clobber=True, format=nc_format)
         
@@ -208,13 +207,13 @@ class NetCDFUtils(object):
             #Copy dimensions
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 if dimension_name in dims_used: # Discard unused dimensions
-                    logger.info('Copying dimension %s of length %d' % (dimension_name, dim_size[dimension_name]))
+                    logger.debug('Copying dimension %s of length %d' % (dimension_name, dim_size[dimension_name]))
                     nc_output_dataset.createDimension(dimension_name, 
                                           dim_size[dimension_name] 
                                           if not dimension.isunlimited() or limit_dim_size 
                                           else None)
                 else:
-                    logger.info('Skipping unused dimension %s' % dimension_name)
+                    logger.debug('Skipping unused dimension %s' % dimension_name)
     
             # Copy variables
             for variable_name, input_variable in self.netcdf_dataset.variables.items():
@@ -260,7 +259,7 @@ class NetCDFUtils(object):
                                                                          dim_size[input_variable.dimensions[dimension_index]])
                              
                 options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.items()]) if var_options else ''   
-                logger.info("Copying variable %s from datatype %s to datatype %s%s" % (variable_name, 
+                logger.debug("Copying variable %s from datatype %s to datatype %s%s" % (variable_name, 
                                                                                        input_variable.datatype, 
                                                                                        dtype, 
                                                                                        options_string
@@ -274,7 +273,7 @@ class NetCDFUtils(object):
                                               )
                 
                 # Copy variable attributes
-                logger.info('\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs())))
+                logger.debug('\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs())))
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs() if not k.startswith('_')})
                 
                 #===============================================================
@@ -282,7 +281,7 @@ class NetCDFUtils(object):
                 #     output_GeoTransform = list(self.GeoTransform)
                 #     output_GeoTransform[5] = - output_GeoTransform[5]
                 #     output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
-                #     logger.info('%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform))
+                #     logger.debug('%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform))
                 #===============================================================
     
                 if variable_name not in empty_var_list:
@@ -297,7 +296,7 @@ class NetCDFUtils(object):
                         #=======================================================
                         #logger.debug('overall_slices={}.format(overall_slices))
                         #=======================================================
-                        # logger.info('\tCopying %s array data of shape %s' % (variable_name,
+                        # logger.debug('\tCopying %s array data of shape %s' % (variable_name,
                         #                                                      tuple([overall_slices[dimension_index].stop - overall_slices[dimension_index].start
                         #                                                             for dimension_index in range(len(input_variable.dimensions))]
                         #                                                            )
@@ -308,7 +307,7 @@ class NetCDFUtils(object):
                         variable_masks = [dim_mask_dict[dimension_name]
                                           for dimension_name in input_variable.dimensions
                                           ]
-                        logger.info('\tCopying %s array data of shape %s' % (variable_name,
+                        logger.debug('\tCopying %s array data of shape %s' % (variable_name,
                                                                              tuple([np.count_nonzero(mask)
                                                                                     for mask in variable_masks]
                                                                                    )
@@ -324,7 +323,7 @@ class NetCDFUtils(object):
                             #     # Y-axis flip required
                             #     assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
                             #     overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
-                            #     logger.info('\tInverting y-axis variable %s' % variable_name)
+                            #     logger.debug('\tInverting y-axis variable %s' % variable_name)
                             #     
                             #===================================================
                             output_variable[...] = input_variable[variable_masks]
@@ -392,7 +391,7 @@ class NetCDFUtils(object):
                                                             for dimension_index in range(len(input_variable.dimensions))
                                                       ]
                                 
-                                logger.info('\t\tCopying piece {} of {}'.format([index + 1 for index in piece_indices], piece_counts))
+                                logger.debug('\t\tCopying piece {} of {}'.format([index + 1 for index in piece_indices], piece_counts))
                                 
                                 #logger.debug('piece_write_slices = {}, np.count_nonzero(piece_mask) = {}'.format(piece_write_slices, np.count_nonzero(piece_mask)))
                                 
@@ -410,7 +409,7 @@ class NetCDFUtils(object):
                         #                     for dimension_index in range(len(input_variable.dimensions)) 
                         #                     ]
                         # 
-                        #     logger.info('\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
+                        #     logger.debug('\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
                         #                                                   ' x '.join([str(piece_size) for piece_size in piece_sizes])
                         #                                                   )
                         #                 )
@@ -428,7 +427,7 @@ class NetCDFUtils(object):
                         #                                     ):
                         #         
                         #                            
-                        #         logger.info('\t\tCopying piece %s' % (piece_indices,))
+                        #         logger.debug('\t\tCopying piece %s' % (piece_indices,))
                         #         
                         #         piece_read_slices = [slice(max(overall_slices[dimension_index].start,
                         #                                  piece_indices[dimension_index] * piece_sizes[dimension_index]
@@ -461,20 +460,20 @@ class NetCDFUtils(object):
                         #=======================================================
                         
                     else: # scalar variable - simple copy
-                        logger.info('\tCopying %s scalar data' % variable_name)
+                        logger.debug('\tCopying %s scalar data' % variable_name)
                         output_variable = input_variable
                 else:
-                    logger.info('\tNot copying data for variable %s' % variable_name)
+                    logger.debug('\tNot copying data for variable %s' % variable_name)
                     
             # Copy global attributes  
-            logger.info("Copying global attributes: %s" % ', '.join(self.netcdf_dataset.__dict__.keys()))
+            logger.debug("Copying global attributes: %s" % ', '.join(self.netcdf_dataset.__dict__.keys()))
             for item, value in self.netcdf_dataset.__dict__.items():
                 if type(value) == str:
                     nc_output_dataset.__setattr__(item, value.encode('utf-8'))
                 else:
                     nc_output_dataset.__setattr__(item, value)
                     
-            logger.info('Finished copying netCDF dataset %s to %s.' % (self.nc_path, nc_out_path))
+            logger.debug('Finished copying netCDF dataset %s to %s.' % (self.nc_path, nc_out_path))
         
         finally:
             nc_output_dataset.close()
