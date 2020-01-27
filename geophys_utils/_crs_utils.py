@@ -26,7 +26,7 @@ from osgeo.osr import SpatialReference, CoordinateTransformation
 import logging
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 
 from osgeo import __version__ as osgeo_version
 
