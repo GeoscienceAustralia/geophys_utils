@@ -27,6 +27,7 @@ import os
 import netCDF4
 import numpy as np
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
+from shapely.geometry.polygon import Polygon
 
 netcdf_grid_utils = None
 
@@ -90,6 +91,11 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
         print('Testing sample_transect function')
         #TODO: Finish this!
         #transect_samples = netcdf_grid_utils.sample_transect(transect_vertices, crs=None, sample_metres=None)
+
+    def test_concave_hull(self):
+        print('Testing concave hull')
+        assert isinstance(netcdf_grid_utils.get_concave_hull(), Polygon)
+
 
 # Define test suites
 def test_suite():

@@ -23,10 +23,11 @@ Created on 16/11/2016
 import os
 import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
+from geophys_utils._concave_hull import concaveHull
 from scipy.spatial.distance import pdist
+from shapely.geometry import shape, Polygon
 import logging
 import netCDF4
-import re
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get __main__ logger
@@ -39,11 +40,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
     def __init__(self, 
                  netcdf_dataset,
+                 memcached_connection=None,
                  enable_disk_cache=None,
-                 enable_memory_cache=None,
+                 enable_memory_cache=True,
                  cache_path=None,
-                 s3_bucket=None,
-                 cci=None,
                  debug=False):
         '''
         NetCDFLineUtils Constructor
@@ -54,11 +54,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''     
         # Start of init function - Call inherited constructor first
         super().__init__(netcdf_dataset=netcdf_dataset, 
-                         enable_disk_cache=enable_disk_cache,
+                         memcached_connection=memcached_connection,
+                         enable_disk_cache=enable_disk_cache, 
                          enable_memory_cache=enable_memory_cache,
                          cache_path=cache_path,
-                         s3_bucket=s3_bucket,
-                         cci=cci,
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
@@ -66,11 +65,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         # Initialise private property variables to None until set by property getter methods
         self._line = None
         self._line_index = None
-
-        # self.s3_bucket = s3_bucket
-        # self.cci = cci
-        # self.cache_path = cache_path
-
+            
+        
     def get_line_masks(self, line_numbers=None, subset_mask=None, get_contiguous_lines=False):
         '''
         Generator to return boolean masks of dimension 'point' for specified lines
@@ -84,7 +80,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''       
         # Yield masks for all lines in subset if no line numbers specified
         if line_numbers is None:
-            line_number_subset = self.line  # All line numbers
+            line_number_subset = self.line # All line numbers
         else:
             # Convert single line number to single element list
             try:
@@ -228,7 +224,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line = None
         line_index = None
 
-        if self.enable_disk_cache is True:
+        if self.enable_disk_cache:
             if os.path.isfile(self.cache_path):
                 # Cached coordinate file exists - read it
                 cache_dataset = netCDF4.Dataset(self.cache_path, 'r')
@@ -257,15 +253,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     line = self.get_line_values()
                 if line_index is None:
                     line_index = self.get_line_index_values()
-
-                #os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
-                try:
-                    original_umask = os.umask(0)
-                    os.makedirs(self.cache_path, mode=0o777, exist_ok=True)
-                finally:
-                    os.umask(original_umask)
-
-
+                
+                os.makedirs(os.path.dirname(self.cache_path), exist_ok=True)
                 if os.path.isfile(self.cache_path):
                     cache_dataset = netCDF4.Dataset(self.cache_path, 'r+')
                 else:
@@ -312,40 +301,39 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         line = None
         line_index = None
-
-        # Memory Caching
         if self.enable_memory_cache and self._line is not None:
             #logger.debug('Returning memory cached line')
             return self._line
 
-        # S3 Caching
-        if self.s3_bucket is not None:
-            s3_key = self.cache_path + '_line_narray'
-            if self.cci.exists_object(s3_key) is True:
-                #logger.debug('attempting to download line array')
-                line = self.cci.download_raw_array(s3_key)
-                #logger.debug('download success')
-                return line
-
+        elif self.memcached_connection is not None:
+            line_cache_key = self.cache_basename + '_line'
+            # line = self.memcached_connection.get(line_cache_key)
+            # if line is not None:
+            #     logger.debug('memcached key found at {}'.format(line_cache_key))
+            # else:
+            #     line = self.get_line_index_values()
+            #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_cache_key))
+            #     self.memcached_connection.add(line_cache_key, line)
+            line = self.memcached_connection.get(line_cache_key)
+            if line is not None:    
+                logger.debug('memcached key found at {}'.format(line_cache_key))
             else:
-                #logger.debug('uploading line array')
                 line = self.get_line_values()
-                #logger.debug('attempting to upload line array')
-                self.cci.upload_raw_array(s3_key, line)
-                #logger.debug('upload success')
-                return line
-
-        elif self.enable_disk_cache is True:
+                logger.debug('memcached key not found. Adding entry with key {}'.format(line_cache_key))
+                self.memcached_connection.add(line_cache_key, line)
+            
+        elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
-        else:  # No caching - read line from source file
+        else: # No caching - read line from source file
             line = self.get_line_values()
             line_index = None
 
-        # Disk Caching
         if self.enable_memory_cache:
             self._line = line
             if line_index is not None:
                 self._line_index = line_index
+                
+        #logger.debug('line: {}'.format(line))
         return line
 
     @property
@@ -356,28 +344,30 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         line = None
         line_index = None
-
-        # Memory Caching
         if self.enable_memory_cache and self._line_index is not None:
-            logger.debug('Returning memory cached line_index')
+            #logger.debug('Returning memory cached line_index')
             return self._line_index
 
-        # S3 Caching
-        if self.s3_bucket is not None:
-            s3_key = self.cache_path + '_line_index_narray'
-            if self.cci.exists_object(s3_key) is True:
-                logger.debug('attempting to download line index array')
-                line_index = self.cci.download_raw_array(s3_key)
-                logger.debug('download success')
-                logger.debug(np.shape(line_index))
+        elif self.memcached_connection is not None:
+            line_index_cache_key = self.cache_basename + '_line_index'
+
+            # line_index = self.memcached_connection.get(line_index_cache_key)
+            # if line_index is not None:
+            #     logger.debug('memcached key found at {}'.format(line_index_cache_key))
+            # else:
+            #     line_index = self.get_line_index_values()
+            #     logger.debug('Memcached key not found. Adding value with key {}'.format(line_index_cache_key))
+            #     self.memcached_connection.add(line_index_cache_key, line_index)
+
+            line_index = self.memcached_connection.get(line_index_cache_key)
+            if line_index is not None:
+                logger.debug('memcached key found at {}'.format(line_index_cache_key))
             else:
                 line_index = self.get_line_index_values()
-                logger.debug('attempting to upload line index array')
-                self.cci.upload_raw_array(s3_key, line_index)
-                logger.debug('upload success')
+                logger.debug('memcached key not found. Adding entry with key {}'.format(line_index_cache_key))
+                self.memcached_connection.add(line_index_cache_key, line_index)
 
-        # Disk Caching
-        elif self.enable_disk_cache is True:
+        elif self.enable_disk_cache:
             line, line_index = self.get_cached_line_arrays()           
         else:  # No caching - read line_index from source file
             line = None
@@ -388,4 +378,21 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 self._line = line
             self._line_index = line_index
             
+        #logger.debug('line_index: {}'.format(line_index))
         return line_index
+
+    def get_concave_hull(self, smoothness=None):
+        def end_points(ld):
+            coords = ld['coordinates']
+            assert len(coords.shape) == 2
+            if coords.shape[0] == 1:
+                return coords
+            else:
+                return coords[[0, -1]]
+
+        points = np.concatenate([end_points(ld) for _, ld in self.get_lines(variables=[])])
+        hull = concaveHull(points)
+        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        if smoothness is None:
+            return result
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
