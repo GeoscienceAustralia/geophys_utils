@@ -30,8 +30,9 @@ from owslib.wms import WebMapService
 from owslib.wcs import WebCoverageService
 import netCDF4
 import yaml
-from pprint import pformat
+from pprint import pformat, pprint
 import logging
+import requests
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -169,7 +170,7 @@ class CSWUtils(object):
             record_count = 0
     
             # Keep querying until all results have been retrieved
-            while record_count < max_total_records:
+            while startposition and record_count < max_total_records:
                 # apply all the filters using the "and" syntax: [[filter1, filter2]]
                 try:
                     csw.getrecords2(constraints=[fes_filters],
@@ -184,13 +185,21 @@ class CSWUtils(object):
                     logger.debug('Bad CSW request:\n{}'.format(csw.request))
                     break
                     
-    
-                query_record_count = len(csw.records)
+                if not csw.results['returned']: # Don't go around again for another query - should be the end
+                    break
     
                 for uuid in [uuid for uuid in csw.records.keys() if uuid not in uuid_list]:
                     record = csw.records[uuid]
                     title = record.title
-    
+                    
+                    try:
+                        identifiers = [identifier_dict['identifier'] 
+                                      for identifier_dict in record.identifiers
+                                      if identifier_dict['identifier'] != uuid
+                                      ]
+                    except:
+                        identifiers = []
+                    
                     #===========================================================
                     # # Ignore datasets with no distributions
                     # if not record.uris:
@@ -204,6 +213,7 @@ class CSWUtils(object):
                     #pprint(record.__dict__)
                     record_dict = {'csw': csw.url,
                                    'uuid': uuid,
+                                   'identifiers': identifiers,
                                    'title': title,
                                    'publisher': record.publisher,
                                    'author': record.creator,
@@ -212,8 +222,22 @@ class CSWUtils(object):
                                   }
     
                     if record.bbox:
-                        record_dict['bbox'] = [record.bbox.minx, record.bbox.minx, record.bbox.maxx, record.bbox.maxy],
-                        record_dict['bbox_crs'] = record.bbox.crs or 'EPSG:4326'
+                        record_dict['bbox'] = [float(ordinate) for ordinate in [record.bbox.minx, record.bbox.miny, record.bbox.maxx, record.bbox.maxy]]
+                        record_dict['bbox_crs'] = str(record.bbox.crs) or 'urn:ogc:def:crs:EPSG::4283' # Default to GDA94
+                        
+#TODO: REMOVE HACK BELOW THIS LINE WHEN GEONETWORK CSW OUTPUT HAS BEEN FIXED                        
+                        #print(record_dict['bbox'], record_dict['bbox_crs'])
+
+                        if record_dict['bbox_crs'][-1] == ')': # Hack for invalid CRS code "urn:ogc:def:crs:EPSG::GDA94 (EPSG:4283)"
+                            record_dict['bbox_crs'] = record_dict['bbox_crs'][:-1]
+                        else: # Hack for incorrect XY coordinate order in response
+                            record_dict['bbox'] = [record_dict['bbox'][1], record_dict['bbox'][0], record_dict['bbox'][3], record_dict['bbox'][2]]
+                        
+                        # Hack to change incorrect(?) lower-right, upper-left points to lower-left, upper-right
+                        record_dict['bbox'] = [min(record_dict['bbox'][::2]), min(record_dict['bbox'][1::2]), max(record_dict['bbox'][::2]), max(record_dict['bbox'][1::2])]
+                        
+                        #print(record_dict['bbox'], record_dict['bbox_crs'])
+#TODO: REMOVE HACK ABOVE THIS LINE WHEN GEONETWORK CSW OUTPUT HAS BEEN FIXED
     
                     # Deal with weird OWSLib behaviour where a single dict containing 'None' string values is returned
                     # when no distributions exist
@@ -263,11 +287,10 @@ class CSWUtils(object):
                     if record_count >= max_total_records:  # Don't go around again for another query - maximum retrieved
                         raise Exception('Maximum number of records retrieved ({})'.format(max_total_records))
         
-                if query_record_count < max_query_records:  # Don't go around again for another query - should be the end
-                    break
-    
                 # Increment start position and repeat query
-                startposition += max_query_records
+                startposition = csw.results['nextrecord']
+                if not startposition:
+                    break
     
         logger.debug('{} records found.'.format(record_count))
 
@@ -394,12 +417,16 @@ class CSWUtils(object):
         del dataset_distribution_dict['distributions']
 
         # Convert lists to strings
+        dataset_distribution_dict['identifiers'] = ', '.join(sorted(dataset_distribution_dict['identifiers']))
+        
         dataset_distribution_dict['keywords'] = ', '.join(sorted(dataset_distribution_dict['keywords']))
         
-        bbox = dataset_distribution_dict.get('bbox')
+        bbox = dataset_distribution_dict.get('bbox') # Retrieve bounding box
         if bbox:
-            dataset_distribution_dict['bbox'] = ', '.join(bbox[0]) #TODO: Cater for multiple bounding boxes
-
+            dataset_distribution_dict['bbox'] = ', '.join(str(ordinate) for ordinate in bbox)
+        else:
+            dataset_distribution_dict['bbox'] = None
+            
         # Merge distribution info into copy of record dict
         if distribution_dict:
             dataset_distribution_dict.update(distribution_dict)
@@ -493,7 +520,10 @@ class CSWUtils(object):
                         match = re.match('(.*\.nc)(\.html)*$', opendap_distribution['url'])
                         try:
                             opendap_distribution['url'] = match.group(1) # Ignore any trailing ".html"
-                            if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                            #if netCDF4.Dataset(opendap_distribution['url']): # Test for valid OPeNDAP endpoint
+                            #TODO: Make a better test for a valid OPeNDAP URL
+                            response = requests.get(opendap_distribution['url'])
+                            if response.status_code == 400: # Test for valid OPeNDAP endpoint
                                 distribution_dict = opendap_distribution
                                 break
                         except:

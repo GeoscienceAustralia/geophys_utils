@@ -28,6 +28,9 @@ from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._netcdf_utils import NetCDFUtils
 import logging
+import argparse
+from distutils.util import strtobool
+from shapely.geometry.base import BaseGeometry
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -43,7 +46,7 @@ class NetCDFGridUtils(NetCDFUtils):
     DEFAULT_MAX_BYTES = 500000000  # Default to 500,000,000 bytes for NCI's OPeNDAP
     FLOAT_TOLERANCE = 0.000001
 
-    def __init__(self, netcdf_dataset):
+    def __init__(self, netcdf_dataset, debug=False):
         '''
         NetCDFGridUtils Constructor - wraps a NetCDF dataset
         '''
@@ -100,7 +103,7 @@ class NetCDFGridUtils(NetCDFUtils):
 
     
         # Start of init function - Call inherited constructor first
-        super().__init__(netcdf_dataset)
+        super().__init__(netcdf_dataset, debug=debug)
         
         logger.debug('Running NetCDFGridUtils constructor')
         
@@ -113,10 +116,8 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if hasattr(variable, 'grid_mapping')][0].dimensions
-            print(data_variable_dimensions)
             self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
-            print(self.data_variable_list)
         except:
             logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
             raise
@@ -370,6 +371,56 @@ class NetCDFGridUtils(NetCDFUtils):
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
+    
+    def get_dimension_ranges(self, bounds, bounds_wkt=None):
+        '''
+        Function to dict of (start, end+1) tuples keyed by dimension name from a bounds geometry or ordinates
+        @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
+        @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
+        @return dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+        '''
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds        
+            bounds_ordinates = bounds.bounds # Obtain [<xmin>, <ymin>, <xmax>, <ymax>] from Shapely geometry
+        else:
+            bounds_ordinates = bounds # Use provided [<xmin>, <ymin>, <xmax>, <ymax>] parameter
+            
+        if bounds_wkt is not None: # Reproject bounds to native CRS if required
+            bounds_ordinates = self.get_reprojected_bounds(bounds_ordinates, bounds_wkt, self.wkt)
+
+        #=======================================================================
+        # bounds_half_size = abs(np.array([bounds_ordinates[2] - bounds_ordinates[0], bounds_ordinates[3] - bounds_ordinates[1]])) / 2.0
+        # bounds_centroid = np.array([bounds_ordinates[0], bounds_ordinates[1]]) + bounds_half_size
+        #=======================================================================
+        
+        dimension_names = self.data_variable.dimensions
+            
+        dim_range_dict = {}
+        if True:# try:
+            logger.debug('self.dimension_arrays = {}'.format(self.dimension_arrays))
+            for dim_index in range(2):
+                #TODO: Maybe make this work for pixel edges, not centres
+                #TODO: Fix indexing in self.dimension_arrays where 1-dim_index only works for lon-lat array
+                subset_indices = np.where(np.logical_and(self.dimension_arrays[1-dim_index] >= bounds_ordinates[dim_index],
+                                                         self.dimension_arrays[1-dim_index] <= bounds_ordinates[dim_index+2]))[0]
+                                                         
+                logger.debug('subset_indices = {}'.format(subset_indices))
+                
+                logger.debug('self.dimension_arrays[{}].shape = {}'.format(1-dim_index, self.dimension_arrays[1-dim_index].shape))
+                                                         
+                dim_range_dict[dimension_names[1-dim_index]] = (subset_indices[0], min(subset_indices[-1]+1,
+                                                                                     self.dimension_arrays[1-dim_index].shape[0]
+                                                                                     ) # add 1 to upper index
+                                                              )
+                
+                logger.debug('dim_range_dict["{}"] = {}'.format(dimension_names[1-dim_index], dim_range_dict[dimension_names[1-dim_index]]))
+            
+            return dim_range_dict
+        else:# except Exception as e:
+            logger.debug('Unable to determine range indices: {}'.format(e))
+            return None
+
+    
+        
 
     @property
     def GeoTransform(self):
@@ -393,4 +444,67 @@ class NetCDFGridUtils(NetCDFUtils):
         return self._GeoTransform
 
 
+    
+def main():
+    '''
+    Main function for quick and dirty testing
+    '''
+    # Define command line arguments
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument('-c', '--copy', 
+                        dest='do_copy', 
+                        action='store_const', 
+                        const=True, default=False,
+                        help='Copy netCDF files')
+    parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
+                        type=str, default='NETCDF4')
+    parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
+                        type=str)
+    parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
+                        type=int, default=4)
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
+    parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
+    parser.add_argument("input_path")
+    parser.add_argument("output_path")
+    
+    args = parser.parse_args()
+    
+    if args.invert_y is not None:
+        invert_y = bool(strtobool(args.invert_y))
+    else:
+        invert_y = None # Default to same as source
+    
+    if args.do_copy:
+        if args.chunkspec:
+            chunk_spec = {dim_name: int(chunk_size) 
+                        for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
+        else:
+            chunk_spec = None
+            
+    ncgu = NetCDFGridUtils(args.input_path,
+                      debug=args.debug
+                      )   
+    
+    ncgu.copy(args.output_path, 
+             #datatype_map_dict={},
+             # Compress all chunked variables
+             variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension) 
+                                                                   for dimension in variable.dimensions
+                                                                   ],
+                                                    'zlib': bool(args.complevel),
+                                                    'complevel': args.complevel
+                                                    }
+                               for variable_name, variable in ncgu.netcdf_dataset.variables.items()
+                               if (set(variable.dimensions) & set(chunk_spec.keys()))
+                               } if chunk_spec else {},
+             #dim_range_dict={},
+             nc_format=args.format,
+             #limit_dim_size=False
+             invert_y=invert_y
+             )
         
+
+if __name__ == '__main__':
+    main()        

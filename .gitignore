@@ -63,3 +63,8 @@ target/
 
 # iPython checkpoints
 *-checkpoint.ipynb
+
+# Tiling tests
+examples/dataset_lists
+examples/point_lists
+examples/tiles

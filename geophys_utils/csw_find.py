@@ -23,6 +23,7 @@ Created on 19 Oct. 2018
 import sys
 import argparse
 import re
+from unidecode import unidecode
 from geophys_utils import CSWUtils, date_string2datetime
 import logging
 
@@ -38,13 +39,17 @@ def main():
         '''
         Helper function to quote text containing delimiters or whitespace
         '''
-        if delimiter in text or quote_char in text or re.search('\s', text):
-            if delimiter == ',': # Use double quote to escape quote character for CSV
-                return quote_char + text.replace(quote_char, quote_char + quote_char) + quote_char
-            else: # Use backslash to escape quote character for tab or space delimited text
-                return quote_char + text.replace(quote_char, '\\' + quote_char) + quote_char
-        else:
-            return text
+        try:
+            if delimiter in text or quote_char in text or re.search('\s', text):
+                if delimiter == ',': # Use double quote to escape quote character for CSV
+                    return quote_char + text.replace(quote_char, quote_char + quote_char) + quote_char
+                else: # Use backslash to escape quote character for tab or space delimited text
+                    return quote_char + text.replace(quote_char, '\\' + quote_char) + quote_char
+            else:
+                return text
+        except UnicodeEncodeError:
+            root_logger.error(text)
+            raise
             
         
     # Define command line arguments
@@ -155,7 +160,7 @@ def main():
             header_printed = True;
         
         # Decode and quote fields if required
-        print(delimiter.join([quote_delimitedtext(str(distribution.get(field) or ''), delimiter)
+        print(delimiter.join([quote_delimitedtext(unidecode(distribution.get(field) or ''), delimiter)
                               for field in (field_list or sorted(distribution.keys()))
                               ]
                              )

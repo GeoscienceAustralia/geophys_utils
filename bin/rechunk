@@ -18,4 +18,4 @@
 # Written by Alex Ip 2/3/2017
 # Example invocation: rechunk infile.nc outfile.nc --chunking=8192,8192
 
-python -m geophys_utils._netcdf_utils --copy "$@"
+python3 -m geophys_utils._netcdf_grid_utils --copy "$@"

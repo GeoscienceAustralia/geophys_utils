@@ -36,6 +36,8 @@ from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.ckdtree import cKDTree
+from shapely.geometry import MultiPolygon, Polygon, MultiPoint, Point
+from shapely.geometry.base import BaseGeometry
 import logging
 
 # Setup logging handlers if required
@@ -199,39 +201,59 @@ class NetCDFPointUtils(NetCDFUtils):
     def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
         Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
+        @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
+        @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
         '''
+        def get_intersection_mask(points, geometry):
+            """
+            Determine if points lie inside (multi)polygon
+            :param points: 2 x n array of input coordinates
+            :param geometry: (multi)polygon
+            :return mask: Boolean array of size n 
+            """
+            # Find all points within geometry
+            intersection_points = np.array(MultiPoint(points).intersection(geometry))
+            
+            #TODO: Find out if there's a better way of getting the mask from the intersection points
+            # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
+            _x_values, x_indices, _x_intersection_indices = np.intersect1d(points.flatten()[0::2], intersection_points.flatten()[0::2], return_indices=True)
+            _y_values, y_indices, _y_intersection_indices = np.intersect1d(points.flatten()[1::2], intersection_points.flatten()[1::2], return_indices=True)
+            
+            mask = np.zeros(shape=(points.shape[0]), dtype=np.bool)
+            intersection_indices = np.intersect1d(x_indices, y_indices, return_indices=False)
+            mask[intersection_indices] = True
+            
+            return mask
+            
+            
         coordinates = self.xycoords
-        
+    
         if bounds_wkt is not None:
             coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
-
-        bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
-        bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
-        
-        # Return true for each point which is <= bounds_half_size distance from bounds_centroid
-        return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
-            
-        
     
-    def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
-        '''
-        Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
-        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
-        @parameter from_wkt: WKT for CRS from which to transform bounds
-        @parameter to_wkt: WKT for CRS to which to transform bounds
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds
         
-        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
-        '''
-        if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
-            return bounds
-        
-        # Need to look at all four bounding box corners, not just LL & UR
-        original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
-        
-        return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
+            bounds_half_size = abs(np.array([bounds.bounds[2] - bounds.bounds[0], bounds.bounds[3] - bounds.bounds[1]])) / 2.0
+            bounds_centroid = np.array(bounds.centroid.coords[0])
             
+            # Limit the points checked to those within the same rectangular extent
+            # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
+            mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
             
+            # Apply sub-mask for all points within bounds geometry
+            (mask[mask])[~get_intersection_mask(coordinates[mask], bounds)] = False
+            
+            return mask
+        else: # Process four-element bounds iterable if possible
+            iterator = iter(bounds)
+            assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
+        
+            bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
+            bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
+            
+            # Return true for each point which is <= bounds_half_size distance from bounds_centroid
+            return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)            
+    
     def grid_points(self, grid_resolution, 
                     variables=None, 
                     native_grid_bounds=None, 
@@ -659,6 +681,9 @@ class NetCDFPointUtils(NetCDFUtils):
         else:
             subset_mask = mask[start_index:end_index]
             
+        lookup_variable.set_auto_mask(False)
+        indexing_variable.set_auto_mask(False)
+            
         result_array = lookup_variable[:][indexing_variable[start_index:end_index][subset_mask]] # Need to index numpy array, not netCDF variable
 
         # Convert 2D byte array into 1D array of unicode strings - needed for OPeNDAP
@@ -837,6 +862,12 @@ class NetCDFPointUtils(NetCDFUtils):
         xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
         self.fetch_array(x_variable, xycoord_values[:,0])
         self.fetch_array(y_variable, xycoord_values[:,1])
+        
+        # Deal with netCDF4 Datasets that have had set_auto_mask(False) called
+        if hasattr(x_variable, '_FillValue'):
+            xycoord_values[:,0][xycoord_values[:,0] == x_variable._FillValue] = np.nan
+        if hasattr(y_variable, '_FillValue'):
+            xycoord_values[:,1][xycoord_values[:,1] == y_variable._FillValue] = np.nan
         
         return xycoord_values    
 

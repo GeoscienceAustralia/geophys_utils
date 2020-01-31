@@ -23,11 +23,25 @@ Created on 16Nov.,2016
 import re
 import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+from osgeo import __version__ as osgeo_version
+
+if osgeo_version >= '3.':
+    from osgeo.osr import OAMS_TRADITIONAL_GIS_ORDER
 
 # Define CRS name mappings for 
-CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
-                    'EPSG:283': 'EPSG:4283', # EPSG Prefix for UTM zone
-                    }
+CRS_NAME_MAPPING = {
+    'GDA94': 'EPSG:4283',
+    'EPSG:283': 'EPSG:4283', # EPSG Prefix for GDA94 UTM zone
+    'MGA': 'EPSG:4283', # EPSG Prefix for GDA94 UTM zone
+    'WGS84': 'EPSG:4326',
+    'AGD84': 'EPSG:4203',
+    'AGD66': 'EPSG:4202',
+    }
 
 def get_spatial_ref_from_wkt(wkt_or_crs_name):
     '''
@@ -40,29 +54,51 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     # Try to resolve WKT
     result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
     if not result:
+        logger.debug('CRS determined using SpatialReference.ImportFromWkt({})'.format(wkt_or_crs_name))
         return spatial_ref
 
     # Try to resolve CRS name - either mapped or original
-    result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
+    modified_crs_name = CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name
+    result = spatial_ref.SetWellKnownGeogCS(modified_crs_name) 
     if not result:
+        logger.debug('CRS determined using SpatialReference.SetWellKnownGeogCS({})'.format(modified_crs_name))
         return spatial_ref
+    
+    match = re.match('EPSG:(\d+)', wkt_or_crs_name, re.IGNORECASE)
+    if match:
+        epsg_code = int(match.group(1))
+        result = spatial_ref.ImportFromEPSG(epsg_code)
+        if not result:
+            logger.debug('CRS determined using SpatialReference.ImportFromEPSG({})'.format(epsg_code))
+            return spatial_ref
+        
 
     # Try common formulations for UTM zones
     #TODO: Fix this so it works in the Northern hemisphere 
     modified_crs_name = re.sub('\s+', '', wkt_or_crs_name.strip().upper())
     utm_match = (re.match('(\w+)/MGAZONE(\d+)', modified_crs_name) or
                  re.match('(\w+)/(\d+)S', modified_crs_name) or
-                 re.match('(EPSG:283)(\d{2})', modified_crs_name) 
+                 re.match('(EPSG:283)(\d{2})', modified_crs_name) or
+                 re.match('(MGA)(\d{2})', modified_crs_name) 
                  )
     if utm_match:
         modified_crs_name = utm_match.group(1)
+        modified_crs_name = CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name
         utm_zone = int(utm_match.group(2))
-        result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(modified_crs_name) or modified_crs_name)
+        result = spatial_ref.SetWellKnownGeogCS(modified_crs_name)
     if not result:
         spatial_ref.SetUTM(utm_zone, False) # Put this here to avoid potential side effects in downstream code
+        logger.debug('UTM CRS determined using SpatialReference.SetWellKnownGeogCS({}) (zone{})'.format(modified_crs_name, utm_zone))
         return spatial_ref
 
-    assert not result, 'Invalid WKT or CRS name'
+    assert not result, 'Invalid WKT or CRS name: "{}"'.format(wkt_or_crs_name)
+
+def get_wkt_from_spatial_ref(spatial_ref):
+    '''
+    Function to return OGC WKT for supplied Proj instance
+    '''
+    return spatial_ref.ExportToWkt()
+
 
 def get_coordinate_transformation(from_wkt, to_wkt):
     '''
@@ -80,6 +116,12 @@ def get_coordinate_transformation(from_wkt, to_wkt):
     # This is probably redundant
     if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
         return None
+    
+    # Hack to make sure that traditional x-y coordinate order is always used
+    if osgeo_version >= '3.':
+        logger.debug('Setting axis mapping strategy to XY  for GDAL 3.X  using OAMS_TRADITIONAL_GIS_ORDER')
+        from_spatial_ref.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER)
+        to_spatial_ref.SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER)
 
     return CoordinateTransformation(from_spatial_ref, to_spatial_ref)
 
