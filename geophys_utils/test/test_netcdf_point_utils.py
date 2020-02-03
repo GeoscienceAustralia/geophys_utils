@@ -94,7 +94,11 @@ class TestNetCDFPointUtilsFunctions1(unittest.TestCase):
         spatial_mask = netcdf_point_utils.get_spatial_mask(TEST_BOUNDS)
         #print(spatial_mask)
         assert np.count_nonzero(spatial_mask) == SPATIAL_MASK_COUNT, 'Unexpected spatial mask count'
-        
+
+    def test_concave_hull(self):
+        print('Testing concave hull')
+        raise ValueError(netcdf_point_utils.get_concave_hull())
+
 
 class TestNetCDFPointUtilsGridFunctions(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_point_utils functions"""

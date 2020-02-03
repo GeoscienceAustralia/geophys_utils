@@ -23,7 +23,9 @@ Created on 16/11/2016
 import os
 import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
+from geophys_utils._concave_hull import concaveHull
 from scipy.spatial.distance import pdist
+from shapely.geometry import shape, Polygon
 import logging
 import netCDF4
 
@@ -378,4 +380,19 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         #logger.debug('line_index: {}'.format(line_index))
         return line_index
-    
+
+    def get_concave_hull(self, smoothness=None):
+        def end_points(ld):
+            coords = ld['coordinates']
+            assert len(coords.shape) == 2
+            if coords.shape[0] == 1:
+                return coords
+            else:
+                return coords[[0, -1]]
+
+        points = np.concatenate([end_points(ld) for _, ld in self.get_lines(variables=[])])
+        hull = concaveHull(points)
+        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        if smoothness is None:
+            return result
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
