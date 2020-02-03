@@ -414,12 +414,28 @@ class NetCDFPointUtils(NetCDFUtils):
     def get_convex_hull(self, to_wkt=None):
         '''
         Function to return vertex coordinates of a convex hull polygon around all points
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
         '''
-        convex_hull = points2convex_hull(self.xycoords)
-    
-        return transform_coords(convex_hull, self.wkt, to_wkt)
+        return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
     
     
+    def get_concave_hull(self, to_wkt=None, smoothness=None):
+        """\
+        Returns the concave hull (as a shapely polygon) of all points. 
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
+        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        """
+        hull = concaveHull(transform_coords(self.xycoords, self.wkt, to_wkt))
+        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        
+        if smoothness is None:
+            return result
+        
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+
+
     def nearest_neighbours(self, coordinates, 
                            wkt=None, 
                            points_required=1, 
@@ -993,11 +1009,6 @@ class NetCDFPointUtils(NetCDFUtils):
             self._kdtree = cKDTree(data=self.xycoords, balanced_tree=False)
             logger.debug('Finished indexing full dataset into KDTree.')
         return self._kdtree
-
-    def get_concave_hull(self):
-        hull = concaveHull(self.xycoords)
-        return shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-
 
 def main(debug=True):
     '''
