@@ -430,8 +430,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         """
         points = transform_coords(self.get_line_start_end_points(), self.wkt, to_wkt)
         
-        print(points)
-        
         hull = concaveHull(points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
         
