@@ -403,7 +403,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         _line_indices, line_start_indices = np.unique(self.line_index, return_index=True)
         line_start_end_indices = np.concatenate((line_start_indices, line_start_indices-1))
         line_start_end_indices[np.where(line_start_end_indices == -1)] = self.line.shape[0]-1 # Replace -1 with length of array less one for correct sorting
-        return np.sort(line_start_end_indices)
+        return self.xycoords[np.sort(line_start_end_indices)]
 
     def get_convex_hull(self, to_wkt=None):
         '''\
@@ -429,6 +429,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
         points = transform_coords(self.get_line_start_end_points(), self.wkt, to_wkt)
+        
+        print(points)
         
         hull = concaveHull(points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})

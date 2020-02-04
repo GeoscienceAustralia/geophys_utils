@@ -143,7 +143,7 @@ def sample_transect(transect_vertices, wkt, sample_metres):
             # print 'sample_point_array.shape = %s' %
             # (sample_point_array.shape,)
         except Exception as e:
-            print('Line sampling failed: {}'.format(e.message))
+            print('Line sampling failed: {}'.format(e))
             residual = 0
             continue
 

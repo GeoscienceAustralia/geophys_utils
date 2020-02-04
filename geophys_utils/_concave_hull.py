@@ -8,6 +8,10 @@ Adapted from Adriano Moreira and Maribel Yasmina Santos 2007.
 import numpy as np
 import scipy.spatial as spt
 from matplotlib.path import Path
+import logging
+
+logger = logging.getLogger(__name__)
+logger.level = logging.INFO
 
 
 def bbox(a, b):
@@ -82,24 +86,23 @@ class PointSet:
     """ Book-keeping for an array of points. """
 
     def __init__(self, points):
-        """ Create a kD-tree from the points. """
-        npoints, ndim = points.shape
-        assert ndim == 2
-        self.points = points
-        self.tree = spt.cKDTree(points, leafsize=10)
+        """ Create a kD-tree from the points. 
+        @param points: n x 2 array of point coordinates
+        """
+        _npoints, ndim = points.shape
+        assert ndim == 2, 'Coordinates must be 2D, not {}D'.format(ndim)
+        
+        self.points = np.unique(points[np.all(~np.isnan(points), axis=1)], axis=0) # remove NaN and duplicate coordinates
+        self.npoints = len(self.points)
+        
+        self.tree = spt.cKDTree(self.points, leafsize=10)
 
         # keep track of which points are currently still under consideration
-        self.registry = np.full((npoints, ), fill_value=True, dtype='bool')
+        self.registry = np.full((self.npoints, ), fill_value=True, dtype='bool')
+        
+        #logger.debug('Computing shape for {} valid points'.format(self.npoints))
+        #assert False, 'ABORT'
 
-        # remove duplicates
-        for i in range(npoints):
-            mask = np.all(points == points[i], axis=1)
-            self.registry[mask] = False
-            self.registry[i] = True
-            npoints = npoints - np.count_nonzero(mask) + 1
-
-        assert np.count_nonzero(self.registry) == npoints
-        self.npoints = npoints
 
     def __getitem__(self, index):
         return self.points[index]
@@ -134,7 +137,11 @@ class PointSet:
                 return indices
             kk = kk + 1
 
-
+    @property
+    def valid_points(self):
+        return len(self.points)
+    
+    
 def TurningAngle(NearestPoint, currentPoint, previousAngle):
     angle = np.arctan2(NearestPoint[1] - currentPoint[1],
                        NearestPoint[0] - currentPoint[0]) - previousAngle
@@ -200,6 +207,9 @@ def first_valid_candidate(point_set, cPoints, hull, first, step):
 
 
 def concave_hull_indices(dataset, k):
+    '''\
+    '''
+    logger.debug('k in concave_hull_indices: {}'.format(k))
     point_set = PointSet(dataset)
     # todo: make sure that enough points for a given k can be found
 
@@ -238,7 +248,10 @@ def concave_hull_indices(dataset, k):
     # check if all points are inside the hull
     p = Path(point_set.points[hull, :])
 
-    pContained = p.contains_points(dataset, radius=0.0000000001)
+    pContained = p.contains_points(point_set.points, radius=0.0000000001) # Check filtered points with no NaNs or duplicates
+    
+    #logger.debug(len(point_set.points), np.count_nonzero(pContained))
+    
     if not pContained.all():
         return concave_hull_indices(dataset, k + 1)
 
@@ -250,5 +263,6 @@ def concaveHull(dataset, k=3):
     Generate n x 2 array of coordinates for vertices of concave hull
     '''
     assert k >= 3, 'k has to be greater or equal to 3.'
-
-    return dataset[concave_hull_indices(dataset, k), :]
+    #logger.debug('dataset in concaveHull: {}'.format(dataset))
+    point_indices = concave_hull_indices(np.unique(dataset, axis=0), k)
+    return dataset[point_indices, :]
