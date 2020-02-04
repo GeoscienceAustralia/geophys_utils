@@ -11,7 +11,7 @@ from matplotlib.path import Path
 import logging
 
 logger = logging.getLogger(__name__)
-logger.level = logging.INFO
+logger.level = logging.DEBUG
 
 
 def bbox(a, b):
@@ -89,18 +89,26 @@ class PointSet:
         """ Create a kD-tree from the points. 
         @param points: n x 2 array of point coordinates
         """
-        _npoints, ndim = points.shape
+        npoints, ndim = points.shape
         assert ndim == 2, 'Coordinates must be 2D, not {}D'.format(ndim)
         
-        self.points = np.unique(points[np.all(~np.isnan(points), axis=1)], axis=0) # remove NaN and duplicate coordinates
-        self.npoints = len(self.points)
+        self.points = points
+        
+        # keep track of which points are currently still under consideration
+        self.registry = np.full((npoints, ), fill_value=False, dtype='bool')
+        
+        # Only use first occurrence of unique values
+        _unique_values, unique_value_indices = np.unique(points, return_index=True, axis=0)
+        self.registry[unique_value_indices] = True
+        
+        # Ignore any coordinates containing NaN
+        self.registry[np.any(np.isnan(points), axis=1)] = False 
+        
+        self.npoints = np.count_nonzero(self.registry)
+        logger.debug('Computing shape for {} valid points'.format(self.npoints))
         
         self.tree = spt.cKDTree(self.points, leafsize=10)
 
-        # keep track of which points are currently still under consideration
-        self.registry = np.full((self.npoints, ), fill_value=True, dtype='bool')
-        
-        #logger.debug('Computing shape for {} valid points'.format(self.npoints))
         #assert False, 'ABORT'
 
 
@@ -137,11 +145,7 @@ class PointSet:
                 return indices
             kk = kk + 1
 
-    @property
-    def valid_points(self):
-        return len(self.points)
-    
-    
+
 def TurningAngle(NearestPoint, currentPoint, previousAngle):
     angle = np.arctan2(NearestPoint[1] - currentPoint[1],
                        NearestPoint[0] - currentPoint[0]) - previousAngle
@@ -248,10 +252,9 @@ def concave_hull_indices(dataset, k):
     # check if all points are inside the hull
     p = Path(point_set.points[hull, :])
 
-    pContained = p.contains_points(point_set.points, radius=0.0000000001) # Check filtered points with no NaNs or duplicates
-    
-    #logger.debug(len(point_set.points), np.count_nonzero(pContained))
-    
+    # Check whether all valid points are contained
+    pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
+    logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
         return concave_hull_indices(dataset, k + 1)
 
