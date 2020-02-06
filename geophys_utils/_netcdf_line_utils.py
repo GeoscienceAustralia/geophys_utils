@@ -387,23 +387,27 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''\
         Function to return n x 2 array of coordinates for line start & end points
         '''
-        #=======================================================================
-        # def end_points(coords):
-        #     assert len(coords.shape) == 2
-        #     if coords.shape[0] == 1:
-        #         return coords
-        #     else:
-        #         return coords[[0, -1]]
-        # 
-        # return np.concatenate([end_points(line_definition['coordinates']) 
-        #                        for _line_number, line_definition in self.get_lines(variables=[])])
-        #=======================================================================
-        
         # Fully vectorised code for efficiency
         _line_indices, line_start_indices = np.unique(self.line_index, return_index=True)
         line_start_end_indices = np.concatenate((line_start_indices, line_start_indices-1))
-        line_start_end_indices[np.where(line_start_end_indices == -1)] = self.line.shape[0]-1 # Replace -1 with length of array less one for correct sorting
+        line_start_end_indices[np.where(line_start_end_indices == -1)] = self.line_index.shape[0]-1 # Replace -1 with length of array less one for correct sorting
         return self.xycoords[np.sort(line_start_end_indices)]
+
+    def get_line_sample_points(self, line_divisions=10):
+        '''\
+        Function to return n x 2 array of coordinates for line start, division points & end points
+        @param line_divisions: Number of sampling subdivisions for each line (1 = start/end points only)
+        '''       
+        # Fully vectorised code for efficiency
+        _line_indices, line_start_indices = np.unique(self.line_index, return_index=True)
+        line_sample_indices = np.concatenate((line_start_indices, line_start_indices-1))
+        line_sample_indices[np.where(line_sample_indices == -1)] = self.line_index.shape[0]-1 # Replace -1 with length of array less one for correct sorting
+        line_sample_indices = np.sort(line_sample_indices)
+        line_sample_indices = np.sort(np.unique(np.concatenate(
+            [(((line_divisions-sample_step)*line_sample_indices[0::2] + sample_step*line_sample_indices[1::2])/line_divisions).astype(np.int)
+            for sample_step in range(line_divisions+1)]
+            ), axis=0))
+        return self.xycoords[line_sample_indices]
 
     def get_convex_hull(self, to_wkt=None):
         '''\
@@ -411,7 +415,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         '''
-        points = transform_coords(self.get_line_start_end_points(), self.wkt, to_wkt)
+        points = transform_coords(self.get_line_sample_points(), self.wkt, to_wkt)
         
         try:
             convex_hull = points2convex_hull(points)
@@ -421,14 +425,14 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, line_divisions=10, smoothness=None):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
-        points = transform_coords(self.get_line_start_end_points(), self.wkt, to_wkt)
+        points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
         
         hull = concaveHull(points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})

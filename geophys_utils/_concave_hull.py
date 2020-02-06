@@ -267,5 +267,5 @@ def concaveHull(dataset, k=3):
     '''
     assert k >= 3, 'k has to be greater or equal to 3.'
     #logger.debug('dataset in concaveHull: {}'.format(dataset))
-    point_indices = concave_hull_indices(np.unique(dataset, axis=0), k)
+    point_indices = concave_hull_indices(dataset, k)
     return dataset[point_indices, :]
