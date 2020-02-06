@@ -191,7 +191,15 @@ class CSWUtils(object):
                 for uuid in [uuid for uuid in csw.records.keys() if uuid not in uuid_list]:
                     record = csw.records[uuid]
                     title = record.title
-    
+                    
+                    try:
+                        identifiers = [identifier_dict['identifier'] 
+                                      for identifier_dict in record.identifiers
+                                      if identifier_dict['identifier'] != uuid
+                                      ]
+                    except:
+                        identifiers = []
+                    
                     #===========================================================
                     # # Ignore datasets with no distributions
                     # if not record.uris:
@@ -205,6 +213,7 @@ class CSWUtils(object):
                     #pprint(record.__dict__)
                     record_dict = {'csw': csw.url,
                                    'uuid': uuid,
+                                   'identifiers': identifiers,
                                    'title': title,
                                    'publisher': record.publisher,
                                    'author': record.creator,
@@ -408,6 +417,8 @@ class CSWUtils(object):
         del dataset_distribution_dict['distributions']
 
         # Convert lists to strings
+        dataset_distribution_dict['identifiers'] = ', '.join(sorted(dataset_distribution_dict['identifiers']))
+        
         dataset_distribution_dict['keywords'] = ', '.join(sorted(dataset_distribution_dict['keywords']))
         
         bbox = dataset_distribution_dict.get('bbox') # Retrieve bounding box
