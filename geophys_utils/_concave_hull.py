@@ -11,7 +11,7 @@ from matplotlib.path import Path
 import logging
 
 logger = logging.getLogger(__name__)
-logger.level = logging.INFO
+logger.level = logging.DEBUG
 
 
 def bbox(a, b):
@@ -266,6 +266,36 @@ def concaveHull(dataset, k=3):
     Generate n x 2 array of coordinates for vertices of concave hull
     '''
     assert k >= 3, 'k has to be greater or equal to 3.'
-    #logger.debug('dataset in concaveHull: {}'.format(dataset))
-    point_indices = concave_hull_indices(dataset, k)
-    return dataset[point_indices, :]
+    logger.debug('dataset length in concaveHull: {}'.format(len(dataset)))
+    
+    points = np.unique(dataset[~np.any(np.isnan(dataset), axis=1)], axis=0) # Purge duplicates and NaNs
+    logger.debug('{} valid points in concaveHull'.format(len(points)))
+    
+    point_indices = concave_hull_indices(points, k)
+    return points[point_indices, :]
+
+
+if __name__ == '__main__':
+    '''\
+    Main routine for quick and dirty testing - remove this later
+    '''
+    import sys
+    from geophys_utils import NetCDFLineUtils
+    
+    console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(name)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+ 
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(logger.name))
+
+    nc_path = 'C:\\Users\\alex\\Documents\\GADDS2\\P354MAG.nc'
+    logger.info('Opening dataset {}'.format(nc_path))
+    nclu = NetCDFLineUtils(nc_path, debug=True)
+    
+    concave_hull = nclu.get_concave_hull(to_wkt='GDA94')
+    
+    print(concave_hull.exterior.coords.xy)
