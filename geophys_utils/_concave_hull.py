@@ -11,7 +11,7 @@ from matplotlib.path import Path
 import logging
 
 logger = logging.getLogger(__name__)
-logger.level = logging.DEBUG
+logger.level = logging.INFO
 
 
 def bbox(a, b):
@@ -274,28 +274,3 @@ def concaveHull(dataset, k=3):
     point_indices = concave_hull_indices(points, k)
     return points[point_indices, :]
 
-
-if __name__ == '__main__':
-    '''\
-    Main routine for quick and dirty testing - remove this later
-    '''
-    import sys
-    from geophys_utils import NetCDFLineUtils
-    
-    console_handler = logging.StreamHandler(sys.stdout)
-    # console_handler.setLevel(logging.INFO)
-    console_handler.setLevel(logging.DEBUG)
-    console_formatter = logging.Formatter('%(name)s: %(message)s')
-    console_handler.setFormatter(console_formatter)
- 
-    if not logger.handlers:
-        logger.addHandler(console_handler)
-        logger.debug('Logging handlers set up for {}'.format(logger.name))
-
-    nc_path = 'C:\\Users\\alex\\Documents\\GADDS2\\P354MAG.nc'
-    logger.info('Opening dataset {}'.format(nc_path))
-    nclu = NetCDFLineUtils(nc_path, debug=True)
-    
-    concave_hull = nclu.get_concave_hull(to_wkt='GDA94')
-    
-    print(concave_hull.exterior.coords.xy)
