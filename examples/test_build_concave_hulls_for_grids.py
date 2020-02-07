@@ -5,6 +5,13 @@ import netCDF4
 import logging
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
+# file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/Cape_York_First_Vertical_Derivative_geodetic.nc"
+# ds = netCDF4.Dataset(file)
+# print(ds)
+# ngu = NetCDFGridUtils(ds)
+# print(ngu)
+# shapely_shape = ngu.get_concave_hull()
+# print(shapely_shape)
 
 logger = logging.getLogger()
 
@@ -23,16 +30,17 @@ for filename in os.listdir(input_dir):
         if(extension == ".nc"):
             filepath = os.path.join(input_dir, filename)
             ds = netCDF4.Dataset(filepath, 'r')
+            print(ds)
             ngu = NetCDFGridUtils(ds)
+            print(ngu)
             shapely_shape = ngu.get_concave_hull()
             print(shapely_shape.area)
             print(shapely_shape.wkt)
             num_of_files_processed = num_of_files_processed + 1
     except Exception as e:
-        print("error on file: {}".format(filename))
-        print(e)
-        num_of_files_failed = num_of_files_failed + 1
-
+         print("error on file: {}".format(filename))
+         print(e)
+         num_of_files_failed = num_of_files_failed + 1
 
 print("Number of files proccessd: {}".format(num_of_files_processed))
 print("Number of files failed: {}".format(num_of_files_failed))
@@ -56,9 +64,5 @@ print("Number of files failed: {}".format(num_of_files_failed))
 #
 # lon = ds['lon']
 # lat = ds['lat']
-
-
-
-
 
 
