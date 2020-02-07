@@ -17,21 +17,25 @@ num_of_files_processed = 0
 num_of_files_failed = 0
 
 for filename in os.listdir(input_dir):
+    extension = os.path.splitext(filename)[1]
+    print(extension)
     try:
-        ds = netCDF4.Dataset(filename, 'r')
-        ngu = NetCDFGridUtils(ds)
-        shapely_shape = ngu.get_concave_hull()
-        logger.debug(shapely_shape.area)
-        logger.debug(shapely_shape.wkt)
-        num_of_files_processed = num_of_files_processed + 1
+        if(extension == ".nc"):
+            filepath = os.path.join(input_dir, filename)
+            ds = netCDF4.Dataset(filepath, 'r')
+            ngu = NetCDFGridUtils(ds)
+            shapely_shape = ngu.get_concave_hull()
+            print(shapely_shape.area)
+            print(shapely_shape.wkt)
+            num_of_files_processed = num_of_files_processed + 1
     except Exception as e:
-        logger.debug("error on file: {}".format(filename))
-        logger.debug(e)
+        print("error on file: {}".format(filename))
+        print(e)
         num_of_files_failed = num_of_files_failed + 1
 
 
-logger.debug("Number of files proccessd: {}".format(num_of_files_processed))
-logger.debug("Number of files failed: {}".format(num_of_files_failed))
+print("Number of files proccessd: {}".format(num_of_files_processed))
+print("Number of files failed: {}".format(num_of_files_failed))
 # #print(ds)
 #
 # #print(ds.variables)
