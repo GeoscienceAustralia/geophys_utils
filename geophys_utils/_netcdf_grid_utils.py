@@ -28,7 +28,7 @@ from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull, get_grid_edge_points
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._concave_hull import concaveHull
-from shapely.geometry import shape
+from shapely.geometry import shape, Polygon
 import logging
 import argparse
 from distutils.util import strtobool
@@ -366,6 +366,11 @@ class NetCDFGridUtils(NetCDFUtils):
         
 
     def get_convex_hull(self, to_wkt=None):
+        '''\
+        Function to return n x 2 array of coordinates for convex hull based on line start/end points
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
+        '''
         try:
             convex_hull = netcdf2convex_hull(self.netcdf_dataset, NetCDFGridUtils.DEFAULT_MAX_BYTES)
         except:
@@ -373,6 +378,27 @@ class NetCDFGridUtils(NetCDFUtils):
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
+    
+    def get_concave_hull(self, to_wkt=None, smoothness=None):
+        """\
+        Returns the concave hull (as a shapely polygon) of grid edge points with data. 
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
+        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        """
+        edge_points = np.array(get_grid_edge_points(self.data_variable,
+                                                    self.dimension_arrays,
+                                                    self.data_variable._FillValue))
+        
+        edge_points = transform_coords(edge_points, self.wkt, to_wkt)
+        
+        hull = concaveHull(edge_points)
+        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+
+        if smoothness is None:
+            return result
+        
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
     
     def get_dimension_ranges(self, bounds, bounds_wkt=None):
         '''
@@ -397,7 +423,7 @@ class NetCDFGridUtils(NetCDFUtils):
         dimension_names = self.data_variable.dimensions
             
         dim_range_dict = {}
-        if True:# try:
+        try:
             logger.debug('self.dimension_arrays = {}'.format(self.dimension_arrays))
             for dim_index in range(2):
                 #TODO: Maybe make this work for pixel edges, not centres
@@ -417,22 +443,11 @@ class NetCDFGridUtils(NetCDFUtils):
                 logger.debug('dim_range_dict["{}"] = {}'.format(dimension_names[1-dim_index], dim_range_dict[dimension_names[1-dim_index]]))
             
             return dim_range_dict
-        else:# except Exception as e:
+        except Exception as e:
             logger.debug('Unable to determine range indices: {}'.format(e))
             return None
 
     
-        
-
-    def get_concave_hull(self):
-        """ Returns the concave hull (as a shapely polygon) of points with data. """
-        edge_points = np.array(get_grid_edge_points(self.data_variable,
-                                                    self.dimension_arrays,
-                                                    self.data_variable._FillValue))
-        hull = concaveHull(edge_points)
-        return shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-
-
     @property
     def GeoTransform(self):
         '''

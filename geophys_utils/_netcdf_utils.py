@@ -22,7 +22,7 @@ Created on 2Mar.,2017
 
 @author: u76345
 '''
-
+import abc
 import netCDF4
 import math
 import itertools
@@ -479,6 +479,25 @@ class NetCDFUtils(object):
             nc_output_dataset.close()
             
     
+    @abc.abstractmethod
+    def get_convex_hull(self, to_wkt=None):
+        '''\
+        Abstract base function to return n x 2 array of coordinates for convex hull of all points
+        Needs to be implemented in subclass (e.g. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
+        @param to_wkt: CRS WKT for shape
+        '''
+        pass
+    
+    @abc.abstractmethod
+    def get_concave_hull(self, to_wkt=None, smoothness=None):
+        """\
+        Abstract base function to return a shapely polygon for concave hull of all points
+        Needs to be implemented in subclass (e.g. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
+        @param to_wkt: CRS WKT for shape
+        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        """
+        pass
+        
     def close(self):
         '''
         Function to close netCDF dataset if opened
