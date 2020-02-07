@@ -162,13 +162,16 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
     '''
-    coord_trans = get_coordinate_transformation(
-        from_wkt, to_wkt)  # Transform from specified CRS to native CRS
-
+    #TODO replace this hack. Hack is to solve issue where get_coordinate_transformation fails when to_wkt is none.
+    try:
+        coord_trans = get_coordinate_transformation(
+            from_wkt, to_wkt)  # Transform from specified CRS to native CRS
+    except:
+        coord_trans = None
     coordinate_array = np.array(coordinates) # Copy coordinates into fresh array
-        
+
     if not coord_trans:  # No transformation required
-        return coordinate_array # Return copy of original coordinates
+        return coordinate_array  # Return copy of original coordinates
     
     is_single_coordinate = (coordinate_array.shape == (2,))
     # Reshape 1D array into 2D single coordinate array if only one coordinate provided
