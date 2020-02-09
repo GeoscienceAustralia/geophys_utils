@@ -11,7 +11,7 @@ from matplotlib.path import Path
 import logging
 
 logger = logging.getLogger(__name__)
-logger.level = logging.INFO
+logger.level = logging.DEBUG
 
 
 def bbox(a, b):
@@ -214,6 +214,9 @@ def concave_hull_indices(dataset, k):
     '''\
     '''
     logger.debug('k in concave_hull_indices: {}'.format(k))
+    assert k >= 3, 'k has to be greater or equal to 3.'
+    assert k <= len(dataset), 'k has to be less than or equal to {}.'.format(len(dataset))
+
     point_set = PointSet(dataset)
     # todo: make sure that enough points for a given k can be found
 
@@ -241,7 +244,7 @@ def concave_hull_indices(dataset, k):
 
         current = first_valid_candidate(point_set, cPoints, hull, first, step)
         if current is None:
-            return concave_hull_indices(dataset, k + 1)
+            return concave_hull_indices(dataset, k * 2)
 
         # add current point to hull
         hull.append(current)
@@ -256,7 +259,7 @@ def concave_hull_indices(dataset, k):
     pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
     logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
-        return concave_hull_indices(dataset, k + 1)
+        return concave_hull_indices(dataset, k * 2)
 
     return hull
 
