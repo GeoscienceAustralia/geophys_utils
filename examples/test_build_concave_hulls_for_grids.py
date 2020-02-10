@@ -30,14 +30,11 @@ list_of_failed_files = []
 
 for filename in os.listdir(input_dir):
     extension = os.path.splitext(filename)[1]
-    print(extension)
     try:
         if(extension == ".nc"):
             filepath = os.path.join(input_dir, filename)
             ds = netCDF4.Dataset(filepath, 'r')
-            print(ds)
             ngu = NetCDFGridUtils(ds)
-            print(ngu)
             shapely_shape = ngu.get_concave_hull()
             print(shapely_shape.area)
             print(shapely_shape.wkt)
