@@ -425,16 +425,18 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, line_divisions=10, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, line_divisions=10, smoothness=None, k=3):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
+        @param line_divisions: Number of subdivisions at which to take sample points for each line
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param k: Initial number of nearest neighbours to consider
         """
         points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
         
-        hull = concaveHull(points)
+        hull = concaveHull(points, k=k)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
         
         if smoothness is None:

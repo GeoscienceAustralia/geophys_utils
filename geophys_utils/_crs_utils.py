@@ -49,6 +49,9 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: SpatialReference from WKT
     '''
+    if not wkt_or_crs_name:
+        return None
+    
     spatial_ref = SpatialReference()
     
     # Try to resolve WKT
@@ -107,7 +110,7 @@ def get_coordinate_transformation(from_wkt, to_wkt):
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
     '''
     # Assume native coordinates if no wkt given
-    if from_wkt == to_wkt:
+    if not to_wkt or from_wkt == to_wkt:
         return None
     
     from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)

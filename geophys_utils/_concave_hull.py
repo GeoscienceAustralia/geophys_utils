@@ -214,6 +214,9 @@ def concave_hull_indices(dataset, k):
     '''\
     '''
     logger.debug('k in concave_hull_indices: {}'.format(k))
+    assert k >= 3, 'k has to be greater or equal to 3.'
+    assert k <= len(dataset), 'k has to be less than or equal to {}.'.format(len(dataset))
+
     point_set = PointSet(dataset)
     # todo: make sure that enough points for a given k can be found
 
@@ -241,7 +244,7 @@ def concave_hull_indices(dataset, k):
 
         current = first_valid_candidate(point_set, cPoints, hull, first, step)
         if current is None:
-            return concave_hull_indices(dataset, k + 1)
+            return concave_hull_indices(dataset, k * 2)
 
         # add current point to hull
         hull.append(current)
@@ -256,7 +259,7 @@ def concave_hull_indices(dataset, k):
     pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
     logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
-        return concave_hull_indices(dataset, k + 1)
+        return concave_hull_indices(dataset, k * 2)
 
     return hull
 
@@ -266,6 +269,11 @@ def concaveHull(dataset, k=3):
     Generate n x 2 array of coordinates for vertices of concave hull
     '''
     assert k >= 3, 'k has to be greater or equal to 3.'
-    #logger.debug('dataset in concaveHull: {}'.format(dataset))
-    point_indices = concave_hull_indices(dataset, k)
-    return dataset[point_indices, :]
+    logger.debug('dataset length in concaveHull: {}'.format(len(dataset)))
+    
+    points = np.unique(dataset[~np.any(np.isnan(dataset), axis=1)], axis=0) # Purge duplicates and NaNs
+    logger.debug('{} valid points in concaveHull'.format(len(points)))
+    
+    point_indices = concave_hull_indices(points, k)
+    return points[point_indices, :]
+
