@@ -29,6 +29,7 @@ num_of_files_failed = 0
 list_of_failed_files = []
 
 for filename in os.listdir(input_dir):
+    print(filename)
     extension = os.path.splitext(filename)[1]
     try:
         if(extension == ".nc"):
