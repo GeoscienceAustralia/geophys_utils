@@ -40,10 +40,10 @@ for filename in os.listdir(input_dir):
             print(shapely_shape.wkt)
             num_of_files_processed = num_of_files_processed + 1
     except Exception as e:
-         print("error on file: {}".format(filename))
-         print(e)
-         num_of_files_failed = num_of_files_failed + 1
-         list_of_failed_files.append(filename)
+        print("error on file: {}".format(filename))
+        print(e)
+        num_of_files_failed = num_of_files_failed + 1
+        list_of_failed_files.append(filename)
 
 print("Number of files proccessd: {}".format(num_of_files_processed))
 print("Number of files failed: {}".format(num_of_files_failed))
