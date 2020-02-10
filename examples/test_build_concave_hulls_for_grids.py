@@ -43,7 +43,7 @@ for filename in os.listdir(input_dir):
          print("error on file: {}".format(filename))
          print(e)
          num_of_files_failed = num_of_files_failed + 1
-        list_of_failed_files.append(filename)
+         list_of_failed_files.append(filename)
 
 print("Number of files proccessd: {}".format(num_of_files_processed))
 print("Number of files failed: {}".format(num_of_files_failed))
