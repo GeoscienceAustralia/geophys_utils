@@ -389,8 +389,10 @@ class NetCDFGridUtils(NetCDFUtils):
         edge_points = np.array(get_grid_edge_points(self.data_variable,
                                                     self.dimension_arrays,
                                                     self.data_variable._FillValue))
-        
-        edge_points = transform_coords(edge_points, self.wkt, to_wkt)
+
+        if to_wkt is not None:
+            edge_points = transform_coords(edge_points, self.wkt, to_wkt)
+            print(edge_points)
         
         hull = concaveHull(edge_points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})

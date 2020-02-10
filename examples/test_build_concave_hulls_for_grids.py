@@ -5,11 +5,15 @@ import netCDF4
 import logging
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
-# file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/Cape_York_First_Vertical_Derivative_geodetic.nc"
+# file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/P613thog2.nc"
 # ds = netCDF4.Dataset(file)
 # print(ds)
+# value = ds['Band1']._FillValue
+# print(value)
 # ngu = NetCDFGridUtils(ds)
+# print(ngu.wkt)
 # print(ngu)
+#
 # shapely_shape = ngu.get_concave_hull()
 # print(shapely_shape)
 
@@ -22,6 +26,7 @@ logger.addHandler(fh)
 input_dir = sys.argv[1]
 num_of_files_processed = 0
 num_of_files_failed = 0
+list_of_failed_files = []
 
 for filename in os.listdir(input_dir):
     extension = os.path.splitext(filename)[1]
@@ -41,9 +46,11 @@ for filename in os.listdir(input_dir):
          print("error on file: {}".format(filename))
          print(e)
          num_of_files_failed = num_of_files_failed + 1
+        list_of_failed_files.append(filename)
 
 print("Number of files proccessd: {}".format(num_of_files_processed))
 print("Number of files failed: {}".format(num_of_files_failed))
+print(list_of_failed_files)
 # #print(ds)
 #
 # #print(ds.variables)
