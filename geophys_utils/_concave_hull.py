@@ -11,7 +11,7 @@ from matplotlib.path import Path
 import logging
 
 logger = logging.getLogger(__name__)
-logger.level = logging.DEBUG
+logger.level = logging.INFO
 
 K_MULTIPLIER = 1.5 # Multiplier for k between iterations
 
