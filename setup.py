@@ -63,7 +63,7 @@ setup(name='geophys_utils',
             'shapely',
             'tempfile',
             'unittest',
-            'yaml'
+            'yaml',
             'unidecode'
             ],
       url='https://github.com/geoscienceaustralia/geophys_utils',
