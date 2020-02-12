@@ -34,8 +34,6 @@ def build_concave_on_directory(input_dir):
                 ds = netCDF4.Dataset(filepath, 'r')
                 ngu = NetCDFGridUtils(ds)
                 shapely_shape = ngu.get_concave_hull()
-                print(shapely_shape.area)
-                print(shapely_shape.wkt)
                 num_of_files_processed = num_of_files_processed + 1
         except Exception as e:
             print("error on file: {}".format(filename))
