@@ -379,12 +379,12 @@ class NetCDFGridUtils(NetCDFUtils):
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
     
-    def get_concave_hull(self, to_wkt=None, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, buffer_distance=None, tolerance=0.001):
         """\
         Returns the concave hull (as a shapely polygon) of grid edge points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
-        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
         edge_points = np.array(get_grid_edge_points(self.data_variable,
                                                     self.dimension_arrays,
@@ -397,10 +397,10 @@ class NetCDFGridUtils(NetCDFUtils):
         hull = concaveHull(edge_points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
 
-        if smoothness is None:
+        if not buffer_distance:
             return result
         
-        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+        return Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3).simplify(tolerance)
     
     def get_dimension_ranges(self, bounds, bounds_wkt=None):
         '''

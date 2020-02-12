@@ -21,6 +21,7 @@ Created on 16/11/2016
 @author: Alex Ip
 '''
 import os
+import sys
 import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._crs_utils import transform_coords
@@ -387,26 +388,31 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''\
         Function to return n x 2 array of coordinates for line start & end points
         '''
-        # Fully vectorised code for efficiency
-        _line_indices, line_start_indices = np.unique(self.line_index, return_index=True)
-        line_start_end_indices = np.concatenate((line_start_indices, line_start_indices-1))
-        line_start_end_indices[np.where(line_start_end_indices == -1)] = self.line_index.shape[0]-1 # Replace -1 with length of array less one for correct sorting
-        return self.xycoords[np.sort(line_start_end_indices)]
+        return self.get_line_sample_points(line_divisions=1)
 
     def get_line_sample_points(self, line_divisions=10):
         '''\
         Function to return n x 2 array of coordinates for line start, division points & end points
         @param line_divisions: Number of sampling subdivisions for each line (1 = start/end points only)
-        '''       
-        # Fully vectorised code for efficiency
-        _line_indices, line_start_indices = np.unique(self.line_index, return_index=True)
-        line_sample_indices = np.concatenate((line_start_indices, line_start_indices-1))
-        line_sample_indices[np.where(line_sample_indices == -1)] = self.line_index.shape[0]-1 # Replace -1 with length of array less one for correct sorting
-        line_sample_indices = np.sort(line_sample_indices)
-        line_sample_indices = np.sort(np.unique(np.concatenate(
-            [(((line_divisions-sample_step)*line_sample_indices[0::2] + sample_step*line_sample_indices[1::2])/line_divisions).astype(np.int)
-            for sample_step in range(line_divisions+1)]
-            ), axis=0))
+        '''    
+        line_sample_indices_set = set()
+        for line_index in range(self.netcdf_dataset.dimensions['line'].size):
+            line_indices = np.where(self.netcdf_dataset.variables['line_index'][:] == line_index)[0]
+            valid_coord_mask = ~np.any(np.isnan(self.xycoords[line_indices]), axis=1) 
+            if not np.count_nonzero(valid_coord_mask): # No valid coordinates in line
+                logger.debug('No valid coordinates found in line index {}'.format(line_index))
+                continue
+            
+            #logger.debug('Found {}/{} valid points in line index {}'.format(np.count_nonzero(valid_coord_mask), len(line_indices), line_index))
+            line_indices = line_indices[valid_coord_mask] # Filter out NaN ordinates  
+                       
+            # Take samples between first and last valid line indices            
+            sampling_increment = max(1, int(len(line_indices)/line_divisions))
+            line_sample_indices_set |= set([line_indices[sample_index]
+                                            for sample_index in range(0, len(line_indices), sampling_increment)])
+            line_sample_indices_set.add(line_indices[-1]) # Make sure last point is included
+        line_sample_indices = np.array(sorted(list(line_sample_indices_set)))
+        
         return self.xycoords[line_sample_indices]
 
     def get_convex_hull(self, to_wkt=None):
@@ -425,13 +431,13 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, line_divisions=10, smoothness=None, k=3):
+    def get_concave_hull(self, to_wkt=None, line_divisions=10, buffer_distance=None, k=3):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         @param line_divisions: Number of subdivisions at which to take sample points for each line
-        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         @param k: Initial number of nearest neighbours to consider
         """
         points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
@@ -439,9 +445,29 @@ class NetCDFLineUtils(NetCDFPointUtils):
         hull = concaveHull(points, k=k)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
         
-        if smoothness is None:
+        if not buffer_distance:
             return result
         
-        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+        return Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
 
 
+if __name__ == '__main__':
+    # Setup logging handlers if required
+    if not logger.handlers:
+        # Set handler for root logger to standard output
+        console_handler = logging.StreamHandler(sys.stdout)
+        #console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        logger.addHandler(console_handler)
+
+    nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=True)
+    print('{} points in {} lines'.format(nclu.point_count, nclu.netcdf_dataset.dimensions['line'].size))
+    sample_points = nclu.get_line_sample_points(line_divisions=3)
+    print(len(sample_points), sample_points) 
+
+    #===========================================================================
+    # concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005)
+    # print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))
+    #===========================================================================

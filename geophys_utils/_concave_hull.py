@@ -13,6 +13,9 @@ import logging
 logger = logging.getLogger(__name__)
 logger.level = logging.INFO
 
+K_MULTIPLIER = 1.5 # Multiplier for k between iterations
+
+print(__name__)
 
 def bbox(a, b):
     return {
@@ -244,7 +247,7 @@ def concave_hull_indices(dataset, k):
 
         current = first_valid_candidate(point_set, cPoints, hull, first, step)
         if current is None:
-            return concave_hull_indices(dataset, k * 2)
+            return concave_hull_indices(dataset, int(k * K_MULTIPLIER))
 
         # add current point to hull
         hull.append(current)
@@ -259,7 +262,7 @@ def concave_hull_indices(dataset, k):
     pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
     logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
-        return concave_hull_indices(dataset, k * 2)
+        return concave_hull_indices(dataset, int(k * K_MULTIPLIER))
 
     return hull
 
