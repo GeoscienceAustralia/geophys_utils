@@ -5,6 +5,12 @@ import netCDF4
 import logging
 from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
+logger = logging.getLogger()
+fh = logging.FileHandler('build_concave_hulls_from_grids.log')
+fh.setLevel(logging.DEBUG)
+logger.addHandler(fh)
+
+
 def build_concave_on_single_file():
     file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/P633demg.nc"
     ds = netCDF4.Dataset(file)
@@ -26,7 +32,7 @@ def build_concave_on_directory(input_dir):
     num_of_files_failed = 0
     list_of_failed_files = []
     for filename in os.listdir(input_dir):
-        print(filename)
+
         extension = os.path.splitext(filename)[1]
         try:
             if(extension == ".nc"):
@@ -35,15 +41,18 @@ def build_concave_on_directory(input_dir):
                 ngu = NetCDFGridUtils(ds)
                 shapely_shape = ngu.get_concave_hull()
                 num_of_files_processed = num_of_files_processed + 1
-        except Exception as e:
-            print("error on file: {}".format(filename))
-            print(e)
-            num_of_files_failed = num_of_files_failed + 1
-            list_of_failed_files.append(filename)
+                logger.debug("{} successful.".format(filename))
+                del ds, ngu, shapely_shape
 
-    print("Number of files proccessd: {}".format(num_of_files_processed))
-    print("Number of files failed: {}".format(num_of_files_failed))
-    print(list_of_failed_files)
+        except Exception as e:
+            logger.debug("error on file: {}".format(filename))
+            logger.debug(e)
+            num_of_files_failed = num_of_files_failed + 1
+            #list_of_failed_files.append(filename)
+
+    logger.debug("Number of files proccessd: {}".format(num_of_files_processed))
+    logger.debug("Number of files failed: {}".format(num_of_files_failed))
+  #  logger.debug(list_of_failed_files)
 # #print(ds)
 #
 # #print(ds.variables)
@@ -65,10 +74,7 @@ def build_concave_on_directory(input_dir):
 # lon = ds['lon']
 # lat = ds['lat']
 def main():
-    logger = logging.getLogger()
-    fh = logging.FileHandler('build_concave_hulls_from_grids.log')
-    fh.setLevel(logging.DEBUG)
-    logger.addHandler(fh)
+
     input_dir = sys.argv[1]
 
     build_concave_on_directory(input_dir)
