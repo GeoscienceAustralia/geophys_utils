@@ -1,0 +1,13 @@
+distutils
+functools
+itertools
+netCDF4
+numpy
+osgeo
+owslib
+scipy
+shapely
+tempfile
+unittest
+yaml
+unidecode
