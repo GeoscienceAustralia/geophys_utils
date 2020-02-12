@@ -71,8 +71,8 @@ def main():
     logger.addHandler(fh)
     input_dir = sys.argv[1]
 
-    #build_concave_on_directory(input_dir)
-    build_concave_on_single_file()
+    build_concave_on_directory(input_dir)
+    #build_concave_on_single_file()
 
 if __name__ == "__main__":
     main()
