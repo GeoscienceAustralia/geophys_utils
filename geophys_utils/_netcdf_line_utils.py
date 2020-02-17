@@ -33,7 +33,7 @@ import logging
 import netCDF4
 
 # Setup logging handlers if required
-logger = logging.getLogger(__name__) # Get __main__ logger
+logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
     
 class NetCDFLineUtils(NetCDFPointUtils):
@@ -431,24 +431,27 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, line_divisions=10, buffer_distance=None, k=3):
+    def get_concave_hull(self, to_wkt=None, line_divisions=10, buffer_distance=None, tolerance=None):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         @param line_divisions: Number of subdivisions at which to take sample points for each line
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
-        @param k: Initial number of nearest neighbours to consider
+        @param tolerance: tolerance for simplification
         """
         points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
         
-        hull = concaveHull(points, k=k)
+        hull = concaveHull(points)
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
         
-        if not buffer_distance:
-            return result
-        
-        return Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
+        if buffer_distance:
+            result = Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
+    
+        if tolerance:
+            result = result.simplify(tolerance)
+            
+        return result
 
 
 if __name__ == '__main__':
@@ -460,14 +463,13 @@ if __name__ == '__main__':
         console_handler.setLevel(logging.DEBUG)
         console_formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
+        
+        logging.getLogger().addHandler(console_handler) # Add handler to root logger
 
-    nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=True)
+    nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=False)
     print('{} points in {} lines'.format(nclu.point_count, nclu.netcdf_dataset.dimensions['line'].size))
     sample_points = nclu.get_line_sample_points(line_divisions=3)
-    print(len(sample_points), sample_points) 
+    #print(len(sample_points), sample_points) 
 
-    #===========================================================================
-    # concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005)
-    # print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))
-    #===========================================================================
+    concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005)
+    print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))

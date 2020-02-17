@@ -489,12 +489,13 @@ class NetCDFUtils(object):
         pass
     
     @abc.abstractmethod
-    def get_concave_hull(self, to_wkt=None, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, buffer_distance=None, tolerance=None):
         """\
         Abstract base function to return a shapely polygon for concave hull of all points
         Needs to be implemented in subclass (e.g. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
         @param to_wkt: CRS WKT for shape
-        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param tolerance: tolerance for simplification
         """
         pass
         

@@ -13,10 +13,6 @@ import logging
 logger = logging.getLogger(__name__)
 logger.level = logging.INFO
 
-K_MULTIPLIER = 1.5 # Multiplier for k between iterations
-
-print(__name__)
-
 def bbox(a, b):
     return {
         'll_x': min(a[0], b[0]),
@@ -247,7 +243,7 @@ def concave_hull_indices(dataset, k):
 
         current = first_valid_candidate(point_set, cPoints, hull, first, step)
         if current is None:
-            return concave_hull_indices(dataset, int(k * K_MULTIPLIER))
+            return None
 
         # add current point to hull
         hull.append(current)
@@ -262,21 +258,37 @@ def concave_hull_indices(dataset, k):
     pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
     logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
-        return concave_hull_indices(dataset, int(k * K_MULTIPLIER))
+        return None
 
     return hull
 
 
-def concaveHull(dataset, k=3):
+def concaveHull(dataset):
     '''\
     Generate n x 2 array of coordinates for vertices of concave hull
     '''
-    assert k >= 3, 'k has to be greater or equal to 3.'
     logger.debug('dataset length in concaveHull: {}'.format(len(dataset)))
     
     points = np.unique(dataset[~np.any(np.isnan(dataset), axis=1)], axis=0) # Purge duplicates and NaNs
     logger.debug('{} valid points in concaveHull'.format(len(points)))
     
-    point_indices = concave_hull_indices(points, k)
-    return points[point_indices, :]
+    lowest_good_k = len(points) # Assume that convex hull is always OK
+    best_point_indices = np.arange(lowest_good_k) 
+    highest_bad_k = 2 # Lowest valid k = 3
+    
+    # Perform binary search
+    while lowest_good_k - highest_bad_k > 1:
+        k = int((lowest_good_k + highest_bad_k) / 2.0)
+        point_indices = concave_hull_indices(points, k)
+        if point_indices is None:
+            highest_bad_k = k
+            logger.debug('Shape generation failed for k={}'.format(k))
+        else:
+            best_point_indices = point_indices
+            lowest_good_k = k
+            logger.debug('Shape generation succeeded for k={}'.format(k))
+            
+    assert best_point_indices, 'Unable to determine concave hull'    
+    logger.debug('Best shape generated with k={}'.format(lowest_good_k))
+    return points[best_point_indices, :]
 
