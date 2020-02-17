@@ -16,7 +16,7 @@ def build_concave_on_single_file(input_file):
    # file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/P633demg.nc"
     ds = netCDF4.Dataset(input_file)
     logger.debug(input_file)
-    value = ds['Band1']._FillValue
+   # value = ds['Band1']._FillValue
     ngu = NetCDFGridUtils(ds)
     shapely_shape = ngu.get_concave_hull()
     logger.debug(shapely_shape)
@@ -74,6 +74,7 @@ def build_concave_on_directory(input_dir):
 def main():
 
     input_file = sys.argv[1]
+    print(input_file)
     try:
         build_concave_on_single_file(input_file)
     except Exception as e:
