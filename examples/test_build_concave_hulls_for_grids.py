@@ -11,18 +11,15 @@ fh.setLevel(logging.DEBUG)
 logger.addHandler(fh)
 
 
-def build_concave_on_single_file():
-    file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/P633demg.nc"
-    ds = netCDF4.Dataset(file)
-    print(ds)
-    value = ds['Band1']._FillValue
-    print(value)
-    ngu = NetCDFGridUtils(ds)
-    print(ngu.wkt)
-    print(ngu)
+def build_concave_on_single_file(input_file):
 
+   # file = "C:/Users/u62231/Desktop/Projects/gadds/grid_exmples/P633demg.nc"
+    ds = netCDF4.Dataset(input_file)
+    logger.debug(input_file)
+    value = ds['Band1']._FillValue
+    ngu = NetCDFGridUtils(ds)
     shapely_shape = ngu.get_concave_hull()
-    print(shapely_shape)
+    logger.debug(shapely_shape)
 
 
 
@@ -52,6 +49,7 @@ def build_concave_on_directory(input_dir):
 
     logger.debug("Number of files proccessd: {}".format(num_of_files_processed))
     logger.debug("Number of files failed: {}".format(num_of_files_failed))
+
   #  logger.debug(list_of_failed_files)
 # #print(ds)
 #
@@ -75,9 +73,11 @@ def build_concave_on_directory(input_dir):
 # lat = ds['lat']
 def main():
 
-    input_dir = sys.argv[1]
-
-    build_concave_on_directory(input_dir)
+    input_file = sys.argv[1]
+    try:
+        build_concave_on_single_file(input_file)
+    except Exception as e:
+        logger.debug(e)
     #build_concave_on_single_file()
 
 if __name__ == "__main__":
