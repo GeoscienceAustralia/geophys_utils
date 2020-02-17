@@ -398,6 +398,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_sample_indices_set = set()
         for line_index in range(self.netcdf_dataset.dimensions['line'].size):
             line_indices = np.where(self.netcdf_dataset.variables['line_index'][:] == line_index)[0]
+            logger.debug('Sampling line index {} with {} points'.format(line_index, len(line_indices)))
             valid_coord_mask = ~np.any(np.isnan(self.xycoords[line_indices]), axis=1) 
             if not np.count_nonzero(valid_coord_mask): # No valid coordinates in line
                 logger.debug('No valid coordinates found in line index {}'.format(line_index))
@@ -468,8 +469,8 @@ if __name__ == '__main__':
 
     nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=False)
     print('{} points in {} lines'.format(nclu.point_count, nclu.netcdf_dataset.dimensions['line'].size))
-    sample_points = nclu.get_line_sample_points(line_divisions=3)
+    #sample_points = nclu.get_line_sample_points(line_divisions=3)
     #print(len(sample_points), sample_points) 
 
-    concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005)
+    concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005, tolerance=0.001)
     print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))

@@ -273,7 +273,7 @@ def concaveHull(dataset):
     logger.debug('{} valid points in concaveHull'.format(len(points)))
     
     lowest_good_k = len(points) # Assume that convex hull is always OK
-    best_point_indices = np.arange(lowest_good_k) 
+    best_point_indices = None
     highest_bad_k = 2 # Lowest valid k = 3
     
     # Perform binary search
@@ -288,6 +288,10 @@ def concaveHull(dataset):
             lowest_good_k = k
             logger.debug('Shape generation succeeded for k={}'.format(k))
             
+    if not best_point_indices: # Try using all points if no valid shape found
+        k = len(points)
+        best_point_indices = concave_hull_indices(points, k)
+        
     assert best_point_indices, 'Unable to determine concave hull'    
     logger.debug('Best shape generated with k={}'.format(lowest_good_k))
     return points[best_point_indices, :]
