@@ -20,8 +20,7 @@ def build_concave_on_single_file(input_file):
     ngu = NetCDFGridUtils(ds)
     shapely_shape = ngu.get_concave_hull()
     logger.debug(shapely_shape)
-
-
+    print(shapely_shape)
 
 
 def build_concave_on_directory(input_dir):
@@ -50,35 +49,19 @@ def build_concave_on_directory(input_dir):
     logger.debug("Number of files proccessd: {}".format(num_of_files_processed))
     logger.debug("Number of files failed: {}".format(num_of_files_failed))
 
-  #  logger.debug(list_of_failed_files)
-# #print(ds)
-#
-# #print(ds.variables)
-# #values = ds['Band1']
-# # latlong_tup = (ds.dimensions['lat'], ds.dimensions['lon'])
-# # ds.createVariable('fake_values', 'f', latlong_tup)
-# # print("DIMENSIONS")
-# # print(ds.dimensions)
-# # print("LAt size")
-# # print(len(ds.dimensions['lat']))
-# # lat_size = ds.dimensions['lat'].size
-# # lon_size = ds.dimensions['lon'].size
-# # print(lat_size)
-# # make list of the correction dimensions and sizes
-# # ds['fake_values'][:] = numpy.zeros(shape=(lat_size, lon_size))
-#
-#
-#
-# lon = ds['lon']
-# lat = ds['lat']
 def main():
 
-    input_file = sys.argv[1]
+   # input_file = sys.argv[1]
+    input_file = "C:/Users/u62231/Desktop/Projects/gadds/grid_examples/nonawagsgrids/ausbath_09_v4_ex_ex.nc"
+   #input_file = "Bowen_Surat_Gravity_Bouguer_Anomaly.nc"
+#GascoyneNorth_Complete_Sph_Cap_Bouguer_1VD_Geodetic.nc
+
     print(input_file)
     try:
         build_concave_on_single_file(input_file)
     except Exception as e:
         logger.debug(e)
+        print(e)
     #build_concave_on_single_file()
 
 if __name__ == "__main__":
