@@ -153,6 +153,8 @@ class NetCDFGridUtils(NetCDFUtils):
 
         set_nominal_pixel_sizes()
 
+        self.nominal_pixel_degrees = self.nominal_pixel_degrees
+
         self.default_sample_metres = get_default_sample_metres()
 
         # Create nested list of bounding box corner coordinates
@@ -389,8 +391,10 @@ class NetCDFGridUtils(NetCDFUtils):
         edge_points = np.array(get_grid_edge_points(self.data_variable,
                                                     self.dimension_arrays,
                                                     self.data_variable._FillValue))
-
+        print(to_wkt)
+        print(edge_points)
         if to_wkt is not None:
+            print("not none")
             edge_points = transform_coords(edge_points, self.wkt, to_wkt)
             print(edge_points)
         
