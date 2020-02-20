@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from _ast import Or
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -27,8 +28,7 @@ from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._crs_utils import transform_coords
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.distance import pdist
-import shapely
-from shapely.geometry import MultiPolygon, LineString, MultiLineString
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 import logging
 import netCDF4
 
@@ -455,7 +455,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
         
 
-    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1, max_polygons=10):
+    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1, max_polygons=5, max_vertices=1000):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
@@ -470,23 +470,34 @@ class NetCDFLineUtils(NetCDFPointUtils):
         """
         assert not max_polygons or buffer_distance > 0, 'buffer_distance must be greater than zero if number of polygons is limited' # Avoid endless recursion
         
-        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons):
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices):
             '''\
             Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
             '''
+            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
             offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
             offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
         
             # Keep doubling the buffer distance if there are too many polygons
-            if max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons:
-                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons)
+            if (
+                (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
+                or
+                (max_vertices and type(offset_geometry) == MultiPolygon and 
+                    sum([len(polygon.exterior.coords) + sum([len(interior_ring.coords) 
+                                                             for interior_ring in polygon.interiors]) 
+                         for polygon in offset_geometry]) > max_vertices)
+                or
+                (max_vertices and type(offset_geometry) == Polygon and 
+                    (len(offset_geometry.exterior.coords) + sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])) > max_vertices)
+                ):
+                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
                 
             return offset_geometry
                     
                     
         multi_line_string = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
         
-        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons)
+        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
 
 
 if __name__ == '__main__':
@@ -506,5 +517,5 @@ if __name__ == '__main__':
     #sample_points = nclu.get_line_sample_points(line_divisions=3)
     #print(len(sample_points), sample_points) 
 
-    concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005, tolerance=0.001)
+    concave_hull = nclu.get_concave_hull(to_wkt='GDA94')
     print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))
