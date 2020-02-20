@@ -478,17 +478,23 @@ class NetCDFLineUtils(NetCDFPointUtils):
             offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
             offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
         
+            # Discard any internal polygons
+            if type(offset_geometry) == MultiPolygon:
+                offset_geometry = MultiPolygon([Polygon(polygon.exterior) for polygon in offset_geometry]) 
+            if type(offset_geometry) == Polygon:
+                offset_geometry = Polygon(offset_geometry.exterior)
+            
             # Keep doubling the buffer distance if there are too many polygons
             if (
                 (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
                 or
                 (max_vertices and type(offset_geometry) == MultiPolygon and 
-                    sum([len(polygon.exterior.coords) + sum([len(interior_ring.coords) 
-                                                             for interior_ring in polygon.interiors]) 
+                    sum([len(polygon.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in polygon.interiors]) 
                          for polygon in offset_geometry]) > max_vertices)
                 or
                 (max_vertices and type(offset_geometry) == Polygon and 
-                    (len(offset_geometry.exterior.coords) + sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])) > max_vertices)
+                    (len(offset_geometry.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])
+                     ) > max_vertices)
                 ):
                 return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
                 
