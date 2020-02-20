@@ -448,7 +448,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_slice = slice(line_start_indices[line_index], line_end_indices[line_index]+1)
             line_vertices = self.xycoords[line_slice]
             line_vertices = line_vertices[~np.any(np.isnan(line_vertices), axis=1)] # Discard null coordinates
-            if len(line_vertices):
+            if len(line_vertices) >= 2: # LineStrings must have at least 2 coordinate tuples
                 line_list.append(LineString(transform_coords(line_vertices, self.wkt, to_wkt)).simplify(tolerance))
         
         return MultiLineString(line_list)
