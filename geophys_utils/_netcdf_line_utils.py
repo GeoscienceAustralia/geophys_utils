@@ -455,7 +455,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
 
         
 
-    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1):
+    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1, max_polygons=10):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
@@ -467,11 +467,9 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param join_style: join_style for buffering. Defaults to round
         @return shapely.geometry.shape: Geometry of concave hull
         """
-        MAX_POLYGONS = 10
+        assert not max_polygons or buffer_distance > 0, 'buffer_distance must be greater than zero if number of polygons is limited' # Avoid endless recursion
         
-        assert buffer_distance > 0, 'buffer_distance must be greater than zero' # Avoid endless recursion
-        
-        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style):
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons):
             '''\
             Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
             '''
@@ -480,7 +478,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             offset_geometry = offset_geometry.buffer(offset, cap_style=cap_style, join_style=join_style).simplify(tolerance)
         
             # Keep doubling the buffer distance if there are too many polygons
-            if type(offset_geometry) == MultiPolygon and len(offset_geometry) > MAX_POLYGONS:
+            if max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons:
                 return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style)
                 
             return offset_geometry
@@ -488,7 +486,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
                     
         multi_line_string = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
         
-        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style)
+        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons)
 
 
 if __name__ == '__main__':
