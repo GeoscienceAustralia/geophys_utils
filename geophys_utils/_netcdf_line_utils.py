@@ -27,7 +27,8 @@ from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._crs_utils import transform_coords
 from geophys_utils._polygon_utils import points2convex_hull
 from scipy.spatial.distance import pdist
-from shapely.geometry import LineString, MultiLineString
+import shapely
+from shapely.geometry import MultiPolygon, LineString, MultiLineString
 import logging
 import netCDF4
 
@@ -466,13 +467,28 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param join_style: join_style for buffering. Defaults to round
         @return shapely.geometry.shape: Geometry of concave hull
         """
-        geometry = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
+        MAX_POLYGONS = 10
         
-        geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
-        geometry = geometry.buffer(-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
-        geometry = geometry.buffer(offset, cap_style=cap_style, join_style=join_style).simplify(tolerance)
-    
-        return geometry
+        assert buffer_distance > 0, 'buffer_distance must be greater than zero' # Avoid endless recursion
+        
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style):
+            '''\
+            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            '''
+            offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+            offset_geometry = offset_geometry.buffer(-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+            offset_geometry = offset_geometry.buffer(offset, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+        
+            # Keep doubling the buffer distance if there are too many polygons
+            if type(geometry) == MultiPolygon and len(geometry) > MAX_POLYGONS:
+                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style)
+                
+            return offset_geometry
+                    
+                    
+        multi_line_string = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
+        
+        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style)
 
 
 if __name__ == '__main__':
