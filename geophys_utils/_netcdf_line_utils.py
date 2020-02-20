@@ -479,7 +479,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
             # Keep doubling the buffer distance if there are too many polygons
             if max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons:
-                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style)
+                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons)
                 
             return offset_geometry
                     
