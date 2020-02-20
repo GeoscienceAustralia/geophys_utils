@@ -26,9 +26,8 @@ import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._crs_utils import transform_coords
 from geophys_utils._polygon_utils import points2convex_hull
-from geophys_utils._concave_hull import concaveHull
 from scipy.spatial.distance import pdist
-from shapely.geometry import shape, Polygon
+from shapely.geometry import LineString, MultiLineString
 import logging
 import netCDF4
 
@@ -432,27 +431,48 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, line_divisions=10, buffer_distance=None, tolerance=None):
+    def get_multi_line_string(self, to_wkt=None, tolerance=0):
+        '''\
+        Function to return a shapely MultiLineString object representing the line dataset
+        '''
+        _line_indices, line_start_indices = np.sort(np.unique(self.line_index, return_index=True))
+        
+        line_end_indices = np.array(line_start_indices)
+        line_end_indices[0:-1] = line_start_indices[1:]
+        line_end_indices[-1] = self.point_count
+        line_end_indices = line_end_indices -1
+        
+        line_list = []
+        for line_index in range(len(line_start_indices)):
+            line_slice = slice(line_start_indices[line_index], line_end_indices[line_index]+1)
+            line_vertices = self.xycoords[line_slice]
+            line_vertices = line_vertices[~np.any(np.isnan(line_vertices), axis=1)] # Discard null coordinates
+            if len(line_vertices):
+                line_list.append(LineString(transform_coords(line_vertices, self.wkt, to_wkt)).simplify(tolerance))
+        
+        return MultiLineString(line_list)
+
+        
+
+    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
-        @param line_divisions: Number of subdivisions at which to take sample points for each line
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param offset: Final offset of final shape from original lines
         @param tolerance: tolerance for simplification
+        @param cap_style: cap_style for buffering. Defaults to round
+        @param join_style: join_style for buffering. Defaults to round
+        @return shapely.geometry.shape: Geometry of concave hull
         """
-        points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
+        geometry = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
         
-        hull = concaveHull(points)
-        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-        
-        if buffer_distance:
-            result = Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
+        geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+        geometry = geometry.buffer(-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+        geometry = geometry.buffer(offset, cap_style=cap_style, join_style=join_style).simplify(tolerance)
     
-        if tolerance:
-            result = result.simplify(tolerance)
-            
-        return result
+        return geometry
 
 
 if __name__ == '__main__':
