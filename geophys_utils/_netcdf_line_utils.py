@@ -480,7 +480,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             offset_geometry = offset_geometry.buffer(offset, cap_style=cap_style, join_style=join_style).simplify(tolerance)
         
             # Keep doubling the buffer distance if there are too many polygons
-            if type(geometry) == MultiPolygon and len(geometry) > MAX_POLYGONS:
+            if type(offset_geometry) == MultiPolygon and len(offset_geometry) > MAX_POLYGONS:
                 return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style)
                 
             return offset_geometry
