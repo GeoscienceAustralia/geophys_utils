@@ -899,7 +899,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # assert np.allclose(arr, arr_down)
 
         if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates')
+            #logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
         elif self.memcached_connection is not None:
