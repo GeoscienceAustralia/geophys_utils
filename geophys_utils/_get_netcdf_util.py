@@ -5,9 +5,9 @@ Created on 12 Dec 2019
 '''
 import netCDF4
 import logging
-import sys
-import re
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
+from geophys_utils._netcdf_point_utils import NetCDFPointUtils
+from geophys_utils._netcdf_line_utils import NetCDFLineUtils
+from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
 
 logger = logging.getLogger(__name__)
