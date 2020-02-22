@@ -549,7 +549,7 @@ class NetCDFUtils(object):
                 if self._crs_variable is not None:
                     break
                 
-            assert self._crs_variable is not None, 'Unable to determine crs_variable'
+            #assert self._crs_variable is not None, 'Unable to determine crs_variable'
                 
         return self._crs_variable
 
