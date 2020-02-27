@@ -117,7 +117,7 @@ def sample_transect(transect_vertices, wkt, sample_metres):
         if utm_line_length == float('inf'):
             continue
 
-        sample_count = (utm_line_length + residual) // sample_metres
+        sample_count = int((utm_line_length + residual) // sample_metres)
         # print 'sample_count = %s' % sample_count
         if not sample_count:
             residual += utm_line_length
