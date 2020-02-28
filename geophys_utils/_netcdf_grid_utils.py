@@ -28,7 +28,7 @@ from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull, get_grid_edge_points
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._concave_hull import concaveHull
-from shapely.geometry import shape, Polygon
+from shapely.geometry import shape, Polygon, MultiPolygon, asMultiPoint
 import logging
 import argparse
 from distutils.util import strtobool
@@ -379,30 +379,64 @@ class NetCDFGridUtils(NetCDFUtils):
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
     
-    def get_concave_hull(self, to_wkt=None, buffer_distance=None, tolerance=None):
+    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, tolerance=0.0005, offset=0.0005, cap_style=1, join_style=1, max_polygons=10):
         """\
         Returns the concave hull (as a shapely polygon) of grid edge points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         @param tolerance: tolerance for simplification
+        @param offset: Final offset of final shape from original lines
         """
-        edge_points = np.array(get_grid_edge_points(self.data_variable,
-                                                    self.dimension_arrays,
-                                                    self.data_variable._FillValue))
-        
-        edge_points = transform_coords(edge_points, self.wkt, to_wkt)
-        
-        hull = concaveHull(edge_points)
-        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        data = self.data_variable[:]
+        dimensions = self.dimension_arrays
+        nodata = self.data_variable._FillValue
 
-        if buffer_distance:
-            result = Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
-    
-        if tolerance:
-            result = result.simplify(tolerance)
-            
-        return result
+        data = np.pad(data, pad_width=1, constant_values=nodata)
+
+        pixel_widths = [dim[1] - dim[0] for dim in dimensions]
+        for i, dim in enumerate(dimensions):
+            dimensions[i] = np.concatenate([np.array([dim[0] - pixel_widths[i]]),
+                                            dim,
+                                            np.array([dim[-1] + pixel_widths[i]])])
+
+        edge_points = np.array(get_grid_edge_points(data, dimensions, nodata))
+        edge_points = transform_coords(edge_points, self.wkt, to_wkt)
+        edge_points = asMultiPoint(edge_points)
+
+        def buffer(geometry, distance):
+            """ Buffer a geometry with the settings provided. """
+            return geometry.buffer(distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+
+        def get_offset_geometry(geometry, buffer_distance):
+            '''\
+            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            '''
+            offset_geometry = buffer(geometry, buffer_distance)
+            offset_geometry = buffer(offset_geometry, -buffer_distance)
+            offset_geometry = buffer(offset_geometry, offset)
+
+            # Keep doubling the buffer distance if there are too many polygons
+            if max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons:
+                return get_offset_geometry(geometry, buffer_distance * 2)
+
+            if type(offset_geometry) == MultiPolygon:
+                return MultiPolygon([Polygon(p.exterior) for p in offset_geometry])
+            elif type(offset_geometry) == Polygon:
+                return Polygon(offset_geometry.exterior)
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geoemtry)))
+
+        # calculate pixel width in transformed coordinates to buffer the pixels with
+        corner = np.array([dim[0] for dim in dimensions])
+        three_point_array = np.array([corner,
+                                      corner + np.array([pixel_widths[0], 0]),
+                                      corner + np.array([0, pixel_widths[1]])])
+        three_point_array = transform_coords(three_point_array, self.wkt, to_wkt)
+        three_point_array = asMultiPoint(three_point_array)
+        pixel_width = max(p1.distance(p2) for p1 in three_point_array for p2 in three_point_array)
+
+        return get_offset_geometry(buffer(edge_points, pixel_width), buffer_distance)
     
     def get_dimension_ranges(self, bounds, bounds_wkt=None):
         '''
