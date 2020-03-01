@@ -466,6 +466,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param cap_style: cap_style for buffering. Defaults to round
         @param join_style: join_style for buffering. Defaults to round
         @param max_polygons: Maximum number of polygons to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
+        @param max_vertices: Maximum number of vertices to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
         @return shapely.geometry.shape: Geometry of concave hull
         """
         assert not max_polygons or buffer_distance > 0, 'buffer_distance must be greater than zero if number of polygons is limited' # Avoid endless recursion
