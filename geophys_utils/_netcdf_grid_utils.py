@@ -126,7 +126,7 @@ class NetCDFGridUtils(NetCDFUtils):
             raise
             
         #TODO: Make this work for multi-variate grids
-        assert len(self.data_variable_list) == 1, 'Unable to determine single data variable (must have "grid_mapping" attribute)'
+        assert len(self.data_variable_list) > 0, 'Unable to determine any data variables (must have same dimensions as variable with "grid_mapping" attribute)'
         self.data_variable = self.data_variable_list[0]
         
         # Boolean flag indicating YX array ordering
@@ -375,7 +375,7 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
             convex_hull = netcdf2convex_hull(self.netcdf_dataset, NetCDFGridUtils.DEFAULT_MAX_BYTES)
         except:
-            #logger.info('Unable to compute convex hull. Using rectangular bounding box instead.')
+            logger.warning('Unable to compute convex hull. Using rectangular bounding box instead.')
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
