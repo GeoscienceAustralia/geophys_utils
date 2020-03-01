@@ -412,7 +412,22 @@ class NetCDFGridUtils(NetCDFUtils):
             offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
 
             if type(offset_geometry) == MultiPolygon:
-                offset_geometry = MultiPolygon([Polygon(p.exterior) for p in offset_geometry])
+                polygon_list = []
+                for polygon in offset_geometry:
+                    polygon = Polygon(polygon.exterior)
+                    polygon_is_contained = False
+                    for outer_polygon in polygon_list:
+                        polygon_is_contained = outer_polygon.contains(polygon)
+                        if polygon_is_contained:
+                            break
+                    if not polygon_is_contained:
+                        polygon_list.append(polygon)       
+
+                if len(polygon_list) == 1:
+                    offset_geometry = polygon_list[0] # Single polygon
+                else:
+                    offset_geometry = MultiPolygon(polygon_list)
+                    
             elif type(offset_geometry) == Polygon:
                 offset_geometry = Polygon(offset_geometry.exterior)
             else:
