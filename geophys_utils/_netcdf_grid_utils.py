@@ -435,7 +435,7 @@ class NetCDFGridUtils(NetCDFUtils):
             return offset_geometry
 
         buffer_distance = buffer_distance or 2.0 * max(*self.pixel_size) # Set initial buffer_distance to 2 x pixel size in native units
-        logger.debug('buffer_distance = {}'.format(buffer_distance))
+        logger.debug('Initial buffer_distance = {}'.format(buffer_distance))
 
         edge_multipoint = asMultiPoint(np.array(get_grid_edge_points(self.data_variable, self.dimension_arrays, self.data_variable._FillValue)))        
         
