@@ -383,7 +383,7 @@ class NetCDFGridUtils(NetCDFUtils):
     def get_concave_hull(self, 
                          to_wkt=None, 
                          buffer_distance=None, 
-                         offset=0.0005, 
+                         offset=None, 
                          tolerance=0.0005, 
                          cap_style=1, 
                          join_style=1, 
@@ -417,10 +417,14 @@ class NetCDFGridUtils(NetCDFUtils):
                 for polygon in offset_geometry:
                     polygon = Polygon(polygon.exterior)
                     polygon_is_contained = False
-                    for outer_polygon in polygon_list:
-                        polygon_is_contained = outer_polygon.contains(polygon)
+                    for list_polygon in polygon_list:
+                        polygon_is_contained = list_polygon.contains(polygon)
                         if polygon_is_contained:
                             break
+                        elif polygon.contains(list_polygon):
+                            polygon_list.remove(list_polygon)
+                            break
+                            
                     if not polygon_is_contained:
                         polygon_list.append(polygon)       
 
@@ -455,9 +459,10 @@ class NetCDFGridUtils(NetCDFUtils):
         offset = offset or 0.1 * max(*self.pixel_size) # Set offset to 0.1 x pixel size in native units
         logger.debug('offset = {}'.format(offset))
 
-        edge_multipoint = asMultiPoint(np.array(get_grid_edge_points(self.data_variable, self.dimension_arrays, self.data_variable._FillValue)))        
+        edge_multipoint = asMultiPoint(np.array(get_grid_edge_points(self.data_variable, self.dimension_arrays, self.data_variable._FillValue))) 
+        logger.debug('{} edge points found'.format(len(edge_multipoint)))       
         
-        offset_geometry = get_offset_geometry(edge_multipoint, buffer_distance, 0, tolerance, cap_style, join_style, max_polygons, max_vertices)
+        offset_geometry = get_offset_geometry(edge_multipoint, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
     
         # Transform vertices from native CRS to required CRS
         if type(offset_geometry) == MultiPolygon:

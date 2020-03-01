@@ -485,10 +485,14 @@ class NetCDFLineUtils(NetCDFPointUtils):
                 for polygon in offset_geometry:
                     polygon = Polygon(polygon.exterior)
                     polygon_is_contained = False
-                    for outer_polygon in polygon_list:
-                        polygon_is_contained = outer_polygon.contains(polygon)
+                    for list_polygon in polygon_list:
+                        polygon_is_contained = list_polygon.contains(polygon)
                         if polygon_is_contained:
                             break
+                        elif polygon.contains(list_polygon):
+                            polygon_list.remove(list_polygon)
+                            break
+                        
                     if not polygon_is_contained:
                         polygon_list.append(polygon)       
 
