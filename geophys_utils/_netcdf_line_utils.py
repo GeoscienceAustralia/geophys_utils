@@ -481,9 +481,26 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
             # Discard any internal polygons
             if type(offset_geometry) == MultiPolygon:
-                offset_geometry = MultiPolygon([Polygon(polygon.exterior) for polygon in offset_geometry]) 
-            if type(offset_geometry) == Polygon:
+                polygon_list = []
+                for polygon in offset_geometry:
+                    polygon = Polygon(polygon.exterior)
+                    polygon_is_contained = False
+                    for outer_polygon in polygon_list:
+                        polygon_is_contained = outer_polygon.contains(polygon)
+                        if polygon_is_contained:
+                            break
+                    if not polygon_is_contained:
+                        polygon_list.append(polygon)       
+
+                if len(polygon_list) == 1:
+                    offset_geometry = polygon_list[0] # Single polygon
+                else:
+                    offset_geometry = MultiPolygon(polygon_list)
+                    
+            elif type(offset_geometry) == Polygon:
                 offset_geometry = Polygon(offset_geometry.exterior)
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geometry)))
             
             # Keep doubling the buffer distance if there are too many polygons
             if (

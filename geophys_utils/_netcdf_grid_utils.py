@@ -383,7 +383,7 @@ class NetCDFGridUtils(NetCDFUtils):
     def get_concave_hull(self, 
                          to_wkt=None, 
                          buffer_distance=None, 
-                         offset=0, 
+                         offset=0.0005, 
                          tolerance=0.0005, 
                          cap_style=1, 
                          join_style=1, 
@@ -411,6 +411,7 @@ class NetCDFGridUtils(NetCDFUtils):
             offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
             offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
 
+            # Discard any internal polygons
             if type(offset_geometry) == MultiPolygon:
                 polygon_list = []
                 for polygon in offset_geometry:
@@ -451,6 +452,8 @@ class NetCDFGridUtils(NetCDFUtils):
 
         buffer_distance = buffer_distance or 2.0 * max(*self.pixel_size) # Set initial buffer_distance to 2 x pixel size in native units
         logger.debug('Initial buffer_distance = {}'.format(buffer_distance))
+        offset = offset or 0.1 * max(*self.pixel_size) # Set offset to 0.1 x pixel size in native units
+        logger.debug('offset = {}'.format(offset))
 
         edge_multipoint = asMultiPoint(np.array(get_grid_edge_points(self.data_variable, self.dimension_arrays, self.data_variable._FillValue)))        
         
