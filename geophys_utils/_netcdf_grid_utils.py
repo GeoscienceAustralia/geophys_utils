@@ -27,14 +27,13 @@ from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull, get_grid_edge_points
 from geophys_utils._netcdf_utils import NetCDFUtils
-from geophys_utils._concave_hull import concaveHull
-from shapely.geometry import shape, Polygon, MultiPolygon, asMultiPoint
+from shapely.geometry import Polygon, MultiPolygon, asMultiPoint
 import logging
 import argparse
 from distutils.util import strtobool
 from shapely.geometry.base import BaseGeometry
-import gc
 import netCDF4
+import sys
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -73,6 +72,11 @@ class NetCDFGridUtils(NetCDFUtils):
                     centre_pixel_coords[coord_index].reverse()
 
             #TODO: Make sure this is general for all CRSs
+            self.x_variable = (self.netcdf_dataset.variables.get('longitude') 
+                               or self.netcdf_dataset.variables.get('lon') 
+                               or self.netcdf_dataset.variables.get('x')
+                               )
+            
             self.y_variable = (self.netcdf_dataset.variables.get('latitude') 
                                or self.netcdf_dataset.variables.get('lat') 
                                or self.netcdf_dataset.variables.get('y')
@@ -585,13 +589,28 @@ class NetCDFGridUtils(NetCDFUtils):
              limit_dim_size=limit_dim_size,
              empty_var_list=empty_var_list
              )
-        
-        if invert_y is None: # No change required
-            return 
-        
         try:
+            logger.debug('Re-opening new dataset {}'.format(nc_out_path))
             new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
-            new_ncgu = NetCDFGridUtils(new_dataset)
+            new_ncgu = NetCDFGridUtils(new_dataset, debug=self.debug)
+            
+            if dim_range_dict: # Subsets were requested
+                logger.debug('dim_range_dict = {}'.format(dim_range_dict))
+                logger.debug('Old first coordinate = ({}, {})'.format(self.x_variable[0], self.y_variable[0]))
+                logger.debug('New first coordinate = ({}, {})'.format(new_ncgu.x_variable[0], new_ncgu.y_variable[0]))
+                geo_transform = new_ncgu.GeoTransform
+                logger.debug('Old GeoTransform = {}'.format(geo_transform))
+                for gt_ordinate_index, ordinate_variable, gt_pixel_width_index in [(0, new_ncgu.x_variable, 1), (3, new_ncgu.y_variable, 5)]:
+                    if ordinate_variable.dimensions[0] in dim_range_dict.keys():
+                        geo_transform[gt_ordinate_index] = ordinate_variable[0].item() - (geo_transform[gt_pixel_width_index] / 2.0) # Subtract half pixel width
+                logger.debug('New GeoTransform = {}'.format(geo_transform))
+                gt_string = ' '.join([str(value) for value in geo_transform])
+                logger.info('Updating GeoTransform to "{}"'.format(gt_string))
+                new_ncgu.crs_variable.GeoTransform = gt_string
+            
+            if invert_y is None: # No change required
+                return 
+            
             if invert_y == new_ncgu.y_inverted:
                 logger.debug('{} does not require any alteration to make y-axis inversion {}'.format(nc_out_path, invert_y))
                 return
@@ -623,18 +642,13 @@ def main():
     # Define command line arguments
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('-c', '--copy', 
-                        dest='do_copy', 
-                        action='store_const', 
-                        const=True, default=False,
-                        help='Copy netCDF files')
     parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
                         type=str, default='NETCDF4')
     parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
                         type=str)
     parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
                         type=int, default=4)
-    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive (grids only)', type=str)
     parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     parser.add_argument("input_path")
@@ -647,12 +661,11 @@ def main():
     else:
         invert_y = None # Default to same as source
     
-    if args.do_copy:
-        if args.chunkspec:
-            chunk_spec = {dim_name: int(chunk_size) 
-                        for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
-        else:
-            chunk_spec = None
+    if args.chunkspec:
+        chunk_spec = {dim_name: int(chunk_size) 
+                    for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
+    else:
+        chunk_spec = None
             
     ncgu = NetCDFGridUtils(args.input_path,
                       debug=args.debug
@@ -670,12 +683,22 @@ def main():
                                for variable_name, variable in ncgu.netcdf_dataset.variables.items()
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
-             #dim_range_dict={},
+             #dim_range_dict={'lat': (5,205),'lon': (5,305)},
+             #dim_mask_dict={},
              nc_format=args.format,
              #limit_dim_size=False
              invert_y=invert_y
              )
         
-
 if __name__ == '__main__':
+    console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(name)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+ 
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(logger.name))
+
     main()

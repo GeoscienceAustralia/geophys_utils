@@ -23,6 +23,8 @@ def get_netcdf_util(netcdf_dataset, debug=False):
             try:
                 _netcdf_dataset = netCDF4.Dataset(netcdf_dataset, 'r')
             except OSError:
+                if not _netcdf_dataset.startswith('http'):
+                    raise
                 _netcdf_dataset = netCDF4.Dataset(netcdf_dataset + '#fillmismatch', 'r')
             netcdf_dataset = _netcdf_dataset
         except Exception as e:
@@ -30,7 +32,7 @@ def get_netcdf_util(netcdf_dataset, debug=False):
             return 
             
     elif type(netcdf_dataset) != netCDF4.Dataset: # NetCDF4.Dataset object provided
-        raise BaseException('Invalid netcdf_dataset type')
+        raise TypeError('Invalid netcdf_dataset type')
     
     # Dataset has line and line_index variables => must be a line dataset
     if set(['line', 'line_index']) <= set(netcdf_dataset.variables.keys()): 

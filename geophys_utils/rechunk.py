@@ -7,9 +7,9 @@ import argparse
 import sys
 import logging
 
-from geophys_utils import NetCDFUtils
+from geophys_utils._get_netcdf_util import get_netcdf_util
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger()
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
 
@@ -39,9 +39,9 @@ def main():
     else:
         chunk_spec = None
             
-    ncu = NetCDFUtils(args.input_path,
-                      debug=args.debug
-                      )   
+    ncu = get_netcdf_util(args.input_path,
+                          debug=args.debug
+                          )   
     
     ncu.copy(args.output_path, 
              #datatype_map_dict={},
@@ -55,11 +55,13 @@ def main():
                                for variable_name, variable in ncu.netcdf_dataset.variables.items()
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
-             #dim_range_dict={},
+             #dim_range_dict={'lat': (5,205),'lon': (5,305)},
+             #dim_mask_dict={},
              nc_format=args.format,
              #limit_dim_size=False
              )
-        
+    
+    logger.debug('Copy complete')   
 
 if __name__ == '__main__':
     console_handler = logging.StreamHandler(sys.stdout)

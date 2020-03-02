@@ -35,7 +35,7 @@ from pprint import pformat
 from geophys_utils._crs_utils import transform_coords
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.INFO) # Initial logging level for this module
 
 class NetCDFUtils(object):
     '''
@@ -594,7 +594,7 @@ def main():
                                for variable_name, variable in ncu.netcdf_dataset.variables.items()
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
-             dim_range_dict={'lat': (5,205),'lon': (5,305)},
+             #dim_range_dict={'lat': (5,205),'lon': (5,305)},
              #dim_mask_dict={},
              nc_format=args.format,
              #limit_dim_size=False
