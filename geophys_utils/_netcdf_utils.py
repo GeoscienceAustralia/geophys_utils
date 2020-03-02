@@ -380,7 +380,7 @@ class NetCDFUtils(object):
                                             (np.count_nonzero(variable_masks[dimension_index][input_variable_slices[dimension_index]][:piece_read_slices[dimension_index].start]) + 
                                                 np.count_nonzero(variable_masks[dimension_index][input_variable_slices[dimension_index]][piece_read_slices[dimension_index]]))
                                             ) 
-                                        if variable_masks[dimension_index] else 
+                                        if variable_masks[dimension_index] is not None else 
                                         slice(piece_read_slices[dimension_index].start - input_variable_slices[dimension_index].start,
                                               piece_read_slices[dimension_index].stop - input_variable_slices[dimension_index].start
                                               ) # No mask in this dimension
@@ -393,7 +393,7 @@ class NetCDFUtils(object):
                                 # Get mask subsets for piece
                                 piece_dim_masks = tuple([
                                     (variable_masks[dimension_index][piece_read_slices[dimension_index]] 
-                                     if variable_masks[dimension_index] else None)
+                                     if variable_masks[dimension_index] is not None else None)
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                                
