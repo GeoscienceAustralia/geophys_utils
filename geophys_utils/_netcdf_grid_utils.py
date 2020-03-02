@@ -34,6 +34,7 @@ import argparse
 from distutils.util import strtobool
 from shapely.geometry.base import BaseGeometry
 import gc
+import netCDF4
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -72,11 +73,12 @@ class NetCDFGridUtils(NetCDFUtils):
                     centre_pixel_coords[coord_index].reverse()
 
             #TODO: Make sure this is general for all CRSs
-            self.y_variable = (self.netcdf_dataset.variables.get('lat') 
+            self.y_variable = (self.netcdf_dataset.variables.get('latitude') 
+                               or self.netcdf_dataset.variables.get('lat') 
                                or self.netcdf_dataset.variables.get('y')
                                )
             
-            self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
+            self.y_inverted = (self.y_variable[-1] < self.y_variable[0]).item() # Should not have to deal with null values
         
             nominal_utm_wkt = get_utm_wkt(centre_pixel_coords[0], self.wkt)
             centre_pixel_utm_coords = transform_coords(
@@ -544,6 +546,74 @@ class NetCDFGridUtils(NetCDFUtils):
                    
         return self._GeoTransform
 
+    def copy(self, 
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             empty_var_list=[],
+             invert_y=None):
+        '''
+        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+            variable creation options and datatypes.
+            
+            @param nc_out_path: path to netCDF output file 
+            @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
+                e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
+            @param variable_options_dict: dict containing any overrides for per-variable variable creation 
+                options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
+                compression to variable 'sst'
+            @param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+            @param dim_mask_dict: dict of boolean arrays keyed by dimension name
+            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
+                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
+            @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
+            @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
+        '''  
+        # Call inherited NetCDFUtils method
+        super().copy( 
+             nc_out_path, 
+             datatype_map_dict=datatype_map_dict,
+             variable_options_dict=variable_options_dict,
+             dim_range_dict=dim_range_dict,
+             dim_mask_dict=dim_mask_dict,
+             nc_format=nc_format,
+             limit_dim_size=limit_dim_size,
+             empty_var_list=empty_var_list
+             )
+        
+        if invert_y is None: # No change required
+            return 
+        
+        try:
+            new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
+            new_ncgu = NetCDFGridUtils(new_dataset)
+            if invert_y == new_ncgu.y_inverted:
+                logger.debug('{} does not require any alteration to make y-axis inversion {}'.format(nc_out_path, invert_y))
+                return
+            
+            assert new_ncgu.y_variable, 'No Y-axis indexing variable defined in {}'.format(nc_out_path)
+            
+            assert len(new_ncgu.y_variable.shape) == 1, 'Y-axis indexing variable should be 1D'
+            
+            y_axis_dimension_name = new_ncgu.y_variable.dimensions[0]
+            
+            for variable_name, variable in new_dataset.variables.items():
+                if y_axis_dimension_name in variable.dimensions:
+                    logger.debug('Inverting Y dimension of variable {}'.format(variable_name))
+                    variable_slices = [
+                        slice(None, None, -1) if dimension_name == y_axis_dimension_name else slice(None, None, None)
+                        for dimension_name in variable.dimensions
+                        ]
+                    variable[:] = variable[variable_slices]
+                    
+        finally:
+            new_dataset.close()
+                       
 
     
 def main():

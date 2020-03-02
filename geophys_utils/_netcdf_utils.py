@@ -136,15 +136,15 @@ class NetCDFUtils(object):
         return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
             
             
-    def copy(self, nc_out_path, 
-                 datatype_map_dict={},
-                 variable_options_dict={},
-                 dim_range_dict={},
-                 dim_mask_dict={},
-                 nc_format=None,
-                 limit_dim_size=False,
-                 empty_var_list=[],
-                 invert_y=None):
+    def copy(self, 
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             empty_var_list=[]):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -161,7 +161,6 @@ class NetCDFUtils(object):
                 'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
-            @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
           
@@ -182,23 +181,28 @@ class NetCDFUtils(object):
             for variable_name, variable in self.netcdf_dataset.variables.items():
                 dims_used |= set(variable.dimensions)
                 
+                # Update the sizes for all dimensions which have masks or ranges
                 for dimension_index in range(len(variable.dimensions)): 
                     dimension_name = variable.dimensions[dimension_index]
-                    if dim_size.get(dimension_name):
+                    source_dimension = self.netcdf_dataset.dimensions[dimension_name]
+                    
+                    if dim_size.get(dimension_name): # We have already configured this dimension
                         continue
                         
                     dim_mask = dim_mask_dict.get(dimension_name)
                     if dim_mask is None:
                         dim_mask = np.ones(shape=(variable.shape[dimension_index],), dtype=np.bool)
+                    else:
+                        assert dim_mask.shape == (source_dimension.size,), 'Dimension mask must be a 1D boolean mask of size {}'.format(source_dimension.size)
                         
                     dim_range = dim_range_dict.get(dimension_name)
                     if dim_range:
                         dim_mask[:dim_range[0]] = False
                         dim_mask[dim_range[1]:] = False
                         
-                    dim_size[dimension_name] = np.count_nonzero(dim_mask)
+                    dim_size[dimension_name] = np.count_nonzero(dim_mask) # Update sizes to take masks into account
                         
-                    dim_mask_dict[dimension_name] = dim_mask # Update mask to include range
+                    #dim_mask_dict[dimension_name] = dim_mask # Update mask to include range
                         
                     
             #logger.debug(dim_size)
@@ -232,9 +236,9 @@ class NetCDFUtils(object):
                     input_variable_chunking = [min(chunking[dimension_index], dim_size[input_variable.dimensions[dimension_index]])
                                                  for dimension_index in range(len(chunking))]
                 elif (len(input_variable.dimensions) == 2 and 
-                      variable_options_dict.get(variable_name) and
-                      variable_options_dict.get(variable_name).get('chunksizes')
-                      ): #TODO: Improve this
+                    variable_options_dict.get(variable_name) and
+                    variable_options_dict.get(variable_name).get('chunksizes')
+                    ): #TODO: Improve this
                     # If input variable is unchunked 2D and output chunking is specified - assume row chunking for input
                     input_variable_chunking = [1, dim_size[input_variable.dimensions[1]]]
                 else:
@@ -275,188 +279,118 @@ class NetCDFUtils(object):
                 logger.debug('\tCopying %s attributes: %s' % (variable_name, ', '.join(input_variable.ncattrs())))
                 output_variable.setncatts({k: input_variable.getncattr(k) for k in input_variable.ncattrs() if not k.startswith('_')})
                 
-                #===============================================================
-                # if (flip_y and (input_variable == self.crs_variable)):                    
-                #     output_GeoTransform = list(self.GeoTransform)
-                #     output_GeoTransform[5] = - output_GeoTransform[5]
-                #     output_variable.GeoTransform = ' '.join([str(value) for value in output_GeoTransform])
-                #     logger.debug('%s.GeoTransform rewritten as "%s"' % (variable_name, output_variable.GeoTransform))
-                #===============================================================
-    
                 if variable_name not in empty_var_list:
                     # Copy data
                     if input_variable.shape: # array
-                        #=======================================================
-                        # overall_slices = [slice(*dim_range_dict[input_variable.dimensions[dimension_index]])  
-                        #           if dim_range_dict.get(input_variable.dimensions[dimension_index])
-                        #           else slice(0, input_variable.shape[dimension_index])
-                        #           for dimension_index in range(len(input_variable.dimensions))
-                        #          ]
-                        #=======================================================
-                        #logger.debug('overall_slices={}.format(overall_slices))
-                        #=======================================================
-                        # logger.debug('\tCopying %s array data of shape %s' % (variable_name,
-                        #                                                      tuple([overall_slices[dimension_index].stop - overall_slices[dimension_index].start
-                        #                                                             for dimension_index in range(len(input_variable.dimensions))]
-                        #                                                            )
-                        #                                                      )
-                        #             )
-                        #=======================================================
+                        overall_variable_slices = [
+                            slice(*dim_range_dict[input_variable.dimensions[dimension_index]])  
+                            if dim_range_dict.get(input_variable.dimensions[dimension_index])
+                            else slice(0, input_variable.shape[dimension_index])
+                        for dimension_index in range(len(input_variable.dimensions))
+                        ]
                         
-                        variable_masks = [dim_mask_dict[dimension_name]
-                                          for dimension_name in input_variable.dimensions
-                                          ]
+                        logger.debug('overall_variable_slices={}'.format(overall_variable_slices))
+                        
                         logger.debug('\tCopying %s array data of shape %s' % (variable_name,
-                                                                             tuple([np.count_nonzero(mask)
-                                                                                    for mask in variable_masks]
-                                                                                   )
-                                                                             )
-                                    )
+                                                                              tuple([overall_variable_slices[dimension_index].stop - overall_variable_slices[dimension_index].start
+                                                                                     for dimension_index in range(len(input_variable.dimensions))]
+                                                                                    )
+                                                                              )
+                                     )
+                        
+                        # Build list of complete dimension masks for this variable
+                        variable_masks = []
+                        for dimension_index, dimension_name in enumerate(input_variable.dimensions):
+                            dim_mask = (dim_mask_dict.get(dimension_name) # Use specified mask if it exists
+                                        or np.ones(shape=(input_variable.shape[dimension_index],), dtype=np.bool) # Select all array elements in this dimension
+                                        )
+                            variable_masks.append(dim_mask)
 
-                        if (not input_variable_chunking or 
-                            len(input_variable.dimensions) != 2): 
-                            # No chunking - Try to copy in one hit
+                        if not input_variable_chunking: 
+                            # No chunking - Try to copy in one hit. This may bork due to OPeNDAP or memory limitations
+                            #TODO: Make this safe for massive arrays, possibly using the array_pieces code
                             
-                            #===================================================
-                            # if ((input_variable == self.y_variable) and flip_y): 
-                            #     # Y-axis flip required
-                            #     assert len(overall_slices) == 1, 'y-axis variable should be one-dimensional'
-                            #     overall_slices = [slice(overall_slices[0].stop-1, overall_slices[0].start-1 if overall_slices[0].start else None, -1)]
-                            #     logger.debug('\tInverting y-axis variable %s' % variable_name)
-                            #     
-                            #===================================================
                             output_variable[...] = input_variable[variable_masks]
                         
                         else: # Chunked - perform copy in pieces
+                            #TODO: Improve performance for small chunks
+                             
                             # Use largest chunk sizes between input and output
-                            piece_sizes = [max(var_options['chunksizes'][dimension_index],
-                                              input_variable_chunking[dimension_index])
-                                          for dimension_index in range(len(input_variable.dimensions))
-                                         ]
-                            
-                            #logger.debug('piece_sizes = {}'.format(piece_sizes))
-                                                  
-                            piece_counts = [int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / 
-                                                          piece_sizes[dimension_index]))
-                                            for dimension_index in range(len(input_variable.dimensions)) 
-                                            ]
-                            
-                            #logger.debug('piece_counts = {}'.format(piece_counts))
-                            
-                            piece_indices_list = [piece_indices for piece_indices in itertools.product(*[range(piece_count) for piece_count in piece_counts])]
-                            
-                            #logger.debug('piece_indices_list = {}'.format(piece_indices_list))
-                                                    
-                            # Define list of mask==True index arrays for each dimension
-                            dim_mask_indices = [np.where(dim_mask_dict[dimension_name])[0]
-                                                for dimension_name in input_variable.dimensions
-                                                ]
-                            
-                            #logger.debug('dim_mask_indices = {}'.format(dim_mask_indices))
-                            
-                            piece_mask_indices_list = [dim_indices for dim_indices in itertools.product(*[range(0, len(dim_mask_indices[dimension_index]), piece_sizes[dimension_index])
+                            piece_sizes = [
+                                max(var_options['chunksizes'][dimension_index],
+                                    input_variable_chunking[dimension_index]
+                                    )
                                 for dimension_index in range(len(input_variable.dimensions))
-                                ])]
+                                ]     
+                                                   
                             
-                            #logger.debug('piece_mask_indices_list = {}'.format(piece_mask_indices_list))
-                            
-                            piece_mask = np.zeros(shape=input_variable.shape, dtype=np.bool) # Re-use the same mask variable
+                            piece_index_ranges = [
+                                (overall_variable_slices[dimension_index].start // piece_sizes[dimension_index],
+                                 int(math.ceil(float(overall_variable_slices[dimension_index].stop) / piece_sizes[dimension_index]))
+                                 )
+                                for dimension_index in range(len(input_variable.dimensions))
+                                ]
+                                                  
+                            piece_counts = [
+                                int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / piece_sizes[dimension_index]))
+                                for dimension_index in range(len(input_variable.dimensions)) 
+                                ]
+                         
+                            logger.debug('\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
+                                                                          ' x '.join([str(piece_size) for piece_size in piece_sizes])
+                                                                          )
+                                        )
+                             
                             # Iterate over every piece
-                            for piece_indices, piece_mask_indices in zip(piece_indices_list, piece_mask_indices_list):
-                                
-                                #logger.debug('piece_indices = {}, piece_mask_indices = {}'.format(piece_indices, piece_mask_indices))
-                                
-                                # Set up piece reading mask
-                                piece_mask.fill(False)
-                                
-                                piece_mask[tuple([slice(piece_mask_indices[dimension_index],
-                                                        min(piece_mask_indices[dimension_index]+piece_sizes[dimension_index],
-                                                            len(dim_mask_indices[dimension_index])
-                                                            )
-                                                        )
-                                                        for dimension_index in range(len(input_variable.dimensions))
-                                                  ]
-                                                 )
-                                           ] = True
+                            for piece_indices in itertools.product(
+                                *[range(piece_index_ranges[dimension_index][0], 
+                                        piece_index_ranges[dimension_index][1]
+                                        )
+                                  for dimension_index in range(len(input_variable.dimensions))
+                                  ]
+                                 ):
+                                 
+                                                    
+                                logger.debug('\t\tCopying piece %s' % (piece_indices,))
                                 
                                  
-                                # Compute slices in each dimension for writing this piece
-                                piece_write_slices = [slice(*[piece_indices[dimension_index]*piece_sizes[dimension_index],
-                                                              min((piece_indices[dimension_index]+1)*piece_sizes[dimension_index],
-                                                                  dim_size[input_variable.dimensions[dimension_index]]
-                                                                  )
-                                                              ]
-                                                            )
-                                                            for dimension_index in range(len(input_variable.dimensions))
-                                                      ]
+                                piece_read_slices = [
+                                    slice(
+                                        max(overall_variable_slices[dimension_index].start,
+                                            piece_indices[dimension_index] * piece_sizes[dimension_index]
+                                            ),                                                 
+                                        min(overall_variable_slices[dimension_index].stop,
+                                            (piece_indices[dimension_index] + 1) * piece_sizes[dimension_index]
+                                            )
+                                        )
+                                    for dimension_index in range(len(input_variable.dimensions))
+                                    ]
+                                 
+                                #===============================================
+                                # # Old code without masks
+                                # piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_variable_slices[dimension_index].start,
+                                #                       piece_read_slices[dimension_index].stop - overall_variable_slices[dimension_index].start,
+                                #                      )
+                                #                 for dimension_index in range(len(input_variable.dimensions))
+                                #                ]
+                                #===============================================
                                 
-                                logger.debug('\t\tCopying piece {} of {}'.format([index + 1 for index in piece_indices], piece_counts))
+                                piece_write_slices = [
+                                    slice(
+                                        np.count_nonzero(variable_masks[dimension_index][:piece_read_slices[dimension_index].start]),
+                                        np.count_nonzero(variable_masks[dimension_index][piece_read_slices[dimension_index]])
+                                        )
+                                    for dimension_index in range(len(input_variable.dimensions))
+                                    ]
                                 
-                                #logger.debug('piece_write_slices = {}, np.count_nonzero(piece_mask) = {}'.format(piece_write_slices, np.count_nonzero(piece_mask)))
+                                logger.debug('piece_write_slices = {}'.format(piece_write_slices))
                                 
-                                output_variable[piece_write_slices] = input_variable[:][piece_mask]
-        
-                        #=======================================================
-                        #     piece_index_ranges = [(overall_slices[dimension_index].start // piece_sizes[dimension_index],
-                        #                           int(math.ceil(float(overall_slices[dimension_index].stop) / piece_sizes[dimension_index]))
-                        #                          )
-                        #                          for dimension_index in range(len(input_variable.dimensions))
-                        #                         ]
-                        #                          
-                        #     piece_counts = [int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / 
-                        #                                   piece_sizes[dimension_index]))
-                        #                     for dimension_index in range(len(input_variable.dimensions)) 
-                        #                     ]
-                        # 
-                        #     logger.debug('\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
-                        #                                                   ' x '.join([str(piece_size) for piece_size in piece_sizes])
-                        #                                                   )
-                        #                 )
-                        #     
-                        #     try:
-                        #         ydim_index = input_variable.dimensions.index(self.y_variable.name)
-                        #     except:
-                        #         ydim_index = None
-                        #     
-                        #     # Iterate over every piece
-                        #     for piece_indices in itertools.product(*[range(piece_index_ranges[dimension_index][0], 
-                        #                                                   piece_index_ranges[dimension_index][1])
-                        #                                        for dimension_index in range(len(input_variable.dimensions))
-                        #                                       ]
-                        #                                     ):
-                        #         
-                        #                            
-                        #         logger.debug('\t\tCopying piece %s' % (piece_indices,))
-                        #         
-                        #         piece_read_slices = [slice(max(overall_slices[dimension_index].start,
-                        #                                  piece_indices[dimension_index] * piece_sizes[dimension_index]
-                        #                                 ),                                                 
-                        #                              min(overall_slices[dimension_index].stop,
-                        #                                  (piece_indices[dimension_index] + 1) * piece_sizes[dimension_index]
-                        #                                 )
-                        #                             )
-                        #                        for dimension_index in range(len(input_variable.dimensions))
-                        #                        ]
-                        #         
-                        #         piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_slices[dimension_index].start,
-                        #                               piece_read_slices[dimension_index].stop - overall_slices[dimension_index].start,
-                        #                              )
-                        #                         for dimension_index in range(len(input_variable.dimensions))
-                        #                        ]
-                        #         
-                        #         #===============================================
-                        #         # if flip_y and ydim_index is not None:
-                        #         #     # Flip required
-                        #         #     piece_write_slices[ydim_index] = slice(output_variable.shape[ydim_index] - piece_write_slices[ydim_index].start -1, 
-                        #         #                                           output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop - 1 
-                        #         #                                             if (output_variable.shape[ydim_index] - piece_write_slices[ydim_index].stop) 
-                        #         #                                             else None, -1)
-                        #         #===============================================
-                        #         
-                        #         #logger.debug(piece_read_slices, piece_write_slices)
-                        #         
-                        #         output_variable[piece_write_slices] = input_variable[piece_read_slices]
-                        #=======================================================
+                                piece_masks = [variable_masks[dimension_index][piece_read_slices[dimension_index]]
+                                               for dimension_index in range(len(input_variable.dimensions))
+                                               ]
+                                               
+                                 
+                                output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_masks] # Mask each piece as it is read
                         
                     else: # scalar variable - simple copy
                         logger.debug('\tCopying %s scalar data' % variable_name)
@@ -605,5 +539,67 @@ class NetCDFUtils(object):
         return self._wgs84_bbox
 
 
+def main():
+    '''
+    Main function for calling NetCDFUtils.copy function
+    '''
+    # Define command line arguments
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
+                        type=str, default='NETCDF4')
+    parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
+                        type=str)
+    parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
+                        type=int, default=4)
+    parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
+                        help='output debug information. Default is no debug info')
+    parser.add_argument("input_path")
+    parser.add_argument("output_path")
+    
+    args = parser.parse_args()
+    
+    if args.chunkspec:
+        chunk_spec = {dim_name: int(chunk_size) 
+                    for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
+    else:
+        chunk_spec = None
+            
+    ncu = NetCDFUtils(args.input_path,
+                      debug=args.debug
+                      )   
+    ncu.max_bytes = 50000
+    print('max_bytes = {}'.format(ncu.max_bytes))
+          
+    ncu.copy(args.output_path, 
+             #datatype_map_dict={},
+             # Compress all chunked variables
+             variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension) 
+                                                                   for dimension in variable.dimensions
+                                                                   ],
+                                                    'zlib': bool(args.complevel),
+                                                    'complevel': args.complevel
+                                                    }
+                               for variable_name, variable in ncu.netcdf_dataset.variables.items()
+                               if (set(variable.dimensions) & set(chunk_spec.keys()))
+                               } if chunk_spec else {},
+             #dim_range_dict={},
+             nc_format=args.format,
+             #limit_dim_size=False
+             )
+        
+
+if __name__ == '__main__':
+    console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(name)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+ 
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(logger.name))
+
+    main()
         
 
