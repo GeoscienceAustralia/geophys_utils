@@ -165,7 +165,7 @@ class NetCDFUtils(object):
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
-          
+                  
         # Override default variable options with supplied ones for all data variables
         for variable_name in self._netcdf_dataset.variables.keys():
             variable_dict = dict(NetCDFUtils.DEFAULT_COPY_OPTIONS)
@@ -176,6 +176,7 @@ class NetCDFUtils(object):
         logger.debug('Output format is %s' % nc_format)
         
         nc_output_dataset = netCDF4.Dataset(nc_out_path, mode="w", clobber=True, format=nc_format)
+        nc_output_dataset.set_auto_mask(False)
         
         try:
             dims_used = set()
@@ -284,30 +285,31 @@ class NetCDFUtils(object):
                 if variable_name not in empty_var_list:
                     # Copy data
                     if input_variable.shape: # array
-                        overall_variable_slices = [
+                        input_variable_slices = tuple([
                             slice(*dim_range_dict[input_variable.dimensions[dimension_index]])  
                             if dim_range_dict.get(input_variable.dimensions[dimension_index])
                             else slice(0, input_variable.shape[dimension_index])
                         for dimension_index in range(len(input_variable.dimensions))
-                        ]
+                        ])
                         
-                        logger.debug('overall_variable_slices={}'.format(overall_variable_slices))
+                        logger.debug('input_variable_slices={}'.format(input_variable_slices))
                         
-                        logger.debug('\tCopying %s array data of shape %s' % (variable_name,
-                                                                              tuple([overall_variable_slices[dimension_index].stop - overall_variable_slices[dimension_index].start
-                                                                                     for dimension_index in range(len(input_variable.dimensions))]
-                                                                                    )
-                                                                              )
-                                     )
+                        logger.debug('\tCopying {} array data of shape {}'.format(
+                            variable_name,
+                            tuple([input_variable_slices[dimension_index].stop - input_variable_slices[dimension_index].start
+                                   for dimension_index in range(len(input_variable.dimensions))]
+                                  )
+                            ))
                         
-                        # Build list of complete dimension masks for this variable
-                        variable_masks = []
-                        for dimension_index, dimension_name in enumerate(input_variable.dimensions):
-                            dim_mask = (dim_mask_dict.get(dimension_name) # Use specified mask if it exists
-                                        or np.ones(shape=(input_variable.shape[dimension_index],), dtype=np.bool) # Select all array elements in this dimension
-                                        )
-                            variable_masks.append(dim_mask)
-
+                        # Build list of full dimension masks for this variable
+                        # We are using None instead of all-true masks because of the issue described in 
+                        # https://github.com/numpy/numpy/issues/13255
+                        # This results in extra dimensions, but the piece assignment operation doesn't care
+                        # See the behaviour described in https://stackoverflow.com/questions/1408311/numpy-array-slice-using-none
+                        variable_masks = tuple([dim_mask_dict.get(dimension_name) # Use specified mask if it exists, None otherwise
+                                          for dimension_name in input_variable.dimensions
+                                          ])
+                        
                         if not input_variable_chunking: 
                             # No chunking - Try to copy in one hit. This may bork due to OPeNDAP or memory limitations
                             #TODO: Make this safe for massive arrays, possibly using the array_pieces code
@@ -315,7 +317,7 @@ class NetCDFUtils(object):
                             output_variable[...] = input_variable[variable_masks]
                         
                         else: # Chunked - perform copy in pieces
-                            #TODO: Improve performance for small chunks
+                            #TODO: Improve performance for small chunks, and maybe look at chunk alignment for slices
                              
                             # Use largest chunk sizes between input and output
                             piece_sizes = [
@@ -327,8 +329,8 @@ class NetCDFUtils(object):
                                                    
                             
                             piece_index_ranges = [
-                                (overall_variable_slices[dimension_index].start // piece_sizes[dimension_index],
-                                 int(math.ceil(float(overall_variable_slices[dimension_index].stop) / piece_sizes[dimension_index]))
+                                (input_variable_slices[dimension_index].start // piece_sizes[dimension_index],
+                                 int(math.ceil(float(input_variable_slices[dimension_index].stop) / piece_sizes[dimension_index]))
                                  )
                                 for dimension_index in range(len(input_variable.dimensions))
                                 ]
@@ -352,65 +354,54 @@ class NetCDFUtils(object):
                                   ]
                                  ):
                                  
-                                                    
-                                logger.debug('\t\tCopying piece %s' % (piece_indices,))
+                                offset_piece_indices = tuple([(indices[0] - indices[1] + 1) 
+                                                              for indices in zip(piece_indices, [piece_index_range[0] for piece_index_range in piece_index_ranges])])
+                                logger.debug('\t\tCopying piece {}'.format(offset_piece_indices))
                                 
                                  
-                                piece_read_slices = [
+                                piece_read_slices = tuple([
                                     slice(
-                                        max(overall_variable_slices[dimension_index].start,
+                                        max(input_variable_slices[dimension_index].start,
                                             piece_indices[dimension_index] * piece_sizes[dimension_index]
                                             ),                                                 
-                                        min(overall_variable_slices[dimension_index].stop,
+                                        min(input_variable_slices[dimension_index].stop,
                                             (piece_indices[dimension_index] + 1) * piece_sizes[dimension_index]
                                             )
                                         )
                                     for dimension_index in range(len(input_variable.dimensions))
-                                    ]
+                                    ])
                                  
                                 logger.debug('piece_read_slices = {}'.format(piece_read_slices))
-                                #===============================================
-                                # # Old code without masks
-                                # piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_variable_slices[dimension_index].start,
-                                #                       piece_read_slices[dimension_index].stop - overall_variable_slices[dimension_index].start,
-                                #                      )
-                                #                 for dimension_index in range(len(input_variable.dimensions))
-                                #                ]
-                                #===============================================
                                 
-                                piece_write_slices = [
-                                    slice(
-                                        np.count_nonzero(variable_masks[dimension_index][:piece_read_slices[dimension_index].start]),
-                                        (np.count_nonzero(variable_masks[dimension_index][:piece_read_slices[dimension_index].start]) + 
-                                            np.count_nonzero(variable_masks[dimension_index][piece_read_slices[dimension_index]]))
-                                        )
+                                piece_write_slices = tuple([
+                                    (
+                                        slice(
+                                            np.count_nonzero(variable_masks[dimension_index][input_variable_slices[dimension_index]][:piece_read_slices[dimension_index].start]),
+                                            (np.count_nonzero(variable_masks[dimension_index][input_variable_slices[dimension_index]][:piece_read_slices[dimension_index].start]) + 
+                                                np.count_nonzero(variable_masks[dimension_index][input_variable_slices[dimension_index]][piece_read_slices[dimension_index]]))
+                                            ) 
+                                        if variable_masks[dimension_index] else 
+                                        slice(piece_read_slices[dimension_index].start - input_variable_slices[dimension_index].start,
+                                              piece_read_slices[dimension_index].stop - input_variable_slices[dimension_index].start
+                                              ) # No mask in this dimension
+                                    )
                                     for dimension_index in range(len(input_variable.dimensions))
-                                    ]
+                                    ])
                                 
                                 logger.debug('piece_write_slices = {}'.format(piece_write_slices))
                                 
-                                piece_dim_masks = [variable_masks[dimension_index][piece_read_slices[dimension_index]]
-                                               for dimension_index in range(len(input_variable.dimensions))
-                                               ]
+                                # Get mask subsets for piece
+                                piece_dim_masks = tuple([
+                                    (variable_masks[dimension_index][piece_read_slices[dimension_index]] 
+                                     if variable_masks[dimension_index] else None)
+                                    for dimension_index in range(len(input_variable.dimensions))
+                                    ])
                                                
-                                logger.debug('type(piece_dim_masks) = {}'.format(type(piece_dim_masks)))
-                                logger.debug('piece_dim_masks types = {}, piece_dim_masks shapes = {}, piece_dim_masks dtypes = {}, piece_dim_masks counts = {}'.format([type(piece_dim_mask) for piece_dim_mask in piece_dim_masks],
-                                                                                                                               [piece_dim_mask.shape for piece_dim_mask in piece_dim_masks], 
-                                                                                                                               [piece_dim_mask.dtype for piece_dim_mask in piece_dim_masks], 
-                                                                                                        [np.count_nonzero(piece_dim_mask) for piece_dim_mask in piece_dim_masks]
-                                                                                                        ))
-                                #logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
+                                logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
                                 
-                                # Mask each piece as it is read
-                                data = input_variable[piece_read_slices]
-                                logger.debug('data.shape = {}'.format(data.shape))
-                                
-                                # The following won't work reliably because of the issue described in 
-                                # https://github.com/numpy/numpy/issues/13255
-                                # IndexError: shape mismatch: indexing arrays could not be broadcast together
-                                data = data[piece_dim_masks]
-                                
-                                output_variable[piece_write_slices] = data 
+                                # N.B: Nones in piece_dim_mask for unmasked dimensions will result in newaxis dimensions, but shape doesn't matter                               
+                                output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_dim_masks]
+                                #logger.debug('output_variable[piece_write_slices] = {}'.format(output_variable[piece_write_slices]))
                         
                     else: # scalar variable - simple copy
                         logger.debug('\tCopying %s scalar data' % variable_name)
@@ -603,7 +594,8 @@ def main():
                                for variable_name, variable in ncu.netcdf_dataset.variables.items()
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
-             #dim_range_dict={},
+             dim_range_dict={'lat': (5,205),'lon': (5,305)},
+             #dim_mask_dict={},
              nc_format=args.format,
              #limit_dim_size=False
              )
