@@ -31,7 +31,7 @@ import re
 import sys
 import numpy as np
 import logging
-
+from pprint import pformat
 from geophys_utils._crs_utils import transform_coords
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class NetCDFUtils(object):
             self._netcdf_dataset = netcdf_dataset 
             self.nc_path = netcdf_dataset.filepath()
         else:
-            raise BaseException('Invalid netcdf_dataset type')
+            raise TypeError('Invalid netcdf_dataset type')
         
         self.opendap = (re.match('^http.*', self.nc_path) is not None)
         if self.opendap:
@@ -78,6 +78,8 @@ class NetCDFUtils(object):
         self._crs_variable = None # Needs to be set in subclass constructor
         self._wkt = None
         self._wgs84_bbox = None
+        
+        self.netcdf_dataset.set_auto_mask(False)
         
 #===============================================================================
 #         #TODO: Make sure this is general for all CRSs
@@ -336,8 +338,8 @@ class NetCDFUtils(object):
                                 for dimension_index in range(len(input_variable.dimensions)) 
                                 ]
                          
-                            logger.debug('\tCopying %s pieces of size %s cells' % (' x '.join([str(piece_count) for piece_count in piece_counts]),
-                                                                          ' x '.join([str(piece_size) for piece_size in piece_sizes])
+                            logger.debug('\tCopying {} pieces of dimensions {}'.format(' x '.join([str(piece_count) for piece_count in piece_counts]),
+                                                                                       ' x '.join([str(piece_size) for piece_size in piece_sizes])
                                                                           )
                                         )
                              
@@ -366,6 +368,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ]
                                  
+                                logger.debug('piece_read_slices = {}'.format(piece_read_slices))
                                 #===============================================
                                 # # Old code without masks
                                 # piece_write_slices = [slice(piece_read_slices[dimension_index].start - overall_variable_slices[dimension_index].start,
@@ -378,19 +381,36 @@ class NetCDFUtils(object):
                                 piece_write_slices = [
                                     slice(
                                         np.count_nonzero(variable_masks[dimension_index][:piece_read_slices[dimension_index].start]),
-                                        np.count_nonzero(variable_masks[dimension_index][piece_read_slices[dimension_index]])
+                                        (np.count_nonzero(variable_masks[dimension_index][:piece_read_slices[dimension_index].start]) + 
+                                            np.count_nonzero(variable_masks[dimension_index][piece_read_slices[dimension_index]]))
                                         )
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ]
                                 
                                 logger.debug('piece_write_slices = {}'.format(piece_write_slices))
                                 
-                                piece_masks = [variable_masks[dimension_index][piece_read_slices[dimension_index]]
+                                piece_dim_masks = [variable_masks[dimension_index][piece_read_slices[dimension_index]]
                                                for dimension_index in range(len(input_variable.dimensions))
                                                ]
                                                
-                                 
-                                output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_masks] # Mask each piece as it is read
+                                logger.debug('type(piece_dim_masks) = {}'.format(type(piece_dim_masks)))
+                                logger.debug('piece_dim_masks types = {}, piece_dim_masks shapes = {}, piece_dim_masks dtypes = {}, piece_dim_masks counts = {}'.format([type(piece_dim_mask) for piece_dim_mask in piece_dim_masks],
+                                                                                                                               [piece_dim_mask.shape for piece_dim_mask in piece_dim_masks], 
+                                                                                                                               [piece_dim_mask.dtype for piece_dim_mask in piece_dim_masks], 
+                                                                                                        [np.count_nonzero(piece_dim_mask) for piece_dim_mask in piece_dim_masks]
+                                                                                                        ))
+                                #logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
+                                
+                                # Mask each piece as it is read
+                                data = input_variable[piece_read_slices]
+                                logger.debug('data.shape = {}'.format(data.shape))
+                                
+                                # The following won't work reliably because of the issue described in 
+                                # https://github.com/numpy/numpy/issues/13255
+                                # IndexError: shape mismatch: indexing arrays could not be broadcast together
+                                data = data[piece_dim_masks]
+                                
+                                output_variable[piece_write_slices] = data 
                         
                     else: # scalar variable - simple copy
                         logger.debug('\tCopying %s scalar data' % variable_name)
