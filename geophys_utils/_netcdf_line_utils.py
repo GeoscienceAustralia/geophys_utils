@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from _ast import Or
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -26,14 +27,13 @@ import numpy as np
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
 from geophys_utils._crs_utils import transform_coords
 from geophys_utils._polygon_utils import points2convex_hull
-from geophys_utils._concave_hull import concaveHull
 from scipy.spatial.distance import pdist
-from shapely.geometry import shape, Polygon
+from shapely.geometry import Polygon, MultiPolygon, LineString, MultiLineString
 import logging
 import netCDF4
 
 # Setup logging handlers if required
-logger = logging.getLogger(__name__) # Get __main__ logger
+logger = logging.getLogger(__name__) # Get logger
 logger.setLevel(logging.INFO) # Initial logging level for this module
     
 class NetCDFLineUtils(NetCDFPointUtils):
@@ -398,6 +398,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         line_sample_indices_set = set()
         for line_index in range(self.netcdf_dataset.dimensions['line'].size):
             line_indices = np.where(self.netcdf_dataset.variables['line_index'][:] == line_index)[0]
+            logger.debug('Sampling line index {} with {} points'.format(line_index, len(line_indices)))
             valid_coord_mask = ~np.any(np.isnan(self.xycoords[line_indices]), axis=1) 
             if not np.count_nonzero(valid_coord_mask): # No valid coordinates in line
                 logger.debug('No valid coordinates found in line index {}'.format(line_index))
@@ -431,24 +432,100 @@ class NetCDFLineUtils(NetCDFPointUtils):
             
         return convex_hull
     
-    def get_concave_hull(self, to_wkt=None, line_divisions=10, buffer_distance=None, k=3):
+    def get_multi_line_string(self, to_wkt=None, tolerance=0):
+        '''\
+        Function to return a shapely MultiLineString object representing the line dataset
+        '''
+        _line_indices, line_start_indices = np.sort(np.unique(self.line_index, return_index=True))
+        
+        line_end_indices = np.array(line_start_indices)
+        line_end_indices[0:-1] = line_start_indices[1:]
+        line_end_indices[-1] = self.point_count
+        line_end_indices = line_end_indices -1
+        
+        line_list = []
+        for line_index in range(len(line_start_indices)):
+            line_slice = slice(line_start_indices[line_index], line_end_indices[line_index]+1)
+            line_vertices = self.xycoords[line_slice]
+            line_vertices = line_vertices[~np.any(np.isnan(line_vertices), axis=1)] # Discard null coordinates
+            if len(line_vertices) >= 2: # LineStrings must have at least 2 coordinate tuples
+                line_list.append(LineString(transform_coords(line_vertices, self.wkt, to_wkt)).simplify(tolerance))
+        
+        return MultiLineString(line_list)
+
+        
+
+    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1, join_style=1, max_polygons=5, max_vertices=1000):
         """\
         Returns the concave hull (as a shapely polygon) of points with data. 
         Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
-        @param line_divisions: Number of subdivisions at which to take sample points for each line
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
-        @param k: Initial number of nearest neighbours to consider
+        @param offset: Final offset of final shape from original lines
+        @param tolerance: tolerance for simplification
+        @param cap_style: cap_style for buffering. Defaults to round
+        @param join_style: join_style for buffering. Defaults to round
+        @param max_polygons: Maximum number of polygons to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
+        @param max_vertices: Maximum number of vertices to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
+        @return shapely.geometry.shape: Geometry of concave hull
         """
-        points = transform_coords(self.get_line_sample_points(line_divisions=line_divisions), self.wkt, to_wkt)
+        assert not max_polygons or buffer_distance > 0, 'buffer_distance must be greater than zero if number of polygons is limited' # Avoid endless recursion
         
-        hull = concaveHull(points, k=k)
-        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices):
+            '''\
+            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            '''
+            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
+            offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
+            offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
         
-        if not buffer_distance:
-            return result
+            # Discard any internal polygons
+            if type(offset_geometry) == MultiPolygon:
+                polygon_list = []
+                for polygon in offset_geometry:
+                    polygon = Polygon(polygon.exterior)
+                    polygon_is_contained = False
+                    for list_polygon in polygon_list:
+                        polygon_is_contained = list_polygon.contains(polygon)
+                        if polygon_is_contained:
+                            break
+                        elif polygon.contains(list_polygon):
+                            polygon_list.remove(list_polygon)
+                            break
+                        
+                    if not polygon_is_contained:
+                        polygon_list.append(polygon)       
+
+                if len(polygon_list) == 1:
+                    offset_geometry = polygon_list[0] # Single polygon
+                else:
+                    offset_geometry = MultiPolygon(polygon_list)
+                    
+            elif type(offset_geometry) == Polygon:
+                offset_geometry = Polygon(offset_geometry.exterior)
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geometry)))
+            
+            # Keep doubling the buffer distance if there are too many polygons
+            if (
+                (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
+                or
+                (max_vertices and type(offset_geometry) == MultiPolygon and 
+                    sum([len(polygon.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in polygon.interiors]) 
+                         for polygon in offset_geometry]) > max_vertices)
+                or
+                (max_vertices and type(offset_geometry) == Polygon and 
+                    (len(offset_geometry.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])
+                     ) > max_vertices)
+                ):
+                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
+                
+            return offset_geometry
+                    
+                    
+        multi_line_string = self.get_multi_line_string(to_wkt=to_wkt, tolerance=tolerance)
         
-        return Polygon(result.buffer(buffer_distance, cap_style=3, join_style=3).exterior).buffer(-buffer_distance, cap_style=3, join_style=3)
+        return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
 
 
 if __name__ == '__main__':
@@ -460,14 +537,13 @@ if __name__ == '__main__':
         console_handler.setLevel(logging.DEBUG)
         console_formatter = logging.Formatter('%(message)s')
         console_handler.setFormatter(console_formatter)
-        logger.addHandler(console_handler)
+        
+        logging.getLogger().addHandler(console_handler) # Add handler to root logger
 
-    nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=True)
+    nclu = NetCDFLineUtils('C:\\Users\\alex\\Documents\\GADDS2\\P544MAG.nc', debug=False)
     print('{} points in {} lines'.format(nclu.point_count, nclu.netcdf_dataset.dimensions['line'].size))
-    sample_points = nclu.get_line_sample_points(line_divisions=3)
-    print(len(sample_points), sample_points) 
+    #sample_points = nclu.get_line_sample_points(line_divisions=3)
+    #print(len(sample_points), sample_points) 
 
-    #===========================================================================
-    # concave_hull = nclu.get_concave_hull(to_wkt='GDA94', line_divisions=10, buffer_distance=0.005)
-    # print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))
-    #===========================================================================
+    concave_hull = nclu.get_concave_hull(to_wkt='GDA94')
+    print('Shape has {} vertices'.format(len(concave_hull.exterior.coords)))

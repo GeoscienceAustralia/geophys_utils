@@ -873,9 +873,12 @@ class NetCDFPointUtils(NetCDFUtils):
         try:
             x_variable = self.netcdf_dataset.variables['longitude']
             y_variable = self.netcdf_dataset.variables['latitude']
-        except:
-            x_variable = self.netcdf_dataset.variables['easting']
-            y_variable = self.netcdf_dataset.variables['northing']
+        except KeyError:
+            try:
+                x_variable = self.netcdf_dataset.variables['easting']
+                y_variable = self.netcdf_dataset.variables['northing']
+            except KeyError:
+                raise BaseException('Unable to find xy coordinate variables')
             
         xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
         self.fetch_array(x_variable, xycoord_values[:,0])
@@ -899,7 +902,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # assert np.allclose(arr, arr_down)
 
         if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates')
+            #logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
         elif self.memcached_connection is not None:

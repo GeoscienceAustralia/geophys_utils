@@ -5,6 +5,7 @@ netCDF4
 numpy
 osgeo
 owslib
+scikit-image
 scipy
 shapely
 tempfile
