@@ -52,6 +52,7 @@ setup(name='geophys_utils',
                      if (os.name == 'nt')
                      else [])),
       requires=[
+            'affine',
             'distutils',
             'functools',
             'itertools',
