@@ -59,7 +59,7 @@ setup(name='geophys_utils',
             'numpy',
             'osgeo',
             'owslib',
-            'scikit-image',
+          # 'scikit-image',TODO add scikit-image - currently removed as dash is casuing errors
             'scipy',
             'shapely',
             'tempfile',
