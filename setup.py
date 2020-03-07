@@ -52,6 +52,7 @@ setup(name='geophys_utils',
                      if (os.name == 'nt')
                      else [])),
       requires=[
+            'affine',
             'distutils',
             'functools',
             'itertools',
@@ -59,7 +60,7 @@ setup(name='geophys_utils',
             'numpy',
             'osgeo',
             'owslib',
-          # 'scikit-image',TODO add scikit-image - currently removed as dash is casuing errors
+            'skimage',
             'scipy',
             'shapely',
             'tempfile',
