@@ -313,8 +313,10 @@ class NetCDFUtils(object):
                         if not input_variable_chunking: 
                             # No chunking - Try to copy in one hit. This may bork due to OPeNDAP or memory limitations
                             #TODO: Make this safe for massive arrays, possibly using the array_pieces code
-                            
-                            output_variable[...] = input_variable[variable_masks]
+                            if any(variable_masks):
+                                output_variable[...] = input_variable[input_variable_slices][variable_masks]
+                            else:
+                                output_variable[...] = input_variable[input_variable_slices]
                         
                         else: # Chunked - perform copy in pieces
                             #TODO: Improve performance for small chunks, and maybe look at chunk alignment for slices
