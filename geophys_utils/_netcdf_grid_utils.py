@@ -568,7 +568,7 @@ class NetCDFGridUtils(NetCDFUtils):
         # that there are no unnecessary holes in the polygons
         # shift the coordinates back by 1 to get original unpadded pixel coordinates
         logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in self.data_variable.shape)) +
-                     ' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.'
+                     (' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.')
                      )
         contours = [(contour - PAD_WIDTH) * downsampling_stride # Shift for padding and compensate for downsampling_stride
                     for contour in measure.find_contours(padded_mask, 0.5, fully_connected='high')]
