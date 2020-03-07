@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from math import ceil
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -36,6 +37,7 @@ from shapely.geometry.base import BaseGeometry
 import netCDF4
 import sys
 from skimage import measure
+from functools import reduce
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -413,6 +415,8 @@ class NetCDFGridUtils(NetCDFUtils):
         @return shapely.geometry.shape: Geometry of concave hull
         """
         PAD_WIDTH = 1
+        MAX_DATA_PROPORTION = 0.9 # Maximum proportion of data containing pixels vs all pixels to trigger full shape computation
+        DOWNSAMPLING_STEP_SIZE = 10000 # Pixels per downsampling_stride increment for downsampling. Used with maximum side length
         
         # Parameters for shape simplification in pixel sizes
         buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
@@ -529,17 +533,44 @@ class NetCDFGridUtils(NetCDFUtils):
                 return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
                 
             return offset_geometry
-        # Create data/no-data mask
-        mask = (self.data_variable[:] != self.data_variable._FillValue)
+        
+        #=======================================================================
+        # # Create data/no-data mask
+        # mask = (self.data_variable != self.data_variable._FillValue)
+        # # pad with nodata so that boundary edges are detected
+        # padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
+        #=======================================================================
+        
+        # Compute downsampling_stride for downsampling, and use that to create mask_slices
+        downsampling_stride = int(max(self.pixel_count) // DOWNSAMPLING_STEP_SIZE) + 1
+        mask_slices = tuple([slice(None, None, downsampling_stride)
+                       for _size in self.data_variable.shape])
 
-        # pad with nodata so that boundary edges are detected
-        padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
+        logger.debug('Computing padded mask')
+        padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride))+2 for size in self.data_variable.shape], dtype=np.bool)
+        padded_mask[1:-1,1:-1] = (self.data_variable != self.data_variable._FillValue)[mask_slices] # It's quicker to read all data and mask afterwards
+        
+        print(np.count_nonzero(padded_mask[1:-1,1:-1]),
+              ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)), 
+              np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)))
+
+        data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[0]-2))
+        if data_proportion >= MAX_DATA_PROPORTION:
+            logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+            return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+
+        #=======================================================================
+        # del mask # We don't need this any more
+        # gc.collect()
+        #=======================================================================
 
         # find contours where the high pieces (data) are fully connected
         # that there are no unnecessary holes in the polygons
         # shift the coordinates back by 1 to get original unpadded pixel coordinates
-        logger.debug('Generating contours for grid of size {}'.format(', '.join(str(size) for size in self.data_variable.shape)))
-        contours = [contour - np.array([[PAD_WIDTH, PAD_WIDTH]])
+        logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in self.data_variable.shape)) +
+                     ' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.'
+                     )
+        contours = [(contour - PAD_WIDTH) * downsampling_stride # Shift for padding and compensate for downsampling_stride
                     for contour in measure.find_contours(padded_mask, 0.5, fully_connected='high')]
         #logger.debug('contours = {}'.format(contours))
         
