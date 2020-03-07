@@ -75,10 +75,6 @@ keywords: geophysics, airborne, AEM, conductivity
 # Not used for output - should be defined in .dfn file instead
 dimension_fields: [layer, low_moment_gate, high_moment_gate]
 
-# List of possible index field names to indicate which fields need to be dealt with as value, start & count arrays
-# Uses overridden short_name values (if set)
-index_fields: [line, flight, date, flag_linetype, survey]
-
 # List of possible lookup field names to indicate which fields need to be turned into lookup arrays
 # Uses overridden short_name values (if set)
 lookup_fields: [line, flight]
