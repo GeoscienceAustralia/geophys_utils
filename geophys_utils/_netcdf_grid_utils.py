@@ -132,7 +132,7 @@ class NetCDFGridUtils(NetCDFUtils):
             self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
         except:
-            logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+            logger.error('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
             raise
             
         #TODO: Make this work for multi-variate grids
