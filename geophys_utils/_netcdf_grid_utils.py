@@ -533,7 +533,7 @@ class NetCDFGridUtils(NetCDFUtils):
         mask = (self.data_variable[:] != self.data_variable._FillValue)
 
         # pad with nodata so that boundary edges are detected
-        padded_mask = np.pad(mask, pad_width=PAD_WIDTH, constant_values=False)
+        padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
 
         # find contours where the high pieces (data) are fully connected
         # that there are no unnecessary holes in the polygons
