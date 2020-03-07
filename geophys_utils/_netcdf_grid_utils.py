@@ -550,10 +550,6 @@ class NetCDFGridUtils(NetCDFUtils):
         padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride))+2 for size in self.data_variable.shape], dtype=np.bool)
         padded_mask[1:-1,1:-1] = (self.data_variable != self.data_variable._FillValue)[mask_slices] # It's quicker to read all data and mask afterwards
         
-        print(np.count_nonzero(padded_mask[1:-1,1:-1]),
-              ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)), 
-              np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)))
-
         data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2))
         if data_proportion >= MAX_DATA_PROPORTION:
             logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
