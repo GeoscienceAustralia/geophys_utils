@@ -420,7 +420,7 @@ class NetCDFGridUtils(NetCDFUtils):
         
         # Parameters for shape simplification in pixel sizes
         buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
-        offset = offset or 0.5 # Take final shape half a pixel out from centre coordinates to cover pixel edges
+        offset = offset or 0.9 # Take final shape half a pixel out from centre coordinates to cover pixel edges
         tolerance = tolerance or 0.5        
         
         
@@ -554,7 +554,7 @@ class NetCDFGridUtils(NetCDFUtils):
               ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)), 
               np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2)))
 
-        data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[0]-2))
+        data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2))
         if data_proportion >= MAX_DATA_PROPORTION:
             logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
             return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
