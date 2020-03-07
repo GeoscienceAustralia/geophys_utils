@@ -537,8 +537,17 @@ class NetCDFGridUtils(NetCDFUtils):
         #=======================================================================
         # # Create data/no-data mask
         # mask = (self.data_variable != self.data_variable._FillValue)
+        #
+        # data_proportion = np.count_nonzero(mask) / (self.pixel_count[0]*self.pixel_count[1])
+        # if data_proportion >= MAX_DATA_PROPORTION:
+        #     logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+        #     return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+        #
         # # pad with nodata so that boundary edges are detected
         # padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
+        #
+        # del mask # We don't need this any more
+        # gc.collect()
         #=======================================================================
         
         # Compute downsampling_stride for downsampling, and use that to create mask_slices
@@ -554,11 +563,6 @@ class NetCDFGridUtils(NetCDFUtils):
         if data_proportion >= MAX_DATA_PROPORTION:
             logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
             return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
-
-        #=======================================================================
-        # del mask # We don't need this any more
-        # gc.collect()
-        #=======================================================================
 
         # find contours where the high pieces (data) are fully connected
         # that there are no unnecessary holes in the polygons

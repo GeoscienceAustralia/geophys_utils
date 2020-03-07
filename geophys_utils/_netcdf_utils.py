@@ -79,7 +79,8 @@ class NetCDFUtils(object):
         self._wkt = None
         self._wgs84_bbox = None
         
-        self.netcdf_dataset.set_auto_mask(False)
+        # Set auto masking to True for consistent behaviour
+        self.netcdf_dataset.set_auto_mask(True)
         
 #===============================================================================
 #         #TODO: Make sure this is general for all CRSs
@@ -166,6 +167,8 @@ class NetCDFUtils(object):
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
                   
+        self.netcdf_dataset.set_auto_mask(False)
+        
         # Override default variable options with supplied ones for all data variables
         for variable_name in self._netcdf_dataset.variables.keys():
             variable_dict = dict(NetCDFUtils.DEFAULT_COPY_OPTIONS)
@@ -422,6 +425,7 @@ class NetCDFUtils(object):
             logger.debug('Finished copying netCDF dataset %s to %s.' % (self.nc_path, nc_out_path))
         
         finally:
+            self.netcdf_dataset.set_auto_mask(True)
             nc_output_dataset.close()
             
     
