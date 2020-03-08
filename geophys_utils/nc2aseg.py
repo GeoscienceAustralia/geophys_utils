@@ -153,7 +153,7 @@ class NC2ASEGGDF2(object):
                     'variables': variables,
                     'attributes': variable_attributes,
                     'dtype': dtype,
-                    'format': ASEG_GDF_FORMAT[str(dtype)]
+                    'format': ASEG_GDF_FORMAT[str(dtype)] # Don't use "get" so we flush out missing formats
                     }
                     
             return variable_definitions
@@ -170,23 +170,28 @@ class NC2ASEGGDF2(object):
         #logger.debug('variable_definitions = {}'.format(pformat(self.variable_definitions)))    
         
         for variable_name in self.variable_definitions.keys():
-            print('{} = {}'.format(variable_name, self.get_data_values(variable_name, slice(None, None, -100000))))
+            print('{} = {}'.format(variable_name, self.get_data_values(variable_name, slice(None, None, 100000))))
         
     
     def get_data_values(self, variable_name, point_slice=slice(None, None, None)):
         '''\
+        Function to return data values as an array
+        @param variable_name: Variable name to query (key in self.variable_definitions)
+        @param point_slice: slice to apply to point (i.e. first) dimension
+        @return data_array: Array of data values
         '''
         variables = self.variable_definitions[variable_name]['variables'] 
         #logger.debug('{}({})'.format(variable_name, ','.join(variables[0].dimensions)))
         
         if len(variables) == 1: # Single variable => no lookup
             if len(variables[0].dimensions): # Array 
+                assert variables[0].dimensions[0] == 'point', 'First array dimension must be "point"'
                 return variables[0][:][point_slice]
             else: # Scalar
                 # Broadcast scalar to required array shape
                 return np.array([variables[0][:]] * (((point_slice.stop or len(variables[0])) - (point_slice.start or 0)) // (point_slice.step or 1)))
         elif len(variables) == 2: # Index & Lookup variables
-            return variables[1][:][variables[0][:][point_slice]]       
+            return variables[1][:][variables[0][:][point_slice]] # Use first array to index second one    
         else:
             raise BaseException('Unable to resolve chained lookups: {}'.format([variable.name for variable in variables]))
         
