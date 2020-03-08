@@ -15,10 +15,13 @@ import yaml
 import tempfile
 import netCDF4
 import logging
+import locale
+from math import log10
 
 from geophys_utils.netcdf_converter.aseg_gdf_utils import variable2aseg_gdf_format
 from geophys_utils import get_spatial_ref_from_wkt
 
+locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.UTF-8'
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -30,7 +33,7 @@ TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 0
+POINT_LIMIT = 1000000
 
 class RowCache(object):
     '''
@@ -65,11 +68,11 @@ class RowCache(object):
         #     N.B: Only required for legacy dataset support
         #     '''
         #     value_variable = self.nc_dataset.variables[indexing_variable_name]
-        #     assert value_variable.dimensions == ('line',), 'Invalid dimension for value variable {}'.format(indexing_variable_name)
+        #     assert value_variable.dimensions == ('line',), 'Invalid dimension for value variable {:n}'.format(indexing_variable_name)
         #     start_variable = self.nc_dataset.variables['index_line']
-        #     assert start_variable.dimensions == ('line',), 'Invalid dimension for start variable {}'.format('index_line')
+        #     assert start_variable.dimensions == ('line',), 'Invalid dimension for start variable {:n}'.format('index_line')
         #     count_variable = self.nc_dataset.variables['index_count']
-        #     assert count_variable.dimensions == ('line',), 'Invalid dimension for count variable {}'.format('index_count')
+        #     assert count_variable.dimensions == ('line',), 'Invalid dimension for count variable {:n}'.format('index_count')
         #     
         #     expanded_array = np.zeros(shape=(self.index_range,), 
         #                               dtype=value_variable.dtype)
@@ -78,13 +81,13 @@ class RowCache(object):
         #     indices = np.where(np.logical_and((start_variable[:] >= start_index),
         #                                       (start_variable[:] <= end_index)))[0]
         #     
-        #     #logger.debug('indices: {}'.format(indices))
+        #     #logger.debug('indices: {:n}'.format(indices))
         #     for index in indices:
         #         new_start_index = max(start_variable[index]-start_index, 0)
         #         new_end_index = min(start_index+count_variable[index], self.index_range)
         #         expanded_array[new_start_index:new_end_index] = value_variable[index]
         #         
-        #     #logger.debug('expanded_array: {}'.format(expanded_array))
+        #     #logger.debug('expanded_array: {:n}'.format(expanded_array))
         #     return expanded_array
         #=======================================================================
         
@@ -227,8 +230,9 @@ class NetCDF2ASEGGDFConverter(object):
     '''
     def __init__(self,
                  netcdf_in_path,
+                 verbose=False,
                  crs_string=None,
-                 settings_path=None
+                 settings_path=None,
                  ):
         '''
         Constructor for class NetCDF2ASEGGDFConverter
@@ -247,6 +251,12 @@ class NetCDF2ASEGGDFConverter(object):
             self.settings = yaml.safe_load(open(self.settings_path))
         except:
             self.settings = {}
+
+        if verbose:
+            logger.debug('Enabling info level ouutput')
+            self.info_output = logger.info # Verbose
+        else:
+            self.info_output = logger.debug # Non-verbose
             
         logger.debug('self.settings: {}'.format(pformat(self.settings)))
 
@@ -273,6 +283,9 @@ class NetCDF2ASEGGDFConverter(object):
                     
         
         self.total_points = self.nc_dataset.dimensions['point'].size
+        
+        # set reporting increment to nice number giving 100 - 199 progress reports
+        self.line_report_increment = (10.0 ** int(log10(self.total_points / 50))) / 2.0
         
     
     def write_record2dfn_file(self, 
@@ -651,7 +664,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             write_proj(dfn_file)
                 
             dfn_file.close()
-            logger.info('Finished writing .dfn file {}'.format(self.dfn_out_path))
+            self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
         
         
         def write_dat_file(cache_chunk_rows=None, point_mask=None):
@@ -674,10 +687,10 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                            
                     value_count = len(python_format_list)
         
-                    logger.debug('Reading rows {}-{}'.format(start_index+1, end_index))
+                    logger.debug('Reading rows {:n}-{:n}'.format(start_index+1, end_index))
                     line_cache.read_points(start_index, end_index, point_mask=point_mask)
                     
-                    logger.debug('Preparing ASEG-GDF lines for rows {}-{}'.format(start_index+1, end_index))
+                    logger.debug('Preparing ASEG-GDF lines for rows {:n}-{:n}'.format(start_index+1, end_index))
                     for value_list in line_cache.chunk_buffer_generator():
                         logger.debug('value_list: {}'.format(value_list))
                         # Turn list of values into a string using python_formats
@@ -699,8 +712,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                                      ):
                         point_count += 1
                         
-                        if point_count == point_count // 10000 * 10000:
-                            logger.info('{} points written'.format(point_count))
+                        if point_count == point_count // self.line_report_increment * self.line_report_increment:
+                            self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
                         
                         logger.debug('line: {}'.format(line))
                         yield line
@@ -711,19 +724,19 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     if POINT_LIMIT and (point_count >= POINT_LIMIT):
                         break
                 
-                logger.info('{} lines output'.format(point_count))
+                self.info_output('{:n} rows output'.format(point_count))
                 
                 
             # Start of write_dat_file function
             cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
             
             # Create, write and close .dat file
-            dat_file = open(self.dat_out_path, mode='w')
+            dat_out_file = open(self.dat_out_path, mode='w')
             logger.debug('Writing lines to {}'.format(self.dat_out_path))
             for line in chunk_buffer_generator(point_mask):
-                dat_file.write(line + '\n')
-            dat_file.close()
-            logger.info('Finished writing .dat file {}'.format(self.dat_out_path))
+                dat_out_file.write(line + '\n')
+            dat_out_file.close()
+            self.info_output('Finished writing .dat file {}'.format(self.dat_out_path))
                 
         
         # Start of convert2aseg_gdf function        
@@ -760,6 +773,9 @@ def main():
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
         
+        parser.add_argument('-v', '--verbose', action='store_const', const=True, default=False,
+                            help='output verbosity. Default is non-verbose')
+        
         parser.add_argument('positional_args', 
                             nargs=argparse.REMAINDER,
                             help='<nc_in_path> [<dat_out_path>]')
@@ -787,9 +803,10 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
     
     logger.debug('args: {}'.format(args.__dict__))
-    
+
     netcdf2aseg_gdf_converter = NetCDF2ASEGGDFConverter(nc_in_path,
                                                         crs_string=args.crs,
+                                                        verbose=args.verbose
                                                         )
     
     point_mask = None # Process all points

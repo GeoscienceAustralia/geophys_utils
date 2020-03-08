@@ -34,12 +34,15 @@ import yaml
 import tempfile
 import netCDF4
 import logging
+import locale
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils.netcdf_converter.aseg_gdf_utils import aseg_gdf_format2dtype, fix_field_precision, truncate
 from geophys_utils import points2convex_hull
 from geophys_utils import transform_coords
+
+locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.UTF-8'
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -60,7 +63,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
     def __init__(self, 
                  nc_out_path, 
-                 aem_dat_path, 
+                 dat_path, 
                  dfn_path, 
                  crs_string=None,
                  netcdf_format='NETCDF4', 
@@ -68,14 +71,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                  default_variable_parameters=None,
                  settings_path=None,
                  fix_precision=True,
-                 space_delimited=False
+                 space_delimited=False,
+                 verbose=False
                  ):
         '''
         Concrete constructor for subclass ASEGGDF2NetCDFConverter
         Needs to initialise object with everything that is required for the other Concrete methods
         N.B: Make sure the base class constructor is called from the subclass constructor
         @param nc_out_path: Path to output netCDF file on filesystem
-        @param aem_dat_path: Path to .dat AEM data source file on filesystem
+        @param dat_path: Path to .dat AEM data source file on filesystem
         @param dfn_path: Path to .dfn definition file on filesystem
         @param netcdf_format: Format for netCDF file. Defaults to 'NETCDF4_CLASSIC'
         @param default_chunk_size: single default chunk size for all dimensions. None means take default, zero means not chunked.
@@ -90,9 +94,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             Will set self.dimensions as an Ordereddict of dimension sizes keyed by dimension name
             '''
             def parse_dfn_file(dfn_path):
-                logger.info('Reading definitions file {}'.format(dfn_path))
+                self.info_output('Reading definitions file {}'.format(dfn_path))
                 self.field_definitions = []
                 
+                # DFN lines look like this: "DEFN 1 ST=RECD,RT=; line: I6: NULL=4294967295 , NAME=Line number"
                 dfn_file = open(dfn_path, 'r')
                 for line in dfn_file:
                     key_value_pairs = {}
@@ -106,7 +111,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                 elif len(definition) == 1:
                                     positional_value_list.append(definition[0])
     
-                    logger.debug('key_value_pairs: {},\npositional_value_list: {}'.format(pformat(key_value_pairs), pformat(positional_value_list))) 
+                    logger.debug('line: {}\nkey_value_pairs: {}\npositional_value_list: {}'.format(line.strip(), pformat(key_value_pairs), pformat(positional_value_list))) 
                 
                     # Column definition
                     if key_value_pairs.get('RT') in ['', 'DATA'] and (positional_value_list 
@@ -205,7 +210,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 Function to create temporary cache file with one 2D variable
                 Needs to have self.column_count defined to work
                 '''
-                self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W+', '_', os.path.splitext(self.aem_dat_path)[0]) + '.nc')
+                self.nc_cache_path = os.path.join(TEMP_DIR, re.sub('\W+', '_', os.path.splitext(self.dat_path)[0]) + '.nc')
                 self._nc_cache_dataset = netCDF4.Dataset(self.nc_cache_path, mode="w", clobber=True, format='NETCDF4')
                 self._nc_cache_dataset.createDimension(dimname='rows', size=None) # Unlimited size
                 
@@ -287,7 +292,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 '''
                 row_list = []
                 line_column_count = 0
-                start_char = 0
+                start_char_index = 0
                 for field_definition in self.field_definitions:
                     short_name = field_definition['short_name']
                     columns = field_definition['columns']
@@ -295,13 +300,13 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     aseg_gdf_format = field_definition['format']
                     column_list = []
                     for _column_offset in range(columns):
-                        end_char = start_char + field_definition['width_specifier']
-                        value_string = line[start_char:end_char]
+                        end_char_index = start_char_index + field_definition['width_specifier']
+                        value_string = line[start_char_index:end_char_index]
                         
                         # Work-around for badly formatted files with first entry too short
                         if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
                             value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
-                            end_char = start_char + len(value_string) # Adjust character offset for next column
+                            end_char_index = start_char_index + len(value_string) # Adjust character offset for next column
                         
                         value_string = value_string.strip()
                         try:
@@ -318,7 +323,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         #logger.debug('value_string: {}, repr(value): {}'.format(value_string, repr(value)))
                         line_column_count += 1
                         column_list.append(value)
-                        start_char = end_char
+                        start_char_index = end_char_index
                     #logger.debug('column_list: {}'.format(column_list))
                     if column_list:
                         if columns == 1: # 1D variable
@@ -382,15 +387,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 return row_list
                 
                 
-            logger.info('Reading data file {}'.format(aem_dat_path))
-            aem_dat_file = open(aem_dat_path, 'r')
+            self.info_output('Reading data file {}'.format(dat_path))
+            dat_in_file = open(dat_path, 'r')
             
             create_nc_cache()
             
             line_count = 0
             self.total_points = 0
             chunk_list = []
-            for line in aem_dat_file:
+            for line in dat_in_file:
                 line = re.sub('\n$', '', line) # Strip trailing EOL
                 #logger.debug('line: "{}"'.format(line))
                 if not line.strip(): # Skip empty lines
@@ -414,7 +419,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     chunk_list = [] # Reset chunk after writing
                 
                 if not line_count % 10000:
-                    logger.info('{} lines read'.format(line_count))
+                    self.info_output('{} lines read'.format(line_count))
                      
                 if POINT_LIMIT and self.total_points >= POINT_LIMIT:
                     logger.debug('Truncating input for testing after {} points'.format(POINT_LIMIT))
@@ -424,9 +429,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 cache_chunk_list(chunk_list, self.total_points)
                 chunk_list = [] # Reset chunk after writing
             
-            aem_dat_file.close()             
+            dat_in_file.close()             
     
-            logger.info('A total of {} points were read'.format(self.total_points))
+            self.info_output('A total of {} points were read'.format(self.total_points))
             
             assert self.total_points, 'Unable to read any points'
             
@@ -584,7 +589,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                               ) 
                 # aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format, modified_fill_value
                 if precision_change_result:    
-                    logger.info('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
+                    self.info_output('Datatype for variable {} changed from {} to {}'.format(short_name, dtype, precision_change_result[1]))
                     #logger.debug('precision_change_result: {}'.format(precision_change_result))
                     field_definition['format'] = precision_change_result[0]
                     field_definition['dtype'] = precision_change_result[1]
@@ -620,7 +625,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                              np.isnan(data_array))] = modified_fill_value
                     cache_variable[:] = data_array
                 
-                    logger.info('{} fill_value changed from {} to {} for format {}'.format(short_name,
+                    self.info_output('{} fill_value changed from {} to {} for format {}'.format(short_name,
                                                                              fill_value, 
                                                                              modified_fill_value,
                                                                              field_definition['format'])
@@ -634,6 +639,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         self.column_count = None # Number of columns in .dat file
         self.space_delimited = space_delimited
 
+        if verbose:
+            logger.debug('Enabling info level output')
+            self.info_output = logger.info # Verbose
+        else:
+            self.info_output = logger.debug # Non-verbose
+            
         if crs_string:
             self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
             logger.debug('CRS set from supplied crs_string {}'.format(crs_string))
@@ -658,10 +669,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  default_variable_parameters=default_variable_parameters
                                  )
         
-        self.aem_dat_path = aem_dat_path
+        self.dat_path = dat_path
         self.dfn_path = dfn_path
         
-        try:
+        if True:#try:
             # Parse .dfn file and apply overrides
             get_field_definitions() 
     
@@ -674,7 +685,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             # Fix excessive precision if required - N.B: Will change field datatypes if no loss in precision
             if fix_precision:
                 fix_all_field_precisions()
-        except Exception as e:
+        else:#except Exception as e:
             logger.error('Unable to create ASEGGDF2NetCDFConverter object: {}'.format(e))
             self.__del__()
                        
@@ -721,7 +732,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         '''
         #TODO: implement search lists for different variable names
         
-        metadata_dict = {'title': 'Dataset read from ASEG-GDF file {}'.format(os.path.basename(self.aem_dat_path)),
+        metadata_dict = {'title': 'Dataset read from ASEG-GDF file {}'.format(os.path.basename(self.dat_path)),
             'Conventions': "CF-1.6,ACDD-1.3",
             'featureType': "trajectory",
             #TODO: Sort out standard names for elevation and get rid of the DTM case. Should this be min(elevation-DOI)?
@@ -730,7 +741,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             'geospatial_vertical_units': "m",
             'geospatial_vertical_resolution': "point",
             'geospatial_vertical_positive': "up",
-            'history': 'Converted from ASEG-GDF file {} using definitions file {}'.format(self.aem_dat_path,
+            'history': 'Converted from ASEG-GDF file {} using definitions file {}'.format(self.dat_path,
                                                                                      self.dfn_path),
             'date_created': datetime.now().isoformat(),
             'geospatial_east_resolution': "point",
@@ -805,20 +816,20 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             '''
             # Process index variables
             try:
-                logger.info('{} {} values found'.format(len(lookup_array), field_definition['short_name']))
+                self.info_output('{} {} values found'.format(len(lookup_array), field_definition['short_name']))
                 #logger.debug('lookup_array: {},\nindex_start_indices: {},\nindex_point_counts: {}'.format(lookup_array, index_start_indices, index_point_counts))
             except:
-                logger.info('Unable to create {} indexing variables'.format(field_definition['short_name']))
+                self.info_output('Unable to create {} indexing variables'.format(field_definition['short_name']))
                 return   
 
             # This is a slightly ugly side effect
-            logger.info('\tCreating dimension for {}'.format(field_definition['short_name']))
+            self.info_output('\tCreating dimension for {}'.format(field_definition['short_name']))
             self.nc_output_dataset.createDimension(dimname=field_definition['short_name'], 
                                                    size=len(lookup_array))
             
-            logger.info('\tWriting {} indexing variables'.format(field_definition['short_name']))
+            self.info_output('\tWriting {} indexing variables'.format(field_definition['short_name']))
             
-            logger.info('\t\tWriting {} values'.format(field_definition['short_name']))
+            self.info_output('\t\tWriting {} values'.format(field_definition['short_name']))
             
             variable_attributes = (field_definition.get('variable_attributes') or {})
             if field_definition.get('long_name'):
@@ -834,7 +845,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            logger.info('\t\tWriting index of first point in each {}'.format(field_definition['short_name']))
+            self.info_output('\t\tWriting index of first point in each {}'.format(field_definition['short_name']))
             yield NetCDFVariable(short_name='{}_start_index'.format(field_definition['short_name']), 
                                  data=index_start_indices, 
                                  dimensions=[field_definition['short_name']], 
@@ -845,7 +856,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  variable_parameters=self.default_variable_parameters
                                  )
                         
-            logger.info('\t\tWriting point count for each {}'.format(field_definition['short_name']))
+            self.info_output('\t\tWriting point count for each {}'.format(field_definition['short_name']))
             yield NetCDFVariable(short_name='{}_point_count'.format(field_definition['short_name']), 
                                  data=index_point_counts, 
                                  dimensions=[field_definition['short_name']], 
@@ -866,18 +877,18 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             
             short_name = field_definition['short_name']
 
-            logger.info('\tWriting {} lookup variables'.format(short_name))
+            self.info_output('\tWriting {} lookup variables'.format(short_name))
             
             variable_attributes = (field_definition.get('variable_attributes') or {})
             if field_definition.get('long_name'):
                 variable_attributes['long_name'] = field_definition['long_name'] 
                 
             # Creating a new dimension is a slightly ugly side effect
-            logger.info('\tCreating dimension for {}'.format(short_name))
+            self.info_output('\tCreating dimension for {}'.format(short_name))
             self.nc_output_dataset.createDimension(dimname=short_name, 
                                                    size=len(lookup_array))
             
-            logger.info('\t\tWriting {} {} lookup values to array variable {}'.format(len(lookup_array), 
+            self.info_output('\t\tWriting {} {} lookup values to array variable {}'.format(len(lookup_array), 
                                                                                       short_name, 
                                                                                       short_name))
             yield NetCDFVariable(short_name=short_name, 
@@ -891,7 +902,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  )
                         
             variable_name = '{}_index'.format(short_name)
-            logger.info('\t\tWriting {} lookup indices to array variable {}'.format(short_name,
+            self.info_output('\t\tWriting {} lookup indices to array variable {}'.format(short_name,
                                                                                     variable_name))
             yield NetCDFVariable(short_name=variable_name, 
                                  data=index_array, 
@@ -915,7 +926,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             assert lookup_array.shape[0] == 1, 'lookup_array must have exactly one (i.e. unique) value'
             short_name = field_definition['short_name']
 
-            logger.info('\tWriting single {} value to scalar variable'.format(short_name))
+            self.info_output('\tWriting single {} value to scalar variable'.format(short_name))
             
             variable_attributes = (field_definition.get('variable_attributes') or {})
             if field_definition.get('long_name'):
@@ -1004,7 +1015,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             fill_value = field_definition.get('fill_value')
                 
             if not field_definition['dimension_size']: # 1D Variable
-                logger.info('\tWriting 1D {} variable {}'.format(dtype, short_name))
+                self.info_output('\tWriting 1D {} variable {}'.format(dtype, short_name))
                 
                 yield NetCDFVariable(short_name=short_name, 
                                      data=self.get_raw_data(short_name), 
@@ -1061,7 +1072,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     data_array = self.get_raw_data(short_name)
                     fill_value = None
                                           
-                logger.info('\tWriting 2D {} variable {}'.format(dtype, short_name))
+                self.info_output('\tWriting 2D {} variable {}'.format(dtype, short_name))
     
                 yield NetCDFVariable(short_name=short_name, 
                                      data=data_array, 
@@ -1096,7 +1107,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             and set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys())
             ):
             # Build GDA94 crs variable and write it to self.nc_output_dataset
-            logger.info('Creating crs, longitude and latitude variables for unprojected CRS')
+            self.info_output('Creating crs, longitude and latitude variables for unprojected CRS')
             point_count = self.nc_output_dataset.dimensions['point'].size
             logger.debug('point_count: {}'.format(point_count))
             
@@ -1110,12 +1121,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                             )
             
             # Create and write crs variable
-            logger.info('Creating new crs variable for unprojected CRS')
+            self.info_output('Creating new crs variable for unprojected CRS')
             self.build_crs_variable(get_spatial_ref_from_wkt(default_crs_wkt)
                                     ).create_var_in_dataset(self.nc_output_dataset)
                                     
             # Create and write longitude variable
-            logger.info('Creating new longitude variable')
+            self.info_output('Creating new longitude variable')
             NetCDFVariable('longitude', 
                            gda94_coords[:,0], 
                            ['point'], 
@@ -1124,7 +1135,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                            ).create_var_in_dataset(self.nc_output_dataset)
             
             # Create and write latitude variable
-            logger.info('Creating new latitude variable')
+            self.info_output('Creating new latitude variable')
             NetCDFVariable('latitude', 
                            gda94_coords[:,1], 
                            ['point'], 
@@ -1132,7 +1143,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                            attributes={'long_name': 'Latitude', 'units': 'degrees North'}
                            ).create_var_in_dataset(self.nc_output_dataset)
                            
-            logger.info('Re-writing new global attributes for new CRS')
+            self.info_output('Re-writing new global attributes for new CRS')
             for attribute_name, attribute_value in iter(self.get_global_attributes().items()):
                 setattr(self.nc_output_dataset, attribute_name, attribute_value or '')
             
@@ -1182,6 +1193,9 @@ def main():
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
         
+        parser.add_argument('-v', '--verbose', action='store_const', const=True, default=False,
+                            help='output verbosity. Default is non-verbose')
+        
         parser.add_argument('positional_args', 
                             nargs=argparse.REMAINDER,
                             help='<dat_in_path> [<nc_out_path>]')
@@ -1208,7 +1222,7 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
         
     dfn_in_path = args.dfn_in_path or os.path.splitext(dat_in_path)[0] + '.dfn'
        
-    try:
+    if True:#try:
         d2n = ASEGGDF2NetCDFConverter(nc_out_path, 
                                       dat_in_path, 
                                       dfn_in_path, 
@@ -1216,12 +1230,13 @@ Usage: python {} <options> <dat_in_path> [<nc_out_path>]'.format(os.path.basenam
                                       default_chunk_size=args.chunking,
                                       settings_path=args.settings_path,
                                       fix_precision=args.optimise,
-                                      space_delimited=args.space_delimited
+                                      space_delimited=args.space_delimited,
+                                      verbose=args.verbose
                                       )
         d2n.convert2netcdf()
-        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-    except Exception as e:
-        logger.error('Failed to create netCDF file {}'.format(e))
+        d2n.info_output('Finished writing netCDF file {}'.format(nc_out_path))
+    else:#except Exception as e:
+        logger.error('Failed to create netCDF file: {}'.format(e))
         try:
             del d2n
         except Exception as e:
@@ -1258,5 +1273,9 @@ if __name__ == '__main__':
         console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         logger.debug('Logging handlers set up for logger {}'.format(logger.name))
+        
+        # SHow geophys_utils.netcdf_converter.aseg_gdf_utils if level is set to DEBUG
+        aseg_gdf_utils_logger = logging.getLogger('geophys_utils.netcdf_converter.aseg_gdf_utils')
+        aseg_gdf_utils_logger.addHandler(console_handler)
 
     main()
