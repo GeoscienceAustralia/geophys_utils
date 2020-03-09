@@ -55,7 +55,7 @@ TEMP_DIR = tempfile.gettempdir()
 POINT_LIMIT = 0
 
 # Number of rows per chunk in temporary netCDF cache file
-CACHE_CHUNK_ROWS = 8192
+CACHE_CHUNK_ROWS = 16384
 
 class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
