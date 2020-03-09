@@ -15,8 +15,9 @@ import tempfile
 import netCDF4
 import logging
 import locale
-from math import log10
+from math import log10, ceil
 from collections import OrderedDict
+from functools import reduce
 
 from geophys_utils.netcdf_converter.aseg_gdf_utils import variable2aseg_gdf_format
 from geophys_utils import get_spatial_ref_from_wkt
@@ -63,7 +64,7 @@ ASEG_GDF_FORMAT = {
         },
     'uint32': {
         'width': 12,
-        'null': 4294967296,
+        'null': 4294967295,
         'aseg_gdf_format': 'I12',
         'python_format': '{:>12d}',
         },
@@ -94,18 +95,98 @@ ASEG_GDF_FORMAT = {
     }
 
 # Default number of rows to read before outputting chunk of lines.
-CACHE_CHUNK_ROWS = 8192
+CACHE_CHUNK_ROWS = 16384
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
 # Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 1000000
+POINT_LIMIT = 10
 
 EXCLUDE_NAME_REGEXES = ['latitude.+', 'longitude.+', 'easting.+', 'northing.+']
 
 INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
 
+class RowValueCache(object):
+    '''\
+    Class to manage cache of row data from netCDF file
+    '''
+    def __init__(self, nc2aseggdf):
+        '''
+        Constructor
+        '''
+        self.nc2aseggdf = nc2aseggdf
+        self.total_points = nc2aseggdf.total_points
+        self.field_definitions = nc2aseggdf.field_definitions
+        self.netcdf_dataset = nc2aseggdf.netcdf_dataset
+        
+        self.clear_cache()
+       
+        
+    def clear_cache(self): 
+        '''
+        Clear cache
+        '''
+        self.index_range = 0
+        self.cache = {}
+
+    
+    def read_points(self, start_index, end_index, point_mask=None):
+        '''
+        Function to read points from start_index to end_index
+        '''
+        self.index_range = end_index - start_index
+        
+        if point_mask is None: # No point_mask defined - take all points in range
+            subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+        else:
+            subset_mask = point_mask[start_index:end_index]
+            self.index_range = np.count_nonzero(subset_mask)
+            
+        # If no points to retrieve, don't read anything
+        if not self.index_range:
+            logger.debug('No points to retrieve - all masked out')            
+            return
+
+        # Build cache of data value slices keyed by field_name
+        self.cache = {field_name: self.nc2aseggdf.get_data_values(field_name, slice(start_index, end_index))
+                      for field_name in self.field_definitions.keys()
+                      }
+        
+        #logger.debug('self.cache: {}'.format(pformat(self.cache)))
+        
+        
+    def chunk_row_data_generator(self, clear_cache=True):
+        '''
+        Generator yielding chunks of all values from cache, expanding 2D variables to multiple columns
+        '''
+        if not self.index_range:
+            logger.debug('Cache is empty - nothing to yield')
+            return
+        
+        for index in range(self.index_range):
+            row_value_list = []
+            for field_name, field_definition in self.field_definitions.items():
+                data = self.cache[field_name][index]
+                
+                # Convert array to string if required (OPeNDAP behaviour with string arrays?)
+                if type(data) == np.ndarray and data.dtype == object:
+                    data = str(data)
+
+                if field_definition['columns'] == 1: # Element from 1D variable
+                    row_value_list.append(data)
+                elif field_definition['columns'] == 2: # Row from 2D variable
+                    row_value_list += [element for element in data]
+                else:
+                    raise BaseException('Invalid dimensionality for variable {}'.format(field_definition['field_name']))
+                            
+            #logger.debug('row_value_list: {}'.format(row_value_list))
+            yield row_value_list 
+            
+        if clear_cache:
+            self.clear_cache() # Clear cache after outputting all lines                   
+                                       
+                                       
 class NC2ASEGGDF2(object):
     
     def __init__(self,
@@ -117,9 +198,9 @@ class NC2ASEGGDF2(object):
         '''
         def build_field_definitions():
             '''\
-            Function to return OrderedDict of field definitions keyed by ASEG-GDF2 field name
+            Hleper function to build self.field_definitions as an OrderedDict of field definitions keyed by ASEG-GDF2 field name
             '''
-            field_definitions = OrderedDict()
+            self.field_definitions = OrderedDict()
             for variable_name, variable in self.netcdf_dataset.variables.items():
                 
                 # Check for any name exclusion matches
@@ -128,7 +209,7 @@ class NC2ASEGGDF2(object):
                     logger.debug('Excluding variable {}'.format(variable_name))
                     continue
                 
-                if variable_name in field_definitions.keys():
+                if variable_name in self.field_definitions.keys(): # already processed
                     continue
                     
                 if len(variable.dimensions) == 1 and variable.dimensions != ('point',): # Non-point indexed array variable, e.g.flight(line)
@@ -176,43 +257,66 @@ class NC2ASEGGDF2(object):
                 #logger.debug('variable_attributes = {}'.format(pformat(variable_attributes)))
                 
                 dtype = variables[-1].dtype
-                aseg_gdf_format = ASEG_GDF_FORMAT.get(str(dtype))
+                format_dict = dict(ASEG_GDF_FORMAT.get(str(dtype)))
                 
-                if not aseg_gdf_format: # Unrecognised format. Treat as string
+                if not format_dict: # Unrecognised format. Treat as string
                     width = max([len(str(element).strip()) for element in variables[-1][:]]) + 1
-                    aseg_gdf_format = {
+                    format_dict = {
                         'width': width,
                         'null': '',
                         'aseg_gdf_format': 'A{}'.format(width),
                         'python_format': '{{:>{}s}}'.format(width),
                         }
+                    
+                try:
+                    column_count = reduce(lambda x, y: x*y, variable.shape[1:]) # This will work for (2+)D, even if we only support 1D or 2D
+                except: # Scalar or 1D
+                    column_count = 1
                 
                 variable_definition = {
-                    'short_name': variable_name,
+                    'variable_name': variable_name,
                     'variables': variables,
                     'attributes': variable_attributes,
                     'dtype': dtype,
-                    'format': aseg_gdf_format
+                    'format': format_dict,
+                    'columns': column_count
                     }
                 
                 # Sanitise field name, truncate to 8 characters and ensure uniqueness
                 field_name = re.sub('(\W|_)+', '', variable_name)[:8].upper()
                 field_name_count = 0
                 while field_name in [variable_definition.get('field_name') 
-                                     for variable_definition in field_definitions.values()]:
+                                     for variable_definition in self.field_definitions.values()]:
                     field_name_count += 1
                     field_name = field_name[:-len(str(field_name_count))] + str(field_name_count)
                     
                 variable_definition['field_name'] = field_name   
                  
-                field_definitions[field_name] = variable_definition
-                    
+                # Add definition to allow subsequent self.get_data_values(field_name) call
+                self.field_definitions[field_name] = variable_definition
                 
-            return field_definitions
+                if 'int' in str(dtype): # Field is some kind of integer - adjust format for data
+                    #logger.debug('\tChecking values to adjust integer field width for variable {}'.format(variable_name))
+                    max_abs_value = np.nanmax(np.abs(self.get_data_values(field_name)))
+                    min_value = np.nanmin(self.get_data_values(field_name))
+                    #logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
+                    
+                    width = int(log10(max_abs_value)) + 2 # allow for leading space
+                    if min_value < 0:
+                        width += 1 # allow for "-"
+                        
+                    if width != format_dict['width']:
+                        logger.debug('\tAdjusting integer field width to {} for variable {}'.format(width, variable_name))
+                        format_dict['width'] = width
+                        format_dict['aseg_gdf_format'] = 'I{}'.format(width)
+                        format_dict['python_format'] = '{{:>{}d}}'.format(width)
+                        logger.debug(self.field_definitions[field_name]['format'])
+                    
+            #logger.debug(self.field_definitions)
         
         # Start of __init__
         if verbose:
-            logger.debug('Enabling info level ouutput')
+            logger.debug('Enabling info level output')
             self.info_output = logger.info # Verbose
         else:
             self.info_output = logger.debug # Non-verbose
@@ -220,35 +324,50 @@ class NC2ASEGGDF2(object):
         self.ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug)
         self.netcdf_dataset = self.ncpu.netcdf_dataset
         
+        self.netcdf_dataset.set_auto_mask(False) # Turn auto-masking off to allow substitution of new null values
+        
         assert 'point' in self.netcdf_dataset.dimensions.keys(), '"point" not found in dataset dimensions'
+        
+        self.total_points = self.ncpu.point_count
         
         self.spatial_ref = get_spatial_ref_from_wkt(self.ncpu.wkt)
         
-        self.field_definitions = build_field_definitions()
+        # set self.field_definitions 
+        build_field_definitions()
+        
+        # set reporting increment to nice number giving 100 - 199 progress reports
+        self.line_report_increment = (10.0 ** int(log10(self.ncpu.point_count / 50))) / 2.0
         
     
     def get_data_values(self, field_name, point_slice=slice(None, None, None)):
         '''\
-        Function to return data values as an array
+        Function to return data values as an array, expanding lookups and broadcasting scalars if necessary
         @param field_name: Variable name to query (key in self.field_definitions)
         @param point_slice: slice to apply to point (i.e. first) dimension
         @return data_array: Array of data values
         '''
         variables = self.field_definitions[field_name]['variables'] 
-        logger.debug('Field {} represents variable {}({})'.format(field_name, variables[-1].name, ','.join(variables[0].dimensions)))
+        #logger.debug('Field {} represents variable {}({})'.format(field_name, variables[-1].name, ','.join(variables[0].dimensions)))
         
         if len(variables) == 1: # Single variable => no lookup
             if len(variables[0].dimensions): # Array 
                 assert variables[0].dimensions[0] == 'point', 'First array dimension must be "point"'
-                return variables[0][:][point_slice]
+                data = variables[0][point_slice]
             else: # Scalar
                 # Broadcast scalar to required array shape
-                return np.array([variables[0][:]] * (((point_slice.stop or len(variables[0])) - (point_slice.start or 0)) // (point_slice.step or 1)))
+                data = np.array([variables[0][:]] * (((point_slice.stop or len(variables[0])) - (point_slice.start or 0)) // (point_slice.step or 1)))
         elif len(variables) == 2: # Index & Lookup variables
-            return variables[1][:][variables[0][:][point_slice]] # Use first array to index second one    
+            data = variables[1][:][variables[0][:][point_slice]] # Use first array to index second one    
         else:
             raise BaseException('Unable to resolve chained lookups (yet): {}'.format([variable.name for variable in variables]))
         
+        # Substitute null_value for _FillValue if required
+        null_value = self.field_definitions[field_name]['format']['null']
+        if null_value is not None and hasattr(variables[-1], '_FillValue'):
+            data[(data == (variables[-1]._FillValue))] = null_value
+        
+        return data
+    
     
     def write_record2dfn_file(self, 
                               dfn_file, 
@@ -289,189 +408,86 @@ class NC2ASEGGDF2(object):
             line += ': ' + definition
             
         dfn_file.write(line + '\n')
-        logger.debug(line)
+        #logger.debug('dfn file line: {}'.format(line))
         return line
         
                 
-    def convert2aseg_gdf(self, 
-                         dat_out_path=None,
-                         dfn_out_path=None,
-                         stride=1,
-                         point_mask=None): 
+    def write_dfn_file(self, dfn_out_path):
         '''
-        Function to convert netCDF file to ASEG-GDF
+        Helper function to output .dfn file
         '''
-#===============================================================================
-#         def get_field_definitions():
-#             '''
-#             Helper function to get field definitions from netCDF file
-#             '''
-#             # Build field definitions
-#             self.field_definitions = []
-#             for variable_name, variable in self.nc_dataset.variables.items():
-#                 # Skip any non-scalar, non-pointwise fields except index variables
-#                 # These are probably lookup fields
-#                 if (variable.shape 
-#                     and not (
-#                         ('point' in variable.dimensions) # Point-indexed variables
-#                         or (variable.dimensions == ('line',) and variable_name != 'line') # Line-indexed variables
-#                         )):
-#                     continue
-#                 
-#                 # Don't output CRS scalar variable - assume all other scalars are to be applied to every point
-#                 if (not variable.shape
-#                     and (variable_name in ['crs', 'transverse_mercator']
-#                          or re.match('ga_.+_metadata', variable_name)
-#                          )
-#                     ):
-#                         continue
-#                 
-#                 # Resolve lookups - use lookup variable instead of index variable
-#                 if variable_name.endswith('_index') | hasattr(variable, 'lookup'): # Index variable found
-#                     # Use lookup variable name for output
-#                     try:
-#                         short_name = variable.lookup # Use lookup attribute
-#                     except AttributeError:
-#                         short_name = re.sub('_index$', '', variable_name, re.IGNORECASE) # Use associated variable name
-#                     
-#                     try:
-#                         lookup_variable = self.nc_dataset.variables[short_name]
-#                     except:
-#                         logger.warning('Unable to access lookup variable "{}" for index variable "{}"'.format(short_name, variable_name))
-#                         continue
-#                     
-#                     variable_attributes = lookup_variable.__dict__
-#                     aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(lookup_variable)
-# 
-#                     
-#                 else: # Non-lookup or line-indexed variable
-#                     short_name = variable_name
-#                     variable_attributes = variable.__dict__
-#                     aseg_gdf_format, dtype, columns, width_specifier, decimal_places, python_format = variable2aseg_gdf_format(variable)
-#                     
-#                 # Map variable name to standard ASEG-GDF field name if required
-#                 short_name = self.settings['aseg_field_mapping'].get(short_name) or short_name
-#                     
-#                 try:
-#                     read_chunk_size = int(variable.chunking()[0])
-#                 except:
-#                     read_chunk_size = CACHE_CHUNK_ROWS # Use default chunking for reads
-#                     
-#                 field_definition = {'variable_name': variable_name,
-#                                     'short_name': short_name,
-#                                     'dtype': dtype,
-#                                     'chunk_size': read_chunk_size,
-#                                     'columns': columns,
-#                                     'format': aseg_gdf_format,
-#                                     'width_specifier': width_specifier,
-#                                     'decimal_places': decimal_places,
-#                                     'python_format': python_format
-#                                     }
-#                 
-#                 fill_value = variable_attributes.get('_FillValue') # System attribute
-#                 if fill_value is not None:
-#                     field_definition['fill_value'] = fill_value
-#                                 
-#                 long_name = variable_attributes.get('long_name')
-#                 if long_name is not None:
-#                     field_definition['long_name'] = long_name
-#                                 
-#                 # Set variable attributes in field definition
-#                 variable_attribute_dict = {attribute_name: variable_attributes.get(key.upper())
-#                     for key, attribute_name in self.settings['variable_attributes'].items()
-#                     if variable_attributes.get(key.upper()) is not None
-#                                            }
-#                         
-#                 if variable_attribute_dict:
-#                     field_definition['variable_attributes'] = variable_attribute_dict  
-#                       
-#                 self.field_definitions.append(field_definition)
-#                 
-#             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
-#     
-#             # Read overriding field definition values from settings
-#             if self.settings.get('field_definitions'):
-#                 for field_definition in self.field_definitions:
-#                     overriding_field_definition = self.settings['field_definitions'].get(field_definition['short_name'])
-#                     if overriding_field_definition:
-#                         field_definition.update(overriding_field_definition)
-#                 
-#                 logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
-#===============================================================================
-        
-        
-        def write_dfn_file():
-            '''
-            Helper function to output .dfn file
-            '''
-            def write_variable_defns(dfn_file):
-                """
-                Helper function to write a DEFN line for each variable
-                """
-                self.defn = 0 # reset DEFN number
-                #for variable_name, variable_attributes in self.field_definitions.items():
+        def write_variable_defns(dfn_file):
+            """
+            Helper function to write a DEFN line for each variable
+            """
+            self.defn = 0 # reset DEFN number
+            #for variable_name, variable_attributes in self.field_definitions.items():
+            
+            for field_name, field_definition in self.field_definitions.items():
+                optional_attribute_list = []
                 
-                for field_name, field_definition in self.field_definitions.items():
-                    optional_attribute_list = []
-                    
-                    units = field_definition['attributes'].get('units')
-                    if units:
-                        optional_attribute_list.append('UNITS={units}'.format(units=units))
-    
-                    #fill_value = field_definition['attributes'].get('_FillValue')
-                    null_value = field_definition['format'].get('null')
-                    if null_value is not None:
-                        optional_attribute_list.append('NULL=' + field_definition['format']['python_format'].format(null_value).strip())                   
-    
-                    long_name = field_definition['attributes'].get('long_name')
-                    if long_name:
-                        optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
-                        
-                    # Include any variable attributes which match regexes in INCLUDE_VARIABLE_ATTRIBUTE_REGEXES
-                    for attribute_name, attribute_value in field_definition['attributes'].items():
-                        if any([re.match(variable_attribute_regex, attribute_name, re.IGNORECASE)
-                                for variable_attribute_regex in INCLUDE_VARIABLE_ATTRIBUTE_REGEXES]):
-                            optional_attribute_list.append('{}={}'.format(attribute_name,
-                                                                          attribute_value))
+                units = field_definition['attributes'].get('units')
+                if units:
+                    optional_attribute_list.append('UNITS={units}'.format(units=units))
 
-                    #===========================================================
-                    # # Check for additional ASEG-GDF attributes defined in settings
-                    # variable_attributes = field_definition.get('variable_attributes')
-                    # if variable_attributes:
-                    #     for aseg_gdf_attribute, netcdf_attribute in self.settings['attributes'].items():
-                    #         attribute_value = variable_attributes.get(netcdf_attribute)
-                    #         if attribute_value is not None:
-                    #             optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
-                    #                                                                                        attribute_value=attribute_value
-                    #                                                                                        ))
-                    #===========================================================
-                        
-                    if optional_attribute_list:
-                        definition = ', '.join(optional_attribute_list)
-                    else:
-                        definition = None
-    
-                    self.write_record2dfn_file(dfn_file,
-                                               rt='',
-                                               name=field_name,
-                                               aseg_gdf_format=field_definition['format']['aseg_gdf_format'],
-                                               definition=definition,
-                                               )
+                #fill_value = field_definition['attributes'].get('_FillValue')
+                null_value = field_definition['format'].get('null')
+                if null_value is not None:
+                    optional_attribute_list.append('NULL=' + field_definition['format']['python_format'].format(null_value).strip())                   
+
+                long_name = field_definition['attributes'].get('long_name') or re.sub('(\W|_)+', ' ', field_definition['variable_name'])
+                if long_name:
+                    optional_attribute_list.append('NAME={long_name}'.format(long_name=long_name))
                     
+                # Include any variable attributes which match regexes in INCLUDE_VARIABLE_ATTRIBUTE_REGEXES
+                for attribute_name, attribute_value in field_definition['attributes'].items():
+                    if any([re.match(variable_attribute_regex, attribute_name, re.IGNORECASE)
+                            for variable_attribute_regex in INCLUDE_VARIABLE_ATTRIBUTE_REGEXES]):
+                        optional_attribute_list.append('{}={}'.format(attribute_name,
+                                                                      attribute_value))
+
+                #===========================================================
+                # # Check for additional ASEG-GDF attributes defined in settings
+                # variable_attributes = field_definition.get('variable_attributes')
+                # if variable_attributes:
+                #     for aseg_gdf_attribute, netcdf_attribute in self.settings['attributes'].items():
+                #         attribute_value = variable_attributes.get(netcdf_attribute)
+                #         if attribute_value is not None:
+                #             optional_attribute_list.append('{aseg_gdf_attribute}={attribute_value}'.format(aseg_gdf_attribute=aseg_gdf_attribute,
+                #                                                                                        attribute_value=attribute_value
+                #                                                                                        ))
+                #===========================================================
                     
-                # Write 'END DEFN'
+                if optional_attribute_list:
+                    definition = ', '.join(optional_attribute_list)
+                else:
+                    definition = None
+
+                aseg_gdf_format = field_definition['format']['aseg_gdf_format']
+                if field_definition['columns'] > 1: # Need to pre-pend number of columns to format string
+                    aseg_gdf_format = '{}{}'.format(field_definition['columns'], aseg_gdf_format)
+                
                 self.write_record2dfn_file(dfn_file,
                                            rt='',
-                                           name='END DEFN',
-                                           aseg_gdf_format=None
+                                           name=field_name,
+                                           aseg_gdf_format=aseg_gdf_format,
+                                           definition=definition,
                                            )
-                    
-                return # End of function write_variable_defns
-            
                 
-            def write_proj(dfn_file):
-                """
-                Helper function to write PROJ lines
+                
+            # Write 'END DEFN'
+            self.write_record2dfn_file(dfn_file,
+                                       rt='',
+                                       name='END DEFN',
+                                       aseg_gdf_format=None
+                                       )
+                
+            return # End of function write_variable_defns
+        
+            
+        def write_proj(dfn_file):
+            """
+            Helper function to write PROJ lines
 From standard:
 DEFN 1 ST=RECD,RT=PROJ; RT: A4
 DEFN 2 ST=RECD,RT=PROJ; COORDSYS: A40: NAME=projection name, POSC projection name
@@ -509,73 +525,73 @@ DEFN 13 ST=RECD,RT=PROJ; PARAM6: D14.0:
 DEFN 14 ST=RECD,RT=PROJ; PARAM7: D14.0:
 DEFN 15 ST=RECD,RT=PROJ; END DEFN
 PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse Mercator  0.000000  141.000000  0.999600 500000.000000 10000000.00000
-                """
-                geogcs = self.spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
-                projcs = self.spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
-                ellipse_name = self.spatial_ref.GetAttrValue('spheroid', 0)
-                major_axis = float(self.spatial_ref.GetAttrValue('spheroid', 1))
-                prime_meridian = float(self.spatial_ref.GetAttrValue('primem', 1))
-                inverse_flattening = float(self.spatial_ref.GetInvFlattening())
-                #eccentricity = self.spatial_ref.GetAttrValue('spheroid', 2) # Non-standard definition same as inverse_flattening?
-                
-                if self.spatial_ref.IsProjected():
-                    if projcs.startswith(geogcs):
-                        projection_name = projcs
-                    else:
-                        projection_name = geogcs + ' / ' + re.sub('[\:\,\=]+', '', projcs) # e.g. 'GDA94 / UTM Zone 54, Southern Hemisphere'
-                    projection_method = self.spatial_ref.GetAttrValue('projection').replace('_', ' ')
-                    projection_parameters = [(key, float(value))
-                                              for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', self.spatial_ref.ExportToPrettyWkt())
-                                              ]
-                else: # Unprojected CRS
-                    projection_name = geogcs
-                    projection_method = None
-                    projection_parameters = None
+            """
+            geogcs = self.spatial_ref.GetAttrValue('geogcs') # e.g. 'GDA94'
+            projcs = self.spatial_ref.GetAttrValue('projcs') # e.g. 'UTM Zone 54, Southern Hemisphere'
+            ellipse_name = self.spatial_ref.GetAttrValue('spheroid', 0)
+            major_axis = float(self.spatial_ref.GetAttrValue('spheroid', 1))
+            prime_meridian = float(self.spatial_ref.GetAttrValue('primem', 1))
+            inverse_flattening = float(self.spatial_ref.GetInvFlattening())
+            #eccentricity = self.spatial_ref.GetAttrValue('spheroid', 2) # Non-standard definition same as inverse_flattening?
+            
+            if self.spatial_ref.IsProjected():
+                if projcs.startswith(geogcs):
+                    projection_name = projcs
+                else:
+                    projection_name = geogcs + ' / ' + re.sub('[\:\,\=]+', '', projcs) # e.g. 'GDA94 / UTM Zone 54, Southern Hemisphere'
+                projection_method = self.spatial_ref.GetAttrValue('projection').replace('_', ' ')
+                projection_parameters = [(key, float(value))
+                                          for key, value in re.findall('PARAMETER\["(.+)",(\d+\.?\d*)\]', self.spatial_ref.ExportToPrettyWkt())
+                                          ]
+            else: # Unprojected CRS
+                projection_name = geogcs
+                projection_method = None
+                projection_parameters = None
 
-                self.defn = 0  # reset DEFN number
-                
-                # write 'DEFN 1 ST=RECD,RT=PROJ; RT:A4'
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='RT',
-                                           aseg_gdf_format='A4'
-                                           )
-                
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='COORDSYS',
-                                           aseg_gdf_format='A40',
-                                           definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
-                                           )
+            self.defn = 0  # reset DEFN number
+            
+            # write 'DEFN 1 ST=RECD,RT=PROJ; RT:A4'
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='RT',
+                                       aseg_gdf_format='A4'
+                                       )
+            
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='COORDSYS',
+                                       aseg_gdf_format='A40',
+                                       definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
+                                       )
 
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='DATUM',
-                                           aseg_gdf_format='A40',
-                                           definition='NAME={ellipse_name}, Ellipsoid name'.format(ellipse_name=ellipse_name)
-                                           )
-                
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='MAJ_AXIS',
-                                           aseg_gdf_format='D12.1',
-                                           definition='UNIT={unit}, NAME={major_axis}, Major axis'.format(unit='m', major_axis=major_axis)
-                                           )
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='DATUM',
+                                       aseg_gdf_format='A40',
+                                       definition='NAME={ellipse_name}, Ellipsoid name'.format(ellipse_name=ellipse_name)
+                                       )
+            
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='MAJ_AXIS',
+                                       aseg_gdf_format='D12.1',
+                                       definition='UNIT={unit}, NAME={major_axis}, Major axis'.format(unit='m', major_axis=major_axis)
+                                       )
 
 
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='INVFLATT',
-                                           aseg_gdf_format='D14.9',
-                                           definition='NAME={inverse_flattening}, 1/f inverse of flattening'.format(inverse_flattening=inverse_flattening)
-                                           )
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='INVFLATT',
+                                       aseg_gdf_format='D14.9',
+                                       definition='NAME={inverse_flattening}, 1/f inverse of flattening'.format(inverse_flattening=inverse_flattening)
+                                       )
 
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
-                                           name='PRIMEMER',
-                                           aseg_gdf_format='F10.1',
-                                           definition='UNIT={unit}, NAME={prime_meridian}, Location of prime meridian'.format(unit='degree', prime_meridian=prime_meridian)
-                                           )
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='PRIMEMER',
+                                       aseg_gdf_format='F10.1',
+                                       definition='UNIT={unit}, NAME={prime_meridian}, Location of prime meridian'.format(unit='degree', prime_meridian=prime_meridian)
+                                       )
 
 #===============================================================================
 #                 # Non-standard definitions
@@ -600,128 +616,137 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
 #                                            definition='NAME={eccentricity}, Non-standard definition for ellipsoidal eccentricity'.format(eccentricity=eccentricity)
 #                                            )
 #===============================================================================
-                
-                if projection_method:                    
-                    self.write_record2dfn_file(dfn_file,
-                                               rt='PROJ',
-                                               name='PROJMETH',
-                                               aseg_gdf_format='A30',
-                                               definition='NAME={projection_method}, projection method'.format(projection_method=projection_method)
-                                               )
-
-                    # Write all projection parameters starting from DEFN 8
-                    param_no = 0
-                    for param_name, param_value in projection_parameters:
-                        param_no += 1  
-                        self.write_record2dfn_file(dfn_file,
-                                                   rt='PROJ',
-                                                   name='PARAM{param_no}'.format(param_no=param_no),
-                                                   aseg_gdf_format='D14.0', #TODO: Investigate whether this is OK - it looks dodgy to me
-                                                   definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
-                                                   )
-                # Write 'END DEFN'
+            
+            if projection_method:                    
                 self.write_record2dfn_file(dfn_file,
                                            rt='PROJ',
-                                           name='END DEFN',
-                                           aseg_gdf_format=''
+                                           name='PROJMETH',
+                                           aseg_gdf_format='A30',
+                                           definition='NAME={projection_method}, projection method'.format(projection_method=projection_method)
                                            )
-                
-                #TODO: Write fixed length PROJ line at end of file
-                  
-                return # End of function write_proj
-                
 
-            # Create, write and close .dat file
-            dfn_file = open(self.dfn_out_path, 'w')
-            dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n') # TODO: Check this first line 
+                # Write all projection parameters starting from DEFN 8
+                param_no = 0
+                for param_name, param_value in projection_parameters:
+                    param_no += 1  
+                    self.write_record2dfn_file(dfn_file,
+                                               rt='PROJ',
+                                               name='PARAM{param_no}'.format(param_no=param_no),
+                                               aseg_gdf_format='D14.0', #TODO: Investigate whether this is OK - it looks dodgy to me
+                                               definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
+                                               )
+            # Write 'END DEFN'
+            self.write_record2dfn_file(dfn_file,
+                                       rt='PROJ',
+                                       name='END DEFN',
+                                       aseg_gdf_format=''
+                                       )
             
-            write_variable_defns(dfn_file)
+            #TODO: Write fixed length PROJ line at end of file
+              
+            return # End of function write_proj
             
-            write_proj(dfn_file)
-                
-            dfn_file.close()
-            self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+
+        # Create, write and close .dat file
+        dfn_file = open(dfn_out_path, 'w')
+        dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n') # TODO: Check this first line 
         
+        write_variable_defns(dfn_file)
         
-        def write_dat_file(cache_chunk_rows=None, point_mask=None):
+        write_proj(dfn_file)
+            
+        dfn_file.close()
+        self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+    
+    
+    def write_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None):
+        '''
+        Helper function to output .dat file
+        '''
+        def chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask=None):
             '''
-            Helper function to output .dat file
-            '''
-            def chunk_buffer_generator(point_mask=None):
+            Generator to yield all line strings across all point variables for specified row range
+            '''                    
+            def chunk_line_generator(row_value_cache, python_format_list, start_index, end_index, point_mask=None):
                 '''
-                Generator to yield all line strings across all point variables for specified row range
-                '''                    
-                def chunk_line_generator(start_index, end_index, point_mask=None):
-                    '''
-                    Helper Generator to yield line strings for specified rows across all point variables
-                    '''
-                    python_format_list = []
-                    for field_definition in self.field_definitions:
-                        for _column_index in range(field_definition['columns']):
-                            python_format_list.append(field_definition['python_format'])
-                    logger.debug('python_format_list: {}'.format(python_format_list)) 
-                           
-                    value_count = len(python_format_list)
-        
-                    logger.debug('Reading rows {:n}-{:n}'.format(start_index+1, end_index))
-                    line_cache.read_points(start_index, end_index, point_mask=point_mask)
-                    
-                    logger.debug('Preparing ASEG-GDF lines for rows {:n}-{:n}'.format(start_index+1, end_index))
-                    for value_list in line_cache.chunk_buffer_generator():
-                        logger.debug('value_list: {}'.format(value_list))
-                        # Turn list of values into a string using python_formats
-                        yield ''.join([python_format_list[value_index].format(value_list[value_index])
-                                       for value_index in range(value_count)]).lstrip()
+                Helper Generator to yield line strings for specified rows across all point variables
+                '''
+                logger.debug('Reading rows {:n} - {:n}'.format(start_index+1, end_index))
+                row_value_cache.read_points(start_index, end_index, point_mask=point_mask)
+                
+                logger.debug('Preparing ASEG-GDF lines for rows {:n} - {:n}'.format(start_index+1, end_index))
+                for row_value_list in row_value_cache.chunk_row_data_generator():
+                    #logger.debug('row_value_list: {}'.format(row_value_list))
+                    # Turn list of values into a string using python_formats
+                    yield ''.join([python_format_list[value_index].format(row_value_list[value_index])
+                                   for value_index in range(len(python_format_list))]) #.lstrip() # lstrip if we want to discard leading spaces from line
 
-                        
-                # Start of chunk_buffer_generator
-                line_cache = RowCache(self) # Create cache for multiple rows
-                
-                # Process all chunks
-                point_count = 0
-                for chunk_index in range(self.total_points // cache_chunk_rows + 1):
-                    for line in chunk_line_generator(start_index=chunk_index*cache_chunk_rows,
-                                                     end_index=min((chunk_index+1)*cache_chunk_rows,
-                                                                   self.total_points
-                                                                   ),
-                                                     point_mask=point_mask
-                                                     ):
-                        point_count += 1
-                        
-                        if point_count == point_count // self.line_report_increment * self.line_report_increment:
-                            self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
-                        
-                        logger.debug('line: {}'.format(line))
-                        yield line
                     
-                        if POINT_LIMIT and (point_count >= POINT_LIMIT):
-                            break                    
+            # Process all chunks
+            point_count = 0
+            for chunk_index in range(self.total_points // cache_chunk_rows + 1):
+                chunk_line_list = []
+                for line in chunk_line_generator(row_value_cache, python_format_list, start_index=chunk_index*cache_chunk_rows,
+                                                 end_index=min((chunk_index+1)*cache_chunk_rows,
+                                                               self.total_points
+                                                               ),
+                                                 point_mask=point_mask
+                                                 ):
+                    point_count += 1
+                    
+                    if point_count == point_count // self.line_report_increment * self.line_report_increment:
+                        self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
+                    
+                    logger.debug('line: "{}"'.format(line))
+                    chunk_line_list.append(line)
+                
+                    if POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
+                        break                    
+                    
+                yield '\n'.join(chunk_line_list) # Yield a chunk of lines    
                         
-                    if POINT_LIMIT and (point_count >= POINT_LIMIT):
-                        break
-                
-                self.info_output('{:n} rows output'.format(point_count))
-                
-                
-            # Start of write_dat_file function
-            cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
+                if POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
+                    break
+                            
+            self.info_output('A total of {:n} rows were output'.format(point_count))
             
-            # Create, write and close .dat file
-            dat_out_file = open(self.dat_out_path, mode='w')
-            logger.debug('Writing lines to {}'.format(self.dat_out_path))
-            for line in chunk_buffer_generator(point_mask):
-                dat_out_file.write(line + '\n')
-            dat_out_file.close()
-            self.info_output('Finished writing .dat file {}'.format(self.dat_out_path))
-                
+            
+        # Start of write_dat_file function
+        cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
         
-        # Start of convert2aseg_gdf function        
+        # Start of chunk_buffer_generator
+        row_value_cache = RowValueCache(self) # Create cache for multiple chunks of data
+        
+        python_format_list = []
+        for field_name, field_definition in self.field_definitions.items():
+            for _column_index in range(field_definition['columns']):
+                python_format_list.append(field_definition['format']['python_format'])
+        #logger.debug('python_format_list: {}'.format(python_format_list)) 
+                   
+        # Create, write and close .dat file
+        dat_out_file = open(dat_out_path, mode='w')
+        logger.debug('Writing lines to {}'.format(self.dat_out_path))
+        for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
+            logger.debug('Writing chunk_buffer to file')
+            dat_out_file.write(chunk_buffer + '\n')
+        dat_out_file.close()
+        self.info_output('Finished writing .dat file {}'.format(dat_out_path))
+
+    
+    def convert2aseg_gdf(self, 
+                         dat_out_path=None,
+                         dfn_out_path=None,
+                         stride=1,
+                         point_mask=None): 
+        '''
+        Function to convert netCDF file to ASEG-GDF
+        '''
         self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.path)[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
-        write_dfn_file()
+        self.write_dfn_file(dfn_out_path)
 
-        #write_dat_file(point_mask=point_mask)
+        self.write_dat_file(dat_out_path)
         
         
     
