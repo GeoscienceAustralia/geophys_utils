@@ -9,17 +9,14 @@ import re
 import os
 import sys
 from datetime import datetime
-from pprint import pformat, pprint
-import yaml
+from pprint import pformat
 import tempfile
-import netCDF4
 import logging
 import locale
-from math import log10, ceil
+from math import log10
 from collections import OrderedDict
 from functools import reduce
 
-from geophys_utils.netcdf_converter.aseg_gdf_utils import variable2aseg_gdf_format
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils import NetCDFPointUtils
 
@@ -27,6 +24,21 @@ locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
+
+# Default number of rows to read before outputting a chunk of lines.
+CACHE_CHUNK_ROWS = 16384
+    
+TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = 'C:\Temp'
+
+# Set this to zero for no limit - only set a non-zero value for testing
+POINT_LIMIT = 100000
+
+# List of regular expressions for variable names to exclude from output
+EXCLUDE_NAME_REGEXES = ['latitude.+', 'longitude.+', 'easting.+', 'northing.+']
+
+# List of regular expressions for variable attributes to include in .dfn file
+INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
 
 # From Ross Brodie's email to Alex Ip, sent: Monday, 24 February 2020 4:27 PM
 ASEG_GDF_FORMAT = {
@@ -76,7 +88,7 @@ ASEG_GDF_FORMAT = {
         },
     'uint16': {
         'width': 7,
-        'null': 65536,
+        'null': 65535,
         'aseg_gdf_format': 'I7',
         'python_format': '{:>7d}',
         },
@@ -88,24 +100,13 @@ ASEG_GDF_FORMAT = {
         },
     'uint8': {
         'width': 5,
-        'null': 256,
+        'null': 255,
         'aseg_gdf_format': 'I5',
         'python_format': '{:>5d}',
         },
     }
 
-# Default number of rows to read before outputting chunk of lines.
-CACHE_CHUNK_ROWS = 16384
-    
-TEMP_DIR = tempfile.gettempdir()
-#TEMP_DIR = 'C:\Temp'
-
-# Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 10
-
-EXCLUDE_NAME_REGEXES = ['latitude.+', 'longitude.+', 'easting.+', 'northing.+']
-
-INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
+ADJUST_INTEGER_FIELD_WIDTH = True
 
 class RowValueCache(object):
     '''\
@@ -295,7 +296,7 @@ class NC2ASEGGDF2(object):
                 # Add definition to allow subsequent self.get_data_values(field_name) call
                 self.field_definitions[field_name] = variable_definition
                 
-                if 'int' in str(dtype): # Field is some kind of integer - adjust format for data
+                if ADJUST_INTEGER_FIELD_WIDTH and 'int' in str(dtype): # Field is some kind of integer - adjust format for data
                     #logger.debug('\tChecking values to adjust integer field width for variable {}'.format(variable_name))
                     max_abs_value = np.nanmax(np.abs(self.get_data_values(field_name)))
                     min_value = np.nanmin(self.get_data_values(field_name))
@@ -315,6 +316,12 @@ class NC2ASEGGDF2(object):
             #logger.debug(self.field_definitions)
         
         # Start of __init__
+        
+        #TODO: Make this a property
+        self.debug = debug
+        log_level = logging.DEBUG if debug else logging.INFO
+        logger.setLevel(level=log_level)
+        
         if verbose:
             logger.debug('Enabling info level output')
             self.info_output = logger.info # Verbose
@@ -697,15 +704,16 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     if point_count == point_count // self.line_report_increment * self.line_report_increment:
                         self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
                     
-                    logger.debug('line: "{}"'.format(line))
+                    #logger.debug('line: "{}"'.format(line))
                     chunk_line_list.append(line)
                 
-                    if POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
+                    if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
                         break                    
                     
                 yield '\n'.join(chunk_line_list) # Yield a chunk of lines    
                         
-                if POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
+                if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
+                    logger.debug('Output limited to {:n} in debug mode'.format(POINT_LIMIT))
                     break
                             
             self.info_output('A total of {:n} rows were output'.format(point_count))
@@ -718,7 +726,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         row_value_cache = RowValueCache(self) # Create cache for multiple chunks of data
         
         python_format_list = []
-        for field_name, field_definition in self.field_definitions.items():
+        for field_definition in self.field_definitions.values():
             for _column_index in range(field_definition['columns']):
                 python_format_list.append(field_definition['format']['python_format'])
         #logger.debug('python_format_list: {}'.format(python_format_list)) 
