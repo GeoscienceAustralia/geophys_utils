@@ -719,7 +719,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                                  ):
                     point_count += 1
                     
-                    if point_count % self.line_report_increment:
+                    if not (point_count % self.line_report_increment):
                         self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
                     
                     #logger.debug('line: "{}"'.format(line))
@@ -830,7 +830,7 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     
     logger.debug('args: {}'.format(args.__dict__))
 
-    nc2aseggdf2 = NC2ASEGGDF2(nc_in_path, debug=True, verbose=True)
+    nc2aseggdf2 = NC2ASEGGDF2(nc_in_path, debug=args.debug, verbose=args.verbose)
     
     #===========================================================================
     # print('field_definitions = {}'.format(pformat(nc2aseggdf2.field_definitions)))    
