@@ -16,6 +16,7 @@ import locale
 from math import log10
 from collections import OrderedDict
 from functools import reduce
+import zipstream
 
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils import NetCDFPointUtils
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
 # Default number of rows to read before outputting a chunk of lines.
-CACHE_CHUNK_ROWS = 16384
+CACHE_CHUNK_ROWS = 32768
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
@@ -347,10 +348,12 @@ class NC2ASEGGDF2(object):
                     
         self.ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug)
         self.netcdf_dataset = self.ncpu.netcdf_dataset
+        self.netcdf_path = self.ncpu.netcdf_dataset.filepath()
         
         self.netcdf_dataset.set_auto_mask(False) # Turn auto-masking off to allow substitution of new null values
         
         assert 'point' in self.netcdf_dataset.dimensions.keys(), '"point" not found in dataset dimensions'
+        self.info_output('Opened netCDF dataset {}'.format(self.netcdf_path))
         
         self.total_points = self.ncpu.point_count
         
@@ -436,7 +439,7 @@ class NC2ASEGGDF2(object):
         return line
         
                 
-    def write_dfn_file(self, dfn_out_path):
+    def write_dfn_file(self, dfn_out_path, zipstream_zipfile=None, zip_out_file=None):
         '''
         Helper function to output .dfn file
         '''
@@ -681,13 +684,30 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             
         dfn_file.close()
         self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+            
+        #TODO: Avoid having to write .dfn file to disk - this is a bit of a hack
+        if zipstream_zipfile:
+            dfn_dir = os.path.dirname(dfn_out_path)
+            dfn_basename = os.path.basename(dfn_out_path)
+            
+            cwd = os.getcwd()
+            try:
+                os.chdir(dfn_dir)
+                
+                #self.info_output('Writing DFN file {} to zip file'.format(dfn_basename))
+                # N.B: We need to change to dfn_dir when writing to zip file
+                zipstream_zipfile.write(dfn_basename)
+                    
+                #self.info_output('Finished writing DFN file {} to zip file'.format(dfn_basename))
+            finally:        
+                os.chdir(cwd)
     
     
-    def write_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None):
+    def write_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None, zipstream_zipfile=None):
         '''
         Helper function to output .dat file
         '''
-        def chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask=None):
+        def chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask=None, encoding=None):
             '''
             Generator to yield all line strings across all point variables for specified row range
             '''                    
@@ -705,7 +725,6 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     # Truncate fields to maximum width with leading space - only string fields should be affected
                     yield ''.join([' ' + python_format_list[value_index].format(row_value_list[value_index])[1-MAX_FIELD_WIDTH::]
                                    for value_index in range(len(python_format_list))]) #.lstrip() # lstrip if we want to discard leading spaces from line
-
                     
             # Process all chunks
             point_count = 0
@@ -728,7 +747,12 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
                         break                    
                     
-                yield '\n'.join(chunk_line_list) # Yield a chunk of lines    
+                chunk_buffer_string = '\n'.join(chunk_line_list) # Yield a chunk of lines    
+                
+                if encoding:
+                    yield(chunk_buffer_string.encode(encoding))
+                else:
+                    yield(chunk_buffer_string)
                         
                 if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
                     logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(POINT_LIMIT))
@@ -749,19 +773,26 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 python_format_list.append(field_definition['format']['python_format'])
         #logger.debug('python_format_list: {}'.format(python_format_list)) 
                    
-        # Create, write and close .dat file
-        dat_out_file = open(dat_out_path, mode='w')
-        logger.debug('Writing lines to {}'.format(self.dat_out_path))
-        for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
-            logger.debug('Writing chunk_buffer to file')
-            dat_out_file.write(chunk_buffer + '\n')
-        dat_out_file.close()
-        self.info_output('Finished writing .dat file {}'.format(dat_out_path))
+        if zipstream_zipfile:
+            # Write to zip file
+            dat_basename = os.path.basename(dat_out_path)
+            zipstream_zipfile.write_iter(dat_basename, 
+                         chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding='utf-8'))
+        else: # No zip
+            # Create, write and close .dat file
+            dat_out_file = open(dat_out_path, mode='w')
+            logger.debug('Writing lines to {}'.format(self.dat_out_path))
+            for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
+                logger.debug('Writing chunk_buffer to file')
+                dat_out_file.write(chunk_buffer + '\n')
+            dat_out_file.close()
+            self.info_output('Finished writing .dat file {}'.format(dat_out_path))
 
     
     def convert2aseg_gdf(self, 
                          dat_out_path=None,
                          dfn_out_path=None,
+                         create_zip=False,
                          stride=1,
                          point_mask=None): 
         '''
@@ -770,14 +801,45 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.path)[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
-        self.write_dfn_file(dfn_out_path)
-
-        self.write_dat_file(dat_out_path)
+        if create_zip:
+            zip_out_path = os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
+            zipstream_zipfile = zipstream.ZipFile()     
+                   
+            #TODO: Confirm file overwriting
+            try:
+                os.remove(zip_out_path)
+            except:
+                pass
+            
+            self.info_output('Opening zip file {}'.format(zip_out_path))
+            zip_out_file = open(zip_out_path, 'wb')
+        else:
+            zipstream_zipfile = None
+            zip_out_file = None
         
-        
-    
+        try:
+            self.write_dfn_file(dfn_out_path, zipstream_zipfile=zipstream_zipfile)
 
-    
+            self.write_dat_file(dat_out_path, zipstream_zipfile=zipstream_zipfile)
+            
+            
+            if zipstream_zipfile:
+                #TODO: Eliminate need to change directory by not writing to file
+                dfn_dir = os.path.dirname(dfn_out_path)
+                cwd = os.getcwd()
+                try:
+                    os.chdir(dfn_dir)
+                    
+                    self.info_output('Writing zip file {}'.format(zip_out_path))
+                    for data in zipstream_zipfile:
+                        zip_out_file.write(data)
+                finally:        
+                    os.chdir(cwd)
+        finally:
+            if zip_out_file:
+                self.info_output('Closing zip file {}'.format(zip_out_path))
+                zipstream_zipfile.close()
+                zip_out_file.close()
 
 
 
@@ -797,6 +859,9 @@ def main():
                             help="Coordinate Reference System string (e.g. GDA94, EPSG:4283) for output",
                             type=str,
                             dest="crs")
+        
+        parser.add_argument('-z', '--zip', action='store_const', const=True, default=False,
+                            help='Zip directly to an archive file. Default is no zip')
         
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
@@ -840,7 +905,7 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     #                            nc2aseggdf2.get_data_values(field_name, 
     #                                                        slice(None, None, 100000))))
     #===========================================================================
-    nc2aseggdf2.convert2aseg_gdf(dat_out_path, dfn_out_path)
+    nc2aseggdf2.convert2aseg_gdf(dat_out_path, dfn_out_path, create_zip=args.zip)
 
 if __name__ == '__main__':
     # Setup logging handlers if required
