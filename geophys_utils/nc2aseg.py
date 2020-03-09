@@ -35,10 +35,15 @@ TEMP_DIR = tempfile.gettempdir()
 POINT_LIMIT = 100000
 
 # List of regular expressions for variable names to exclude from output
-EXCLUDE_NAME_REGEXES = ['latitude.+', 'longitude.+', 'easting.+', 'northing.+']
+EXCLUDE_NAME_REGEXES = ['crs', '.*_index$', 'ga_.*_metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+']
 
 # List of regular expressions for variable attributes to include in .dfn file
 INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
+
+# Set this to non zero to limit string field width.
+# WARNING - string truncation may corrupt data!
+# N.B: Must be >= all numeric field widths defined in ASEG_GDF_FORMAT dict below (enforced by assertion)
+MAX_FIELD_WIDTH = 0
 
 # From Ross Brodie's email to Alex Ip, sent: Monday, 24 February 2020 4:27 PM
 ASEG_GDF_FORMAT = {
@@ -107,6 +112,9 @@ ASEG_GDF_FORMAT = {
     }
 
 ADJUST_INTEGER_FIELD_WIDTH = True
+
+# Check to ensure that MAX_FIELD_WIDTH will not truncate numeric fields
+assert not MAX_FIELD_WIDTH or all([format_specification['width'] <= MAX_FIELD_WIDTH for format_specification in ASEG_GDF_FORMAT.values()]), 'Invalid MAX_FIELD_WIDTH {}'.format(MAX_FIELD_WIDTH)
 
 class RowValueCache(object):
     '''\
@@ -199,7 +207,7 @@ class NC2ASEGGDF2(object):
         '''
         def build_field_definitions():
             '''\
-            Hleper function to build self.field_definitions as an OrderedDict of field definitions keyed by ASEG-GDF2 field name
+            Helper function to build self.field_definitions as an OrderedDict of field definitions keyed by ASEG-GDF2 field name
             '''
             self.field_definitions = OrderedDict()
             for variable_name, variable in self.netcdf_dataset.variables.items():
@@ -258,10 +266,16 @@ class NC2ASEGGDF2(object):
                 #logger.debug('variable_attributes = {}'.format(pformat(variable_attributes)))
                 
                 dtype = variables[-1].dtype
-                format_dict = dict(ASEG_GDF_FORMAT.get(str(dtype)))
+                logger.debug('Variable is of dtype {}'.format(dtype))
+                format_dict = dict(ASEG_GDF_FORMAT.get(str(dtype)) or {})
                 
                 if not format_dict: # Unrecognised format. Treat as string
                     width = max([len(str(element).strip()) for element in variables[-1][:]]) + 1
+                    
+                    if MAX_FIELD_WIDTH and width > MAX_FIELD_WIDTH:
+                        logger.warning('WARNING: String variable "{}" data will be truncated from a width of {} to {}'.format(variable_name, width, MAX_FIELD_WIDTH))
+                        width = MAX_FIELD_WIDTH
+                        
                     format_dict = {
                         'width': width,
                         'null': '',
@@ -302,16 +316,19 @@ class NC2ASEGGDF2(object):
                     min_value = np.nanmin(self.get_data_values(field_name))
                     #logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
                     
-                    width = int(log10(max_abs_value)) + 2 # allow for leading space
-                    if min_value < 0:
-                        width += 1 # allow for "-"
+                    if max_abs_value > 0:
+                        width = int(log10(max_abs_value)) + 2 # allow for leading space
+                        if min_value < 0:
+                            width += 1 # allow for "-"
+                    else:
+                        width = 2
                         
                     if width != format_dict['width']:
-                        logger.debug('\tAdjusting integer field width to {} for variable {}'.format(width, variable_name))
+                        logger.debug('\tAdjusting integer field width from {} to {} for variable {}'.format(format_dict['width'], width, variable_name))
                         format_dict['width'] = width
                         format_dict['aseg_gdf_format'] = 'I{}'.format(width)
                         format_dict['python_format'] = '{{:>{}d}}'.format(width)
-                        logger.debug(self.field_definitions[field_name]['format'])
+                        #logger.debug(self.field_definitions[field_name]['format'])
                     
             #logger.debug(self.field_definitions)
         
@@ -362,7 +379,7 @@ class NC2ASEGGDF2(object):
                 data = variables[0][point_slice]
             else: # Scalar
                 # Broadcast scalar to required array shape
-                data = np.array([variables[0][:]] * (((point_slice.stop or len(variables[0])) - (point_slice.start or 0)) // (point_slice.step or 1)))
+                data = np.array([variables[0][:]] * (((point_slice.stop or self.total_points) - (point_slice.start or 0)) // (point_slice.step or 1)))
         elif len(variables) == 2: # Index & Lookup variables
             data = variables[1][:][variables[0][:][point_slice]] # Use first array to index second one    
         else:
@@ -685,7 +702,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 for row_value_list in row_value_cache.chunk_row_data_generator():
                     #logger.debug('row_value_list: {}'.format(row_value_list))
                     # Turn list of values into a string using python_formats
-                    yield ''.join([python_format_list[value_index].format(row_value_list[value_index])
+                    # Truncate fields to maximum width with leading space - only string fields should be affected
+                    yield ''.join([' ' + python_format_list[value_index].format(row_value_list[value_index])[1-MAX_FIELD_WIDTH::]
                                    for value_index in range(len(python_format_list))]) #.lstrip() # lstrip if we want to discard leading spaces from line
 
                     
@@ -701,7 +719,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                                  ):
                     point_count += 1
                     
-                    if point_count == point_count // self.line_report_increment * self.line_report_increment:
+                    if point_count % self.line_report_increment:
                         self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
                     
                     #logger.debug('line: "{}"'.format(line))
@@ -713,7 +731,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 yield '\n'.join(chunk_line_list) # Yield a chunk of lines    
                         
                 if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
-                    logger.debug('Output limited to {:n} in debug mode'.format(POINT_LIMIT))
+                    logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(POINT_LIMIT))
                     break
                             
             self.info_output('A total of {:n} rows were output'.format(point_count))
