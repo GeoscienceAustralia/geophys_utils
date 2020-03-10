@@ -34,6 +34,7 @@ import locale
 from math import log10
 from collections import OrderedDict
 from functools import reduce
+import zipfile
 import zipstream
 
 from geophys_utils import get_spatial_ref_from_wkt
@@ -802,6 +803,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                          dat_out_path=None,
                          dfn_out_path=None,
                          create_zip=False,
+                         zip_out_path=None,
                          stride=1,
                          point_mask=None): 
         '''
@@ -811,8 +813,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
         if create_zip:
-            zip_out_path = os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
-            zipstream_zipfile = zipstream.ZipFile()     
+            zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
+            zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED)     
             zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
                                                                                           os.path.basename(self.netcdf_path))).encode(CHARACTER_ENCODING)  
             #TODO: Confirm file overwriting
