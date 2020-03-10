@@ -45,25 +45,34 @@ locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-# Default number of rows to read before outputting a chunk of lines.
-CACHE_CHUNK_ROWS = 32768
-    
-TEMP_DIR = tempfile.gettempdir()
-#TEMP_DIR = 'C:\Temp'
+# Dynamically adjust integer field widths to fit all data values if True
+ADJUST_INTEGER_FIELD_WIDTH = True
 
-# Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 100000
-
-# List of regular expressions for variable names to exclude from output
-EXCLUDE_NAME_REGEXES = ['crs', '.*_index$', 'ga_.*_metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+']
-
-# List of regular expressions for variable attributes to include in .dfn file
-INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
+# Truncate ASEG-GDF2 field names to eight characters if True
+TRUNCATE_VARIABLE_NAMES = False
 
 # Set this to non zero to limit string field width.
 # WARNING - string truncation may corrupt data!
 # N.B: Must be >= all numeric field widths defined in ASEG_GDF_FORMAT dict below (enforced by assertion)
 MAX_FIELD_WIDTH = 0
+
+# Character encoding for .dfn, .dat & .des files
+CHARACTER_ENCODING = 'utf-8'
+
+# Default number of rows to read from netCDF before outputting a chunk of lines.
+CACHE_CHUNK_ROWS = 32768
+    
+TEMP_DIR = tempfile.gettempdir()
+#TEMP_DIR = 'C:\Temp'
+
+# Set this to zero for no limit - only set a non-zero value for testing when debug = True
+DEBUG_POINT_LIMIT = 100000
+
+# List of regular expressions for variable names to exclude from output
+EXCLUDE_NAME_REGEXES = ['crs', '.*_index$', 'ga_.*metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+']
+
+# List of regular expressions for variable attributes to include in .dfn file
+INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
 
 # From Ross Brodie's email to Alex Ip, sent: Monday, 24 February 2020 4:27 PM
 ASEG_GDF_FORMAT = {
@@ -131,9 +140,6 @@ ASEG_GDF_FORMAT = {
         },
     }
 
-ADJUST_INTEGER_FIELD_WIDTH = True
-
-CHARACTER_ENCODING = 'utf-8'
 
 # Check to ensure that MAX_FIELD_WIDTH will not truncate numeric fields
 assert not MAX_FIELD_WIDTH or all([format_specification['width'] <= MAX_FIELD_WIDTH for format_specification in ASEG_GDF_FORMAT.values()]), 'Invalid MAX_FIELD_WIDTH {}'.format(MAX_FIELD_WIDTH)
@@ -319,13 +325,16 @@ class NC2ASEGGDF2(object):
                     'columns': column_count
                     }
                 
-                # Sanitise field name, truncate to 8 characters and ensure uniqueness
-                field_name = re.sub('(\W|_)+', '', variable_name)[:8].upper()
-                field_name_count = 0
-                while field_name in [variable_definition.get('field_name') 
-                                     for variable_definition in self.field_definitions.values()]:
-                    field_name_count += 1
-                    field_name = field_name[:-len(str(field_name_count))] + str(field_name_count)
+                if TRUNCATE_VARIABLE_NAMES:
+                    # Sanitise field name, truncate to 8 characters and ensure uniqueness
+                    field_name = re.sub('(\W|_)+', '', variable_name)[:8].upper()
+                    field_name_count = 0
+                    while field_name in [variable_definition.get('field_name') 
+                                         for variable_definition in self.field_definitions.values()]:
+                        field_name_count += 1
+                        field_name = field_name[:-len(str(field_name_count))] + str(field_name_count)
+                else:
+                    field_name = re.sub('\W+', '_', variable_name) # Sanitisation shouldn't be necessary, but we'll do it anyway
                     
                 variable_definition['field_name'] = field_name   
                  
@@ -350,7 +359,6 @@ class NC2ASEGGDF2(object):
                         format_dict['width'] = width
                         format_dict['aseg_gdf_format'] = 'I{}'.format(width)
                         format_dict['python_format'] = '{{:>{}d}}'.format(width)
-                        #logger.debug(self.field_definitions[field_name]['format'])
                     
             #logger.debug(self.field_definitions)
         
@@ -754,7 +762,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     #logger.debug('line: "{}"'.format(line))
                     chunk_line_list.append(line)
                 
-                    if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
+                    if self.debug and DEBUG_POINT_LIMIT and (point_count >= DEBUG_POINT_LIMIT): # Don't process more lines
                         break                    
                     
                 chunk_buffer_string = '\n'.join(chunk_line_list) + '\n' # Yield a chunk of lines    
@@ -764,8 +772,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 else:
                     yield(chunk_buffer_string)
                         
-                if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
-                    logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(POINT_LIMIT))
+                if self.debug and DEBUG_POINT_LIMIT and (point_count >= DEBUG_POINT_LIMIT): # Don't process more chunks
+                    logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(DEBUG_POINT_LIMIT))
                     break
                             
             self.info_output('A total of {:n} rows were output'.format(point_count))
@@ -816,8 +824,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
             zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED)     
             zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
-                                                                                          os.path.basename(self.netcdf_path))).encode(CHARACTER_ENCODING)  
-            #TODO: Confirm file overwriting
+                                                                                          os.path.basename(self.netcdf_path))
+                                                                                          ).encode(CHARACTER_ENCODING)  
             try:
                 os.remove(zip_out_path)
             except:
