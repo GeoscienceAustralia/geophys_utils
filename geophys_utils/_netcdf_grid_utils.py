@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-from math import ceil
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -19,7 +18,7 @@ from math import ceil
 '''
 Created on 14Sep.,2016
 
-@author: Alex
+@author: Alex Ip <Alex.Ip@ga.gov.au>
 '''
 import numpy as np
 import math
@@ -37,7 +36,7 @@ from shapely.geometry.base import BaseGeometry
 import netCDF4
 import sys
 from skimage import measure
-from functools import reduce
+from math import ceil
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module

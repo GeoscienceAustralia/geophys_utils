@@ -1,8 +1,26 @@
+#!/usr/bin/env python
+
+#===============================================================================
+#    Copyright 2017 Geoscience Australia
+# 
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+#===============================================================================
 '''
 Created on 8 Mar 2020
 
-@author: alex
+@author: Alex Ip <Alex.Ip@ga.gov.au>
 '''
+
 import argparse
 import numpy as np
 import re
@@ -444,7 +462,6 @@ class NC2ASEGGDF2(object):
         '''
         Helper function to output .dfn file
         '''
-            
         if zipstream_zipfile:
             dfn_basename = os.path.basename(dfn_out_path)
             
@@ -790,7 +807,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         '''
         Function to convert netCDF file to ASEG-GDF
         '''
-        self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.path)[0] + '.dat'
+        self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.filepath())[0] + '.dat'
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
         if create_zip:
@@ -807,9 +824,9 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         else:
             zipstream_zipfile = None
 
-        self.create_dfn_file(dfn_out_path, zipstream_zipfile=zipstream_zipfile)
+        self.create_dfn_file(self.dfn_out_path, zipstream_zipfile=zipstream_zipfile)
 
-        self.create_dat_file(dat_out_path, zipstream_zipfile=zipstream_zipfile)
+        self.create_dat_file(self.dat_out_path, zipstream_zipfile=zipstream_zipfile)
         
         if zipstream_zipfile:
             logger.debug('Opening zip file {}'.format(zip_out_path))
@@ -878,14 +895,6 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
 
     nc2aseggdf2 = NC2ASEGGDF2(nc_in_path, debug=args.debug, verbose=args.verbose)
     
-    #===========================================================================
-    # print('field_definitions = {}'.format(pformat(nc2aseggdf2.field_definitions)))    
-    # 
-    # for field_name in nc2aseggdf2.field_definitions.keys():
-    #     print('{} = {}'.format(field_name, 
-    #                            nc2aseggdf2.get_data_values(field_name, 
-    #                                                        slice(None, None, 100000))))
-    #===========================================================================
     nc2aseggdf2.convert2aseg_gdf(dat_out_path, dfn_out_path, create_zip=args.zip)
 
 if __name__ == '__main__':
