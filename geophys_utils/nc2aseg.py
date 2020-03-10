@@ -114,6 +114,8 @@ ASEG_GDF_FORMAT = {
 
 ADJUST_INTEGER_FIELD_WIDTH = True
 
+CHARACTER_ENCODING = 'utf-8'
+
 # Check to ensure that MAX_FIELD_WIDTH will not truncate numeric fields
 assert not MAX_FIELD_WIDTH or all([format_specification['width'] <= MAX_FIELD_WIDTH for format_specification in ASEG_GDF_FORMAT.values()]), 'Invalid MAX_FIELD_WIDTH {}'.format(MAX_FIELD_WIDTH)
 
@@ -396,18 +398,18 @@ class NC2ASEGGDF2(object):
         return data
     
     
-    def write_record2dfn_file(self, 
-                              dfn_file, 
-                              rt, 
-                              name, 
-                              aseg_gdf_format, 
-                              definition=None, 
-                              defn=None, 
-                              st='RECD'):
+    def create_dfn_line(
+        self, 
+        rt, 
+        name, 
+        aseg_gdf_format, 
+        definition=None, 
+        defn=None, 
+        st='RECD'
+        ):
         '''
         Helper function to write line to .dfn file.
         self.defn is used to track the DEFN number, which can be reset using the optional defn parameter
-        @param dfn_file: output file for DEFN line 
         @param rt: value for "RT=<rt>" portion of DEFN line, e.g. '' or 'PROJ'  
         @param name: Name of DEFN 
         @param format_specifier_dict: format specifier dict, e.g. {'width': 5, 'null': 256, 'aseg_gdf_format': 'I5', 'python_format': '{:>5d}'}
@@ -434,16 +436,42 @@ class NC2ASEGGDF2(object):
         if definition:
             line += ': ' + definition
             
-        dfn_file.write(line + '\n')
         #logger.debug('dfn file line: {}'.format(line))
         return line
         
                 
-    def write_dfn_file(self, dfn_out_path, zipstream_zipfile=None, zip_out_file=None):
+    def create_dfn_file(self, dfn_out_path, zipstream_zipfile=None):
         '''
         Helper function to output .dfn file
         '''
-        def write_variable_defns(dfn_file):
+            
+        if zipstream_zipfile:
+            dfn_basename = os.path.basename(dfn_out_path)
+            
+            zipstream_zipfile.write_iter(dfn_basename,
+                                         self.encoded_dfn_line_generator(encoding=CHARACTER_ENCODING))
+                    
+        else:
+            # Create, write and close .dfn file
+            with open(dfn_out_path, 'w') as dfn_file:
+                for dfn_line in self.dfn_line_generator():
+                    dfn_file.write(dfn_line)
+                dfn_file.close()
+            self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+                
+                    
+    def encoded_dfn_line_generator(self, encoding=CHARACTER_ENCODING):
+        '''
+        Helper generator to yield encoded bytestrings of all lines in .dfn file
+        '''
+        for line_string in self.dfn_line_generator():
+            yield line_string.encode(encoding) 
+            
+    def dfn_line_generator(self):
+        '''
+        Helper generator to yield all lines in .dfn file
+        '''
+        def variable_defns_generator():
             """
             Helper function to write a DEFN line for each variable
             """
@@ -494,8 +522,7 @@ class NC2ASEGGDF2(object):
                 if field_definition['columns'] > 1: # Need to pre-pend number of columns to format string
                     aseg_gdf_format = '{}{}'.format(field_definition['columns'], aseg_gdf_format)
                 
-                self.write_record2dfn_file(dfn_file,
-                                           rt='',
+                yield self.create_dfn_line(rt='',
                                            name=field_name,
                                            aseg_gdf_format=aseg_gdf_format,
                                            definition=definition,
@@ -503,16 +530,13 @@ class NC2ASEGGDF2(object):
                 
                 
             # Write 'END DEFN'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='',
+            yield self.create_dfn_line(rt='',
                                        name='END DEFN',
                                        aseg_gdf_format=None
                                        )
-                
-            return # End of function write_variable_defns
         
             
-        def write_proj(dfn_file):
+        def proj_defns_generator():
             """
             Helper function to write PROJ lines
 From standard:
@@ -578,43 +602,37 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             self.defn = 0  # reset DEFN number
             
             # write 'DEFN 1 ST=RECD,RT=PROJ; RT:A4'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='RT',
                                        aseg_gdf_format='A4'
                                        )
             
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='COORDSYS',
                                        aseg_gdf_format='A40',
                                        definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
                                        )
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='DATUM',
                                        aseg_gdf_format='A40',
                                        definition='NAME={ellipse_name}, Ellipsoid name'.format(ellipse_name=ellipse_name)
                                        )
             
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='MAJ_AXIS',
                                        aseg_gdf_format='D12.1',
                                        definition='UNIT={unit}, NAME={major_axis}, Major axis'.format(unit='m', major_axis=major_axis)
                                        )
 
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='INVFLATT',
                                        aseg_gdf_format='D14.9',
                                        definition='NAME={inverse_flattening}, 1/f inverse of flattening'.format(inverse_flattening=inverse_flattening)
                                        )
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='PRIMEMER',
                                        aseg_gdf_format='F10.1',
                                        definition='UNIT={unit}, NAME={prime_meridian}, Location of prime meridian'.format(unit='degree', prime_meridian=prime_meridian)
@@ -622,22 +640,19 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
 
 #===============================================================================
 #                 # Non-standard definitions
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='ELLPSNAM',
 #                                            aseg_gdf_format='A30',
 #                                            definition='NAME={ellipse_name}, Non-standard definition for ellipse name'.format(ellipse_name=ellipse_name)
 #                                            )
 # 
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='PROJNAME',
 #                                            aseg_gdf_format='A40',
 #                                            definition='NAME={projection_name}, Non-standard definition for projection name'.format(projection_name=projection_name)
 #                                            )
 # 
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='ECCENT',
 #                                            aseg_gdf_format='D12.9',
 #                                            definition='NAME={eccentricity}, Non-standard definition for ellipsoidal eccentricity'.format(eccentricity=eccentricity)
@@ -645,8 +660,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
 #===============================================================================
             
             if projection_method:                    
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
+                yield self.create_dfn_line(rt='PROJ',
                                            name='PROJMETH',
                                            aseg_gdf_format='A30',
                                            definition='NAME={projection_method}, projection method'.format(projection_method=projection_method)
@@ -656,54 +670,32 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 param_no = 0
                 for param_name, param_value in projection_parameters:
                     param_no += 1  
-                    self.write_record2dfn_file(dfn_file,
-                                               rt='PROJ',
+                    yield self.create_dfn_line(rt='PROJ',
                                                name='PARAM{param_no}'.format(param_no=param_no),
                                                aseg_gdf_format='D14.0', #TODO: Investigate whether this is OK - it looks dodgy to me
                                                definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
                                                )
             # Write 'END DEFN'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='END DEFN',
                                        aseg_gdf_format=''
                                        )
             
             #TODO: Write fixed length PROJ line at end of file
               
-            return # End of function write_proj
+            return # End of function proj_defns_generator
             
 
-        # Create, write and close .dat file
-        dfn_file = open(dfn_out_path, 'w')
-        dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n') # TODO: Check this first line 
+        yield 'DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n' # TODO: Check this first line 
         
-        write_variable_defns(dfn_file)
+        for defn_line in variable_defns_generator():
+            yield defn_line + '\n'
         
-        write_proj(dfn_file)
-            
-        dfn_file.close()
-        self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
-            
-        #TODO: Avoid having to write .dfn file to disk - this is a bit of a hack
-        if zipstream_zipfile:
-            dfn_dir = os.path.dirname(dfn_out_path)
-            dfn_basename = os.path.basename(dfn_out_path)
-            
-            cwd = os.getcwd()
-            try:
-                os.chdir(dfn_dir)
-                
-                #self.info_output('Writing DFN file {} to zip file'.format(dfn_basename))
-                # N.B: We need to change to dfn_dir when writing to zip file
-                zipstream_zipfile.write(dfn_basename)
-                    
-                #self.info_output('Finished writing DFN file {} to zip file'.format(dfn_basename))
-            finally:        
-                os.chdir(cwd)
+        for proj_line in proj_defns_generator():
+            yield proj_line + '\n'
     
     
-    def write_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None, zipstream_zipfile=None):
+    def create_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None, zipstream_zipfile=None):
         '''
         Helper function to output .dat file
         '''
@@ -747,7 +739,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
                         break                    
                     
-                chunk_buffer_string = '\n'.join(chunk_line_list) # Yield a chunk of lines    
+                chunk_buffer_string = '\n'.join(chunk_line_list) + '\n' # Yield a chunk of lines    
                 
                 if encoding:
                     yield(chunk_buffer_string.encode(encoding))
@@ -761,7 +753,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             self.info_output('A total of {:n} rows were output'.format(point_count))
             
             
-        # Start of write_dat_file function
+        # Start of create_dat_file function
         cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
         
         # Start of chunk_buffer_generator
@@ -777,11 +769,11 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             # Write to zip file
             dat_basename = os.path.basename(dat_out_path)
             zipstream_zipfile.write_iter(dat_basename, 
-                         chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding='utf-8'))
+                         chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding=CHARACTER_ENCODING))
         else: # No zip
             # Create, write and close .dat file
             dat_out_file = open(dat_out_path, mode='w')
-            logger.debug('Writing lines to {}'.format(self.dat_out_path))
+            logger.debug('Writing lines to .dat file {}'.format(self.dat_out_path))
             for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
                 logger.debug('Writing chunk_buffer to file')
                 dat_out_file.write(chunk_buffer + '\n')
@@ -804,42 +796,31 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         if create_zip:
             zip_out_path = os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
             zipstream_zipfile = zipstream.ZipFile()     
-                   
+            zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
+                                                                                          os.path.basename(self.netcdf_path))).encode(CHARACTER_ENCODING)  
             #TODO: Confirm file overwriting
             try:
                 os.remove(zip_out_path)
             except:
                 pass
             
-            self.info_output('Opening zip file {}'.format(zip_out_path))
-            zip_out_file = open(zip_out_path, 'wb')
         else:
             zipstream_zipfile = None
-            zip_out_file = None
-        
-        try:
-            self.write_dfn_file(dfn_out_path, zipstream_zipfile=zipstream_zipfile)
 
-            self.write_dat_file(dat_out_path, zipstream_zipfile=zipstream_zipfile)
+        self.create_dfn_file(dfn_out_path, zipstream_zipfile=zipstream_zipfile)
+
+        self.create_dat_file(dat_out_path, zipstream_zipfile=zipstream_zipfile)
+        
+        if zipstream_zipfile:
+            logger.debug('Opening zip file {}'.format(zip_out_path))
+            zip_out_file = open(zip_out_path, 'wb')
             
-            
-            if zipstream_zipfile:
-                #TODO: Eliminate need to change directory by not writing to file
-                dfn_dir = os.path.dirname(dfn_out_path)
-                cwd = os.getcwd()
-                try:
-                    os.chdir(dfn_dir)
-                    
-                    self.info_output('Writing zip file {}'.format(zip_out_path))
-                    for data in zipstream_zipfile:
-                        zip_out_file.write(data)
-                finally:        
-                    os.chdir(cwd)
-        finally:
-            if zip_out_file:
-                self.info_output('Closing zip file {}'.format(zip_out_path))
-                zipstream_zipfile.close()
-                zip_out_file.close()
+            self.info_output('Writing zip file {}'.format(zip_out_path))
+            for data in zipstream_zipfile:
+                zip_out_file.write(data)
+                
+            self.info_output('Closing zip file {}'.format(zip_out_path))
+            zipstream_zipfile.close()
 
 
 
