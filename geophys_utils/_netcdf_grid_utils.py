@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from math import ceil
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -25,15 +26,18 @@ import math
 from scipy.ndimage import map_coordinates
 from geophys_utils._crs_utils import get_utm_wkt, transform_coords
 from geophys_utils._transect_utils import sample_transect
-from geophys_utils._polygon_utils import netcdf2convex_hull, get_grid_edge_points
+from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._netcdf_utils import NetCDFUtils
-from shapely.geometry import Polygon, MultiPolygon, asMultiPoint
+from shapely.geometry import Polygon, MultiPolygon, asPolygon
+from affine import Affine
 import logging
 import argparse
 from distutils.util import strtobool
 from shapely.geometry.base import BaseGeometry
 import netCDF4
 import sys
+from skimage import measure
+from functools import reduce
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -128,7 +132,7 @@ class NetCDFGridUtils(NetCDFUtils):
             self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
         except:
-            logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+            logger.error('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
             raise
             
         #TODO: Make this work for multi-variate grids
@@ -390,7 +394,7 @@ class NetCDFGridUtils(NetCDFUtils):
                          to_wkt=None, 
                          buffer_distance=None, 
                          offset=None, 
-                         tolerance=0.0005, 
+                         tolerance=None, 
                          cap_style=1, 
                          join_style=1, 
                          max_polygons=10, 
@@ -399,6 +403,7 @@ class NetCDFGridUtils(NetCDFUtils):
         """\
         Returns the concave hull (as a shapely polygon) of grid edge points with data. 
         Implements abstract base function in NetCDFUtils 
+        Note that all distance parameters are in pixel units, not in destination CRS units
         @param to_wkt: CRS WKT for shape
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         @param offset: Final offset of final shape from original lines
@@ -409,18 +414,23 @@ class NetCDFGridUtils(NetCDFUtils):
         @param max_vertices: Maximum number of vertices to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
         @return shapely.geometry.shape: Geometry of concave hull
         """
-        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices):
+        PAD_WIDTH = 1
+        MAX_DATA_PROPORTION = 0.9 # Maximum proportion of data containing pixels vs all pixels to trigger full shape computation
+        DOWNSAMPLING_STEP_SIZE = 10000 # Pixels per downsampling_stride increment for downsampling. Used with maximum side length
+        
+        # Parameters for shape simplification in pixel sizes
+        buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
+        offset = offset or 0.9 # Take final shape half a pixel out from centre coordinates to cover pixel edges
+        tolerance = tolerance or 0.5        
+        
+        
+        def discard_internal_polygons(geometry):
             '''\
-            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            Helper function to discard internal polygons
             '''
-            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
-            offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
-            offset_geometry = offset_geometry.buffer(offset-buffer_distance, cap_style=cap_style, join_style=join_style).simplify(tolerance)
-
-            # Discard any internal polygons
-            if type(offset_geometry) == MultiPolygon:
+            if type(geometry) == MultiPolygon:
                 polygon_list = []
-                for polygon in offset_geometry:
+                for polygon in geometry:
                     polygon = Polygon(polygon.exterior)
                     polygon_is_contained = False
                     for list_polygon in polygon_list:
@@ -435,14 +445,78 @@ class NetCDFGridUtils(NetCDFUtils):
                         polygon_list.append(polygon)       
 
                 if len(polygon_list) == 1:
-                    offset_geometry = polygon_list[0] # Single polygon
+                    external_geometry = polygon_list[0] # Single polygon
                 else:
-                    offset_geometry = MultiPolygon(polygon_list)
+                    external_geometry = MultiPolygon(polygon_list)
                     
-            elif type(offset_geometry) == Polygon:
-                offset_geometry = Polygon(offset_geometry.exterior)
+                logger.debug('{} internal polygons discarded.'.format(len(geometry) - len(polygon_list)))
+                    
+            elif type(geometry) == Polygon:
+                external_geometry = Polygon(geometry.exterior)
             else:
-                raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geometry)))
+                raise ValueError('Unexpected type of geometry: {}'.format(type(geometry)))
+            
+            return external_geometry
+            
+        def contour_to_polygon(polygon_vertices):
+            '''\
+            Helper function to turn an individual contour into shapely Polygon in the correct xy axis order
+            @param polygon_vertices: n x 2 array of pixel coordinates forming a polygon
+            '''
+            # Note that we need coordinates in xy order, but the polygon vertices are in array order (probably yx)
+            if self.YX_order: # yx array order - y-axis flip required
+                reorder_slices = (slice(None, None, None), slice(None, None, -1))
+            else: # xy array order - no y-axis flip required
+                reorder_slices = (slice(None, None, None), slice(None, None, None))
+                
+            # Create polygon in pixel ordinates, and then buffer outwards by 0.5 pixel widths, and simplify by 0.25 pixel widths
+            # Note that this polygon is in array order, i.e. probably yx and not xy, so we need to apply the reorder_slices
+            return asPolygon(polygon_vertices[reorder_slices])
+        
+        def transform_geometry_pixel_to_wkt(geometry, to_wkt):
+            '''\
+            Helper function to transform geometry from pixel coordinates to specified WKT via (self.wkt)
+            # N.B: Ignores polygon interiors
+            @param geometry: Shapely MultiPolygon or Polygon to transform
+            @param to_wkt: WKT of destination CRS
+            '''
+            # Set affine transform from GeoTransform values for CRS given by self.wkt
+            affine_transform = Affine.from_gdal(*self.GeoTransform)
+        
+            if type(geometry) == MultiPolygon:
+                return MultiPolygon([
+                    asPolygon(transform_coords(np.array([(affine_transform * pixel_coordinate_pair) 
+                                                    for pixel_coordinate_pair in polygon.exterior.coords
+                                                    ]),
+                         self.wkt, to_wkt)
+                         )
+                    for polygon in geometry
+                    ])
+
+            elif type(geometry) == Polygon:
+                return asPolygon(transform_coords(np.array([(affine_transform * pixel_coordinate_pair) 
+                                                    for pixel_coordinate_pair in geometry.exterior.coords
+                                                    ]),
+                         self.wkt, to_wkt)
+                         )
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(geometry)))
+
+
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices):
+            '''\
+            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            '''
+            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
+            offset_geometry = (geometry.buffer(
+                buffer_distance, 
+                cap_style=cap_style, 
+                join_style=join_style).simplify(tolerance).buffer(
+                    offset-buffer_distance, 
+                    cap_style=cap_style, 
+                    join_style=join_style).simplify(tolerance)
+                )      
+            discard_internal_polygons(offset_geometry)
             
             # Keep doubling the buffer distance if there are too many polygons
             if (
@@ -457,29 +531,68 @@ class NetCDFGridUtils(NetCDFUtils):
                      ) > max_vertices)
                 ):
                 return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
-            
+                
             return offset_geometry
-
-        buffer_distance = buffer_distance or 2.0 * max(*self.pixel_size) # Set initial buffer_distance to 2 x pixel size in native units
-        logger.debug('Initial buffer_distance = {}'.format(buffer_distance))
-        offset = offset or 0.1 * max(*self.pixel_size) # Set offset to 0.1 x pixel size in native units
-        logger.debug('offset = {}'.format(offset))
-
-        edge_multipoint = asMultiPoint(np.array(get_grid_edge_points(self.data_variable, self.dimension_arrays, self.data_variable._FillValue))) 
-        logger.debug('{} edge points found'.format(len(edge_multipoint)))       
         
-        offset_geometry = get_offset_geometry(edge_multipoint, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
-    
-        # Transform vertices from native CRS to required CRS
-        if type(offset_geometry) == MultiPolygon:
-            offset_geometry = MultiPolygon([Polygon(transform_coords(polygon.exterior.coords, self.wkt, to_wkt)) for polygon in offset_geometry])
-        elif type(offset_geometry) == Polygon:
-            offset_geometry = Polygon(transform_coords(offset_geometry.exterior.coords, self.wkt, to_wkt))
-        else:
-            raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geometry)))
+        #=======================================================================
+        # # Create data/no-data mask
+        # mask = (self.data_variable != self.data_variable._FillValue)
+        #
+        # data_proportion = np.count_nonzero(mask) / (self.pixel_count[0]*self.pixel_count[1])
+        # if data_proportion >= MAX_DATA_PROPORTION:
+        #     logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+        #     return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+        #
+        # # pad with nodata so that boundary edges are detected
+        # padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
+        #
+        # del mask # We don't need this any more
+        # gc.collect()
+        #=======================================================================
         
-        return offset_geometry
+        # Compute downsampling_stride for downsampling, and use that to create mask_slices
+        downsampling_stride = int(max(self.pixel_count) // DOWNSAMPLING_STEP_SIZE) + 1
+        mask_slices = tuple([slice(None, None, downsampling_stride)
+                       for _size in self.data_variable.shape])
 
+        logger.debug('Computing padded mask')
+        padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride))+2 for size in self.data_variable.shape], dtype=np.bool)
+        padded_mask[1:-1,1:-1] = (self.data_variable != self.data_variable._FillValue)[mask_slices] # It's quicker to read all data and mask afterwards
+        
+        data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2))
+        if data_proportion >= MAX_DATA_PROPORTION:
+            logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+            return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+
+        # find contours where the high pieces (data) are fully connected
+        # that there are no unnecessary holes in the polygons
+        # shift the coordinates back by 1 to get original unpadded pixel coordinates
+        logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in self.data_variable.shape)) +
+                     (' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.')
+                     )
+        contours = [(contour - PAD_WIDTH) * downsampling_stride # Shift for padding and compensate for downsampling_stride
+                    for contour in measure.find_contours(padded_mask, 0.5, fully_connected='high')]
+        #logger.debug('contours = {}'.format(contours))
+        
+        concave_hull = MultiPolygon([contour_to_polygon(contour) for contour in contours]).simplify(tolerance)
+        concave_hull = get_offset_geometry(concave_hull, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
+        
+        if self.debug:
+            if type(concave_hull) == MultiPolygon:
+                polygon_count = len(concave_hull)
+                vertex_count = sum([len(polygon.exterior.coords) for polygon in concave_hull])
+
+            elif type(concave_hull) == Polygon:
+                polygon_count = 1
+                vertex_count = len(concave_hull.exterior.coords)
+                
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(concave_hull)))
+            logger.debug('Final shape has {} vertices in {} polygons.'.format(vertex_count, polygon_count))
+            
+
+        # Transform from pixel ordinates to to_wkt (via self.wkt using affine_transform)
+        return transform_geometry_pixel_to_wkt(concave_hull, to_wkt)  
     
     def get_dimension_ranges(self, bounds, bounds_wkt=None):
         '''

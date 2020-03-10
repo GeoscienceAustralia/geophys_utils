@@ -18,4 +18,4 @@
 :: Written by Alex Ip 27/6/2018
 :: Example invocation: aseg2nc <netcdf_input_path> <aseg_gdf_dat_output_path>
 
-python -m geophys_utils.netcdf_converter.netcdf2aseg_gdf_converter %*
+python -m geophys_utils.nc2aseg %*

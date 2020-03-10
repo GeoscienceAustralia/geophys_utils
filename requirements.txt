@@ -1,3 +1,4 @@
+affine
 distutils
 functools
 itertools
@@ -8,6 +9,7 @@ owslib
 scikit-image
 scipy
 shapely
+skimage
 tempfile
 unittest
 yaml
