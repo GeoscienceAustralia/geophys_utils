@@ -826,7 +826,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 
             logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
             
-            for key, value in global_attributes_dict.items():
+            for key in sorted(global_attributes_dict.keys()):
+                value = global_attributes_dict[key]
                 key_string = (' {{:<{}s}} : '.format(max_key_length)).format(key) # Include leading space
                 
                 for value_line in value.split('\n'):
