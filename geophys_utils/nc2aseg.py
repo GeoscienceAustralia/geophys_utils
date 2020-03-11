@@ -51,10 +51,13 @@ ADJUST_INTEGER_FIELD_WIDTH = True
 # Truncate ASEG-GDF2 field names to eight characters if True
 TRUNCATE_VARIABLE_NAMES = False
 
-# Set this to non zero to limit string field width.
+# Set this to non zero to limit string field width in .dat file.
 # WARNING - string truncation may corrupt data!
 # N.B: Must be >= all numeric field widths defined in ASEG_GDF_FORMAT dict below (enforced by assertion)
 MAX_FIELD_WIDTH = 0
+
+# Maximum width of comment fields in .des file
+MAX_COMMENT_WIDTH = 128
 
 # Character encoding for .dfn, .dat & .des files
 CHARACTER_ENCODING = 'utf-8'
@@ -804,10 +807,67 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             self.info_output('Finished writing .dat file {}'.format(dat_out_path))
 
     
+    def create_des_file(self, des_out_path, zipstream_zipfile=None):
+        '''
+        Helper function to output .des file
+        '''
+        def des_line_generator(encoding=None):
+            '''
+            Helper Generator to yield line strings for .des file
+            '''
+            global_attributes_dict = dict(self.netcdf_dataset.__dict__)
+            
+            max_key_length = 0
+            max_value_length = 0
+            for key, value in global_attributes_dict.items():
+                # Ignore netCDF system attributes
+                if key.startswith('_'):
+                    del global_attributes_dict[key]
+                    continue
+                
+                value = str(value).strip()
+                global_attributes_dict[key] = value
+                
+                max_key_length = max(max_key_length, len(key))
+                
+                for value_line in value.split('\n'):
+                    max_value_length = max(max_value_length, len(value_line))
+                
+            logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
+            
+            for key, value in global_attributes_dict.items():
+                key_string = (' {{:<{}s}} : '.format(max_key_length)).format(key) # Include leading space
+                
+                for value_line in value.split('\n'):
+                    # Split long values into multiple lines. Need to be careful with leading & trailing spaces when reassembling
+                    while value_line: 
+                        comment_line = 'COMM{}{}'.format(key_string, value_line[:MAX_COMMENT_WIDTH-len(key_string)])
+                        
+                        if encoding:
+                            yield comment_line.encode(encoding)
+                        else:
+                            yield comment_line
+                            
+                        value_line = value_line[MAX_COMMENT_WIDTH-len(key_string):]
+                    
+        if zipstream_zipfile:
+            # Write to zip file
+            des_basename = os.path.basename(des_out_path)
+            zipstream_zipfile.write_iter(des_basename, 
+                                         des_line_generator(encoding=CHARACTER_ENCODING))
+        else: # No zip
+            # Create, write and close .dat file
+            des_out_file = open(des_out_path, mode='w')
+            logger.debug('Writing lines to .des file {}'.format(self.dat_out_path))
+            for des_line in des_line_generator():
+                logger.debug('Writing "{}" to .des file'.format(des_line))
+                des_out_file.write(des_line + '\n')
+            des_out_file.close()
+            self.info_output('Finished writing .des file {}'.format(des_out_path))
+
+    
     def convert2aseg_gdf(self, 
                          dat_out_path=None,
-                         dfn_out_path=None,
-                         create_zip=False,
                          zip_out_path=None,
                          stride=1,
                          point_mask=None): 
@@ -815,9 +875,10 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         Function to convert netCDF file to ASEG-GDF
         '''
         self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.filepath())[0] + '.dat'
-        self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
+        self.dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
+        self.des_out_path = os.path.splitext(dat_out_path)[0] + '.des'
         
-        if create_zip:
+        if zip_out_path:
             zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG_GDF2.zip'
             zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED)     
             zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
@@ -834,6 +895,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.create_dfn_file(self.dfn_out_path, zipstream_zipfile=zipstream_zipfile)
 
         self.create_dat_file(self.dat_out_path, zipstream_zipfile=zipstream_zipfile)
+        
+        self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
         
         if zipstream_zipfile:
             logger.debug('Opening zip file {}'.format(zip_out_path))
@@ -887,7 +950,7 @@ def main():
     logger.setLevel(level=log_level)
 
     assert 1 <= len(args.positional_args) <= 2, 'Invalid number of positional arguments.\n\
-Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basename(sys.argv[0]))
+Usage: python {} <options> <nc_in_path> [<dat_out_path>] [<zip_out_path>]'.format(os.path.basename(sys.argv[0]))
 
     nc_in_path = args.positional_args[0]
 
@@ -896,13 +959,16 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     else:
         dat_out_path = os.path.splitext(nc_in_path)[0] + '.dat'
         
-    dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
-    
+    if len(args.positional_args) == 3:
+        zip_out_path = args.positional_args[2]
+    else:
+        zip_out_path = None
+        
     logger.debug('args: {}'.format(args.__dict__))
 
     nc2aseggdf2 = NC2ASEGGDF2(nc_in_path, debug=args.debug, verbose=args.verbose)
     
-    nc2aseggdf2.convert2aseg_gdf(dat_out_path, dfn_out_path, create_zip=args.zip)
+    nc2aseggdf2.convert2aseg_gdf(dat_out_path, zip_out_path)
 
 if __name__ == '__main__':
     # Setup logging handlers if required
