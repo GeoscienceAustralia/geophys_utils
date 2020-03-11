@@ -870,7 +870,6 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.des_out_path = os.path.splitext(dat_out_path)[0] + '.des'
         
         if zip_out_path:
-            zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG_GDF2.zip'
             zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED)     
             zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
                                                                                           os.path.basename(self.netcdf_path))
@@ -954,7 +953,7 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>] [<zip_out_path>]'.forma
         if len(args.positional_args) == 3:
             zip_out_path = args.positional_args[2]
         else:
-            zip_out_path = os.path.splitext(nc_in_path)[0] + '.zip'
+            zip_out_path = os.path.splitext(nc_in_path)[0] + '_ASEG_GDF2.zip'
     else:
         zip_out_path = None
         
