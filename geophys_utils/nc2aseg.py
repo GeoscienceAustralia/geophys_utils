@@ -712,7 +712,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             return # End of function proj_defns_generator
             
 
-        yield 'DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n' # TODO: Check this first line 
+        yield 'DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A{}\n'.format(MAX_COMMENT_WIDTH) # TODO: Check this first line 
         
         for defn_line in variable_defns_generator():
             yield defn_line + '\n'
@@ -841,7 +841,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 for value_line in value.split('\n'):
                     # Split long values into multiple lines. Need to be careful with leading & trailing spaces when reassembling
                     while value_line: 
-                        comment_line = 'COMM{}{}'.format(key_string, value_line[:MAX_COMMENT_WIDTH-len(key_string)])
+                        comment_line = 'COMM{}{}'.format(key_string, value_line[:MAX_COMMENT_WIDTH-len(key_string)]) +'\n'
                         
                         if encoding:
                             yield comment_line.encode(encoding)
@@ -861,7 +861,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             logger.debug('Writing lines to .des file {}'.format(self.dat_out_path))
             for des_line in des_line_generator():
                 logger.debug('Writing "{}" to .des file'.format(des_line))
-                des_out_file.write(des_line + '\n')
+                des_out_file.write(des_line)
             des_out_file.close()
             self.info_output('Finished writing .des file {}'.format(des_out_path))
 
@@ -959,8 +959,11 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>] [<zip_out_path>]'.forma
     else:
         dat_out_path = os.path.splitext(nc_in_path)[0] + '.dat'
         
-    if len(args.positional_args) == 3:
-        zip_out_path = args.positional_args[2]
+    if args.zip:
+        if len(args.positional_args) == 3:
+            zip_out_path = args.positional_args[2]
+        else:
+            zip_out_path = os.path.splitext(nc_in_path)[0] + '.zip'
     else:
         zip_out_path = None
         
