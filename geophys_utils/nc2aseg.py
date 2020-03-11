@@ -823,6 +823,9 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             
             # Determine maximum key length for fixed field width
             max_key_length = max([len(key) for key in global_attributes_dict.keys()])
+            
+            global_attributes_dict['ASEG_GDF2'] = 'ASEG-GDF2 file Generated at {} from netCDF file {} using nc2aseg'.format(datetime.now().isoformat,
+                                                                                                             os.path.basename(self.netcdf_path))
                 
             logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
             
@@ -866,6 +869,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         '''
         Function to convert netCDF file to ASEG-GDF
         '''
+        start_time = datetime.now()
+        
         self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.filepath())[0] + '.dat'
         self.dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
         self.des_out_path = os.path.splitext(dat_out_path)[0] + '.des'
@@ -890,7 +895,6 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
         
         if zipstream_zipfile:
-            logger.debug('Opening zip file {}'.format(zip_out_path))
             zip_out_file = open(zip_out_path, 'wb')
             
             self.info_output('Writing zip file {}'.format(zip_out_path))
@@ -900,7 +904,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             self.info_output('Closing zip file {}'.format(zip_out_path))
             zipstream_zipfile.close()
 
-
+        elapsed_time = datetime.now() - start_time
+        self.info_output('ASEG-GDF output completed in {}'.format(str(elapsed_time).split('.')[0])) # Discard partial seconds
 
 def main():
     '''
