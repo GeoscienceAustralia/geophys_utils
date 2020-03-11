@@ -78,30 +78,28 @@ INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
 ASEG_GDF_FORMAT = {
     'float64': {
         'width': 18,
-        'null': -9.9999999999e+00,
+        'null': -9.9999999999e+32,
         'aseg_gdf_format': 'E18.10',
         'python_format': '{:>18.10e}',
         },
     'float32': {
         'width': 14,
-        'null': -9.999999e+00,
+        'null': -9.999999e+32,
         'aseg_gdf_format': 'E14.6',
         'python_format': '{:>14.6e}',
         },
-    #===========================================================================
-    # 'int64': {
-    #     'width': 12,
-    #     'null': -2147483647,
-    #     'aseg_gdf_format': 'I12',
-    #     'python_format': '{:>12d}',
-    #     },
-    # 'uint64': {
-    #     'width': 12,
-    #     'null': 4294967296,
-    #     'aseg_gdf_format': 'I12',
-    #     'python_format': '{:>12d}',
-    #     },
-    #===========================================================================
+    'int64': {
+        'width': 21,
+        'null': -9223372036854775808,
+        'aseg_gdf_format': 'I21',
+        'python_format': '{:>21d}',
+        },
+    'uint64': {
+        'width': 21,
+        'null': 18446744073709551616,
+        'aseg_gdf_format': 'I21',
+        'python_format': '{:>21d}',
+        },
     'int32': {
         'width': 12,
         'null': -2147483647,
@@ -139,7 +137,6 @@ ASEG_GDF_FORMAT = {
         'python_format': '{:>5d}',
         },
     }
-
 
 # Check to ensure that MAX_FIELD_WIDTH will not truncate numeric fields
 assert not MAX_FIELD_WIDTH or all([format_specification['width'] <= MAX_FIELD_WIDTH for format_specification in ASEG_GDF_FORMAT.values()]), 'Invalid MAX_FIELD_WIDTH {}'.format(MAX_FIELD_WIDTH)
@@ -821,7 +818,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
         
         if create_zip:
-            zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG-GDF2.zip'
+            zip_out_path = zip_out_path or os.path.splitext(dat_out_path)[0] + '_ASEG_GDF2.zip'
             zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED)     
             zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
                                                                                           os.path.basename(self.netcdf_path))
