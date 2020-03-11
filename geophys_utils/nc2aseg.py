@@ -815,23 +815,14 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             '''
             Helper Generator to yield line strings for .des file
             '''
-            global_attributes_dict = dict(self.netcdf_dataset.__dict__)
+            # Ignore netCDF system attributes
+            global_attributes_dict = {key: str(value).strip() 
+                                      for key, value in self.netcdf_dataset.__dict__.items()
+                                      if not key.startswith('_')
+                                      }
             
-            max_key_length = 0
-            max_value_length = 0
-            for key, value in global_attributes_dict.items():
-                # Ignore netCDF system attributes
-                if key.startswith('_'):
-                    del global_attributes_dict[key]
-                    continue
-                
-                value = str(value).strip()
-                global_attributes_dict[key] = value
-                
-                max_key_length = max(max_key_length, len(key))
-                
-                for value_line in value.split('\n'):
-                    max_value_length = max(max_value_length, len(value_line))
+            # Determine maximum key length for fixed field width
+            max_key_length = max([len(key) for key in global_attributes_dict.keys()])
                 
             logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
             
