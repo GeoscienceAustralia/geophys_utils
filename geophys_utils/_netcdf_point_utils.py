@@ -247,7 +247,6 @@ class NetCDFPointUtils(NetCDFUtils):
             
             return mask
         else: # Process four-element bounds iterable if possible
-            iterator = iter(bounds)
             assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
         
             bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
@@ -289,9 +288,9 @@ class NetCDFPointUtils(NetCDFUtils):
             variables = [variables]
         
         if native_grid_bounds:
-            reprojected_grid_bounds = self.get_reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
+            reprojected_grid_bounds = reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
         elif reprojected_grid_bounds:
-            native_grid_bounds = self.get_reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
+            native_grid_bounds = reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
@@ -312,7 +311,7 @@ class NetCDFPointUtils(NetCDFUtils):
                                 pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
+        spatial_subset_mask = self.get_spatial_mask(reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error

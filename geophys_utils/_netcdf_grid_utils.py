@@ -23,7 +23,7 @@ Created on 14Sep.,2016
 import numpy as np
 import math
 from scipy.ndimage import map_coordinates
-from geophys_utils._crs_utils import get_utm_wkt, transform_coords
+from geophys_utils._crs_utils import get_utm_wkt, transform_coords, get_reprojected_bounds
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
 from geophys_utils._netcdf_utils import NetCDFUtils
@@ -606,7 +606,7 @@ class NetCDFGridUtils(NetCDFUtils):
             bounds_ordinates = bounds # Use provided [<xmin>, <ymin>, <xmax>, <ymax>] parameter
             
         if bounds_wkt is not None: # Reproject bounds to native CRS if required
-            bounds_ordinates = self.get_reprojected_bounds(bounds_ordinates, bounds_wkt, self.wkt)
+            bounds_ordinates = get_reprojected_bounds(bounds_ordinates, bounds_wkt, self.wkt)
 
         #=======================================================================
         # bounds_half_size = abs(np.array([bounds_ordinates[2] - bounds_ordinates[0], bounds_ordinates[3] - bounds_ordinates[1]])) / 2.0
