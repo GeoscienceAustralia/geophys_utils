@@ -31,7 +31,7 @@ import tempfile
 from collections import OrderedDict
 from pprint import pformat
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import transform_coords, get_utm_wkt, reprojected_bounds
+from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
@@ -288,9 +288,9 @@ class NetCDFPointUtils(NetCDFUtils):
             variables = [variables]
         
         if native_grid_bounds:
-            reprojected_grid_bounds = reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
+            reprojected_grid_bounds = get_reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
         elif reprojected_grid_bounds:
-            native_grid_bounds = reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
+            native_grid_bounds = get_reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
@@ -311,7 +311,7 @@ class NetCDFPointUtils(NetCDFUtils):
                                 pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
+        spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
