@@ -937,7 +937,7 @@ def main():
         
         parser.add_argument('positional_args', 
                             nargs=argparse.REMAINDER,
-                            help='<nc_in_path> [<dat_out_path>]')
+                            help='<nc_in_path> [<dat_out_path>] [<zip_out_path>]')
 
         return parser.parse_args()
     
