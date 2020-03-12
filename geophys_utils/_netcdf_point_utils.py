@@ -1012,6 +1012,74 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Finished indexing full dataset into KDTree.')
         return self._kdtree
 
+    def copy(self, 
+        nc_out_path, 
+        to_crs=None,
+        *args,
+        **kwargs             
+        ):
+        '''
+        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+            variable creation options and datatypes.
+            
+            @param nc_out_path: path to netCDF output file 
+            @param to_crs: WKT of destination CRS
+
+        '''  
+        # Call inherited NetCDFUtils method
+        super().copy( 
+            nc_out_path, 
+            *args,
+            **kwargs
+            )
+        
+        # Finish up if no reprojection required
+        if not to_crs or to_crs == self.wkt:
+            return
+        
+        try:
+            logger.debug('Re-opening new dataset {}'.format(nc_out_path))
+            new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
+            new_ncpu = NetCDFPointUtils(new_dataset, debug=self.debug)
+            logger.debug('Reprojecting coordinates in new dataset')
+            #TODO: Check coordinate variable data type if changing between degrees & metres
+            new_ncpu._xycoords = transform_coords(self.xycoords, self.wkt, to_crs)
+            new_ncpu.x_variable[:] = new_ncpu._xycoords[:,0]
+            new_ncpu.y_variable[:] = new_ncpu._xycoords[:,1]
+            
+            crs_variable_name, crs_variable_attributes = self.get_crs_attributes(to_crs)
+            logger.debug('Setting {} variable attributes'.format(crs_variable_name))
+            # Delete existing crs variable attributes
+            for key in new_ncpu.crs_variable.__dict__.keys():
+                if not key.startswith('_'):
+                    delattr(new_ncpu.crs_variable, key) 
+                    
+            # Set new crs variable attributes
+            for key, value in crs_variable_attributes:
+                new_ncpu.crs_variable.setattr(key, value)
+                
+            # Rename variables if switching between projected & unprojected
+            if crs_variable_name != new_ncpu.crs_variable.name:
+                logger.debug('Renaming {} variable to {}'.format(new_ncpu.crs_variable.name, crs_variable_name))
+                new_dataset.renameVariable(new_ncpu.crs_variable.name, crs_variable_name) 
+                
+                if crs_variable_name == 'crs': # Geodetic
+                    xy_varnames = ('longitude', 'latitude')
+                elif crs_variable_name == 'transverse_mercator': # Geodetic
+                    xy_varnames = ('x', 'y')
+                else:
+                    raise BaseException('Unrecognised crs variable name "{}"'.format(crs_variable_name))
+                
+                logger.debug('Renaming {} & {} variables to {} & {}', format(new_ncpu.x_variable.name, 
+                                                                             new_ncpu.y_variable.name,
+                                                                             *xy_varnames 
+                                                                             ))
+                new_dataset.renameVariable(new_ncpu.x_variable.name, xy_varnames[0])
+                new_dataset.renameVariable(new_ncpu.y_variable.name, xy_varnames[1])
+        
+        finally:
+            new_dataset.close()
+
 def main(debug=True):
     '''
     Main function for quick and dirty testing
@@ -1049,14 +1117,20 @@ def main(debug=True):
        
 if __name__ == '__main__':
     # Setup logging handlers if required
+    console_handler = logging.StreamHandler(sys.stdout)
+    #console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(message)s')
+    console_handler.setFormatter(console_formatter)
+    
     if not logger.handlers:
         # Set handler for root logger to standard output
-        console_handler = logging.StreamHandler(sys.stdout)
-        #console_handler.setLevel(logging.INFO)
-        console_handler.setLevel(logging.DEBUG)
-        console_formatter = logging.Formatter('%(message)s')
-        console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         logger.debug('Logging handlers set up for logger {}'.format(logger.name))
+
+    ncu_logger = logging.getLogger('geophys_utils._netcdf_utils')
+    if not ncu_logger.handlers:
+        ncu_logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(ncu_logger.name))
 
     main()        

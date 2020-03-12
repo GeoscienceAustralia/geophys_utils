@@ -31,8 +31,9 @@ import re
 import sys
 import numpy as np
 import logging
+import osgeo
 from pprint import pformat
-from geophys_utils._crs_utils import transform_coords, get_reprojected_bounds
+from geophys_utils._crs_utils import transform_coords, get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -41,6 +42,10 @@ class NetCDFUtils(object):
     '''
     NetCDFUtils class implementing useful functionality against netCDF files
     '''
+    # Point, line  and grid subclasses will need this, even though this class is non-spatial
+    X_DIM_VARIABLE_NAMES = ['longitude', 'lon', 'x', 'Easting']
+    Y_DIM_VARIABLE_NAMES = ['latitude', 'lat', 'y', 'Northing']
+    
     DEFAULT_COPY_OPTIONS = {'complevel': 4, 
                             'zlib': True, 
                             'fletcher32': True,
@@ -79,45 +84,21 @@ class NetCDFUtils(object):
         self._wkt = None
         self._wgs84_bbox = None
         
-        # Set auto masking to True for consistent behaviour
-        self.netcdf_dataset.set_auto_mask(True)
+        self._x_variable = None
+        for variable_name in NetCDFUtils.X_DIM_VARIABLE_NAMES:
+            self._x_variable = self.netcdf_dataset.variables.get(variable_name) 
+            if self._x_variable is not None:
+                break
         
-#===============================================================================
-#         #TODO: Make sure this is general for all CRSs
-#         self.x_variable = (self.netcdf_dataset.variables.get('lon') 
-#                            or self.netcdf_dataset.variables.get('x')
-#                            )
-#         
-#         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
-#                            or self.netcdf_dataset.variables.get('y')
-#                            )
-#         
-#         self.y_inverted = (self.y_variable[-1] < self.y_variable[0]) if self.y_variable else False
-#         
-#         try:
-#             self.crs_variable = self.netcdf_dataset.variables[
-#                 self.data_variable_list[0].grid_mapping]
-#         except:
-#             self.crs_variable = None
-#             for grid_mapping_variable_name in ['crs',
-#                                                'transverse_mercator'
-#                                                ]:
-#                 try:
-#                     self.crs_variable = self.netcdf_dataset.variables[grid_mapping_variable_name]
-#                     break
-#                 except: 
-#                     continue
-# 
-#             
-#         try:
-#             self.wkt = self.crs_variable.spatial_ref
-#         except:
-#             try:
-#                 self.wkt = get_spatial_ref_from_wkt(self.crs_variable.epsg_code).ExportToWkt()
-#             except:
-#                 #TODO: Do something a bit better than assuming unprojected WGS84
-#                 self.wkt = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
-#===============================================================================
+        self._y_variable = None
+        for variable_name in NetCDFUtils.Y_DIM_VARIABLE_NAMES:
+            self._y_variable = self.netcdf_dataset.variables.get(variable_name) 
+            if self._y_variable is not None:
+                break
+        
+        # Set auto masking to True for consistent behaviour
+        self.netcdf_dataset.set_auto_mask(True) #TODO: set this at a function level
+        
 
     def copy(self, 
              nc_out_path, 
@@ -145,6 +126,7 @@ class NetCDFUtils(object):
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
         '''  
+        print('blah')
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
                   
         self.netcdf_dataset.set_auto_mask(False)
@@ -408,6 +390,49 @@ class NetCDFUtils(object):
             self.netcdf_dataset.set_auto_mask(True)
             nc_output_dataset.close()
             
+    def get_crs_attributes(self, crs):
+        '''\
+        Function to return name and attributes of crs or transverse_mercator variable
+        '''
+        # Determine wkt and spatial_ref from crs as required
+        if type(crs) == osgeo.osr.SpatialReference:
+            spatial_ref = crs
+        elif type(crs) == str:
+            spatial_ref = get_spatial_ref_from_wkt(crs)
+            
+        wkt = spatial_ref.ExportToWkt() # Export WKT from spatial_ref for consistency even if supplied
+        crs_attributes = {'spatial_ref': wkt}
+        
+        crs_attributes['inverse_flattening'] = spatial_ref.GetInvFlattening()
+        crs_attributes['semi_major_axis'] = spatial_ref.GetSemiMajor()
+        crs_attributes['longitude_of_prime_meridian'] = spatial_ref.GetAttrValue('PRIMEM', 1)
+
+        if spatial_ref.GetUTMZone(): # CRS is UTM
+            crs_variable_name = 'transverse_mercator'
+            crs_attributes['grid_mapping_name'] = 'transverse_mercator'
+
+            crs_attributes['latitude_of_projection_origin'] = spatial_ref.GetProjParm('latitude_of_origin')
+            crs_attributes['scale_factor_at_central_meridian'] = spatial_ref.GetProjParm('scale_factor')
+            crs_attributes['longitude_of_central_meridian'] = spatial_ref.GetProjParm('central_meridian')
+            crs_attributes['false_northing'] = spatial_ref.GetProjParm('false_northing')
+            crs_attributes['false_easting'] = spatial_ref.GetProjParm('false_easting')
+                   
+        else:
+            #===================================================================
+            # # Example crs attributes created by GDAL:
+            #
+            # crs:inverse_flattening = 298.257222101 ;
+            # crs:spatial_ref = "GEOGCS[\"GEOCENTRIC DATUM of AUSTRALIA\",DATUM[\"GDA94\",SPHEROID[\"GRS80\",6378137,298.257222101]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433]]" ;
+            # crs:semi_major_axis = 6378137. ;
+            # crs:GeoTransform = "121.1202390605822 0.0037 0 -20.56227098919639 0 -0.0037 " ;
+            # crs:grid_mapping_name = "latitude_longitude" ;
+            # crs:longitude_of_prime_meridian = 0. ;
+            #===================================================================
+            crs_variable_name = 'crs'
+            crs_attributes['grid_mapping_name'] = 'latitude_longitude'
+
+        logger.debug('{} attributes: {}'.format(pformat(crs_variable_name, crs_attributes)))
+        return crs_variable_name, crs_attributes
     
     @abc.abstractmethod
     def get_convex_hull(self, to_wkt=None):
@@ -496,6 +521,14 @@ class NetCDFUtils(object):
         return self._wkt
 
 
+    @property
+    def x_variable(self):
+        return self._x_variable
+    
+    @property
+    def y_variable(self):
+        return self._y_variable
+    
     @property
     def debug(self):
         return self._debug

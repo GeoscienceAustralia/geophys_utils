@@ -48,7 +48,6 @@ class NetCDFGridUtils(NetCDFUtils):
     '''
     # Assume WGS84 lat/lon if no CRS is provided
     DEFAULT_CRS = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
-    HORIZONTAL_VARIABLE_NAMES = ['lon', 'Easting', 'x', 'longitude']
     DEFAULT_MAX_BYTES = 500000000  # Default to 500,000,000 bytes for NCI's OPeNDAP
     FLOAT_TOLERANCE = 0.000001
 
@@ -74,17 +73,6 @@ class NetCDFGridUtils(NetCDFUtils):
                 for coord_index in range(2):
                     centre_pixel_coords[coord_index].reverse()
 
-            #TODO: Make sure this is general for all CRSs
-            self.x_variable = (self.netcdf_dataset.variables.get('longitude') 
-                               or self.netcdf_dataset.variables.get('lon') 
-                               or self.netcdf_dataset.variables.get('x')
-                               )
-            
-            self.y_variable = (self.netcdf_dataset.variables.get('latitude') 
-                               or self.netcdf_dataset.variables.get('lat') 
-                               or self.netcdf_dataset.variables.get('y')
-                               )
-            
             self.y_inverted = (self.y_variable[-1] < self.y_variable[0]).item() # Should not have to deal with null values
         
             nominal_utm_wkt = get_utm_wkt(centre_pixel_coords[0], self.wkt)
@@ -121,10 +109,6 @@ class NetCDFGridUtils(NetCDFUtils):
         
         self._GeoTransform = None
 
-
-# assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
-# 2D' # This is not valid
-
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if hasattr(variable, 'grid_mapping')][0].dimensions
@@ -141,7 +125,7 @@ class NetCDFGridUtils(NetCDFUtils):
         # Boolean flag indicating YX array ordering
         # TODO: Find a nicer way of dealing with this
         self.YX_order = self.data_variable.dimensions[
-            1] in NetCDFGridUtils.HORIZONTAL_VARIABLE_NAMES
+            1] in NetCDFGridUtils.X_DIM_VARIABLE_NAMES
 
         # Two-element list of dimension varibles.
         self.dimension_arrays = [self.netcdf_dataset.variables[dimension_name][
@@ -663,15 +647,12 @@ class NetCDFGridUtils(NetCDFUtils):
         return self._GeoTransform
 
     def copy(self, 
-             nc_out_path, 
-             datatype_map_dict={},
-             variable_options_dict={},
-             dim_range_dict={},
-             dim_mask_dict={},
-             nc_format=None,
-             limit_dim_size=False,
-             empty_var_list=[],
-             invert_y=None):
+        nc_out_path, 
+        dim_range_dict={},
+        invert_y=None,
+        *args,
+        **kwargs             
+        ):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -693,14 +674,10 @@ class NetCDFGridUtils(NetCDFUtils):
         # Call inherited NetCDFUtils method
         super().copy( 
              nc_out_path, 
-             datatype_map_dict=datatype_map_dict,
-             variable_options_dict=variable_options_dict,
-             dim_range_dict=dim_range_dict,
-             dim_mask_dict=dim_mask_dict,
-             nc_format=nc_format,
-             limit_dim_size=limit_dim_size,
-             empty_var_list=empty_var_list
+             *args,
+             **kwargs
              )
+        
         try:
             logger.debug('Re-opening new dataset {}'.format(nc_out_path))
             new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
@@ -812,5 +789,10 @@ if __name__ == '__main__':
     if not logger.handlers:
         logger.addHandler(console_handler)
         logger.debug('Logging handlers set up for {}'.format(logger.name))
+
+    ncu_logger = logging.getLogger('geophys_utils._netcdf_utils')
+    if not ncu_logger.handlers:
+        ncu_logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(ncu_logger.name))
 
     main()
