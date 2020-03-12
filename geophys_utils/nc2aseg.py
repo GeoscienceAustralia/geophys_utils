@@ -824,7 +824,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             # Determine maximum key length for fixed field width
             max_key_length = max([len(key) for key in global_attributes_dict.keys()])
             
-            global_attributes_dict['ASEG_GDF2'] = 'ASEG-GDF2 file Generated at {} from netCDF file {} using nc2aseg'.format(datetime.now().isoformat,
+            global_attributes_dict['ASEG_GDF2'] = 'ASEG-GDF2 file Generated at {} from netCDF file {} using nc2aseg'.format(datetime.now().isoformat(),
                                                                                                              os.path.basename(self.netcdf_path))
                 
             logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
