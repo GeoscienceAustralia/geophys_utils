@@ -45,6 +45,7 @@ class NetCDFUtils(object):
     # Point, line  and grid subclasses will need this, even though this class is non-spatial
     X_DIM_VARIABLE_NAMES = ['longitude', 'lon', 'x', 'Easting']
     Y_DIM_VARIABLE_NAMES = ['latitude', 'lat', 'y', 'Northing']
+    CRS_VARIABLE_NAMES = ['crs', 'transverse_mercator']
     
     DEFAULT_COPY_OPTIONS = {'complevel': 4, 
                             'zlib': True, 
@@ -497,9 +498,7 @@ class NetCDFUtils(object):
         '''
         if self._crs_variable is None:
             logger.debug('Setting crs_variable property')
-            for crs_variable_name in ['crs',
-                                      'transverse_mercator'
-                                      ]:
+            for crs_variable_name in NetCDFUtils.CRS_VARIABLE_NAMES:
                 self._crs_variable = self.netcdf_dataset.variables.get(crs_variable_name)
                 
                 if self._crs_variable is not None:

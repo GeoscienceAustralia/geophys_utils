@@ -755,7 +755,7 @@ class NetCDFPointUtils(NetCDFUtils):
                               )
                           and not variable.name.endswith('_index') 
                             and not hasattr(variable, 'lookup') # Variable is not an index variable
-                          and not variable.name in ['crs', 'transverse_mercator'] 
+                          and not variable.name in NetCDFUtils.CRS_VARIABLE_NAMES 
                             and not re.match('ga_.+_metadata', variable.name) # Not an excluded variable
                           ]
  
@@ -773,7 +773,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # Scalar variable
             if len(variable.shape) == 0:
                 # Skip CRS variable
-                if variable_name in ['crs', 'transverse_mercator'] or re.match('ga_.+_metadata', variable_name):
+                if variable_name in NetCDFUtils.CRS_VARIABLE_NAMES or re.match('ga_.+_metadata', variable_name):
                     continue 
                 
                 # Repeat scalar value for each point
