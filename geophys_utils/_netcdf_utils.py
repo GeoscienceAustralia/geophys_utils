@@ -127,7 +127,6 @@ class NetCDFUtils(object):
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
         '''  
-        print('blah')
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
                   
         self.netcdf_dataset.set_auto_mask(False)
