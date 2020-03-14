@@ -72,7 +72,9 @@ TEMP_DIR = tempfile.gettempdir()
 DEBUG_POINT_LIMIT = 100000
 
 # List of regular expressions for variable names to exclude from output
-EXCLUDE_NAME_REGEXES = ['crs', '.*_index$', 'ga_.*metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+']
+EXCLUDE_NAME_REGEXES = (['.*_index$', 'ga_.*metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+'] +
+                        NetCDFPointUtils.CRS_VARIABLE_NAMES
+                        )
 
 # List of regular expressions for variable attributes to include in .dfn file
 INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
@@ -212,10 +214,8 @@ class RowValueCache(object):
 
                 if field_definition['columns'] == 1: # Element from 1D variable
                     row_value_list.append(data)
-                elif field_definition['columns'] == 2: # Row from 2D variable
+                else: # Row from 2D variable
                     row_value_list += [element for element in data]
-                else:
-                    raise BaseException('Invalid dimensionality for variable {}'.format(field_definition['field_name']))
                             
             #logger.debug('row_value_list: {}'.format(row_value_list))
             yield row_value_list 
