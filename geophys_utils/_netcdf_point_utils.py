@@ -31,7 +31,7 @@ import tempfile
 from collections import OrderedDict
 from pprint import pformat
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds
+from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
 from geophys_utils._netcdf_utils import NetCDFUtils
 from geophys_utils._polygon_utils import points2convex_hull
@@ -1013,10 +1013,15 @@ class NetCDFPointUtils(NetCDFUtils):
         return self._kdtree
 
     def copy(self, 
-        nc_out_path, 
-        to_crs=None,
-        *args,
-        **kwargs             
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             empty_var_list=[],
+             to_crs=None       
         ):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
@@ -1028,22 +1033,28 @@ class NetCDFPointUtils(NetCDFUtils):
         '''  
         # Call inherited NetCDFUtils method
         super().copy( 
-            nc_out_path, 
-            *args,
-            **kwargs
+             nc_out_path, 
+             datatype_map_dict=datatype_map_dict,
+             variable_options_dict=variable_options_dict,
+             dim_range_dict=dim_range_dict,
+             dim_mask_dict=dim_mask_dict,
+             nc_format=nc_format,
+             limit_dim_size=limit_dim_size,
+             empty_var_list=empty_var_list,  
             )
         
         # Finish up if no reprojection required
-        if not to_crs or to_crs == self.wkt:
+        if not to_crs or get_spatial_ref_from_wkt(to_crs).IsSame(get_spatial_ref_from_wkt(self.wkt)):
+            logger.debug('No reprojection required for dataset {}'.format(nc_out_path))
             return
         
         try:
             logger.debug('Re-opening new dataset {}'.format(nc_out_path))
             new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
             new_ncpu = NetCDFPointUtils(new_dataset, debug=self.debug)
-            logger.debug('Reprojecting coordinates in new dataset')
+            logger.debug('Reprojecting () coordinates in new dataset'.format(len(new_ncpu.x_variable)))
             #TODO: Check coordinate variable data type if changing between degrees & metres
-            new_ncpu._xycoords = transform_coords(self.xycoords, self.wkt, to_crs)
+            new_ncpu._xycoords = transform_coords(new_ncpu.xycoords, self.wkt, to_crs)
             new_ncpu.x_variable[:] = new_ncpu._xycoords[:,0]
             new_ncpu.y_variable[:] = new_ncpu._xycoords[:,1]
             
@@ -1055,9 +1066,8 @@ class NetCDFPointUtils(NetCDFUtils):
                     delattr(new_ncpu.crs_variable, key) 
                     
             # Set new crs variable attributes
-            for key, value in crs_variable_attributes:
-                new_ncpu.crs_variable.setattr(key, value)
-                
+            new_ncpu.crs_variable.setncatts(crs_variable_attributes)
+            
             # Rename variables if switching between projected & unprojected
             if crs_variable_name != new_ncpu.crs_variable.name:
                 logger.debug('Renaming {} variable to {}'.format(new_ncpu.crs_variable.name, crs_variable_name))

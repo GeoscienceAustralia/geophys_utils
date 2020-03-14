@@ -647,11 +647,15 @@ class NetCDFGridUtils(NetCDFUtils):
         return self._GeoTransform
 
     def copy(self, 
-        nc_out_path, 
-        dim_range_dict={},
-        invert_y=None,
-        *args,
-        **kwargs             
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             empty_var_list=[],        
+             invert_y=None,
         ):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
@@ -674,8 +678,13 @@ class NetCDFGridUtils(NetCDFUtils):
         # Call inherited NetCDFUtils method
         super().copy( 
              nc_out_path, 
-             *args,
-             **kwargs
+             datatype_map_dict=datatype_map_dict,
+             variable_options_dict=variable_options_dict,
+             dim_range_dict=dim_range_dict,
+             dim_mask_dict=dim_mask_dict,
+             nc_format=nc_format,
+             limit_dim_size=limit_dim_size,
+             empty_var_list=empty_var_list,
              )
         
         try:

@@ -109,7 +109,8 @@ class NetCDFUtils(object):
              dim_mask_dict={},
              nc_format=None,
              limit_dim_size=False,
-             empty_var_list=[]):
+             empty_var_list=[],
+             ):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -407,6 +408,8 @@ class NetCDFUtils(object):
         crs_attributes['semi_major_axis'] = spatial_ref.GetSemiMajor()
         crs_attributes['longitude_of_prime_meridian'] = spatial_ref.GetAttrValue('PRIMEM', 1)
 
+        #TODO: Make this more general to follow GDAL grid dataset conventions
+        # This should handle "albers_conical_equal_area"
         if spatial_ref.GetUTMZone(): # CRS is UTM
             crs_variable_name = 'transverse_mercator'
             crs_attributes['grid_mapping_name'] = 'transverse_mercator'
@@ -431,7 +434,7 @@ class NetCDFUtils(object):
             crs_variable_name = 'crs'
             crs_attributes['grid_mapping_name'] = 'latitude_longitude'
 
-        logger.debug('{} attributes: {}'.format(pformat(crs_variable_name, crs_attributes)))
+        logger.debug('{} attributes: {}'.format(crs_variable_name, pformat(crs_attributes)))
         return crs_variable_name, crs_attributes
     
     @abc.abstractmethod
@@ -496,7 +499,7 @@ class NetCDFUtils(object):
         Property getter function to return crs_variable as required
         '''
         if self._crs_variable is None:
-            logger.debug('Setting crs_variable property')
+            logger.debug('Getting crs_variable property')
             for crs_variable_name in NetCDFUtils.CRS_VARIABLE_NAMES:
                 self._crs_variable = self.netcdf_dataset.variables.get(crs_variable_name)
                 
