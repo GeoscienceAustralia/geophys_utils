@@ -170,6 +170,9 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
     '''
+    #TODO: Deal with this in a more high-level way
+    POINT_CHUNK_SIZE = 1048576 # Number of points to check at any one time to keep memory usage down
+            
     coord_trans = get_coordinate_transformation(
         from_wkt, to_wkt)  # Transform from specified CRS to native CRS
 
@@ -183,7 +186,17 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     if is_single_coordinate:
         coordinate_array = coordinate_array.reshape((1,2))
         
-    new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
+    chunk_start_index = 0
+    transformed_coord_chunk_list = []
+    while chunk_start_index < len(coordinates):
+        chunk_end_index = min(chunk_start_index + POINT_CHUNK_SIZE, len(coordinates))
+        logger.debug('Transforming coordinates {} to {} of {}'.format(chunk_start_index, chunk_end_index-1, len(coordinates)))
+        transformed_coord_chunk_list.append(np.array(coord_trans.TransformPoints(coordinate_array[slice(chunk_start_index, chunk_end_index)]))[:,0:2])
+        chunk_start_index = chunk_end_index
+    new_coordinate_array = np.concatenate(transformed_coord_chunk_list)
+        
+    #new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2] # Old un-chunked coordinate transformation
+    
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
     else: 

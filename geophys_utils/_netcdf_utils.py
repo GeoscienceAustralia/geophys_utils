@@ -33,6 +33,7 @@ import numpy as np
 import logging
 import osgeo
 from pprint import pformat
+from collections import OrderedDict
 from geophys_utils._crs_utils import transform_coords, get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
@@ -45,7 +46,7 @@ class NetCDFUtils(object):
     # Point, line  and grid subclasses will need this, even though this class is non-spatial
     X_DIM_VARIABLE_NAMES = ['longitude', 'lon', 'x', 'Easting']
     Y_DIM_VARIABLE_NAMES = ['latitude', 'lat', 'y', 'Northing']
-    CRS_VARIABLE_NAMES = ['crs', 'transverse_mercator']
+    CRS_VARIABLE_NAMES = ['crs', 'transverse_mercator', 'albers_conical_equal_area'] #TODO: See if we can make this exhaustive
     
     DEFAULT_COPY_OPTIONS = {'complevel': 4, 
                             'zlib': True, 
@@ -109,6 +110,7 @@ class NetCDFUtils(object):
              dim_mask_dict={},
              nc_format=None,
              limit_dim_size=False,
+             var_list=[],
              empty_var_list=[],
              ):
         '''
@@ -126,14 +128,32 @@ class NetCDFUtils(object):
             @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
                 'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param var_list: List of strings denoting variable names for variables which should be copied
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
                   
         self.netcdf_dataset.set_auto_mask(False)
         
+        if var_list:
+            # Created OrderedDict of filtered variables.
+            filtered_variables = OrderedDict([
+                [variable_name, variable]
+                 for variable_name, variable in self.netcdf_dataset.variables.items()
+                 # Never exclude coordinate variable names
+                 if variable_name in (
+                    var_list + 
+                    NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                    NetCDFUtils.Y_DIM_VARIABLE_NAMES +
+                    NetCDFUtils.CRS_VARIABLE_NAMES
+                    )
+                 ])
+            logger.debug('filtered_variables = {}'.format(filtered_variables.keys()))
+        else:
+            filtered_variables = self.netcdf_dataset.variables
+        
         # Override default variable options with supplied ones for all data variables
-        for variable_name in self._netcdf_dataset.variables.keys():
+        for variable_name in filtered_variables.keys():
             variable_dict = dict(NetCDFUtils.DEFAULT_COPY_OPTIONS)
             variable_dict.update(variable_options_dict.get(variable_name) or {})
             variable_options_dict[variable_name] = variable_dict
@@ -147,7 +167,7 @@ class NetCDFUtils(object):
         try:
             dims_used = set()
             dim_size = {}
-            for variable_name, variable in self.netcdf_dataset.variables.items():
+            for variable_name, variable in filtered_variables.items():               
                 dims_used |= set(variable.dimensions)
                 
                 # Update the sizes for all dimensions which have masks or ranges
@@ -188,7 +208,7 @@ class NetCDFUtils(object):
                     logger.debug('Skipping unused dimension %s' % dimension_name)
     
             # Copy variables
-            for variable_name, input_variable in self.netcdf_dataset.variables.items():
+            for variable_name, input_variable in filtered_variables.items():
                 dtype = datatype_map_dict.get(str(input_variable.datatype)) or input_variable.datatype
                 
                 # Special case for "crs" or "transverse_mercator" - want byte datatype
@@ -409,7 +429,7 @@ class NetCDFUtils(object):
         crs_attributes['longitude_of_prime_meridian'] = spatial_ref.GetAttrValue('PRIMEM', 1)
 
         #TODO: Make this more general to follow GDAL grid dataset conventions
-        # This should handle "albers_conical_equal_area"
+        # This should handle "albers_conical_equal_area" for EPSG:3577
         if spatial_ref.GetUTMZone(): # CRS is UTM
             crs_variable_name = 'transverse_mercator'
             crs_attributes['grid_mapping_name'] = 'transverse_mercator'
@@ -499,7 +519,7 @@ class NetCDFUtils(object):
         Property getter function to return crs_variable as required
         '''
         if self._crs_variable is None:
-            logger.debug('Getting crs_variable property')
+            logger.debug('Getting crs_variable property value')
             for crs_variable_name in NetCDFUtils.CRS_VARIABLE_NAMES:
                 self._crs_variable = self.netcdf_dataset.variables.get(crs_variable_name)
                 
@@ -517,7 +537,7 @@ class NetCDFUtils(object):
         Property getter function to return wkt as required
         '''
         if not self._wkt:
-            logger.debug('Setting wkt property')
+            logger.debug('Getting wkt property value')
             self._wkt = self.crs_variable.spatial_ref
         return self._wkt
 

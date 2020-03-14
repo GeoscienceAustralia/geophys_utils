@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+from shapely.geometry.polygon import asPolygon
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -137,7 +138,7 @@ class NetCDFPointUtils(NetCDFUtils):
         # Define bounds
         self.bounds = [xmin, ymin, xmax, ymax]
             
-        self.point_count = len(xycoords)
+        self.point_count = self.netcdf_dataset.dimensions['point'].size
                
         
     #===========================================================================
@@ -205,7 +206,13 @@ class NetCDFPointUtils(NetCDFUtils):
         Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
         @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
         @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
+        :return mask: Boolean array of size n
         '''
+        # Find all points within geometry
+        
+        #TODO: Deal with this in a more high-level way
+        POINT_CHUNK_SIZE = 1048576 # Number of points to check at any one time to keep memory usage down
+            
         def get_intersection_mask(points, geometry):
             """
             Determine if points lie inside (multi)polygon
@@ -213,48 +220,83 @@ class NetCDFPointUtils(NetCDFUtils):
             :param geometry: (multi)polygon
             :return mask: Boolean array of size n 
             """
-            # Find all points within geometry
-            intersection_points = np.array(MultiPoint(points).intersection(geometry))
-            
-            #TODO: Find out if there's a better way of getting the mask from the intersection points
-            # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
-            _x_values, x_indices, _x_intersection_indices = np.intersect1d(points.flatten()[0::2], intersection_points.flatten()[0::2], return_indices=True)
-            _y_values, y_indices, _y_intersection_indices = np.intersect1d(points.flatten()[1::2], intersection_points.flatten()[1::2], return_indices=True)
-            
             mask = np.zeros(shape=(points.shape[0]), dtype=np.bool)
-            intersection_indices = np.intersect1d(x_indices, y_indices, return_indices=False)
-            mask[intersection_indices] = True
             
+            chunk_start_index = 0
+            while chunk_start_index < len(points):
+                chunk_end_index = min(chunk_start_index + POINT_CHUNK_SIZE, len(points))
+                logger.debug('Checking spatial containment for points {} to {} of {}'.format(chunk_start_index, chunk_end_index-1, len(points)))
+                intersection_points = np.array(MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry))
+                
+                #TODO: Find out if there's a better way of getting the mask from the intersection points
+                # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
+                logger.debug('Computing partial mask from {} intersection points'.format(len(intersection_points)))
+                _x_values, x_indices, _x_intersection_indices = np.intersect1d(points.flatten()[0::2], intersection_points.flatten()[0::2], return_indices=True)
+                _y_values, y_indices, _y_intersection_indices = np.intersect1d(points.flatten()[1::2], intersection_points.flatten()[1::2], return_indices=True)
+                intersection_indices = np.intersect1d(x_indices, y_indices, return_indices=False)
+                mask[intersection_indices] = True
+                    
+                chunk_start_index = chunk_end_index
+
             return mask
             
             
         coordinates = self.xycoords
+        logger.debug('coordinates = {}'.format(coordinates))
     
         if bounds_wkt is not None:
-            coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
+            coordinates = transform_coords(self.xycoords, self.wkt, bounds_wkt)
+            logger.debug('Transformed coordinates = {}'.format(coordinates))
     
-        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds
-        
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds    
+            # Shortcut the whole process if the extents are within the bounds geometry       
+            transformed_bbox = asPolygon(transform_coords(self.native_bbox, self.wkt, bounds_wkt))        
+            if transformed_bbox.within(bounds):
+                logger.debug('Dataset is completely contained within bounds')
+                return np.ones(shape=(len(coordinates),), dtype=np.bool)
+                
             bounds_half_size = abs(np.array([bounds.bounds[2] - bounds.bounds[0], bounds.bounds[3] - bounds.bounds[1]])) / 2.0
             bounds_centroid = np.array(bounds.centroid.coords[0])
+            #logger.debug('bounds_half_size = {}, bounds_centroid = {}'.format(bounds_half_size, bounds_centroid))
             
             # Limit the points checked to those within the same rectangular extent
             # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
+            #logger.debug('Bounding box mask = {}'.format(mask))
             
             # Apply sub-mask for all points within bounds geometry
             (mask[mask])[~get_intersection_mask(coordinates[mask], bounds)] = False
+            #logger.debug('Final shape mask = {}'.format(mask))
             
-            return mask
         else: # Process four-element bounds iterable if possible
             assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
+            
+            transformed_dataset_bounds = transform_coords(np.array(self.bounds).reshape((2,2)), self.wkt, bounds_wkt).reshape((4, 1)) # Transform as [xmin, ymin], [xmax, ymax]]
+                
+            if (transformed_dataset_bounds[0] >= bounds[0]
+                and transformed_dataset_bounds[1] >= bounds[1]
+                and transformed_dataset_bounds[2] <= bounds[2]
+                and transformed_dataset_bounds[3] <= bounds[3]
+                ):
+                logger.debug('Dataset is completely contained within bounds')
+                return np.ones(shape=(len(coordinates),), dtype=np.bool)
+                
         
             bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
             bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
             
             # Return true for each point which is <= bounds_half_size distance from bounds_centroid
-            return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)            
-    
+            mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)  
+                      
+            #===================================================================
+            # if np.all(mask):
+            #     return None
+            # else:
+            #     return mask    
+            #===================================================================
+            return mask
+        
+        
     def grid_points(self, grid_resolution, 
                     variables=None, 
                     native_grid_bounds=None, 
@@ -1020,6 +1062,7 @@ class NetCDFPointUtils(NetCDFUtils):
              dim_mask_dict={},
              nc_format=None,
              limit_dim_size=False,
+             var_list=[],
              empty_var_list=[],
              to_crs=None       
         ):
@@ -1040,6 +1083,7 @@ class NetCDFPointUtils(NetCDFUtils):
              dim_mask_dict=dim_mask_dict,
              nc_format=nc_format,
              limit_dim_size=limit_dim_size,
+             var_list=var_list,
              empty_var_list=empty_var_list,  
             )
         
@@ -1064,9 +1108,16 @@ class NetCDFPointUtils(NetCDFUtils):
             for key in new_ncpu.crs_variable.__dict__.keys():
                 if not key.startswith('_'):
                     delattr(new_ncpu.crs_variable, key) 
+                    try:
+                        delattr(new_ncpu.x_variable, key) 
+                        delattr(new_ncpu.y_variable, key) 
+                    except:
+                        pass
                     
             # Set new crs variable attributes
             new_ncpu.crs_variable.setncatts(crs_variable_attributes)
+            new_ncpu.x_variable.setncatts(crs_variable_attributes)
+            new_ncpu.y_variable.setncatts(crs_variable_attributes)
             
             # Rename variables if switching between projected & unprojected
             if crs_variable_name != new_ncpu.crs_variable.name:

@@ -654,6 +654,7 @@ class NetCDFGridUtils(NetCDFUtils):
              dim_mask_dict={},
              nc_format=None,
              limit_dim_size=False,
+             var_list=[],        
              empty_var_list=[],        
              invert_y=None,
         ):
@@ -684,6 +685,7 @@ class NetCDFGridUtils(NetCDFUtils):
              dim_mask_dict=dim_mask_dict,
              nc_format=nc_format,
              limit_dim_size=limit_dim_size,
+             var_list=var_list,
              empty_var_list=empty_var_list,
              )
         

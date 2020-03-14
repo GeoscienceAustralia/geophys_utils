@@ -64,6 +64,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
+        
+        assert 'line' in self.netcdf_dataset.dimensions, 'No "line" dimension found'
 
         # Initialise private property variables to None until set by property getter methods
         self._line = None
