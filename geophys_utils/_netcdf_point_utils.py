@@ -1136,8 +1136,8 @@ class NetCDFPointUtils(NetCDFUtils):
                 new_ncpu.x_variable.long_name = xy_varnames[0]
                 
                 new_dataset.renameVariable(new_ncpu.y_variable.name, xy_varnames[1])
-                new_ncpu.x_variable.units = units
-                new_ncpu.x_variable.long_name = xy_varnames[1]
+                new_ncpu.y_variable.units = units
+                new_ncpu.y_variable.long_name = xy_varnames[1]
         
         finally:
             new_dataset.close()
