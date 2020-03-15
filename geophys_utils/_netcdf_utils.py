@@ -330,15 +330,16 @@ class NetCDFUtils(object):
                                                    for dim_index in range(len(input_variable.dimensions))
                                                    ]
                                 #logger.debug('new_piece_sizes = {}'.format(new_piece_sizes))
-                                if (
-                                    np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, new_piece_sizes) < self.max_bytes
-                                    and all([new_piece_size <= variable_size
-                                             for new_piece_size, variable_size in zip(new_piece_sizes, input_variable.shape)
-                                             ])
-                                    ): # Test size of new piece
+                                if np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, new_piece_sizes) < self.max_bytes: # new piece size is OK
                                     piece_sizes = new_piece_sizes
-                                    continue
-                                else:
+                                    # Allow piece size to just exceed overall size - don't keep looking
+                                    if any([new_piece_size >= variable_size
+                                            for new_piece_size, variable_size in zip(new_piece_sizes, input_variable.shape)
+                                            ]): # piece_size exceeds data size in one or more dimensions - stop looking
+                                        break
+                                    else: # piece_size can go bigger
+                                        continue
+                                else: # new_piece_size is too big - use previously calculated piece_size
                                     break
                             logger.debug('piece_sizes = {}'.format(piece_sizes))                      
                             
