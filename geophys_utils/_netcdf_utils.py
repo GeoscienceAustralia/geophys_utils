@@ -34,6 +34,7 @@ import logging
 import osgeo
 from pprint import pformat
 from collections import OrderedDict
+from functools import reduce
 from geophys_utils._crs_utils import transform_coords, get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
@@ -299,22 +300,47 @@ class NetCDFUtils(object):
                         if not input_variable_chunking: 
                             # No chunking - Try to copy in one hit. This may bork due to OPeNDAP or memory limitations
                             #TODO: Make this safe for massive arrays, possibly using the array_pieces code
+                            logger.debug('Copying un-chunked array')
                             if any(variable_masks):
                                 output_variable[...] = input_variable[input_variable_slices][variable_masks]
                             else:
                                 output_variable[...] = input_variable[input_variable_slices]
                         
                         else: # Chunked - perform copy in pieces
-                            #TODO: Improve performance for small chunks, and maybe look at chunk alignment for slices
-                             
-                            # Use largest chunk sizes between input and output
-                            piece_sizes = [
+                            logger.debug('input_variable.shape = {}'.format(input_variable.shape))
+                            logger.debug('Input variable item size in bytes = {}'.format(np.dtype(input_variable.dtype).itemsize))
+
+                            # Use largest chunk sizes between input and output as the smallest possible piece
+                            smallest_piece_sizes = [
                                 max(var_options['chunksizes'][dimension_index],
                                     input_variable_chunking[dimension_index]
                                     )
                                 for dimension_index in range(len(input_variable.dimensions))
-                                ]     
-                                                   
+                                ]
+                            logger.debug('smallest_piece_sizes = {}'.format(smallest_piece_sizes))
+                            
+                            # Determine largest multiples of smallest piece which can be read
+                            #TODO: Replace this with something more efficient, maybe start from maximum size and work downwards to smallest_piece_sizes
+                            piece_sizes = smallest_piece_sizes
+                            piece_multiples = [1 for dim_index in range(len(input_variable.dimensions))]
+                            while True:
+                                piece_multiples[piece_sizes.index(min(piece_sizes))] += 1 # Increment multiple for smallest dimension size
+                                
+                                new_piece_sizes = [piece_multiples[dim_index] * smallest_piece_sizes[dim_index] 
+                                                   for dim_index in range(len(input_variable.dimensions))
+                                                   ]
+                                #logger.debug('new_piece_sizes = {}'.format(new_piece_sizes))
+                                if (
+                                    np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, new_piece_sizes) < self.max_bytes
+                                    and all([new_piece_size <= variable_size
+                                             for new_piece_size, variable_size in zip(new_piece_sizes, input_variable.shape)
+                                             ])
+                                    ): # Test size of new piece
+                                    piece_sizes = new_piece_sizes
+                                    continue
+                                else:
+                                    break
+                            logger.debug('piece_sizes = {}'.format(piece_sizes))                      
                             
                             piece_index_ranges = [
                                 (input_variable_slices[dimension_index].start // piece_sizes[dimension_index],
@@ -429,8 +455,32 @@ class NetCDFUtils(object):
         crs_attributes['longitude_of_prime_meridian'] = spatial_ref.GetAttrValue('PRIMEM', 1)
 
         #TODO: Make this more general to follow GDAL grid dataset conventions
-        # This should handle "albers_conical_equal_area" for EPSG:3577
-        if spatial_ref.GetUTMZone(): # CRS is UTM
+        if spatial_ref.IsSame(get_spatial_ref_from_wkt('EPSG:3577')): # Albers equal area projection
+            #=======================================================================
+            # char albers_conical_equal_area ;
+            #         albers_conical_equal_area:grid_mapping_name = "albers_conical_equal_area" ;
+            #         albers_conical_equal_area:false_easting = 0. ;
+            #         albers_conical_equal_area:false_northing = 0. ;
+            #         albers_conical_equal_area:latitude_of_projection_origin = 0. ;
+            #         albers_conical_equal_area:longitude_of_central_meridian = 132. ;
+            #         albers_conical_equal_area:standard_parallel = -18., -36. ;
+            #         albers_conical_equal_area:long_name = "CRS definition" ;
+            #         albers_conical_equal_area:longitude_of_prime_meridian = 0. ;
+            #         albers_conical_equal_area:semi_major_axis = 6378137. ;
+            #         albers_conical_equal_area:inverse_flattening = 298.257222101 ;
+            #         albers_conical_equal_area:spatial_ref = "PROJCS[\"GDA94 / Australian Albers\",GEOGCS[\"GDA94\",DATUM[\"Geocentric_Datum_of_Australia_1994\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY[\"EPSG\",\"6283\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4283\"]],PROJECTION[\"Albers_Conic_Equal_Area\"],PARAMETER[\"standard_parallel_1\",-18],PARAMETER[\"standard_parallel_2\",-36],PARAMETER[\"latitude_of_center\",0],PARAMETER[\"longitude_of_center\",132],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"3577\"]]" ;
+            #         albers_conical_equal_area:GeoTransform = "-2647837.5 87.5 0 -228462.5 0 -87.5 " ;
+            #=======================================================================
+            crs_variable_name = 'albers_conical_equal_area'
+            crs_attributes['grid_mapping_name'] = "albers_conical_equal_area"
+            
+            crs_attributes['latitude_of_projection_origin'] = spatial_ref.GetProjParm('latitude_of_origin')
+            crs_attributes['scale_factor_at_central_meridian'] = spatial_ref.GetProjParm('scale_factor')
+            crs_attributes['longitude_of_central_meridian'] = spatial_ref.GetProjParm('central_meridian')
+            crs_attributes['false_northing'] = spatial_ref.GetProjParm('false_northing')
+            crs_attributes['false_easting'] = spatial_ref.GetProjParm('false_easting')
+            
+        elif spatial_ref.GetUTMZone(): # CRS is UTM
             crs_variable_name = 'transverse_mercator'
             crs_attributes['grid_mapping_name'] = 'transverse_mercator'
 
@@ -442,7 +492,7 @@ class NetCDFUtils(object):
                    
         else:
             #===================================================================
-            # # Example crs attributes created by GDAL:
+            # # Example crs attributes created by GDAL for geographic CRS:
             #
             # crs:inverse_flattening = 298.257222101 ;
             # crs:spatial_ref = "GEOGCS[\"GEOCENTRIC DATUM of AUSTRALIA\",DATUM[\"GDA94\",SPHEROID[\"GRS80\",6378137,298.257222101]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433]]" ;

@@ -676,6 +676,9 @@ class NetCDFGridUtils(NetCDFUtils):
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
             @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
         '''  
+        
+        assert not dim_mask_dict, 'Dimension masking not supported for grids (would create irregular grid).'
+        
         # Call inherited NetCDFUtils method
         super().copy( 
              nc_out_path, 

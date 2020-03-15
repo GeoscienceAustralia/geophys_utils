@@ -911,25 +911,16 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to return a full in-memory coordinate array from source dataset
         '''
         logger.debug('Reading xy coordinates from source dataset')
-        try:
-            x_variable = self.netcdf_dataset.variables['longitude']
-            y_variable = self.netcdf_dataset.variables['latitude']
-        except KeyError:
-            try:
-                x_variable = self.netcdf_dataset.variables['easting']
-                y_variable = self.netcdf_dataset.variables['northing']
-            except KeyError:
-                raise BaseException('Unable to find xy coordinate variables')
             
-        xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
-        self.fetch_array(x_variable, xycoord_values[:,0])
-        self.fetch_array(y_variable, xycoord_values[:,1])
+        xycoord_values = np.zeros(shape=(len(self.x_variable), 2), dtype=self.x_variable.dtype)
+        self.fetch_array(self.x_variable, xycoord_values[:,0])
+        self.fetch_array(self.y_variable, xycoord_values[:,1])
         
         # Deal with netCDF4 Datasets that have had set_auto_mask(False) called
-        if hasattr(x_variable, '_FillValue'):
-            xycoord_values[:,0][xycoord_values[:,0] == x_variable._FillValue] = np.nan
-        if hasattr(y_variable, '_FillValue'):
-            xycoord_values[:,1][xycoord_values[:,1] == y_variable._FillValue] = np.nan
+        if hasattr(self.x_variable, '_FillValue'):
+            xycoord_values[:,0][xycoord_values[:,0] == self.x_variable._FillValue] = np.nan
+        if hasattr(self.y_variable, '_FillValue'):
+            xycoord_values[:,1][xycoord_values[:,1] == self.y_variable._FillValue] = np.nan
         
         return xycoord_values    
 
@@ -1088,7 +1079,8 @@ class NetCDFPointUtils(NetCDFUtils):
             )
         
         # Finish up if no reprojection required
-        if not to_crs or get_spatial_ref_from_wkt(to_crs).IsSame(get_spatial_ref_from_wkt(self.wkt)):
+        dest_srs = get_spatial_ref_from_wkt(to_crs)
+        if not to_crs or dest_srs.IsSame(get_spatial_ref_from_wkt(self.wkt)):
             logger.debug('No reprojection required for dataset {}'.format(nc_out_path))
             return
         
@@ -1096,7 +1088,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Re-opening new dataset {}'.format(nc_out_path))
             new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
             new_ncpu = NetCDFPointUtils(new_dataset, debug=self.debug)
-            logger.debug('Reprojecting () coordinates in new dataset'.format(len(new_ncpu.x_variable)))
+            logger.debug('Reprojecting {} coordinates in new dataset'.format(len(new_ncpu.x_variable)))
             #TODO: Check coordinate variable data type if changing between degrees & metres
             new_ncpu._xycoords = transform_coords(new_ncpu.xycoords, self.wkt, to_crs)
             new_ncpu.x_variable[:] = new_ncpu._xycoords[:,0]
@@ -1126,17 +1118,26 @@ class NetCDFPointUtils(NetCDFUtils):
                 
                 if crs_variable_name == 'crs': # Geodetic
                     xy_varnames = ('longitude', 'latitude')
-                elif crs_variable_name == 'transverse_mercator': # Geodetic
+                    units = dest_srs.GetAngularUnitsName() + 's' # degrees
+                    
+                elif crs_variable_name in ['transverse_mercator', "albers_conical_equal_area"]: # Projected
                     xy_varnames = ('x', 'y')
+                    units = units = dest_srs.GetLinearUnitsName() + 's' # metres
+                    
                 else:
-                    raise BaseException('Unrecognised crs variable name "{}"'.format(crs_variable_name))
+                    raise BaseException('Unhandled crs variable name "{}"'.format(crs_variable_name))
                 
-                logger.debug('Renaming {} & {} variables to {} & {}', format(new_ncpu.x_variable.name, 
+                logger.debug('Renaming {} & {} variables to {} & {}'.format(new_ncpu.x_variable.name, 
                                                                              new_ncpu.y_variable.name,
-                                                                             *xy_varnames 
+                                                                             *xy_varnames
                                                                              ))
                 new_dataset.renameVariable(new_ncpu.x_variable.name, xy_varnames[0])
+                new_ncpu.x_variable.units = units
+                new_ncpu.x_variable.long_name = xy_varnames[0]
+                
                 new_dataset.renameVariable(new_ncpu.y_variable.name, xy_varnames[1])
+                new_ncpu.x_variable.units = units
+                new_ncpu.x_variable.long_name = xy_varnames[1]
         
         finally:
             new_dataset.close()
