@@ -242,11 +242,11 @@ class NetCDFPointUtils(NetCDFUtils):
             
             
         coordinates = self.xycoords
-        logger.debug('coordinates = {}'.format(coordinates))
+        #logger.debug('coordinates = {}'.format(coordinates))
     
         if bounds_wkt is not None:
             coordinates = transform_coords(self.xycoords, self.wkt, bounds_wkt)
-            logger.debug('Transformed coordinates = {}'.format(coordinates))
+            #logger.debug('Transformed coordinates = {}'.format(coordinates))
     
         if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds    
             # Shortcut the whole process if the extents are within the bounds geometry       

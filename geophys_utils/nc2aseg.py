@@ -64,6 +64,9 @@ CHARACTER_ENCODING = 'utf-8'
 
 # Default number of rows to read from netCDF before outputting a chunk of lines.
 CACHE_CHUNK_ROWS = 32768
+
+# Buffer size per-line for 64-bit zipfile
+LINE_BUFFER_SIZE = 4096 # Conservative (biggest) line size in bytes
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
@@ -475,7 +478,8 @@ class NC2ASEGGDF2(object):
             dfn_basename = os.path.basename(dfn_out_path)
             
             zipstream_zipfile.write_iter(dfn_basename,
-                                         self.encoded_dfn_line_generator(encoding=CHARACTER_ENCODING))
+                                         self.encoded_dfn_line_generator(encoding=CHARACTER_ENCODING),
+                                         )
                     
         else:
             # Create, write and close .dfn file
@@ -757,7 +761,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     point_count += 1
                     
                     if not (point_count % self.line_report_increment):
-                        self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
+                        self.info_output('{:n} / {:n} ASEG-GDF2 rows converted to text'.format(point_count, self.total_points))
                     
                     #logger.debug('line: "{}"'.format(line))
                     chunk_line_list.append(line)
@@ -768,8 +772,14 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 chunk_buffer_string = '\n'.join(chunk_line_list) + '\n' # Yield a chunk of lines    
                 
                 if encoding:
-                    yield(chunk_buffer_string.encode(encoding))
+                    encoded_bytestring = chunk_buffer_string.encode(encoding)
+                    line_size = sys.getsizeof(encoded_bytestring)
+                    assert line_size < LINE_BUFFER_SIZE*CACHE_CHUNK_ROWS, 'Line size of {} exceeds buffer size of {}'.format(line_size,
+                                                                                                                             LINE_BUFFER_SIZE * CACHE_CHUNK_ROWS)
+                    logger.debug('Writing ASEG-GDF line buffer of size {:n} bytes'.format(line_size))
+                    yield(encoded_bytestring)
                 else:
+                    logger.debug('Writing ASEG-GDF line buffer')
                     yield(chunk_buffer_string)
                         
                 if self.debug and DEBUG_POINT_LIMIT and (point_count >= DEBUG_POINT_LIMIT): # Don't process more chunks
@@ -794,14 +804,15 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         if zipstream_zipfile:
             # Write to zip file
             dat_basename = os.path.basename(dat_out_path)
-            zipstream_zipfile.write_iter(dat_basename, 
-                         chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding=CHARACTER_ENCODING))
+            zipstream_zipfile.write_iter(
+                dat_basename, 
+                chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding=CHARACTER_ENCODING),
+                buffer_size = self.ncpu.point_count * LINE_BUFFER_SIZE # Need this to force 64-bit zip
+                )
         else: # No zip
             # Create, write and close .dat file
             dat_out_file = open(dat_out_path, mode='w')
-            logger.debug('Writing lines to .dat file {}'.format(self.dat_out_path))
             for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
-                logger.debug('Writing chunk_buffer to file')
                 dat_out_file.write(chunk_buffer + '\n')
             dat_out_file.close()
             self.info_output('Finished writing .dat file {}'.format(dat_out_path))
@@ -849,7 +860,8 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             # Write to zip file
             des_basename = os.path.basename(des_out_path)
             zipstream_zipfile.write_iter(des_basename, 
-                                         des_line_generator(encoding=CHARACTER_ENCODING))
+                                         des_line_generator(encoding=CHARACTER_ENCODING),
+                                         )
         else: # No zip
             # Create, write and close .dat file
             des_out_file = open(des_out_path, mode='w')
