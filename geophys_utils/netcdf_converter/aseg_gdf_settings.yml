@@ -28,6 +28,8 @@ field_definitions:
   latgda94: {long_name: Latitude, short_name: latitude, units: degrees North}
   longda94: {long_name: Longitude, short_name: longitude, units: degrees East}
   longgda94: {long_name: Longitude, short_name: longitude, units: degrees East}
+  gnss_latitude_gda94: {short_name: latitude, units: degrees North}
+  gnss_longitude_gda94: {short_name: longitude, units: degrees East}
   line: {long_name: Line number, short_name: line}
   flight: {long_name: Flight number, short_name: flight}
   flt: {long_name: Flight number, short_name: flight}

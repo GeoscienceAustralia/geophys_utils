@@ -1,8 +1,26 @@
+#!/usr/bin/env python
+
+#===============================================================================
+#    Copyright 2017 Geoscience Australia
+# 
+#    Licensed under the Apache License, Version 2.0 (the "License");
+#    you may not use this file except in compliance with the License.
+#    You may obtain a copy of the License at
+# 
+#        http://www.apache.org/licenses/LICENSE-2.0
+# 
+#    Unless required by applicable law or agreed to in writing, software
+#    distributed under the License is distributed on an "AS IS" BASIS,
+#    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#    See the License for the specific language governing permissions and
+#    limitations under the License.
+#===============================================================================
 '''
 Created on 8 Mar 2020
 
-@author: alex
+@author: Alex Ip <Alex.Ip@ga.gov.au>
 '''
+
 import argparse
 import numpy as np
 import re
@@ -16,6 +34,8 @@ import locale
 from math import log10
 from collections import OrderedDict
 from functools import reduce
+import zipfile
+import zipstream
 
 from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils import NetCDFPointUtils
@@ -25,54 +45,69 @@ locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
 
-# Default number of rows to read before outputting a chunk of lines.
-CACHE_CHUNK_ROWS = 16384
+# Dynamically adjust integer field widths to fit all data values if True
+ADJUST_INTEGER_FIELD_WIDTH = True
+
+# Truncate ASEG-GDF2 field names to eight characters if True
+TRUNCATE_VARIABLE_NAMES = False
+
+# Set this to non zero to limit string field width in .dat file.
+# WARNING - string truncation may corrupt data!
+# N.B: Must be >= all numeric field widths defined in ASEG_GDF_FORMAT dict below (enforced by assertion)
+MAX_FIELD_WIDTH = 0
+
+# Maximum width of comment fields in .des file
+MAX_COMMENT_WIDTH = 128
+
+# Character encoding for .dfn, .dat & .des files
+CHARACTER_ENCODING = 'utf-8'
+
+# Default number of rows to read from netCDF before outputting a chunk of lines.
+CACHE_CHUNK_ROWS = 32768
+
+# Buffer size per-line for 64-bit zipfile
+LINE_BUFFER_SIZE = 4096 # Conservative (biggest) line size in bytes
     
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'C:\Temp'
 
-# Set this to zero for no limit - only set a non-zero value for testing
-POINT_LIMIT = 100000
+# Set this to zero for no limit - only set a non-zero value for testing when debug = True
+DEBUG_POINT_LIMIT = 0
 
 # List of regular expressions for variable names to exclude from output
-EXCLUDE_NAME_REGEXES = ['crs', '.*_index$', 'ga_.*_metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+']
+EXCLUDE_NAME_REGEXES = (['.*_index$', 'ga_.*metadata', 'latitude.+', 'longitude.+', 'easting.+', 'northing.+'] +
+                        NetCDFPointUtils.CRS_VARIABLE_NAMES
+                        )
 
 # List of regular expressions for variable attributes to include in .dfn file
 INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
-
-# Set this to non zero to limit string field width.
-# WARNING - string truncation may corrupt data!
-# N.B: Must be >= all numeric field widths defined in ASEG_GDF_FORMAT dict below (enforced by assertion)
-MAX_FIELD_WIDTH = 0
 
 # From Ross Brodie's email to Alex Ip, sent: Monday, 24 February 2020 4:27 PM
 ASEG_GDF_FORMAT = {
     'float64': {
         'width': 18,
-        'null': -9.9999999999e+00,
+        'null': -9.9999999999e+32,
         'aseg_gdf_format': 'E18.10',
         'python_format': '{:>18.10e}',
         },
     'float32': {
         'width': 14,
-        'null': -9.999999e+00,
+        'null': -9.999999e+32,
         'aseg_gdf_format': 'E14.6',
         'python_format': '{:>14.6e}',
         },
-    #===========================================================================
-    # 'int64': {
-    #     'width': 12,
-    #     'null': -2147483647,
-    #     'aseg_gdf_format': 'I12',
-    #     'python_format': '{:>12d}',
-    #     },
-    # 'uint64': {
-    #     'width': 12,
-    #     'null': 4294967296,
-    #     'aseg_gdf_format': 'I12',
-    #     'python_format': '{:>12d}',
-    #     },
-    #===========================================================================
+    'int64': {
+        'width': 21,
+        'null': -9223372036854775808,
+        'aseg_gdf_format': 'I21',
+        'python_format': '{:>21d}',
+        },
+    'uint64': {
+        'width': 21,
+        'null': 18446744073709551616,
+        'aseg_gdf_format': 'I21',
+        'python_format': '{:>21d}',
+        },
     'int32': {
         'width': 12,
         'null': -2147483647,
@@ -110,8 +145,6 @@ ASEG_GDF_FORMAT = {
         'python_format': '{:>5d}',
         },
     }
-
-ADJUST_INTEGER_FIELD_WIDTH = True
 
 # Check to ensure that MAX_FIELD_WIDTH will not truncate numeric fields
 assert not MAX_FIELD_WIDTH or all([format_specification['width'] <= MAX_FIELD_WIDTH for format_specification in ASEG_GDF_FORMAT.values()]), 'Invalid MAX_FIELD_WIDTH {}'.format(MAX_FIELD_WIDTH)
@@ -184,10 +217,8 @@ class RowValueCache(object):
 
                 if field_definition['columns'] == 1: # Element from 1D variable
                     row_value_list.append(data)
-                elif field_definition['columns'] == 2: # Row from 2D variable
+                else: # Row from 2D variable
                     row_value_list += [element for element in data]
-                else:
-                    raise BaseException('Invalid dimensionality for variable {}'.format(field_definition['field_name']))
                             
             #logger.debug('row_value_list: {}'.format(row_value_list))
             yield row_value_list 
@@ -297,13 +328,16 @@ class NC2ASEGGDF2(object):
                     'columns': column_count
                     }
                 
-                # Sanitise field name, truncate to 8 characters and ensure uniqueness
-                field_name = re.sub('(\W|_)+', '', variable_name)[:8].upper()
-                field_name_count = 0
-                while field_name in [variable_definition.get('field_name') 
-                                     for variable_definition in self.field_definitions.values()]:
-                    field_name_count += 1
-                    field_name = field_name[:-len(str(field_name_count))] + str(field_name_count)
+                if TRUNCATE_VARIABLE_NAMES:
+                    # Sanitise field name, truncate to 8 characters and ensure uniqueness
+                    field_name = re.sub('(\W|_)+', '', variable_name)[:8].upper()
+                    field_name_count = 0
+                    while field_name in [variable_definition.get('field_name') 
+                                         for variable_definition in self.field_definitions.values()]:
+                        field_name_count += 1
+                        field_name = field_name[:-len(str(field_name_count))] + str(field_name_count)
+                else:
+                    field_name = re.sub('\W+', '_', variable_name) # Sanitisation shouldn't be necessary, but we'll do it anyway
                     
                 variable_definition['field_name'] = field_name   
                  
@@ -328,7 +362,6 @@ class NC2ASEGGDF2(object):
                         format_dict['width'] = width
                         format_dict['aseg_gdf_format'] = 'I{}'.format(width)
                         format_dict['python_format'] = '{{:>{}d}}'.format(width)
-                        #logger.debug(self.field_definitions[field_name]['format'])
                     
             #logger.debug(self.field_definitions)
         
@@ -347,10 +380,12 @@ class NC2ASEGGDF2(object):
                     
         self.ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug)
         self.netcdf_dataset = self.ncpu.netcdf_dataset
+        self.netcdf_path = self.ncpu.netcdf_dataset.filepath()
         
         self.netcdf_dataset.set_auto_mask(False) # Turn auto-masking off to allow substitution of new null values
         
         assert 'point' in self.netcdf_dataset.dimensions.keys(), '"point" not found in dataset dimensions'
+        self.info_output('Opened netCDF dataset {}'.format(self.netcdf_path))
         
         self.total_points = self.ncpu.point_count
         
@@ -393,18 +428,18 @@ class NC2ASEGGDF2(object):
         return data
     
     
-    def write_record2dfn_file(self, 
-                              dfn_file, 
-                              rt, 
-                              name, 
-                              aseg_gdf_format, 
-                              definition=None, 
-                              defn=None, 
-                              st='RECD'):
+    def create_dfn_line(
+        self, 
+        rt, 
+        name, 
+        aseg_gdf_format, 
+        definition=None, 
+        defn=None, 
+        st='RECD'
+        ):
         '''
         Helper function to write line to .dfn file.
         self.defn is used to track the DEFN number, which can be reset using the optional defn parameter
-        @param dfn_file: output file for DEFN line 
         @param rt: value for "RT=<rt>" portion of DEFN line, e.g. '' or 'PROJ'  
         @param name: Name of DEFN 
         @param format_specifier_dict: format specifier dict, e.g. {'width': 5, 'null': 256, 'aseg_gdf_format': 'I5', 'python_format': '{:>5d}'}
@@ -431,16 +466,42 @@ class NC2ASEGGDF2(object):
         if definition:
             line += ': ' + definition
             
-        dfn_file.write(line + '\n')
         #logger.debug('dfn file line: {}'.format(line))
         return line
         
                 
-    def write_dfn_file(self, dfn_out_path):
+    def create_dfn_file(self, dfn_out_path, zipstream_zipfile=None):
         '''
         Helper function to output .dfn file
         '''
-        def write_variable_defns(dfn_file):
+        if zipstream_zipfile:
+            dfn_basename = os.path.basename(dfn_out_path)
+            
+            zipstream_zipfile.write_iter(dfn_basename,
+                                         self.encoded_dfn_line_generator(encoding=CHARACTER_ENCODING),
+                                         )
+                    
+        else:
+            # Create, write and close .dfn file
+            with open(dfn_out_path, 'w') as dfn_file:
+                for dfn_line in self.dfn_line_generator():
+                    dfn_file.write(dfn_line)
+                dfn_file.close()
+            self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+                
+                    
+    def encoded_dfn_line_generator(self, encoding=CHARACTER_ENCODING):
+        '''
+        Helper generator to yield encoded bytestrings of all lines in .dfn file
+        '''
+        for line_string in self.dfn_line_generator():
+            yield line_string.encode(encoding) 
+            
+    def dfn_line_generator(self):
+        '''
+        Helper generator to yield all lines in .dfn file
+        '''
+        def variable_defns_generator():
             """
             Helper function to write a DEFN line for each variable
             """
@@ -491,8 +552,7 @@ class NC2ASEGGDF2(object):
                 if field_definition['columns'] > 1: # Need to pre-pend number of columns to format string
                     aseg_gdf_format = '{}{}'.format(field_definition['columns'], aseg_gdf_format)
                 
-                self.write_record2dfn_file(dfn_file,
-                                           rt='',
+                yield self.create_dfn_line(rt='',
                                            name=field_name,
                                            aseg_gdf_format=aseg_gdf_format,
                                            definition=definition,
@@ -500,16 +560,13 @@ class NC2ASEGGDF2(object):
                 
                 
             # Write 'END DEFN'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='',
+            yield self.create_dfn_line(rt='',
                                        name='END DEFN',
                                        aseg_gdf_format=None
                                        )
-                
-            return # End of function write_variable_defns
         
             
-        def write_proj(dfn_file):
+        def proj_defns_generator():
             """
             Helper function to write PROJ lines
 From standard:
@@ -575,43 +632,37 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             self.defn = 0  # reset DEFN number
             
             # write 'DEFN 1 ST=RECD,RT=PROJ; RT:A4'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='RT',
                                        aseg_gdf_format='A4'
                                        )
             
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='COORDSYS',
                                        aseg_gdf_format='A40',
                                        definition='NAME={projection_name}, Projection name'.format(projection_name=projection_name)
                                        )
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='DATUM',
                                        aseg_gdf_format='A40',
                                        definition='NAME={ellipse_name}, Ellipsoid name'.format(ellipse_name=ellipse_name)
                                        )
             
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='MAJ_AXIS',
                                        aseg_gdf_format='D12.1',
                                        definition='UNIT={unit}, NAME={major_axis}, Major axis'.format(unit='m', major_axis=major_axis)
                                        )
 
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='INVFLATT',
                                        aseg_gdf_format='D14.9',
                                        definition='NAME={inverse_flattening}, 1/f inverse of flattening'.format(inverse_flattening=inverse_flattening)
                                        )
 
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='PRIMEMER',
                                        aseg_gdf_format='F10.1',
                                        definition='UNIT={unit}, NAME={prime_meridian}, Location of prime meridian'.format(unit='degree', prime_meridian=prime_meridian)
@@ -619,22 +670,19 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
 
 #===============================================================================
 #                 # Non-standard definitions
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='ELLPSNAM',
 #                                            aseg_gdf_format='A30',
 #                                            definition='NAME={ellipse_name}, Non-standard definition for ellipse name'.format(ellipse_name=ellipse_name)
 #                                            )
 # 
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='PROJNAME',
 #                                            aseg_gdf_format='A40',
 #                                            definition='NAME={projection_name}, Non-standard definition for projection name'.format(projection_name=projection_name)
 #                                            )
 # 
-#                 self.write_record2dfn_file(dfn_file,
-#                                            rt='PROJ',
+#                 yield self.create_dfn_line(rt='PROJ',
 #                                            name='ECCENT',
 #                                            aseg_gdf_format='D12.9',
 #                                            definition='NAME={eccentricity}, Non-standard definition for ellipsoidal eccentricity'.format(eccentricity=eccentricity)
@@ -642,8 +690,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
 #===============================================================================
             
             if projection_method:                    
-                self.write_record2dfn_file(dfn_file,
-                                           rt='PROJ',
+                yield self.create_dfn_line(rt='PROJ',
                                            name='PROJMETH',
                                            aseg_gdf_format='A30',
                                            definition='NAME={projection_method}, projection method'.format(projection_method=projection_method)
@@ -653,41 +700,36 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 param_no = 0
                 for param_name, param_value in projection_parameters:
                     param_no += 1  
-                    self.write_record2dfn_file(dfn_file,
-                                               rt='PROJ',
+                    yield self.create_dfn_line(rt='PROJ',
                                                name='PARAM{param_no}'.format(param_no=param_no),
                                                aseg_gdf_format='D14.0', #TODO: Investigate whether this is OK - it looks dodgy to me
                                                definition='NAME={param_value}, {param_name}'.format(param_value=param_value, param_name=param_name)
                                                )
             # Write 'END DEFN'
-            self.write_record2dfn_file(dfn_file,
-                                       rt='PROJ',
+            yield self.create_dfn_line(rt='PROJ',
                                        name='END DEFN',
                                        aseg_gdf_format=''
                                        )
             
             #TODO: Write fixed length PROJ line at end of file
               
-            return # End of function write_proj
+            return # End of function proj_defns_generator
             
 
-        # Create, write and close .dat file
-        dfn_file = open(dfn_out_path, 'w')
-        dfn_file.write('DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A128\n') # TODO: Check this first line 
+        yield 'DEFN   ST=RECD,RT=COMM;RT:A4;COMMENTS:A{}\n'.format(MAX_COMMENT_WIDTH) # TODO: Check this first line 
         
-        write_variable_defns(dfn_file)
+        for defn_line in variable_defns_generator():
+            yield defn_line + '\n'
         
-        write_proj(dfn_file)
-            
-        dfn_file.close()
-        self.info_output('Finished writing .dfn file {}'.format(self.dfn_out_path))
+        for proj_line in proj_defns_generator():
+            yield proj_line + '\n'
     
     
-    def write_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None):
+    def create_dat_file(self, dat_out_path, cache_chunk_rows=None, point_mask=None, zipstream_zipfile=None):
         '''
         Helper function to output .dat file
         '''
-        def chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask=None):
+        def chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask=None, encoding=None):
             '''
             Generator to yield all line strings across all point variables for specified row range
             '''                    
@@ -705,7 +747,6 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     # Truncate fields to maximum width with leading space - only string fields should be affected
                     yield ''.join([' ' + python_format_list[value_index].format(row_value_list[value_index])[1-MAX_FIELD_WIDTH::]
                                    for value_index in range(len(python_format_list))]) #.lstrip() # lstrip if we want to discard leading spaces from line
-
                     
             # Process all chunks
             point_count = 0
@@ -720,24 +761,35 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     point_count += 1
                     
                     if not (point_count % self.line_report_increment):
-                        self.info_output('{:n} / {:n} rows written'.format(point_count, self.total_points))
+                        self.info_output('{:n} / {:n} ASEG-GDF2 rows converted to text'.format(point_count, self.total_points))
                     
                     #logger.debug('line: "{}"'.format(line))
                     chunk_line_list.append(line)
                 
-                    if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more lines
+                    if self.debug and DEBUG_POINT_LIMIT and (point_count >= DEBUG_POINT_LIMIT): # Don't process more lines
                         break                    
                     
-                yield '\n'.join(chunk_line_list) # Yield a chunk of lines    
+                chunk_buffer_string = '\n'.join(chunk_line_list) + '\n' # Yield a chunk of lines    
+                
+                if encoding:
+                    encoded_bytestring = chunk_buffer_string.encode(encoding)
+                    line_size = sys.getsizeof(encoded_bytestring)
+                    assert line_size < LINE_BUFFER_SIZE*CACHE_CHUNK_ROWS, 'Line size of {} exceeds buffer size of {}'.format(line_size,
+                                                                                                                             LINE_BUFFER_SIZE * CACHE_CHUNK_ROWS)
+                    logger.debug('Writing ASEG-GDF line buffer of size {:n} bytes'.format(line_size))
+                    yield(encoded_bytestring)
+                else:
+                    logger.debug('Writing ASEG-GDF line buffer')
+                    yield(chunk_buffer_string)
                         
-                if self.debug and POINT_LIMIT and (point_count >= POINT_LIMIT): # Don't process more chunks
-                    logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(POINT_LIMIT))
+                if self.debug and DEBUG_POINT_LIMIT and (point_count >= DEBUG_POINT_LIMIT): # Don't process more chunks
+                    logger.warning('WARNING: Output limited to {:n} points in debug mode'.format(DEBUG_POINT_LIMIT))
                     break
                             
             self.info_output('A total of {:n} rows were output'.format(point_count))
             
             
-        # Start of write_dat_file function
+        # Start of create_dat_file function
         cache_chunk_rows = cache_chunk_rows or CACHE_CHUNK_ROWS
         
         # Start of chunk_buffer_generator
@@ -749,37 +801,152 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                 python_format_list.append(field_definition['format']['python_format'])
         #logger.debug('python_format_list: {}'.format(python_format_list)) 
                    
-        # Create, write and close .dat file
-        dat_out_file = open(dat_out_path, mode='w')
-        logger.debug('Writing lines to {}'.format(self.dat_out_path))
-        for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
-            logger.debug('Writing chunk_buffer to file')
-            dat_out_file.write(chunk_buffer + '\n')
-        dat_out_file.close()
-        self.info_output('Finished writing .dat file {}'.format(dat_out_path))
+        if zipstream_zipfile:
+            # Write to zip file
+            dat_basename = os.path.basename(dat_out_path)
+            zipstream_zipfile.write_iter(
+                dat_basename, 
+                chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask, encoding=CHARACTER_ENCODING),
+                buffer_size = self.ncpu.point_count * LINE_BUFFER_SIZE # Need this to force 64-bit zip
+                )
+        else: # No zip
+            # Create, write and close .dat file
+            dat_out_file = open(dat_out_path, mode='w')
+            for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows, point_mask):
+                dat_out_file.write(chunk_buffer + '\n')
+            dat_out_file.close()
+            self.info_output('Finished writing .dat file {}'.format(dat_out_path))
+
+    
+    def create_des_file(self, des_out_path, zipstream_zipfile=None):
+        '''
+        Helper function to output .des file
+        '''
+        def des_line_generator(encoding=None):
+            '''
+            Helper Generator to yield line strings for .des file
+            '''
+            # Ignore netCDF system attributes
+            global_attributes_dict = {key: str(value).strip() 
+                                      for key, value in self.netcdf_dataset.__dict__.items()
+                                      if not key.startswith('_')
+                                      }
+            
+            # Determine maximum key length for fixed field width
+            max_key_length = max([len(key) for key in global_attributes_dict.keys()])
+            
+            global_attributes_dict['ASEG_GDF2'] = 'Generated at {} from {} using nc2aseg.py'.format(datetime.now().isoformat(),
+                                                                                                             os.path.basename(self.netcdf_path))
+            
+            # Show dimension sizes
+            for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
+                global_attributes_dict[dimension_name + '_count'] = str(dimension.size)
+                
+            logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
+            
+            for key in sorted(global_attributes_dict.keys()):
+                value = global_attributes_dict[key]
+                key_string = (' {{:<{}s}} : '.format(max_key_length)).format(key) # Include leading space
+                
+                for value_line in value.split('\n'):
+                    # Split long values into multiple lines. Need to be careful with leading & trailing spaces when reassembling
+                    while value_line: 
+                        comment_line = 'COMM{}{}'.format(key_string, value_line[:MAX_COMMENT_WIDTH-len(key_string)]) +'\n'
+                        
+                        if encoding:
+                            yield comment_line.encode(encoding)
+                        else:
+                            yield comment_line
+                            
+                        value_line = value_line[MAX_COMMENT_WIDTH-len(key_string):]
+                    
+        if zipstream_zipfile:
+            # Write to zip file
+            des_basename = os.path.basename(des_out_path)
+            zipstream_zipfile.write_iter(des_basename, 
+                                         des_line_generator(encoding=CHARACTER_ENCODING),
+                                         )
+        else: # No zip
+            # Create, write and close .dat file
+            des_out_file = open(des_out_path, mode='w')
+            logger.debug('Writing lines to .des file {}'.format(self.dat_out_path))
+            for des_line in des_line_generator():
+                logger.debug('Writing "{}" to .des file'.format(des_line))
+                des_out_file.write(des_line)
+            des_out_file.close()
+            self.info_output('Finished writing .des file {}'.format(des_out_path))
 
     
     def convert2aseg_gdf(self, 
                          dat_out_path=None,
-                         dfn_out_path=None,
+                         zip_out_path=None,
                          stride=1,
                          point_mask=None): 
         '''
         Function to convert netCDF file to ASEG-GDF
         '''
-        self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.path)[0] + '.dat'
-        self.dfn_out_path = dfn_out_path or os.path.splitext(dat_out_path)[0] + '.dfn'
+        start_time = datetime.now()
         
-        self.write_dfn_file(dfn_out_path)
+        self.dat_out_path = dat_out_path or os.path.splitext(self.netcdf_dataset.filepath())[0] + '.dat'
+        self.dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
+        self.des_out_path = os.path.splitext(dat_out_path)[0] + '.des'
+        
+        if zip_out_path:
+            zipstream_zipfile = zipstream.ZipFile(compression=zipfile.ZIP_DEFLATED, 
+                                                  allowZip64=True
+                                                  )     
+            zipstream_zipfile.comment = ('ASEG-GDF2 files generated at {} from {}'.format(datetime.now().isoformat(),
+                                                                                          os.path.basename(self.netcdf_path))
+                                                                                          ).encode(CHARACTER_ENCODING)  
+            try:
+                os.remove(zip_out_path)
+            except:
+                pass
+            
+        else:
+            zipstream_zipfile = None
 
-        self.write_dat_file(dat_out_path)
-        
-        
+        try:               
+            self.create_dfn_file(self.dfn_out_path, zipstream_zipfile=zipstream_zipfile)
     
+            self.create_dat_file(self.dat_out_path, zipstream_zipfile=zipstream_zipfile)
+            
+            self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
+            
+            if zipstream_zipfile:
+                zip_out_file = open(zip_out_path, 'wb')
+                
+                self.info_output('Writing zip file {}'.format(zip_out_path))
+                for data in zipstream_zipfile:
+                    zip_out_file.write(data)
+                    
+                self.info_output('Closing zip file {}'.format(zip_out_path))
+                zipstream_zipfile.close()
+        except:
+            # Close and remove incomplete zip file
+            try:
+                zipstream_zipfile.close()
+            except:
+                pass
+            
+            try:
+                zip_out_file.close()
+            except:
+                pass
+            
+            try:
+                os.remove(zip_out_path)
+                logger.debug('Removed failed zip file {}'.format(zip_out_path))
+            except:
+                pass
+            
+            raise
+               
+               
+                    
 
-    
-
-
+        elapsed_time = datetime.now() - start_time
+        self.info_output('ASEG-GDF output completed in {}'.format(str(elapsed_time).split('.')[0])) # Discard partial seconds
 
 def main():
     '''
@@ -798,6 +965,9 @@ def main():
                             type=str,
                             dest="crs")
         
+        parser.add_argument('-z', '--zip', action='store_const', const=True, default=False,
+                            help='Zip directly to an archive file. Default is no zip')
+        
         parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                             help='output debug information. Default is no debug info')
         
@@ -806,7 +976,7 @@ def main():
         
         parser.add_argument('positional_args', 
                             nargs=argparse.REMAINDER,
-                            help='<nc_in_path> [<dat_out_path>]')
+                            help='<nc_in_path> [<dat_out_path>] [<zip_out_path>]')
 
         return parser.parse_args()
     
@@ -817,7 +987,7 @@ def main():
     logger.setLevel(level=log_level)
 
     assert 1 <= len(args.positional_args) <= 2, 'Invalid number of positional arguments.\n\
-Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basename(sys.argv[0]))
+Usage: python {} <options> <nc_in_path> [<dat_out_path>] [<zip_out_path>]'.format(os.path.basename(sys.argv[0]))
 
     nc_in_path = args.positional_args[0]
 
@@ -826,21 +996,19 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     else:
         dat_out_path = os.path.splitext(nc_in_path)[0] + '.dat'
         
-    dfn_out_path = os.path.splitext(dat_out_path)[0] + '.dfn'
-    
+    if args.zip:
+        if len(args.positional_args) == 3:
+            zip_out_path = args.positional_args[2]
+        else:
+            zip_out_path = os.path.splitext(nc_in_path)[0] + '_ASEG_GDF2.zip'
+    else:
+        zip_out_path = None
+        
     logger.debug('args: {}'.format(args.__dict__))
 
     nc2aseggdf2 = NC2ASEGGDF2(nc_in_path, debug=args.debug, verbose=args.verbose)
     
-    #===========================================================================
-    # print('field_definitions = {}'.format(pformat(nc2aseggdf2.field_definitions)))    
-    # 
-    # for field_name in nc2aseggdf2.field_definitions.keys():
-    #     print('{} = {}'.format(field_name, 
-    #                            nc2aseggdf2.get_data_values(field_name, 
-    #                                                        slice(None, None, 100000))))
-    #===========================================================================
-    nc2aseggdf2.convert2aseg_gdf(dat_out_path, dfn_out_path)
+    nc2aseggdf2.convert2aseg_gdf(dat_out_path, zip_out_path)
 
 if __name__ == '__main__':
     # Setup logging handlers if required

@@ -64,6 +64,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
                          debug=debug)
 
         logger.debug('Running NetCDFLineUtils constructor')
+        
+        assert 'line' in self.netcdf_dataset.dimensions, 'No "line" dimension found'
 
         # Initialise private property variables to None until set by property getter methods
         self._line = None
@@ -149,7 +151,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         bounds = bounds or self.bounds
         
-        #spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
+        #spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(bounds, bounds_wkt, self.wkt))
         spatial_subset_mask = self.get_spatial_mask(bounds)
         
         logger.debug('subsampling_distance: {}'.format(subsampling_distance))

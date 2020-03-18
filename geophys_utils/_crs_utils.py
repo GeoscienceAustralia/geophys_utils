@@ -54,6 +54,11 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     
     spatial_ref = SpatialReference()
     
+    result = spatial_ref.SetFromUserInput(wkt_or_crs_name)
+    if not result:
+        logger.debug('CRS determined using SpatialReference.SetFromUserInput({})'.format(wkt_or_crs_name))
+        return spatial_ref
+    
     # Try to resolve WKT
     result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
     if not result:
@@ -117,7 +122,7 @@ def get_coordinate_transformation(from_wkt, to_wkt):
     to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
 
     # This is probably redundant
-    if from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
+    if not to_spatial_ref or from_spatial_ref.ExportToWkt() == to_spatial_ref.ExportToWkt():
         return None
     
     # Hack to make sure that traditional x-y coordinate order is always used
@@ -165,26 +170,56 @@ def transform_coords(coordinates, from_wkt, to_wkt):
     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
     '''
-    try:
-        coord_trans = get_coordinate_transformation(
-            from_wkt, to_wkt)  # Transform from specified CRS to native CRS
-    except:
-        coord_trans = None
+    #TODO: Deal with this in a more high-level way
+    POINT_CHUNK_SIZE = 1048576 # Number of points to check at any one time to keep memory usage down
+            
+    coord_trans = get_coordinate_transformation(
+        from_wkt, to_wkt)  # Transform from specified CRS to native CRS
+
     coordinate_array = np.array(coordinates) # Copy coordinates into fresh array
-
-
+        
     if not coord_trans:  # No transformation required
-        return coordinate_array  # Return copy of original coordinates
+        return coordinate_array # Return copy of original coordinates
     
     is_single_coordinate = (coordinate_array.shape == (2,))
     # Reshape 1D array into 2D single coordinate array if only one coordinate provided
     if is_single_coordinate:
         coordinate_array = coordinate_array.reshape((1,2))
         
-    new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
+    chunk_start_index = 0
+    transformed_coord_chunk_list = []
+    while chunk_start_index < len(coordinates):
+        chunk_end_index = min(chunk_start_index + POINT_CHUNK_SIZE, len(coordinates))
+        logger.debug('Transforming coordinates {} to {} of {}'.format(chunk_start_index, chunk_end_index-1, len(coordinates)))
+        transformed_coord_chunk_list.append(np.array(coord_trans.TransformPoints(coordinate_array[slice(chunk_start_index, chunk_end_index)]))[:,0:2])
+        chunk_start_index = chunk_end_index
+    new_coordinate_array = np.concatenate(transformed_coord_chunk_list)
+        
+    #new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2] # Old un-chunked coordinate transformation
+    
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
     else: 
         return new_coordinate_array
 
+def get_reprojected_bounds(bounds, from_wkt, to_wkt):
+    '''
+    Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
+    @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
+    @parameter from_wkt: WKT for CRS from which to transform bounds
+    @parameter to_wkt: WKT for CRS to which to transform bounds
+    
+    @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
+    '''
+    #if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
+    if to_wkt == from_wkt:
+        return bounds
+    
+    # Need to look at all four bounding box corners, not just LL & UR
+    original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
+    reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
+    
+    return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
+            
+            
 

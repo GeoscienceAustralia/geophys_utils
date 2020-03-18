@@ -31,8 +31,11 @@ import re
 import sys
 import numpy as np
 import logging
+import osgeo
 from pprint import pformat
-from geophys_utils._crs_utils import transform_coords
+from collections import OrderedDict
+from functools import reduce
+from geophys_utils._crs_utils import transform_coords, get_spatial_ref_from_wkt
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
@@ -41,6 +44,11 @@ class NetCDFUtils(object):
     '''
     NetCDFUtils class implementing useful functionality against netCDF files
     '''
+    # Point, line  and grid subclasses will need this, even though this class is non-spatial
+    X_DIM_VARIABLE_NAMES = ['longitude', 'lon', 'x', 'Easting']
+    Y_DIM_VARIABLE_NAMES = ['latitude', 'lat', 'y', 'Northing']
+    CRS_VARIABLE_NAMES = ['crs', 'transverse_mercator', 'albers_conical_equal_area'] #TODO: See if we can make this exhaustive
+    
     DEFAULT_COPY_OPTIONS = {'complevel': 4, 
                             'zlib': True, 
                             'fletcher32': True,
@@ -79,66 +87,22 @@ class NetCDFUtils(object):
         self._wkt = None
         self._wgs84_bbox = None
         
+        self._x_variable = None
+        for variable_name in NetCDFUtils.X_DIM_VARIABLE_NAMES:
+            self._x_variable = self.netcdf_dataset.variables.get(variable_name) 
+            if self._x_variable is not None:
+                break
+        
+        self._y_variable = None
+        for variable_name in NetCDFUtils.Y_DIM_VARIABLE_NAMES:
+            self._y_variable = self.netcdf_dataset.variables.get(variable_name) 
+            if self._y_variable is not None:
+                break
+        
         # Set auto masking to True for consistent behaviour
-        self.netcdf_dataset.set_auto_mask(True)
+        self.netcdf_dataset.set_auto_mask(True) #TODO: set this at a function level
         
-#===============================================================================
-#         #TODO: Make sure this is general for all CRSs
-#         self.x_variable = (self.netcdf_dataset.variables.get('lon') 
-#                            or self.netcdf_dataset.variables.get('x')
-#                            )
-#         
-#         self.y_variable = (self.netcdf_dataset.variables.get('lat') 
-#                            or self.netcdf_dataset.variables.get('y')
-#                            )
-#         
-#         self.y_inverted = (self.y_variable[-1] < self.y_variable[0]) if self.y_variable else False
-#         
-#         try:
-#             self.crs_variable = self.netcdf_dataset.variables[
-#                 self.data_variable_list[0].grid_mapping]
-#         except:
-#             self.crs_variable = None
-#             for grid_mapping_variable_name in ['crs',
-#                                                'transverse_mercator'
-#                                                ]:
-#                 try:
-#                     self.crs_variable = self.netcdf_dataset.variables[grid_mapping_variable_name]
-#                     break
-#                 except: 
-#                     continue
-# 
-#             
-#         try:
-#             self.wkt = self.crs_variable.spatial_ref
-#         except:
-#             try:
-#                 self.wkt = get_spatial_ref_from_wkt(self.crs_variable.epsg_code).ExportToWkt()
-#             except:
-#                 #TODO: Do something a bit better than assuming unprojected WGS84
-#                 self.wkt = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
-#===============================================================================
 
-    def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
-        '''
-        Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
-        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
-        @parameter from_wkt: WKT for CRS from which to transform bounds
-        @parameter to_wkt: WKT for CRS to which to transform bounds
-        
-        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
-        '''
-        #if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
-        if to_wkt == from_wkt:
-            return bounds
-        
-        # Need to look at all four bounding box corners, not just LL & UR
-        original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
-        
-        return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
-            
-            
     def copy(self, 
              nc_out_path, 
              datatype_map_dict={},
@@ -147,7 +111,9 @@ class NetCDFUtils(object):
              dim_mask_dict={},
              nc_format=None,
              limit_dim_size=False,
-             empty_var_list=[]):
+             var_list=[],
+             empty_var_list=[],
+             ):
         '''
         Function to copy a netCDF dataset to another one with potential changes to size, format, 
             variable creation options and datatypes.
@@ -163,14 +129,27 @@ class NetCDFUtils(object):
             @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
                 'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param var_list: List of strings denoting variable names for variables which should be copied
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
         '''  
         logger.debug('variable_options_dict: {}'.format(variable_options_dict))   
                   
         self.netcdf_dataset.set_auto_mask(False)
         
+        if var_list:
+            # Created OrderedDict of filtered variables.
+            filtered_variables = OrderedDict([
+                [variable_name, variable]
+                 for variable_name, variable in self.netcdf_dataset.variables.items()
+                 # Never exclude coordinate variable names
+                 if variable_name in var_list
+                 ])
+            logger.debug('filtered_variables = {}'.format(filtered_variables.keys()))
+        else:
+            filtered_variables = self.netcdf_dataset.variables
+        
         # Override default variable options with supplied ones for all data variables
-        for variable_name in self._netcdf_dataset.variables.keys():
+        for variable_name in filtered_variables.keys():
             variable_dict = dict(NetCDFUtils.DEFAULT_COPY_OPTIONS)
             variable_dict.update(variable_options_dict.get(variable_name) or {})
             variable_options_dict[variable_name] = variable_dict
@@ -183,8 +162,8 @@ class NetCDFUtils(object):
         
         try:
             dims_used = set()
-            dim_size = {}
-            for variable_name, variable in self.netcdf_dataset.variables.items():
+            dest_dim_size = {}
+            for variable_name, variable in filtered_variables.items():               
                 dims_used |= set(variable.dimensions)
                 
                 # Update the sizes for all dimensions which have masks or ranges
@@ -192,7 +171,7 @@ class NetCDFUtils(object):
                     dimension_name = variable.dimensions[dimension_index]
                     source_dimension = self.netcdf_dataset.dimensions[dimension_name]
                     
-                    if dim_size.get(dimension_name): # We have already configured this dimension
+                    if dest_dim_size.get(dimension_name): # We have already configured this dimension
                         continue
                         
                     dim_mask = dim_mask_dict.get(dimension_name)
@@ -206,26 +185,26 @@ class NetCDFUtils(object):
                         dim_mask[:dim_range[0]] = False
                         dim_mask[dim_range[1]:] = False
                         
-                    dim_size[dimension_name] = np.count_nonzero(dim_mask) # Update sizes to take masks into account
+                    dest_dim_size[dimension_name] = np.count_nonzero(dim_mask) # Update sizes to take masks into account
                         
                     #dim_mask_dict[dimension_name] = dim_mask # Update mask to include range
                         
                     
-            #logger.debug(dim_size)
+            logger.debug('dest_dim_size = {}'.format(dest_dim_size))
             
             #Copy dimensions
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 if dimension_name in dims_used: # Discard unused dimensions
-                    logger.debug('Copying dimension %s of length %d' % (dimension_name, dim_size[dimension_name]))
+                    logger.debug('Copying dimension %s of length %d' % (dimension_name, dest_dim_size[dimension_name]))
                     nc_output_dataset.createDimension(dimension_name, 
-                                          dim_size[dimension_name] 
+                                          dest_dim_size[dimension_name] 
                                           if not dimension.isunlimited() or limit_dim_size 
                                           else None)
                 else:
                     logger.debug('Skipping unused dimension %s' % dimension_name)
     
             # Copy variables
-            for variable_name, input_variable in self.netcdf_dataset.variables.items():
+            for variable_name, input_variable in filtered_variables.items():
                 dtype = datatype_map_dict.get(str(input_variable.datatype)) or input_variable.datatype
                 
                 # Special case for "crs" or "transverse_mercator" - want byte datatype
@@ -239,14 +218,14 @@ class NetCDFUtils(object):
                 chunking = input_variable.chunking()
                 if chunking and chunking != 'contiguous':
                     # Input variable is chunked - use same chunking by default unless overridden
-                    input_variable_chunking = [min(chunking[dimension_index], dim_size[input_variable.dimensions[dimension_index]])
+                    input_variable_chunking = [min(chunking[dimension_index], dest_dim_size[input_variable.dimensions[dimension_index]])
                                                  for dimension_index in range(len(chunking))]
                 elif (len(input_variable.dimensions) == 2 and 
                     variable_options_dict.get(variable_name) and
                     variable_options_dict.get(variable_name).get('chunksizes')
                     ): #TODO: Improve this
                     # If input variable is unchunked 2D and output chunking is specified - assume row chunking for input
-                    input_variable_chunking = [1, dim_size[input_variable.dimensions[1]]]
+                    input_variable_chunking = [1, dest_dim_size[input_variable.dimensions[1]]]
                 else:
                     # Input variable is not chunked
                     input_variable_chunking = None
@@ -264,8 +243,8 @@ class NetCDFUtils(object):
                 # Ensure chunk sizes aren't bigger than variable sizes
                 if var_options.get('chunksizes'):
                     for dimension_index in range(len(input_variable.dimensions)):
-                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index] or dim_size[input_variable.dimensions[dimension_index]],
-                                                                         dim_size[input_variable.dimensions[dimension_index]])
+                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index] or dest_dim_size[input_variable.dimensions[dimension_index]],
+                                                                         dest_dim_size[input_variable.dimensions[dimension_index]])
                              
                 options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.items()]) if var_options else ''   
                 logger.debug("Copying variable %s from datatype %s to datatype %s%s" % (variable_name, 
@@ -295,7 +274,7 @@ class NetCDFUtils(object):
                         for dimension_index in range(len(input_variable.dimensions))
                         ])
                         
-                        logger.debug('input_variable_slices={}'.format(input_variable_slices))
+                        #logger.debug('input_variable_slices={}'.format(input_variable_slices))
                         
                         logger.debug('\tCopying {} array data of shape {}'.format(
                             variable_name,
@@ -316,22 +295,47 @@ class NetCDFUtils(object):
                         if not input_variable_chunking: 
                             # No chunking - Try to copy in one hit. This may bork due to OPeNDAP or memory limitations
                             #TODO: Make this safe for massive arrays, possibly using the array_pieces code
+                            logger.debug('Copying un-chunked array')
                             if any(variable_masks):
                                 output_variable[...] = input_variable[input_variable_slices][variable_masks]
                             else:
                                 output_variable[...] = input_variable[input_variable_slices]
                         
                         else: # Chunked - perform copy in pieces
-                            #TODO: Improve performance for small chunks, and maybe look at chunk alignment for slices
-                             
-                            # Use largest chunk sizes between input and output
-                            piece_sizes = [
+                            logger.debug('input_variable.shape = {}'.format(input_variable.shape))
+                            
+                            array_item_size = np.dtype(input_variable.dtype).itemsize
+                            #TODO: Deal with strings in a better way
+                            # Assume string arrays aren't going to be huge - check largest size of all elements
+                            if not array_item_size and input_variable.dtype == str: #  and len(input_variable.dimensions) == 1
+                                array_item_size = max([sys.getsizeof(element) for element in input_variable[:]])
+                            logger.debug('array_item_size (in bytes) = {}'.format(array_item_size))
+                            
+
+                            # Use largest chunk sizes between input and output as the smallest possible piece
+                            smallest_piece_sizes = [
                                 max(var_options['chunksizes'][dimension_index],
                                     input_variable_chunking[dimension_index]
                                     )
                                 for dimension_index in range(len(input_variable.dimensions))
-                                ]     
-                                                   
+                                ]
+                            logger.debug('smallest_piece_sizes = {}'.format(smallest_piece_sizes))
+                            
+                            
+                            # Compute piece_sizes using the largest multiple of the smallest pieces under the maximum number of bytes
+                            piece_sizes = list(smallest_piece_sizes)
+                            piece_counts = tuple([
+                                int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
+                                for dimension_index in range(len(input_variable.dimensions)) 
+                                ])
+                            largest_piece_count_index = piece_counts.index(max(piece_counts))
+                            smallest_piece_bytes = array_item_size * reduce(lambda x, y: x * y, smallest_piece_sizes)                            
+                            piece_sizes[largest_piece_count_index] = min(input_variable.shape[largest_piece_count_index],
+                                                                         int(smallest_piece_sizes[largest_piece_count_index] * (self.max_bytes // smallest_piece_bytes))
+                                                                         )
+                            
+                            piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, piece_sizes)
+                            logger.debug('piece_sizes = {}, bytes = {}'.format(piece_sizes, piece_bytes))
                             
                             piece_index_ranges = [
                                 (input_variable_slices[dimension_index].start // piece_sizes[dimension_index],
@@ -340,11 +344,12 @@ class NetCDFUtils(object):
                                 for dimension_index in range(len(input_variable.dimensions))
                                 ]
                                                   
-                            piece_counts = [
-                                int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / piece_sizes[dimension_index]))
+                            # Recompute piece_counts for revised piece_sizes
+                            piece_counts = tuple([
+                                int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
                                 for dimension_index in range(len(input_variable.dimensions)) 
-                                ]
-                         
+                                ])
+                            
                             logger.debug('\tCopying {} pieces of dimensions {}'.format(' x '.join([str(piece_count) for piece_count in piece_counts]),
                                                                                        ' x '.join([str(piece_size) for piece_size in piece_sizes])
                                                                           )
@@ -361,7 +366,7 @@ class NetCDFUtils(object):
                                  
                                 offset_piece_indices = tuple([(indices[0] - indices[1] + 1) 
                                                               for indices in zip(piece_indices, [piece_index_range[0] for piece_index_range in piece_index_ranges])])
-                                logger.debug('\t\tCopying piece {}'.format(offset_piece_indices))
+                                logger.debug('\t\tCopying piece {}/{}'.format(offset_piece_indices, piece_counts))
                                 
                                  
                                 piece_read_slices = tuple([
@@ -376,7 +381,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                  
-                                logger.debug('piece_read_slices = {}'.format(piece_read_slices))
+                                #logger.debug('piece_read_slices = {}'.format(piece_read_slices))
                                 
                                 piece_write_slices = tuple([
                                     (
@@ -393,7 +398,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                 
-                                logger.debug('piece_write_slices = {}'.format(piece_write_slices))
+                                #logger.debug('piece_write_slices = {}'.format(piece_write_slices))
                                 
                                 # Get mask subsets for piece
                                 piece_dim_masks = tuple([
@@ -402,7 +407,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                                
-                                logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
+                                #logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
                                 
                                 # N.B: Nones in piece_dim_mask for unmasked dimensions will result in newaxis dimensions, but shape doesn't matter                               
                                 output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_dim_masks]
@@ -428,6 +433,75 @@ class NetCDFUtils(object):
             self.netcdf_dataset.set_auto_mask(True)
             nc_output_dataset.close()
             
+    def get_crs_attributes(self, crs):
+        '''\
+        Function to return name and attributes of crs or transverse_mercator variable
+        '''
+        # Determine wkt and spatial_ref from crs as required
+        if type(crs) == osgeo.osr.SpatialReference:
+            spatial_ref = crs
+        elif type(crs) == str:
+            spatial_ref = get_spatial_ref_from_wkt(crs)
+            
+        wkt = spatial_ref.ExportToWkt() # Export WKT from spatial_ref for consistency even if supplied
+        crs_attributes = {'spatial_ref': wkt}
+        
+        crs_attributes['inverse_flattening'] = spatial_ref.GetInvFlattening()
+        crs_attributes['semi_major_axis'] = spatial_ref.GetSemiMajor()
+        crs_attributes['longitude_of_prime_meridian'] = spatial_ref.GetAttrValue('PRIMEM', 1)
+
+        #TODO: Make this more general to follow GDAL grid dataset conventions
+        if spatial_ref.IsSame(get_spatial_ref_from_wkt('EPSG:3577')): # Albers equal area projection
+            #=======================================================================
+            # char albers_conical_equal_area ;
+            #         albers_conical_equal_area:grid_mapping_name = "albers_conical_equal_area" ;
+            #         albers_conical_equal_area:false_easting = 0. ;
+            #         albers_conical_equal_area:false_northing = 0. ;
+            #         albers_conical_equal_area:latitude_of_projection_origin = 0. ;
+            #         albers_conical_equal_area:longitude_of_central_meridian = 132. ;
+            #         albers_conical_equal_area:standard_parallel = -18., -36. ;
+            #         albers_conical_equal_area:long_name = "CRS definition" ;
+            #         albers_conical_equal_area:longitude_of_prime_meridian = 0. ;
+            #         albers_conical_equal_area:semi_major_axis = 6378137. ;
+            #         albers_conical_equal_area:inverse_flattening = 298.257222101 ;
+            #         albers_conical_equal_area:spatial_ref = "PROJCS[\"GDA94 / Australian Albers\",GEOGCS[\"GDA94\",DATUM[\"Geocentric_Datum_of_Australia_1994\",SPHEROID[\"GRS 1980\",6378137,298.257222101,AUTHORITY[\"EPSG\",\"7019\"]],TOWGS84[0,0,0,0,0,0,0],AUTHORITY[\"EPSG\",\"6283\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4283\"]],PROJECTION[\"Albers_Conic_Equal_Area\"],PARAMETER[\"standard_parallel_1\",-18],PARAMETER[\"standard_parallel_2\",-36],PARAMETER[\"latitude_of_center\",0],PARAMETER[\"longitude_of_center\",132],PARAMETER[\"false_easting\",0],PARAMETER[\"false_northing\",0],UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH],AUTHORITY[\"EPSG\",\"3577\"]]" ;
+            #         albers_conical_equal_area:GeoTransform = "-2647837.5 87.5 0 -228462.5 0 -87.5 " ;
+            #=======================================================================
+            crs_variable_name = 'albers_conical_equal_area'
+            crs_attributes['grid_mapping_name'] = "albers_conical_equal_area"
+            
+            crs_attributes['latitude_of_projection_origin'] = spatial_ref.GetProjParm('latitude_of_origin')
+            crs_attributes['scale_factor_at_central_meridian'] = spatial_ref.GetProjParm('scale_factor')
+            crs_attributes['longitude_of_central_meridian'] = spatial_ref.GetProjParm('central_meridian')
+            crs_attributes['false_northing'] = spatial_ref.GetProjParm('false_northing')
+            crs_attributes['false_easting'] = spatial_ref.GetProjParm('false_easting')
+            
+        elif spatial_ref.GetUTMZone(): # CRS is UTM
+            crs_variable_name = 'transverse_mercator'
+            crs_attributes['grid_mapping_name'] = 'transverse_mercator'
+
+            crs_attributes['latitude_of_projection_origin'] = spatial_ref.GetProjParm('latitude_of_origin')
+            crs_attributes['scale_factor_at_central_meridian'] = spatial_ref.GetProjParm('scale_factor')
+            crs_attributes['longitude_of_central_meridian'] = spatial_ref.GetProjParm('central_meridian')
+            crs_attributes['false_northing'] = spatial_ref.GetProjParm('false_northing')
+            crs_attributes['false_easting'] = spatial_ref.GetProjParm('false_easting')
+                   
+        else:
+            #===================================================================
+            # # Example crs attributes created by GDAL for geographic CRS:
+            #
+            # crs:inverse_flattening = 298.257222101 ;
+            # crs:spatial_ref = "GEOGCS[\"GEOCENTRIC DATUM of AUSTRALIA\",DATUM[\"GDA94\",SPHEROID[\"GRS80\",6378137,298.257222101]],PRIMEM[\"Greenwich\",0],UNIT[\"degree\",0.0174532925199433]]" ;
+            # crs:semi_major_axis = 6378137. ;
+            # crs:GeoTransform = "121.1202390605822 0.0037 0 -20.56227098919639 0 -0.0037 " ;
+            # crs:grid_mapping_name = "latitude_longitude" ;
+            # crs:longitude_of_prime_meridian = 0. ;
+            #===================================================================
+            crs_variable_name = 'crs'
+            crs_attributes['grid_mapping_name'] = 'latitude_longitude'
+
+        logger.debug('{} attributes: {}'.format(crs_variable_name, pformat(crs_attributes)))
+        return crs_variable_name, crs_attributes
     
     @abc.abstractmethod
     def get_convex_hull(self, to_wkt=None):
@@ -491,10 +565,8 @@ class NetCDFUtils(object):
         Property getter function to return crs_variable as required
         '''
         if self._crs_variable is None:
-            logger.debug('Setting crs_variable property')
-            for crs_variable_name in ['crs',
-                                      'transverse_mercator'
-                                      ]:
+            logger.debug('Getting crs_variable property value')
+            for crs_variable_name in NetCDFUtils.CRS_VARIABLE_NAMES:
                 self._crs_variable = self.netcdf_dataset.variables.get(crs_variable_name)
                 
                 if self._crs_variable is not None:
@@ -511,11 +583,19 @@ class NetCDFUtils(object):
         Property getter function to return wkt as required
         '''
         if not self._wkt:
-            logger.debug('Setting wkt property')
+            logger.debug('Getting wkt property value')
             self._wkt = self.crs_variable.spatial_ref
         return self._wkt
 
 
+    @property
+    def x_variable(self):
+        return self._x_variable
+    
+    @property
+    def y_variable(self):
+        return self._y_variable
+    
     @property
     def debug(self):
         return self._debug
