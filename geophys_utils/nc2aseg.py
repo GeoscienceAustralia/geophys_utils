@@ -906,14 +906,14 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         else:
             zipstream_zipfile = None
 
-        self.create_dfn_file(self.dfn_out_path, zipstream_zipfile=zipstream_zipfile)
-
-        self.create_dat_file(self.dat_out_path, zipstream_zipfile=zipstream_zipfile)
-        
-        self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
-        
-        if zipstream_zipfile:
-            try:               
+        try:               
+            self.create_dfn_file(self.dfn_out_path, zipstream_zipfile=zipstream_zipfile)
+    
+            self.create_dat_file(self.dat_out_path, zipstream_zipfile=zipstream_zipfile)
+            
+            self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
+            
+            if zipstream_zipfile:
                 zip_out_file = open(zip_out_path, 'wb')
                 
                 self.info_output('Writing zip file {}'.format(zip_out_path))
@@ -922,19 +922,25 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                     
                 self.info_output('Closing zip file {}'.format(zip_out_path))
                 zipstream_zipfile.close()
+        except:
+            # Close and remove incomplete zip file
+            try:
+                zipstream_zipfile.close()
             except:
-                # Close and remove incomplete zip file
-                try:
-                    zipstream_zipfile.close()
-                except:
-                    pass
-                
-                try:
-                    os.remove(zip_out_path)
-                except:
-                    pass
-                
-                raise
+                pass
+            
+            try:
+                zip_out_file.close()
+            except:
+                pass
+            
+            try:
+                os.remove(zip_out_path)
+                logger.debug('Removed failed zip file {}'.format(zip_out_path))
+            except:
+                pass
+            
+            raise
                
                
                     
