@@ -303,7 +303,14 @@ class NetCDFUtils(object):
                         
                         else: # Chunked - perform copy in pieces
                             logger.debug('input_variable.shape = {}'.format(input_variable.shape))
-                            logger.debug('Input variable item size in bytes = {}'.format(np.dtype(input_variable.dtype).itemsize))
+                            
+                            array_item_size = np.dtype(input_variable.dtype).itemsize
+                            #TODO: Deal with strings in a better way
+                            # Assume string arrays aren't going to be huge - check largest size of all elements
+                            if not array_item_size and input_variable.dtype == str: #  and len(input_variable.dimensions) == 1
+                                array_item_size = max([sys.getsizeof(element) for element in input_variable[:]])
+                            logger.debug('array_item_size (in bytes) = {}'.format(array_item_size))
+                            
 
                             # Use largest chunk sizes between input and output as the smallest possible piece
                             smallest_piece_sizes = [
@@ -322,7 +329,7 @@ class NetCDFUtils(object):
                                 for dimension_index in range(len(input_variable.dimensions)) 
                                 ])
                             largest_piece_count_index = piece_counts.index(max(piece_counts))
-                            smallest_piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, smallest_piece_sizes)                            
+                            smallest_piece_bytes = array_item_size * reduce(lambda x, y: x * y, smallest_piece_sizes)                            
                             piece_sizes[largest_piece_count_index] = min(input_variable.shape[largest_piece_count_index],
                                                                          int(smallest_piece_sizes[largest_piece_count_index] * (self.max_bytes // smallest_piece_bytes))
                                                                          )
