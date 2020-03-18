@@ -837,6 +837,10 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             
             global_attributes_dict['ASEG_GDF2'] = 'Generated at {} from {} using nc2aseg.py'.format(datetime.now().isoformat(),
                                                                                                              os.path.basename(self.netcdf_path))
+            
+            # Show dimension sizes
+            for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
+                global_attributes_dict[dimension_name + '_count'] = str(dimension.size)
                 
             logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))   
             
@@ -909,14 +913,31 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
         self.create_des_file(self.des_out_path, zipstream_zipfile=zipstream_zipfile)
         
         if zipstream_zipfile:
-            zip_out_file = open(zip_out_path, 'wb')
-            
-            self.info_output('Writing zip file {}'.format(zip_out_path))
-            for data in zipstream_zipfile:
-                zip_out_file.write(data)
+            try:               
+                zip_out_file = open(zip_out_path, 'wb')
                 
-            self.info_output('Closing zip file {}'.format(zip_out_path))
-            zipstream_zipfile.close()
+                self.info_output('Writing zip file {}'.format(zip_out_path))
+                for data in zipstream_zipfile:
+                    zip_out_file.write(data)
+                    
+                self.info_output('Closing zip file {}'.format(zip_out_path))
+                zipstream_zipfile.close()
+            except:
+                # Close and remove incomplete zip file
+                try:
+                    zipstream_zipfile.close()
+                except:
+                    pass
+                
+                try:
+                    os.remove(zip_out_path)
+                except:
+                    pass
+                
+                raise
+               
+               
+                    
 
         elapsed_time = datetime.now() - start_time
         self.info_output('ASEG-GDF output completed in {}'.format(str(elapsed_time).split('.')[0])) # Discard partial seconds
