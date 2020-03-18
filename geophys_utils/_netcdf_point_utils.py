@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from shapely.geometry.polygon import asPolygon
-
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
@@ -39,8 +37,10 @@ from geophys_utils._polygon_utils import points2convex_hull
 from geophys_utils._concave_hull import concaveHull
 from shapely.geometry import shape
 from scipy.spatial.ckdtree import cKDTree
-from shapely.geometry import MultiPolygon, Polygon, MultiPoint, Point
+from shapely.geometry import Polygon, MultiPoint
+from shapely.geometry.polygon import asPolygon
 from shapely.geometry.base import BaseGeometry
+from shapely.ops import transform
 import logging
 
 # Setup logging handlers if required
@@ -208,7 +208,6 @@ class NetCDFPointUtils(NetCDFUtils):
         @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
         :return mask: Boolean array of size n
         '''
-        # Find all points within geometry
         
         #TODO: Deal with this in a more high-level way
         POINT_CHUNK_SIZE = 1048576 # Number of points to check at any one time to keep memory usage down
@@ -216,6 +215,7 @@ class NetCDFPointUtils(NetCDFUtils):
         def get_intersection_mask(points, geometry):
             """
             Determine if points lie inside (multi)polygon
+            N.B: points and geometry must be in the same CRS
             :param points: 2 x n array of input coordinates
             :param geometry: (multi)polygon
             :return mask: Boolean array of size n 
@@ -241,49 +241,52 @@ class NetCDFPointUtils(NetCDFUtils):
             return mask
             
             
-        coordinates = self.xycoords
+        coordinates = self.xycoords # Don't transform these - do all spatial operations in native CRS
         #logger.debug('coordinates = {}'.format(coordinates))
     
-        if bounds_wkt is not None:
-            coordinates = transform_coords(self.xycoords, self.wkt, bounds_wkt)
-            #logger.debug('Transformed coordinates = {}'.format(coordinates))
     
         if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds    
+            if bounds_wkt is None:
+                native_crs_bounds = bounds
+            else:
+                native_crs_bounds = transform((lambda x, y: transform_coords([x, y], bounds_wkt, self._crs)), 
+                                              bounds)
+
             # Shortcut the whole process if the extents are within the bounds geometry       
-            transformed_bbox = asPolygon(transform_coords(self.native_bbox, self.wkt, bounds_wkt))        
-            if transformed_bbox.within(bounds):
+            if asPolygon(self.native_bbox).within(native_crs_bounds):
                 logger.debug('Dataset is completely contained within bounds')
                 return np.ones(shape=(len(coordinates),), dtype=np.bool)
                 
-            bounds_half_size = abs(np.array([bounds.bounds[2] - bounds.bounds[0], bounds.bounds[3] - bounds.bounds[1]])) / 2.0
-            bounds_centroid = np.array(bounds.centroid.coords[0])
+            bounds_half_size = abs(np.array([native_crs_bounds.bounds[2] - native_crs_bounds.bounds[0], 
+                                             native_crs_bounds.bounds[3] - native_crs_bounds.bounds[1]])) / 2.0
+            bounds_centroid = np.array(native_crs_bounds.centroid.coords[0])
             #logger.debug('bounds_half_size = {}, bounds_centroid = {}'.format(bounds_half_size, bounds_centroid))
             
-            # Limit the points checked to those within the same rectangular extent
+            # Limit the points checked to those within the same rectangular extent (for speed)
             # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
             #logger.debug('Bounding box mask = {}'.format(mask))
             
             # Apply sub-mask for all points within bounds geometry
-            (mask[mask])[~get_intersection_mask(coordinates[mask], bounds)] = False
+            (mask[mask])[~get_intersection_mask(coordinates[mask], native_crs_bounds)] = False
             #logger.debug('Final shape mask = {}'.format(mask))
             
         else: # Process four-element bounds iterable if possible
             assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
             
-            transformed_dataset_bounds = transform_coords(np.array(self.bounds).reshape((2,2)), self.wkt, bounds_wkt).reshape((4, 1)) # Transform as [xmin, ymin], [xmax, ymax]]
+            native_crs_bounds = transform_coords(np.array(bounds).reshape((2,2)), bounds_wkt, self.wkt).reshape((4, 1)) # Transform as [xmin, ymin], [xmax, ymax]]
                 
-            if (transformed_dataset_bounds[0] >= bounds[0]
-                and transformed_dataset_bounds[1] >= bounds[1]
-                and transformed_dataset_bounds[2] <= bounds[2]
-                and transformed_dataset_bounds[3] <= bounds[3]
+            if (self.bounds[0] >= native_crs_bounds[0]
+                and self.bounds[1] >= native_crs_bounds[1]
+                and self.bounds[2] <= native_crs_bounds[2]
+                and self.bounds[3] <= native_crs_bounds[3]
                 ):
                 logger.debug('Dataset is completely contained within bounds')
                 return np.ones(shape=(len(coordinates),), dtype=np.bool)
                 
         
-            bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
-            bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
+            bounds_half_size = abs(np.array([native_crs_bounds[2] - native_crs_bounds[0], native_crs_bounds[3] - native_crs_bounds[1]])) / 2.0
+            bounds_centroid = np.array([native_crs_bounds[0], native_crs_bounds[1]]) + bounds_half_size
             
             # Return true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)  
