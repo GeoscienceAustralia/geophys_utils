@@ -314,14 +314,18 @@ class NetCDFUtils(object):
                                 ]
                             logger.debug('smallest_piece_sizes = {}'.format(smallest_piece_sizes))
                             
-                            piece_sizes = list(smallest_piece_sizes)
                             
-                            # Compute the largest multiple of the smallest pieces under the maximum number of bytes
-                            largest_dim_index = input_variable.shape.index(max(input_variable.shape))
+                            # Compute piece_sizesthe largest multiple of the smallest pieces under the maximum number of bytes
+                            piece_sizes = list(smallest_piece_sizes)
+                            piece_counts = tuple([
+                                int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
+                                for dimension_index in range(len(input_variable.dimensions)) 
+                                ])
+                            largest_piece_count_index = piece_counts.index(max(piece_counts))
                             smallest_piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, smallest_piece_sizes)                            
-                            piece_sizes[largest_dim_index] = min(input_variable.shape[largest_dim_index],
-                                                                 smallest_piece_sizes[largest_dim_index] * (self.max_bytes // smallest_piece_bytes)
-                                                                 )
+                            piece_sizes[largest_piece_count_index] = min(input_variable.shape[largest_piece_count_index],
+                                                                         int(smallest_piece_sizes[largest_piece_count_index] * (self.max_bytes // smallest_piece_bytes))
+                                                                         )
                             
                             piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, piece_sizes)
                             logger.debug('piece_sizes = {}, bytes = {}'.format(piece_sizes, piece_bytes))
@@ -333,6 +337,7 @@ class NetCDFUtils(object):
                                 for dimension_index in range(len(input_variable.dimensions))
                                 ]
                                                   
+                            # Recompute piece_counts for revised piece_sizes
                             piece_counts = tuple([
                                 int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
                                 for dimension_index in range(len(input_variable.dimensions)) 
