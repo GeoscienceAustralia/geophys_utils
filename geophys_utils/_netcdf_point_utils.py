@@ -249,8 +249,11 @@ class NetCDFPointUtils(NetCDFUtils):
             if bounds_wkt is None:
                 native_crs_bounds = bounds
             else:
-                native_crs_bounds = transform((lambda x, y: transform_coords([x, y], bounds_wkt, self._crs)), 
+                logger.debug('Original bounds = {}'.format(bounds))
+                native_crs_bounds = transform((lambda x, y: transform_coords([x, y], bounds_wkt, self.wkt)), 
                                               bounds)
+                
+            logger.debug('native_crs_bounds = {}'.format(native_crs_bounds))
 
             # Shortcut the whole process if the extents are within the bounds geometry       
             if asPolygon(self.native_bbox).within(native_crs_bounds):
@@ -265,7 +268,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # Limit the points checked to those within the same rectangular extent (for speed)
             # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
-            #logger.debug('Bounding box mask = {}'.format(mask))
+            logger.debug('{}/{} points found in initial bounding box intersection'.format(np.count_nonzero(mask), len(coordinates)))
             
             # Apply sub-mask for all points within bounds geometry
             (mask[mask])[~get_intersection_mask(coordinates[mask], native_crs_bounds)] = False
@@ -291,13 +294,8 @@ class NetCDFPointUtils(NetCDFUtils):
             # Return true for each point which is <= bounds_half_size distance from bounds_centroid
             mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)  
                       
-            #===================================================================
-            # if np.all(mask):
-            #     return None
-            # else:
-            #     return mask    
-            #===================================================================
-            return mask
+        logger.debug('{}/{} points found in final mask'.format(np.count_nonzero(mask), len(coordinates)))
+        return mask
         
         
     def grid_points(self, grid_resolution, 
@@ -1068,6 +1066,18 @@ class NetCDFPointUtils(NetCDFUtils):
             @param to_crs: WKT of destination CRS
 
         '''  
+        
+        if var_list:
+            expanded_var_list = list(set(
+                var_list + 
+                NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                NetCDFUtils.Y_DIM_VARIABLE_NAMES +
+                NetCDFUtils.CRS_VARIABLE_NAMES +
+                ['line', 'line_index'] # Always include line numbers (This really should be in an overridden function in NetCDFLineUtils)
+                ))
+        else:
+            expanded_var_list = var_list
+        
         # Call inherited NetCDFUtils method
         super().copy( 
              nc_out_path, 
@@ -1077,7 +1087,7 @@ class NetCDFPointUtils(NetCDFUtils):
              dim_mask_dict=dim_mask_dict,
              nc_format=nc_format,
              limit_dim_size=limit_dim_size,
-             var_list=var_list,
+             var_list=expanded_var_list,
              empty_var_list=empty_var_list,  
             )
         

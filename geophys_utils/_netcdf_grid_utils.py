@@ -679,6 +679,14 @@ class NetCDFGridUtils(NetCDFUtils):
         
         assert not dim_mask_dict, 'Dimension masking not supported for grids (would create irregular grid).'
         
+        if var_list:
+            expanded_var_list = list(set(
+                var_list + 
+                NetCDFUtils.CRS_VARIABLE_NAMES
+                ))
+        else:
+            expanded_var_list = var_list
+        
         # Call inherited NetCDFUtils method
         super().copy( 
              nc_out_path, 
@@ -688,7 +696,7 @@ class NetCDFGridUtils(NetCDFUtils):
              dim_mask_dict=dim_mask_dict,
              nc_format=nc_format,
              limit_dim_size=limit_dim_size,
-             var_list=var_list,
+             var_list=expanded_var_list,
              empty_var_list=empty_var_list,
              )
         

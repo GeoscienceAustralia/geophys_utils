@@ -142,12 +142,7 @@ class NetCDFUtils(object):
                 [variable_name, variable]
                  for variable_name, variable in self.netcdf_dataset.variables.items()
                  # Never exclude coordinate variable names
-                 if variable_name in (
-                    var_list + 
-                    NetCDFUtils.X_DIM_VARIABLE_NAMES + 
-                    NetCDFUtils.Y_DIM_VARIABLE_NAMES +
-                    NetCDFUtils.CRS_VARIABLE_NAMES
-                    )
+                 if variable_name in var_list
                  ])
             logger.debug('filtered_variables = {}'.format(filtered_variables.keys()))
         else:
@@ -167,7 +162,7 @@ class NetCDFUtils(object):
         
         try:
             dims_used = set()
-            dim_size = {}
+            dest_dim_size = {}
             for variable_name, variable in filtered_variables.items():               
                 dims_used |= set(variable.dimensions)
                 
@@ -176,7 +171,7 @@ class NetCDFUtils(object):
                     dimension_name = variable.dimensions[dimension_index]
                     source_dimension = self.netcdf_dataset.dimensions[dimension_name]
                     
-                    if dim_size.get(dimension_name): # We have already configured this dimension
+                    if dest_dim_size.get(dimension_name): # We have already configured this dimension
                         continue
                         
                     dim_mask = dim_mask_dict.get(dimension_name)
@@ -190,19 +185,19 @@ class NetCDFUtils(object):
                         dim_mask[:dim_range[0]] = False
                         dim_mask[dim_range[1]:] = False
                         
-                    dim_size[dimension_name] = np.count_nonzero(dim_mask) # Update sizes to take masks into account
+                    dest_dim_size[dimension_name] = np.count_nonzero(dim_mask) # Update sizes to take masks into account
                         
                     #dim_mask_dict[dimension_name] = dim_mask # Update mask to include range
                         
                     
-            #logger.debug(dim_size)
+            logger.debug('dest_dim_size = {}'.format(dest_dim_size))
             
             #Copy dimensions
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 if dimension_name in dims_used: # Discard unused dimensions
-                    logger.debug('Copying dimension %s of length %d' % (dimension_name, dim_size[dimension_name]))
+                    logger.debug('Copying dimension %s of length %d' % (dimension_name, dest_dim_size[dimension_name]))
                     nc_output_dataset.createDimension(dimension_name, 
-                                          dim_size[dimension_name] 
+                                          dest_dim_size[dimension_name] 
                                           if not dimension.isunlimited() or limit_dim_size 
                                           else None)
                 else:
@@ -223,14 +218,14 @@ class NetCDFUtils(object):
                 chunking = input_variable.chunking()
                 if chunking and chunking != 'contiguous':
                     # Input variable is chunked - use same chunking by default unless overridden
-                    input_variable_chunking = [min(chunking[dimension_index], dim_size[input_variable.dimensions[dimension_index]])
+                    input_variable_chunking = [min(chunking[dimension_index], dest_dim_size[input_variable.dimensions[dimension_index]])
                                                  for dimension_index in range(len(chunking))]
                 elif (len(input_variable.dimensions) == 2 and 
                     variable_options_dict.get(variable_name) and
                     variable_options_dict.get(variable_name).get('chunksizes')
                     ): #TODO: Improve this
                     # If input variable is unchunked 2D and output chunking is specified - assume row chunking for input
-                    input_variable_chunking = [1, dim_size[input_variable.dimensions[1]]]
+                    input_variable_chunking = [1, dest_dim_size[input_variable.dimensions[1]]]
                 else:
                     # Input variable is not chunked
                     input_variable_chunking = None
@@ -248,8 +243,8 @@ class NetCDFUtils(object):
                 # Ensure chunk sizes aren't bigger than variable sizes
                 if var_options.get('chunksizes'):
                     for dimension_index in range(len(input_variable.dimensions)):
-                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index] or dim_size[input_variable.dimensions[dimension_index]],
-                                                                         dim_size[input_variable.dimensions[dimension_index]])
+                        var_options['chunksizes'][dimension_index] = min(var_options['chunksizes'][dimension_index] or dest_dim_size[input_variable.dimensions[dimension_index]],
+                                                                         dest_dim_size[input_variable.dimensions[dimension_index]])
                              
                 options_string = ' with options: %s' % ', '.join(['%s=%s' % item for item in var_options.items()]) if var_options else ''   
                 logger.debug("Copying variable %s from datatype %s to datatype %s%s" % (variable_name, 
@@ -279,7 +274,7 @@ class NetCDFUtils(object):
                         for dimension_index in range(len(input_variable.dimensions))
                         ])
                         
-                        logger.debug('input_variable_slices={}'.format(input_variable_slices))
+                        #logger.debug('input_variable_slices={}'.format(input_variable_slices))
                         
                         logger.debug('\tCopying {} array data of shape {}'.format(
                             variable_name,
@@ -319,29 +314,17 @@ class NetCDFUtils(object):
                                 ]
                             logger.debug('smallest_piece_sizes = {}'.format(smallest_piece_sizes))
                             
-                            # Determine largest multiples of smallest piece which can be read
-                            #TODO: Replace this with something more efficient, maybe start from maximum size and work downwards to smallest_piece_sizes
-                            piece_sizes = smallest_piece_sizes
-                            piece_multiples = [1 for dim_index in range(len(input_variable.dimensions))]
-                            while True:
-                                piece_multiples[piece_sizes.index(min(piece_sizes))] += 1 # Increment multiple for smallest dimension size
-                                
-                                new_piece_sizes = [piece_multiples[dim_index] * smallest_piece_sizes[dim_index] 
-                                                   for dim_index in range(len(input_variable.dimensions))
-                                                   ]
-                                #logger.debug('new_piece_sizes = {}'.format(new_piece_sizes))
-                                if np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, new_piece_sizes) < self.max_bytes: # new piece size is OK
-                                    piece_sizes = new_piece_sizes
-                                    # Allow piece size to just exceed overall size - don't keep looking
-                                    if any([new_piece_size >= variable_size
-                                            for new_piece_size, variable_size in zip(new_piece_sizes, input_variable.shape)
-                                            ]): # piece_size exceeds data size in one or more dimensions - stop looking
-                                        break
-                                    else: # piece_size can go bigger
-                                        continue
-                                else: # new_piece_size is too big - use previously calculated piece_size
-                                    break
-                            logger.debug('piece_sizes = {}'.format(piece_sizes))                      
+                            piece_sizes = list(smallest_piece_sizes)
+                            
+                            # Compute the largest multiple of the smallest pieces under the maximum number of bytes
+                            largest_dim_index = input_variable.shape.index(max(input_variable.shape))
+                            smallest_piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, smallest_piece_sizes)                            
+                            piece_sizes[largest_dim_index] = min(input_variable.shape[largest_dim_index],
+                                                                 smallest_piece_sizes[largest_dim_index] * (self.max_bytes // smallest_piece_bytes)
+                                                                 )
+                            
+                            piece_bytes = np.dtype(input_variable.dtype).itemsize * reduce(lambda x, y: x * y, piece_sizes)
+                            logger.debug('piece_sizes = {}, bytes = {}'.format(piece_sizes, piece_bytes))
                             
                             piece_index_ranges = [
                                 (input_variable_slices[dimension_index].start // piece_sizes[dimension_index],
@@ -350,11 +333,11 @@ class NetCDFUtils(object):
                                 for dimension_index in range(len(input_variable.dimensions))
                                 ]
                                                   
-                            piece_counts = [
-                                int(math.ceil(float(dim_size[input_variable.dimensions[dimension_index]]) / piece_sizes[dimension_index]))
+                            piece_counts = tuple([
+                                int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
                                 for dimension_index in range(len(input_variable.dimensions)) 
-                                ]
-                         
+                                ])
+                            
                             logger.debug('\tCopying {} pieces of dimensions {}'.format(' x '.join([str(piece_count) for piece_count in piece_counts]),
                                                                                        ' x '.join([str(piece_size) for piece_size in piece_sizes])
                                                                           )
@@ -371,7 +354,7 @@ class NetCDFUtils(object):
                                  
                                 offset_piece_indices = tuple([(indices[0] - indices[1] + 1) 
                                                               for indices in zip(piece_indices, [piece_index_range[0] for piece_index_range in piece_index_ranges])])
-                                logger.debug('\t\tCopying piece {}'.format(offset_piece_indices))
+                                logger.debug('\t\tCopying piece {}/{}'.format(offset_piece_indices, piece_counts))
                                 
                                  
                                 piece_read_slices = tuple([
@@ -386,7 +369,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                  
-                                logger.debug('piece_read_slices = {}'.format(piece_read_slices))
+                                #logger.debug('piece_read_slices = {}'.format(piece_read_slices))
                                 
                                 piece_write_slices = tuple([
                                     (
@@ -403,7 +386,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                 
-                                logger.debug('piece_write_slices = {}'.format(piece_write_slices))
+                                #logger.debug('piece_write_slices = {}'.format(piece_write_slices))
                                 
                                 # Get mask subsets for piece
                                 piece_dim_masks = tuple([
@@ -412,7 +395,7 @@ class NetCDFUtils(object):
                                     for dimension_index in range(len(input_variable.dimensions))
                                     ])
                                                
-                                logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
+                                #logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
                                 
                                 # N.B: Nones in piece_dim_mask for unmasked dimensions will result in newaxis dimensions, but shape doesn't matter                               
                                 output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_dim_masks]
