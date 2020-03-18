@@ -322,7 +322,7 @@ class NetCDFUtils(object):
                             logger.debug('smallest_piece_sizes = {}'.format(smallest_piece_sizes))
                             
                             
-                            # Compute piece_sizesthe largest multiple of the smallest pieces under the maximum number of bytes
+                            # Compute piece_sizes using the largest multiple of the smallest pieces under the maximum number of bytes
                             piece_sizes = list(smallest_piece_sizes)
                             piece_counts = tuple([
                                 int(math.ceil(float(self.netcdf_dataset.dimensions[input_variable.dimensions[dimension_index]].size) / piece_sizes[dimension_index]))
