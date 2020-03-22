@@ -1187,7 +1187,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Setting global geometric metadata attributes in netCDF point dataset with {} points'.format(self.netcdf_dataset.dimensions['point'].size))
             
             attribute_dict = dict(zip(['geospatial_lon_min', 'geospatial_lat_min', 'geospatial_lon_max', 'geospatial_lat_max'],
-                              get_reprojected_bounds(self.bounds, self.wt, METADATA_CRS)
+                              get_reprojected_bounds(self.bounds, self.wkt, METADATA_CRS)
                               )
                           )
             

@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-from _ast import Or
-from builtins import False
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
@@ -556,7 +554,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         N.B: This will fail if dataset is not writable
         '''
         try:
-            super().set_global_attributes(self, compute_shape) # Call NetCDFPointUtils.set_global_attributes
+            super().set_global_attributes(compute_shape) # Call NetCDFPointUtils.set_global_attributes
             
             attribute_dict = {}
                 
