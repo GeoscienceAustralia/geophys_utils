@@ -32,7 +32,7 @@ from pprint import pformat
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
-from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._netcdf_utils import NetCDFUtils, METADATA_CRS
 from geophys_utils._polygon_utils import points2convex_hull
 from geophys_utils._concave_hull import concaveHull
 from shapely.geometry import shape
@@ -61,8 +61,6 @@ DEFAULT_READ_CHUNK_SIZE = 8192
 # Set this to a number other than zero for testing
 POINT_LIMIT = 0
     
-METADATA_CRS = 'EPSG:4283' # Standard CRS for metadata (GDA94)  
-
 # Metadata shape generation parameters
 SHAPE_BUFFER_DISTANCE = 0.02 # Distance to buffer (kerf) shape out then in again (in degrees)
 SHAPE_OFFSET = 0.0005 # Distance to buffer (kerf) final shape outwards (in degrees)
@@ -1247,7 +1245,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 
                 try:
                     variable.actual_range = np.array(
-                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype='float32')
+                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
                     logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
                 except:
                     logger.warning('Unable to compute actual_range value for point variable {}'.format(variable_name))

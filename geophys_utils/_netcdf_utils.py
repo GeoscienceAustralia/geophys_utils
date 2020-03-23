@@ -40,6 +40,8 @@ from geophys_utils._crs_utils import transform_coords, get_spatial_ref_from_wkt
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
+METADATA_CRS = 'EPSG:4283' # Standard CRS for metadata (GDA94)  
+
 class NetCDFUtils(object):
     '''
     NetCDFUtils class implementing useful functionality against netCDF files
@@ -85,7 +87,7 @@ class NetCDFUtils(object):
         self._data_variable_list = None       
         self._crs_variable = None # Needs to be set in subclass constructor
         self._wkt = None
-        self._wgs84_bbox = None
+#        self._wgs84_bbox = None
         
         self._x_variable = None
         for variable_name in NetCDFUtils.X_DIM_VARIABLE_NAMES:
@@ -504,6 +506,22 @@ class NetCDFUtils(object):
         return crs_variable_name, crs_attributes
     
     @abc.abstractmethod
+    def set_global_attributes(self, compute_shape=False):
+        '''\
+        Abstract base function to set ACDD global geometric metadata attributes in netCDF file
+        N.B: This will fail if dataset is not writable
+        '''
+        pass
+        
+    @abc.abstractmethod
+    def set_variable_actual_range_attribute(self):
+        '''\
+        Function to set ACDD actual_range attribute in all data variables
+        N.B: This will fail if dataset is not writable
+        '''
+        pass
+    
+    @abc.abstractmethod
     def get_convex_hull(self, to_wkt=None):
         '''\
         Abstract base function to return n x 2 array of coordinates for convex hull of all points
@@ -620,20 +638,22 @@ class NetCDFUtils(object):
                 logger.debug('Logger {} set to level {}'.format(base_class.__module__, log_level))
 
                 
-    @property
-    def wgs84_bbox(self):
-        '''
-        Property getter function to return wgs84_bbox as required
-        '''
-        if self._wgs84_bbox is None:
-            logger.debug('Setting wgs84_bbox property')
-            transformed_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
-            self._wgs84_bbox = [[min(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
-                                [max(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
-                                [max(transformed_bbox[:,0]), max(transformed_bbox[:,1])],
-                                [min(transformed_bbox[:,0]), max(transformed_bbox[:,1])]
-                                ]
-        return self._wgs84_bbox
+    #===========================================================================
+    # @property
+    # def wgs84_bbox(self):
+    #     '''
+    #     Property getter function to return wgs84_bbox as required
+    #     '''
+    #     if self._wgs84_bbox is None:
+    #         logger.debug('Setting wgs84_bbox property')
+    #         transformed_bbox = transform_coords(self.native_bbox, from_wkt=self.wkt, to_wkt='EPSG:4326')
+    #         self._wgs84_bbox = [[min(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
+    #                             [max(transformed_bbox[:,0]), min(transformed_bbox[:,1])],
+    #                             [max(transformed_bbox[:,0]), max(transformed_bbox[:,1])],
+    #                             [min(transformed_bbox[:,0]), max(transformed_bbox[:,1])]
+    #                             ]
+    #     return self._wgs84_bbox
+    #===========================================================================
 
 
 def main():
