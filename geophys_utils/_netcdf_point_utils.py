@@ -1210,7 +1210,13 @@ class NetCDFPointUtils(NetCDFUtils):
                 except Exception as e:
                     logger.warning('Unable to compute concave hull shape: {}'.format(e))
                     try:
-                        del self.netcdf_dataset.geospatial_bounds # Delete any existing value
+                        self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(asPolygon([
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_max']],
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_max']], 
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            ]))
                     except:
                         pass
                             
