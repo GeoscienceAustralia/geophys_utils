@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
@@ -31,11 +30,18 @@ import tempfile
 from collections import OrderedDict
 from pprint import pformat
 from scipy.interpolate import griddata
-from geophys_utils._crs_utils import transform_coords, get_utm_wkt
+from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
-from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._netcdf_utils import NetCDFUtils, METADATA_CRS
 from geophys_utils._polygon_utils import points2convex_hull
+from geophys_utils._concave_hull import concaveHull
+from shapely.geometry import shape
 from scipy.spatial.ckdtree import cKDTree
+from shapely.geometry import Polygon, MultiPoint
+from shapely.geometry.polygon import asPolygon
+from shapely.geometry.base import BaseGeometry
+from shapely.ops import transform
+import shapely.wkt
 import logging
 
 # Setup logging handlers if required
@@ -55,6 +61,15 @@ DEFAULT_READ_CHUNK_SIZE = 8192
 # Set this to a number other than zero for testing
 POINT_LIMIT = 0
     
+# Metadata shape generation parameters
+SHAPE_BUFFER_DISTANCE = 0.02 # Distance to buffer (kerf) shape out then in again (in degrees)
+SHAPE_OFFSET = 0.0005 # Distance to buffer (kerf) final shape outwards (in degrees)
+SHAPE_SIMPLIFY_TOLERANCE = 0.0005 # Length of shortest line in shape (in degrees)
+SHAPE_MAX_POLYGONS=5
+SHAPE_MAX_VERTICES=1000
+SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
+
+
 class NetCDFPointUtils(NetCDFUtils):
     '''
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
@@ -133,7 +148,7 @@ class NetCDFPointUtils(NetCDFUtils):
         # Define bounds
         self.bounds = [xmin, ymin, xmax, ymax]
             
-        self.point_count = len(xycoords)
+        self.point_count = self.netcdf_dataset.dimensions['point'].size
                
         
     #===========================================================================
@@ -199,39 +214,100 @@ class NetCDFPointUtils(NetCDFUtils):
     def get_spatial_mask(self, bounds, bounds_wkt=None):
         '''
         Return boolean mask of dimension 'point' for all coordinates within specified bounds and CRS
+        @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
+        @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
+        :return mask: Boolean array of size n
         '''
-        coordinates = self.xycoords
         
-        if bounds_wkt is not None:
-            coordinates = np.array(transform_coords(self.xycoords, self.wkt, bounds_wkt))
+        #TODO: Deal with this in a more high-level way
+        POINT_CHUNK_SIZE = 1048576 # Number of points to check at any one time to keep memory usage down
+            
+        def get_intersection_mask(points, geometry):
+            """
+            Determine if points lie inside (multi)polygon
+            N.B: points and geometry must be in the same CRS
+            :param points: 2 x n array of input coordinates
+            :param geometry: (multi)polygon
+            :return mask: Boolean array of size n 
+            """
+            mask = np.zeros(shape=(points.shape[0]), dtype=np.bool)
+            
+            chunk_start_index = 0
+            while chunk_start_index < len(points):
+                chunk_end_index = min(chunk_start_index + POINT_CHUNK_SIZE, len(points))
+                logger.debug('Checking spatial containment for points {} to {} of {}'.format(chunk_start_index, chunk_end_index-1, len(points)))
+                intersection_points = np.array(MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry))
+                
+                #TODO: Find out if there's a better way of getting the mask from the intersection points
+                # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
+                logger.debug('Computing partial mask from {} intersection points'.format(len(intersection_points)))
+                _x_values, x_indices, _x_intersection_indices = np.intersect1d(points.flatten()[0::2], intersection_points.flatten()[0::2], return_indices=True)
+                _y_values, y_indices, _y_intersection_indices = np.intersect1d(points.flatten()[1::2], intersection_points.flatten()[1::2], return_indices=True)
+                intersection_indices = np.intersect1d(x_indices, y_indices, return_indices=False)
+                mask[intersection_indices] = True
+                    
+                chunk_start_index = chunk_end_index
 
-        bounds_half_size = abs(np.array([bounds[2] - bounds[0], bounds[3] - bounds[1]])) / 2.0
-        bounds_centroid = np.array([bounds[0], bounds[1]]) + bounds_half_size
-        
-        # Return true for each point which is <= bounds_half_size distance from bounds_centroid
-        return np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
+            return mask
             
-        
+            
+        coordinates = self.xycoords # Don't transform these - do all spatial operations in native CRS
+        #logger.debug('coordinates = {}'.format(coordinates))
     
-    def get_reprojected_bounds(self, bounds, from_wkt, to_wkt):
-        '''
-        Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
-        @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
-        @parameter from_wkt: WKT for CRS from which to transform bounds
-        @parameter to_wkt: WKT for CRS to which to transform bounds
-        
-        @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
-        '''
-        if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
-            return bounds
-        
-        # Need to look at all four bounding box corners, not just LL & UR
-        original_bounding_box =((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3]))
-        reprojected_bounding_box = np.array(transform_coords(original_bounding_box, from_wkt, to_wkt))
-        
-        return [min(reprojected_bounding_box[:,0]), min(reprojected_bounding_box[:,1]), max(reprojected_bounding_box[:,0]), max(reprojected_bounding_box[:,1])]
+    
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds    
+            if bounds_wkt is None:
+                native_crs_bounds = bounds
+            else:
+                logger.debug('Original bounds = {}'.format(bounds))
+                native_crs_bounds = transform((lambda x, y: transform_coords([x, y], bounds_wkt, self.wkt)), 
+                                              bounds)
+                
+            logger.debug('native_crs_bounds = {}'.format(native_crs_bounds))
+
+            # Shortcut the whole process if the extents are within the bounds geometry       
+            if asPolygon(self.native_bbox).within(native_crs_bounds):
+                logger.debug('Dataset is completely contained within bounds')
+                return np.ones(shape=(len(coordinates),), dtype=np.bool)
+                
+            bounds_half_size = abs(np.array([native_crs_bounds.bounds[2] - native_crs_bounds.bounds[0], 
+                                             native_crs_bounds.bounds[3] - native_crs_bounds.bounds[1]])) / 2.0
+            bounds_centroid = np.array(native_crs_bounds.centroid.coords[0])
+            #logger.debug('bounds_half_size = {}, bounds_centroid = {}'.format(bounds_half_size, bounds_centroid))
             
+            # Limit the points checked to those within the same rectangular extent (for speed)
+            # Set mask element to true for each point which is <= bounds_half_size distance from bounds_centroid
+            mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)
+            logger.debug('{}/{} points found in initial bounding box intersection'.format(np.count_nonzero(mask), len(coordinates)))
             
+            # Apply sub-mask for all points within bounds geometry
+            (mask[mask])[~get_intersection_mask(coordinates[mask], native_crs_bounds)] = False
+            #logger.debug('Final shape mask = {}'.format(mask))
+            
+        else: # Process four-element bounds iterable if possible
+            assert len(bounds) == 4, 'Invalid bounds iterable: {}. Must be of form [<xmin>, <ymin>, <xmax>, <ymax>]'.format(bounds)
+            
+            native_crs_bounds = transform_coords(np.array(bounds).reshape((2,2)), bounds_wkt, self.wkt).reshape((4, 1)) # Transform as [xmin, ymin], [xmax, ymax]]
+                
+            if (self.bounds[0] >= native_crs_bounds[0]
+                and self.bounds[1] >= native_crs_bounds[1]
+                and self.bounds[2] <= native_crs_bounds[2]
+                and self.bounds[3] <= native_crs_bounds[3]
+                ):
+                logger.debug('Dataset is completely contained within bounds')
+                return np.ones(shape=(len(coordinates),), dtype=np.bool)
+                
+        
+            bounds_half_size = abs(np.array([native_crs_bounds[2] - native_crs_bounds[0], native_crs_bounds[3] - native_crs_bounds[1]])) / 2.0
+            bounds_centroid = np.array([native_crs_bounds[0], native_crs_bounds[1]]) + bounds_half_size
+            
+            # Return true for each point which is <= bounds_half_size distance from bounds_centroid
+            mask = np.all(ne.evaluate("abs(coordinates - bounds_centroid) <= bounds_half_size"), axis=1)  
+                      
+        logger.debug('{}/{} points found in final mask'.format(np.count_nonzero(mask), len(coordinates)))
+        return mask
+        
+        
     def grid_points(self, grid_resolution, 
                     variables=None, 
                     native_grid_bounds=None, 
@@ -265,9 +341,9 @@ class NetCDFPointUtils(NetCDFUtils):
             variables = [variables]
         
         if native_grid_bounds:
-            reprojected_grid_bounds = self.get_reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
+            reprojected_grid_bounds = get_reprojected_bounds(native_grid_bounds, self.wkt, grid_wkt)
         elif reprojected_grid_bounds:
-            native_grid_bounds = self.get_reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
+            native_grid_bounds = get_reprojected_bounds(reprojected_grid_bounds, grid_wkt, self.wkt)
         else: # No reprojection required
             native_grid_bounds = self.bounds
             reprojected_grid_bounds = self.bounds
@@ -288,7 +364,7 @@ class NetCDFPointUtils(NetCDFUtils):
                                 pixel_centre_bounds[3]+grid_size[1]/50.0
                                 ]
 
-        spatial_subset_mask = self.get_spatial_mask(self.get_reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
+        spatial_subset_mask = self.get_spatial_mask(get_reprojected_bounds(expanded_grid_bounds, grid_wkt, self.wkt))
         
         # Create grids of Y and X values. Note YX ordering and inverted Y
         # Note GRID_RESOLUTION/2.0 fudge to avoid truncation due to rounding error
@@ -390,12 +466,28 @@ class NetCDFPointUtils(NetCDFUtils):
     def get_convex_hull(self, to_wkt=None):
         '''
         Function to return vertex coordinates of a convex hull polygon around all points
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
         '''
-        convex_hull = points2convex_hull(self.xycoords)
-    
-        return transform_coords(convex_hull, self.wkt, to_wkt)
+        return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
     
     
+    def get_concave_hull(self, to_wkt=None, smoothness=None):
+        """\
+        Returns the concave hull (as a shapely polygon) of all points. 
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
+        @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        """
+        hull = concaveHull(transform_coords(self.xycoords, self.wkt, to_wkt))
+        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+        
+        if smoothness is None:
+            return result
+        
+        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+
+
     def nearest_neighbours(self, coordinates, 
                            wkt=None, 
                            points_required=1, 
@@ -716,7 +808,7 @@ class NetCDFPointUtils(NetCDFUtils):
                               )
                           and not variable.name.endswith('_index') 
                             and not hasattr(variable, 'lookup') # Variable is not an index variable
-                          and not variable.name in ['crs', 'transverse_mercator'] 
+                          and not variable.name in NetCDFUtils.CRS_VARIABLE_NAMES 
                             and not re.match('ga_.+_metadata', variable.name) # Not an excluded variable
                           ]
  
@@ -734,7 +826,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # Scalar variable
             if len(variable.shape) == 0:
                 # Skip CRS variable
-                if variable_name in ['crs', 'transverse_mercator'] or re.match('ga_.+_metadata', variable_name):
+                if variable_name in NetCDFUtils.CRS_VARIABLE_NAMES or re.match('ga_.+_metadata', variable_name):
                     continue 
                 
                 # Repeat scalar value for each point
@@ -830,16 +922,16 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to return a full in-memory coordinate array from source dataset
         '''
         logger.debug('Reading xy coordinates from source dataset')
-        try:
-            x_variable = self.netcdf_dataset.variables['longitude']
-            y_variable = self.netcdf_dataset.variables['latitude']
-        except:
-            x_variable = self.netcdf_dataset.variables['easting']
-            y_variable = self.netcdf_dataset.variables['northing']
             
-        xycoord_values = np.zeros(shape=(len(x_variable), 2), dtype=x_variable.dtype)
-        self.fetch_array(x_variable, xycoord_values[:,0])
-        self.fetch_array(y_variable, xycoord_values[:,1])
+        xycoord_values = np.zeros(shape=(len(self.x_variable), 2), dtype=self.x_variable.dtype)
+        self.fetch_array(self.x_variable, xycoord_values[:,0])
+        self.fetch_array(self.y_variable, xycoord_values[:,1])
+        
+        # Deal with netCDF4 Datasets that have had set_auto_mask(False) called
+        if hasattr(self.x_variable, '_FillValue'):
+            xycoord_values[:,0][xycoord_values[:,0] == self.x_variable._FillValue] = np.nan
+        if hasattr(self.y_variable, '_FillValue'):
+            xycoord_values[:,1][xycoord_values[:,1] == self.y_variable._FillValue] = np.nan
         
         return xycoord_values    
 
@@ -853,7 +945,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # assert np.allclose(arr, arr_down)
 
         if self.enable_memory_cache and self._xycoords is not None:
-            logger.debug('Returning memory cached coordinates')
+            #logger.debug('Returning memory cached coordinates')
             return self._xycoords
 
         elif self.memcached_connection is not None:
@@ -964,6 +1056,210 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('Finished indexing full dataset into KDTree.')
         return self._kdtree
 
+    def copy(self, 
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             var_list=[],
+             empty_var_list=[],
+             to_crs=None       
+        ):
+        '''
+        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+            variable creation options and datatypes.
+            
+            @param nc_out_path: path to netCDF output file 
+            @param to_crs: WKT of destination CRS
+
+        '''  
+        
+        if var_list:
+            expanded_var_list = list(set(
+                var_list + 
+                NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                NetCDFUtils.Y_DIM_VARIABLE_NAMES +
+                NetCDFUtils.CRS_VARIABLE_NAMES +
+                ['line', 'line_index'] # Always include line numbers (This really should be in an overridden function in NetCDFLineUtils)
+                ))
+        else:
+            expanded_var_list = var_list
+        
+        # Call inherited NetCDFUtils method
+        super().copy( 
+             nc_out_path, 
+             datatype_map_dict=datatype_map_dict,
+             variable_options_dict=variable_options_dict,
+             dim_range_dict=dim_range_dict,
+             dim_mask_dict=dim_mask_dict,
+             nc_format=nc_format,
+             limit_dim_size=limit_dim_size,
+             var_list=expanded_var_list,
+             empty_var_list=empty_var_list,  
+            )
+        
+        # Finish up if no reprojection required
+        dest_srs = get_spatial_ref_from_wkt(to_crs)
+        if not to_crs or dest_srs.IsSame(get_spatial_ref_from_wkt(self.wkt)):
+            logger.debug('No reprojection required for dataset {}'.format(nc_out_path))
+            return
+        
+        try:
+            logger.debug('Re-opening new dataset {}'.format(nc_out_path))
+            new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
+            new_ncpu = NetCDFPointUtils(new_dataset, debug=self.debug)
+            logger.debug('Reprojecting {} coordinates in new dataset'.format(len(new_ncpu.x_variable)))
+            #TODO: Check coordinate variable data type if changing between degrees & metres
+            new_ncpu._xycoords = transform_coords(new_ncpu.xycoords, self.wkt, to_crs)
+            new_ncpu.x_variable[:] = new_ncpu._xycoords[:,0]
+            new_ncpu.y_variable[:] = new_ncpu._xycoords[:,1]
+            
+            crs_variable_name, crs_variable_attributes = self.get_crs_attributes(to_crs)
+            logger.debug('Setting {} variable attributes'.format(crs_variable_name))
+            # Delete existing crs variable attributes
+            for key in new_ncpu.crs_variable.__dict__.keys():
+                if not key.startswith('_'):
+                    delattr(new_ncpu.crs_variable, key) 
+                    try:
+                        delattr(new_ncpu.x_variable, key) 
+                        delattr(new_ncpu.y_variable, key) 
+                    except:
+                        pass
+                    
+            # Set new crs variable attributes
+            new_ncpu.crs_variable.setncatts(crs_variable_attributes)
+            new_ncpu.x_variable.setncatts(crs_variable_attributes)
+            new_ncpu.y_variable.setncatts(crs_variable_attributes)
+            
+            # Rename variables if switching between projected & unprojected
+            if crs_variable_name != new_ncpu.crs_variable.name:
+                logger.debug('Renaming {} variable to {}'.format(new_ncpu.crs_variable.name, crs_variable_name))
+                new_dataset.renameVariable(new_ncpu.crs_variable.name, crs_variable_name) 
+                
+                if crs_variable_name == 'crs': # Geodetic
+                    xy_varnames = ('longitude', 'latitude')
+                    units = dest_srs.GetAngularUnitsName() + 's' # degrees
+                    
+                elif crs_variable_name in ['transverse_mercator', "albers_conical_equal_area"]: # Projected
+                    xy_varnames = ('x', 'y')
+                    units = units = dest_srs.GetLinearUnitsName() + 's' # metres
+                    
+                else:
+                    raise BaseException('Unhandled crs variable name "{}"'.format(crs_variable_name))
+                
+                logger.debug('Renaming {} & {} variables to {} & {}'.format(new_ncpu.x_variable.name, 
+                                                                             new_ncpu.y_variable.name,
+                                                                             *xy_varnames
+                                                                             ))
+                new_dataset.renameVariable(new_ncpu.x_variable.name, xy_varnames[0])
+                new_ncpu.x_variable.units = units
+                new_ncpu.x_variable.long_name = xy_varnames[0]
+                
+                new_dataset.renameVariable(new_ncpu.y_variable.name, xy_varnames[1])
+                new_ncpu.y_variable.units = units
+                new_ncpu.y_variable.long_name = xy_varnames[1]
+        
+        finally:
+            new_dataset.close()
+
+    def set_global_attributes(self, compute_shape=False):
+        '''\
+        Function to set  global geometric metadata attributes in netCDF file
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            metadata_srs = get_spatial_ref_from_wkt(METADATA_CRS)
+            assert metadata_srs.IsGeographic(), 'Unable to set geodetic parameters for this dataset'
+            
+            
+            #===================================================================
+            # # Reopen as writable dataset
+            # filepath = self.netcdf_dataset.filepath()
+            # self.netcdf_dataset.close()
+            # self.netcdf_dataset = netCDF4.Dataset(filepath, 'r+')
+            #===================================================================
+            
+            logger.debug('Setting global geometric metadata attributes in netCDF point dataset with {} points'.format(self.netcdf_dataset.dimensions['point'].size))
+            
+            attribute_dict = dict(zip(['geospatial_lon_min', 'geospatial_lat_min', 'geospatial_lon_max', 'geospatial_lat_max'],
+                              get_reprojected_bounds(self.bounds, self.wkt, METADATA_CRS)
+                              )
+                          )
+            
+            attribute_dict['geospatial_lon_units'] = 'degrees'
+            attribute_dict['geospatial_lat_units'] = 'degrees'
+            
+            attribute_dict['geospatial_bounds_crs'] = metadata_srs.ExportToPrettyWkt()
+            
+            if compute_shape:
+                try:
+                    logger.debug('Computing concave hull')
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        self.get_concave_hull(
+                            to_wkt=METADATA_CRS, 
+                            buffer_distance=SHAPE_BUFFER_DISTANCE,
+                            offset=SHAPE_OFFSET,
+                            tolerance=SHAPE_SIMPLIFY_TOLERANCE,
+                            max_polygons=SHAPE_MAX_POLYGONS, 
+                            max_vertices=SHAPE_MAX_VERTICES
+                            ), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+                except Exception as e:
+                    logger.warning('Unable to compute concave hull shape: {}'.format(e))
+                    try:
+                        self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(asPolygon([
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_max']],
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_max']], 
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            ]))
+                    except:
+                        pass
+                            
+            logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
+        
+            logger.debug('Writing global attributes to netCDF file'.format(self.netcdf_dataset.filepath()))
+            for key, value in attribute_dict.items():
+                setattr(self.netcdf_dataset, key, value)
+                
+            logger.debug('Finished setting global geometric metadata attributes in netCDF point dataset')
+        except:
+            logger.error('Unable to set geometric metadata attributes in netCDF point dataset')
+            raise
+
+
+    def set_variable_actual_range_attribute(self):
+        '''\
+        Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
+        N.B: Will fail if dataset is not writable
+        '''
+        self.netcdf_dataset.set_auto_mask(True)
+        
+        try:
+            for variable_name, variable in self.netcdf_dataset.variables.items():
+                # Skip all variables not of point dimensionality
+                if 'point' not in variable.dimensions:
+                    continue
+                
+                # Skip index variables
+                if re.search('_index$', variable_name):
+                    continue
+                
+                try:
+                    variable.actual_range = np.array(
+                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
+                    logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
+                except:
+                    logger.warning('Unable to compute actual_range value for point variable {}'.format(variable_name))
+        except:
+            logger.error('Unable to set variable actual_range metadata attributes in netCDF point dataset')
+            raise
+
+
 
 def main(debug=True):
     '''
@@ -1002,15 +1298,20 @@ def main(debug=True):
        
 if __name__ == '__main__':
     # Setup logging handlers if required
+    console_handler = logging.StreamHandler(sys.stdout)
+    #console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(message)s')
+    console_handler.setFormatter(console_formatter)
+    
     if not logger.handlers:
         # Set handler for root logger to standard output
-        console_handler = logging.StreamHandler(sys.stdout)
-        #console_handler.setLevel(logging.INFO)
-        console_handler.setLevel(logging.DEBUG)
-        console_formatter = logging.Formatter('%(message)s')
-        console_handler.setFormatter(console_formatter)
         logger.addHandler(console_handler)
         logger.debug('Logging handlers set up for logger {}'.format(logger.name))
 
+    ncu_logger = logging.getLogger('geophys_utils._netcdf_utils')
+    if not ncu_logger.handlers:
+        ncu_logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(ncu_logger.name))
+
     main()        
-    

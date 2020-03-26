@@ -18,21 +18,39 @@
 '''
 Created on 14Sep.,2016
 
-@author: Alex
+@author: Alex Ip <Alex.Ip@ga.gov.au>
 '''
 import numpy as np
 import math
 from scipy.ndimage import map_coordinates
-from geophys_utils._crs_utils import get_utm_wkt, transform_coords
+from geophys_utils._crs_utils import get_utm_wkt, transform_coords, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
-from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._netcdf_utils import NetCDFUtils, METADATA_CRS
+from shapely.geometry import Polygon, MultiPolygon, asPolygon
+from shapely.geometry.base import BaseGeometry
+import shapely
+from affine import Affine
 import logging
 import argparse
 from distutils.util import strtobool
+import netCDF4
+import sys
+import re
+from skimage import measure
+from math import ceil
+from pprint import pformat
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
+
+MAX_CELLS_TO_COMPUTE_SHAPE = 400000000 # Set limit for grids of approximately 20,000 x 20,000
+SHAPE_BUFFER_DISTANCE = None # Distance to buffer (kerf) shape out then in again (in degrees)
+SHAPE_OFFSET = None # Distance to buffer (kerf) final shape outwards (in degrees)
+SHAPE_SIMPLIFY_TOLERANCE = 0.0005 # Length of shortest line in shape (in degrees)
+SHAPE_MAX_POLYGONS=5
+SHAPE_MAX_VERTICES=1000
+SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
 
 
 class NetCDFGridUtils(NetCDFUtils):
@@ -41,7 +59,6 @@ class NetCDFGridUtils(NetCDFUtils):
     '''
     # Assume WGS84 lat/lon if no CRS is provided
     DEFAULT_CRS = "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]],AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433,AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
-    HORIZONTAL_VARIABLE_NAMES = ['lon', 'Easting', 'x', 'longitude']
     DEFAULT_MAX_BYTES = 500000000  # Default to 500,000,000 bytes for NCI's OPeNDAP
     FLOAT_TOLERANCE = 0.000001
 
@@ -67,12 +84,7 @@ class NetCDFGridUtils(NetCDFUtils):
                 for coord_index in range(2):
                     centre_pixel_coords[coord_index].reverse()
 
-            #TODO: Make sure this is general for all CRSs
-            self.y_variable = (self.netcdf_dataset.variables.get('lat') 
-                               or self.netcdf_dataset.variables.get('y')
-                               )
-            
-            self.y_inverted = (self.y_variable[-1] < self.y_variable[0])
+            self.y_inverted = (self.y_variable[-1] < self.y_variable[0]).item() # Should not have to deal with null values
         
             nominal_utm_wkt = get_utm_wkt(centre_pixel_coords[0], self.wkt)
             centre_pixel_utm_coords = transform_coords(
@@ -108,27 +120,23 @@ class NetCDFGridUtils(NetCDFUtils):
         
         self._GeoTransform = None
 
-
-# assert len(self.netcdf_dataset.dimensions) == 2, 'NetCDF dataset must be
-# 2D' # This is not valid
-
         try:
             data_variable_dimensions = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if hasattr(variable, 'grid_mapping')][0].dimensions
             self._data_variable_list = [variable for variable in self.netcdf_dataset.variables.values() 
                                        if variable.dimensions == data_variable_dimensions]
         except:
-            logger.debug('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
+            logger.error('Unable to determine data variable(s) (must have same dimensions as variable with "grid_mapping" attribute)')
             raise
             
         #TODO: Make this work for multi-variate grids
-        assert len(self.data_variable_list) == 1, 'Unable to determine single data variable (must have "grid_mapping" attribute)'
+        assert len(self.data_variable_list) > 0, 'Unable to determine any data variables (must have same dimensions as variable with "grid_mapping" attribute)'
         self.data_variable = self.data_variable_list[0]
         
         # Boolean flag indicating YX array ordering
         # TODO: Find a nicer way of dealing with this
         self.YX_order = self.data_variable.dimensions[
-            1] in NetCDFGridUtils.HORIZONTAL_VARIABLE_NAMES
+            1] in NetCDFGridUtils.X_DIM_VARIABLE_NAMES
 
         # Two-element list of dimension varibles.
         self.dimension_arrays = [self.netcdf_dataset.variables[dimension_name][
@@ -363,14 +371,271 @@ class NetCDFGridUtils(NetCDFUtils):
         
 
     def get_convex_hull(self, to_wkt=None):
+        '''\
+        Function to return n x 2 array of coordinates for convex hull based on line start/end points
+        Implements abstract base function in NetCDFUtils 
+        @param to_wkt: CRS WKT for shape
+        '''
         try:
             convex_hull = netcdf2convex_hull(self.netcdf_dataset, NetCDFGridUtils.DEFAULT_MAX_BYTES)
         except:
-            #logger.info('Unable to compute convex hull. Using rectangular bounding box instead.')
+            logger.warning('Unable to compute convex hull. Using rectangular bounding box instead.')
             convex_hull = self.native_bbox
             
         return transform_coords(convex_hull, self.wkt, to_wkt)
+    
+    def get_concave_hull(self, 
+                         to_wkt=None, 
+                         buffer_distance=None, 
+                         offset=None, 
+                         tolerance=None, 
+                         cap_style=1, 
+                         join_style=1, 
+                         max_polygons=10, 
+                         max_vertices=1000
+                         ):
+        """\
+        Returns the concave hull (as a shapely polygon) of grid edge points with data. 
+        Implements abstract base function in NetCDFUtils 
+        Note that all distance parameters are in pixel units, not in destination CRS units
+        @param to_wkt: CRS WKT for shape
+        @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param offset: Final offset of final shape from original lines
+        @param tolerance: tolerance for simplification
+        @param cap_style: cap_style for buffering. Defaults to round
+        @param join_style: join_style for buffering. Defaults to round
+        @param max_polygons: Maximum number of polygons to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
+        @param max_vertices: Maximum number of vertices to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
+        @return shapely.geometry.shape: Geometry of concave hull
+        """
+        PAD_WIDTH = 1
+        MAX_DATA_PROPORTION = 0.9 # Maximum proportion of data containing pixels vs all pixels to trigger full shape computation
+        DOWNSAMPLING_STEP_SIZE = 10000 # Pixels per downsampling_stride increment for downsampling. Used with maximum side length
+        
+        # Parameters for shape simplification in pixel sizes
+        buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
+        offset = offset or 0.9 # Take final shape half a pixel out from centre coordinates to cover pixel edges
+        tolerance = tolerance or 0.5        
+        
+        
+        def discard_internal_polygons(geometry):
+            '''\
+            Helper function to discard internal polygons
+            '''
+            if type(geometry) == MultiPolygon:
+                polygon_list = []
+                for polygon in geometry:
+                    polygon = Polygon(polygon.exterior)
+                    polygon_is_contained = False
+                    for list_polygon in polygon_list:
+                        polygon_is_contained = list_polygon.contains(polygon)
+                        if polygon_is_contained:
+                            break
+                        elif polygon.contains(list_polygon):
+                            polygon_list.remove(list_polygon)
+                            break
+                            
+                    if not polygon_is_contained:
+                        polygon_list.append(polygon)       
 
+                if len(polygon_list) == 1:
+                    external_geometry = polygon_list[0] # Single polygon
+                else:
+                    external_geometry = MultiPolygon(polygon_list)
+                    
+                logger.debug('{} internal polygons discarded.'.format(len(geometry) - len(polygon_list)))
+                    
+            elif type(geometry) == Polygon:
+                external_geometry = Polygon(geometry.exterior)
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(geometry)))
+            
+            return external_geometry
+            
+        def contour_to_polygon(polygon_vertices):
+            '''\
+            Helper function to turn an individual contour into shapely Polygon in the correct xy axis order
+            @param polygon_vertices: n x 2 array of pixel coordinates forming a polygon
+            '''
+            # Note that we need coordinates in xy order, but the polygon vertices are in array order (probably yx)
+            if self.YX_order: # yx array order - y-axis flip required
+                reorder_slices = (slice(None, None, None), slice(None, None, -1))
+            else: # xy array order - no y-axis flip required
+                reorder_slices = (slice(None, None, None), slice(None, None, None))
+                
+            # Create polygon in pixel ordinates, and then buffer outwards by 0.5 pixel widths, and simplify by 0.25 pixel widths
+            # Note that this polygon is in array order, i.e. probably yx and not xy, so we need to apply the reorder_slices
+            return asPolygon(polygon_vertices[reorder_slices])
+        
+        def transform_geometry_pixel_to_wkt(geometry, to_wkt):
+            '''\
+            Helper function to transform geometry from pixel coordinates to specified WKT via (self.wkt)
+            # N.B: Ignores polygon interiors
+            @param geometry: Shapely MultiPolygon or Polygon to transform
+            @param to_wkt: WKT of destination CRS
+            '''
+            # Set affine transform from GeoTransform values for CRS given by self.wkt
+            affine_transform = Affine.from_gdal(*self.GeoTransform)
+        
+            if type(geometry) == MultiPolygon:
+                return MultiPolygon([
+                    asPolygon(transform_coords(np.array([(affine_transform * pixel_coordinate_pair) 
+                                                    for pixel_coordinate_pair in polygon.exterior.coords
+                                                    ]),
+                         self.wkt, to_wkt)
+                         )
+                    for polygon in geometry
+                    ])
+
+            elif type(geometry) == Polygon:
+                return asPolygon(transform_coords(np.array([(affine_transform * pixel_coordinate_pair) 
+                                                    for pixel_coordinate_pair in geometry.exterior.coords
+                                                    ]),
+                         self.wkt, to_wkt)
+                         )
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(geometry)))
+
+
+        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices):
+            '''\
+            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
+            '''
+            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
+            offset_geometry = (geometry.buffer(
+                buffer_distance, 
+                cap_style=cap_style, 
+                join_style=join_style).simplify(tolerance).buffer(
+                    offset-buffer_distance, 
+                    cap_style=cap_style, 
+                    join_style=join_style).simplify(tolerance)
+                )      
+            discard_internal_polygons(offset_geometry)
+            
+            # Keep doubling the buffer distance if there are too many polygons
+            if (
+                (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
+                or
+                (max_vertices and type(offset_geometry) == MultiPolygon and 
+                    sum([len(polygon.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in polygon.interiors]) 
+                         for polygon in offset_geometry]) > max_vertices)
+                or
+                (max_vertices and type(offset_geometry) == Polygon and 
+                    (len(offset_geometry.exterior.coords) #+ sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])
+                     ) > max_vertices)
+                ):
+                return get_offset_geometry(geometry, buffer_distance*2, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
+                
+            return offset_geometry
+        
+        #=======================================================================
+        # # Create data/no-data mask
+        # mask = (self.data_variable != self.data_variable._FillValue)
+        #
+        # data_proportion = np.count_nonzero(mask) / (self.pixel_count[0]*self.pixel_count[1])
+        # if data_proportion >= MAX_DATA_PROPORTION:
+        #     logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+        #     return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+        #
+        # # pad with nodata so that boundary edges are detected
+        # padded_mask = np.pad(mask, pad_width=PAD_WIDTH, mode='constant', constant_values=False)
+        #
+        # del mask # We don't need this any more
+        # gc.collect()
+        #=======================================================================
+        
+        # Compute downsampling_stride for downsampling, and use that to create mask_slices
+        downsampling_stride = int(max(self.pixel_count) // DOWNSAMPLING_STEP_SIZE) + 1
+        mask_slices = tuple([slice(None, None, downsampling_stride)
+                       for _size in self.data_variable.shape])
+
+        logger.debug('Computing padded mask')
+        padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride))+2 for size in self.data_variable.shape], dtype=np.bool)
+        padded_mask[1:-1,1:-1] = (self.data_variable != self.data_variable._FillValue)[mask_slices] # It's quicker to read all data and mask afterwards
+        
+        data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2))
+        if data_proportion >= MAX_DATA_PROPORTION:
+            logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
+            return asPolygon(transform_coords(np.array(self.native_bbox), self.wkt, to_wkt))
+
+        # find contours where the high pieces (data) are fully connected
+        # that there are no unnecessary holes in the polygons
+        # shift the coordinates back by 1 to get original unpadded pixel coordinates
+        logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in self.data_variable.shape)) +
+                     (' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.')
+                     )
+        contours = [(contour - PAD_WIDTH) * downsampling_stride # Shift for padding and compensate for downsampling_stride
+                    for contour in measure.find_contours(padded_mask, 0.5, fully_connected='high')]
+        #logger.debug('contours = {}'.format(contours))
+        
+        concave_hull = MultiPolygon([contour_to_polygon(contour) for contour in contours]).simplify(tolerance)
+        concave_hull = get_offset_geometry(concave_hull, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
+        
+        if self.debug:
+            if type(concave_hull) == MultiPolygon:
+                polygon_count = len(concave_hull)
+                vertex_count = sum([len(polygon.exterior.coords) for polygon in concave_hull])
+
+            elif type(concave_hull) == Polygon:
+                polygon_count = 1
+                vertex_count = len(concave_hull.exterior.coords)
+                
+            else:
+                raise ValueError('Unexpected type of geometry: {}'.format(type(concave_hull)))
+            logger.debug('Final shape has {} vertices in {} polygons.'.format(vertex_count, polygon_count))
+            
+
+        # Transform from pixel ordinates to to_wkt (via self.wkt using affine_transform)
+        return transform_geometry_pixel_to_wkt(concave_hull, to_wkt)  
+    
+    def get_dimension_ranges(self, bounds, bounds_wkt=None):
+        '''
+        Function to dict of (start, end+1) tuples keyed by dimension name from a bounds geometry or ordinates
+        @parameter bounds: Either an iterable containing [<xmin>, <ymin>, <xmax>, <ymax>] or a shapely (multi)polygon
+        @parameter bounds_wkt: WKT for bounds CRS. Defaults to dataset native CRS
+        @return dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+        '''
+        if isinstance(bounds, BaseGeometry): # Process shapely (multi)polygon bounds        
+            bounds_ordinates = bounds.bounds # Obtain [<xmin>, <ymin>, <xmax>, <ymax>] from Shapely geometry
+        else:
+            bounds_ordinates = bounds # Use provided [<xmin>, <ymin>, <xmax>, <ymax>] parameter
+            
+        if bounds_wkt is not None: # Reproject bounds to native CRS if required
+            bounds_ordinates = get_reprojected_bounds(bounds_ordinates, bounds_wkt, self.wkt)
+
+        #=======================================================================
+        # bounds_half_size = abs(np.array([bounds_ordinates[2] - bounds_ordinates[0], bounds_ordinates[3] - bounds_ordinates[1]])) / 2.0
+        # bounds_centroid = np.array([bounds_ordinates[0], bounds_ordinates[1]]) + bounds_half_size
+        #=======================================================================
+        
+        dimension_names = self.data_variable.dimensions
+            
+        dim_range_dict = {}
+        try:
+            logger.debug('self.dimension_arrays = {}'.format(self.dimension_arrays))
+            for dim_index in range(2):
+                #TODO: Maybe make this work for pixel edges, not centres
+                #TODO: Fix indexing in self.dimension_arrays where 1-dim_index only works for lon-lat array
+                subset_indices = np.where(np.logical_and(self.dimension_arrays[1-dim_index] >= bounds_ordinates[dim_index],
+                                                         self.dimension_arrays[1-dim_index] <= bounds_ordinates[dim_index+2]))[0]
+                                                         
+                logger.debug('subset_indices = {}'.format(subset_indices))
+                
+                logger.debug('self.dimension_arrays[{}].shape = {}'.format(1-dim_index, self.dimension_arrays[1-dim_index].shape))
+                                                         
+                dim_range_dict[dimension_names[1-dim_index]] = (subset_indices[0], min(subset_indices[-1]+1,
+                                                                                     self.dimension_arrays[1-dim_index].shape[0]
+                                                                                     ) # add 1 to upper index
+                                                              )
+                
+                logger.debug('dim_range_dict["{}"] = {}'.format(dimension_names[1-dim_index], dim_range_dict[dimension_names[1-dim_index]]))
+            
+            return dim_range_dict
+        except Exception as e:
+            logger.debug('Unable to determine range indices: {}'.format(e))
+            return None
+
+    
     @property
     def GeoTransform(self):
         '''
@@ -392,8 +657,179 @@ class NetCDFGridUtils(NetCDFUtils):
                    
         return self._GeoTransform
 
+    def copy(self, 
+             nc_out_path, 
+             datatype_map_dict={},
+             variable_options_dict={},
+             dim_range_dict={},
+             dim_mask_dict={},
+             nc_format=None,
+             limit_dim_size=False,
+             var_list=[],        
+             empty_var_list=[],        
+             invert_y=None,
+        ):
+        '''
+        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+            variable creation options and datatypes.
+            
+            @param nc_out_path: path to netCDF output file 
+            @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
+                e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
+            @param variable_options_dict: dict containing any overrides for per-variable variable creation 
+                options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
+                compression to variable 'sst'
+            @param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
+            @param dim_mask_dict: dict of boolean arrays keyed by dimension name
+            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
+                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
+            @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
+            @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
+            @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
+        '''  
+        
+        assert not dim_mask_dict, 'Dimension masking not supported for grids (would create irregular grid).'
+        
+        if var_list:
+            expanded_var_list = list(set(
+                var_list + 
+                NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                NetCDFUtils.Y_DIM_VARIABLE_NAMES +
+                NetCDFUtils.CRS_VARIABLE_NAMES
+                ))
+        else:
+            expanded_var_list = var_list
+        
+        # Call inherited NetCDFUtils method
+        super().copy( 
+             nc_out_path, 
+             datatype_map_dict=datatype_map_dict,
+             variable_options_dict=variable_options_dict,
+             dim_range_dict=dim_range_dict,
+             dim_mask_dict=dim_mask_dict,
+             nc_format=nc_format,
+             limit_dim_size=limit_dim_size,
+             var_list=expanded_var_list,
+             empty_var_list=empty_var_list,
+             )
+        
+        try:
+            logger.debug('Re-opening new dataset {}'.format(nc_out_path))
+            new_dataset = netCDF4.Dataset(nc_out_path, 'r+')
+            new_ncgu = NetCDFGridUtils(new_dataset, debug=self.debug)
+            
+            if dim_range_dict: # Subsets were requested
+                logger.debug('dim_range_dict = {}'.format(dim_range_dict))
+                logger.debug('Old first coordinate = ({}, {})'.format(self.x_variable[0], self.y_variable[0]))
+                logger.debug('New first coordinate = ({}, {})'.format(new_ncgu.x_variable[0], new_ncgu.y_variable[0]))
+                geo_transform = new_ncgu.GeoTransform
+                logger.debug('Old GeoTransform = {}'.format(geo_transform))
+                for gt_ordinate_index, ordinate_variable, gt_pixel_width_index in [(0, new_ncgu.x_variable, 1), (3, new_ncgu.y_variable, 5)]:
+                    if ordinate_variable.dimensions[0] in dim_range_dict.keys():
+                        geo_transform[gt_ordinate_index] = ordinate_variable[0].item() - (geo_transform[gt_pixel_width_index] / 2.0) # Subtract half pixel width
+                logger.debug('New GeoTransform = {}'.format(geo_transform))
+                gt_string = ' '.join([str(value) for value in geo_transform])
+                logger.info('Updating GeoTransform to "{}"'.format(gt_string))
+                new_ncgu.crs_variable.GeoTransform = gt_string
+            
+            if invert_y is None: # No change required
+                return 
+            
+            if invert_y == new_ncgu.y_inverted:
+                logger.debug('{} does not require any alteration to make y-axis inversion {}'.format(nc_out_path, invert_y))
+                return
+            
+            assert new_ncgu.y_variable, 'No Y-axis indexing variable defined in {}'.format(nc_out_path)
+            
+            assert len(new_ncgu.y_variable.shape) == 1, 'Y-axis indexing variable should be 1D'
+            
+            y_axis_dimension_name = new_ncgu.y_variable.dimensions[0]
+            
+            for variable_name, variable in new_dataset.variables.items():
+                if y_axis_dimension_name in variable.dimensions:
+                    logger.debug('Inverting Y dimension of variable {}'.format(variable_name))
+                    variable_slices = [
+                        slice(None, None, -1) if dimension_name == y_axis_dimension_name else slice(None, None, None)
+                        for dimension_name in variable.dimensions
+                        ]
+                    variable[:] = variable[variable_slices]
+                    
+        finally:
+            new_dataset.close()
+            
+                       
+    def set_global_attributes(self, compute_shape=False):
+        '''\
+        Function to set  global geometric metadata attributes in netCDF file
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            attribute_dict = dict()
+            attribute_dict['pixel_count'] = self.pixel_count # same as dimensions
+        
+            gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt() # this is wkt of (currently) gda94
+            attribute_dict['geospatial_bounds_crs'] = gda_wkt
+            metadata_bbox = get_reprojected_bounds(self.bounds, self.wkt, gda_wkt) # Reproject bounding box from native CRS to metadata CRS
+        
+            attribute_dict['geospatial_lon_min'] = metadata_bbox[0]
+            attribute_dict['geospatial_lat_min'] = metadata_bbox[1]
+            attribute_dict['geospatial_lon_max'] = metadata_bbox[2]
+            attribute_dict['geospatial_lat_max'] = metadata_bbox[3]
+            attribute_dict['geospatial_lon_units'] = 'degrees'
+            attribute_dict['geospatial_lat_units'] = 'degrees'
+            attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # x
+            attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # y
+        
+            # polygon generation
+            if compute_shape:
+                try:
+                    assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
+                        
+                    logger.debug('Computing concave hull')
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        self.get_concave_hull(to_wkt=gda_wkt), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+                except Exception as e: # if it fails use the convex hull or bounding box instead
+                    logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        asPolygon(self.get_convex_hull(to_wkt=gda_wkt)), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
+                        )
+            
+            logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
+            logger.info('Writing global attributes to netCDF file')
+            for key, value in attribute_dict.items():
+                setattr(self.netcdf_dataset, key, value)
+        except:
+            logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
+            raise
 
-    
+    def set_variable_actual_range_attribute(self):
+        '''\
+        Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            for variable_name, variable in self.netcdf_dataset.variables.items():
+                # Skip all variables which can't be grids
+                if len(variable.dimensions) < 2:
+                    continue
+                
+                # Skip index variables
+                if re.search('_index$', variable_name):
+                    continue
+                
+                try:
+                    variable.actual_range = np.array(
+                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
+                    logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
+                except:
+                    logger.warning('Unable to compute actual_range value for variable {}'.format(variable_name))
+        except:
+            logger.error('Unable to set variable actual_range metadata attributes in netCDF grid dataset')
+            raise        
+        
+
 def main():
     '''
     Main function for quick and dirty testing
@@ -401,18 +837,13 @@ def main():
     # Define command line arguments
     parser = argparse.ArgumentParser()
     
-    parser.add_argument('-c', '--copy', 
-                        dest='do_copy', 
-                        action='store_const', 
-                        const=True, default=False,
-                        help='Copy netCDF files')
     parser.add_argument("-f", "--format", help="NetCDF file format (one of 'NETCDF4', 'NETCDF4_CLASSIC', 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET' or 'NETCDF3_64BIT_DATA')",
                         type=str, default='NETCDF4')
     parser.add_argument("--chunkspec", help="comma-separated list of <dimension_name>/<chunk_size> specifications",
                         type=str)
     parser.add_argument("--complevel", help="Compression level for chunked variables as an integer 0-9. Default is 4",
                         type=int, default=4)
-    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive', type=str)
+    parser.add_argument('-i', '--invert_y', help='Store copy with y-axis indexing Southward positive (grids only)', type=str)
     parser.add_argument('-d', '--debug', action='store_const', const=True, default=False,
                         help='output debug information. Default is no debug info')
     parser.add_argument("input_path")
@@ -425,12 +856,11 @@ def main():
     else:
         invert_y = None # Default to same as source
     
-    if args.do_copy:
-        if args.chunkspec:
-            chunk_spec = {dim_name: int(chunk_size) 
-                        for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
-        else:
-            chunk_spec = None
+    if args.chunkspec:
+        chunk_spec = {dim_name: int(chunk_size) 
+                    for dim_name, chunk_size in [chunk_spec_string.strip().split('/') for chunk_spec_string in args.chunkspec.split(',')]}
+    else:
+        chunk_spec = None
             
     ncgu = NetCDFGridUtils(args.input_path,
                       debug=args.debug
@@ -448,12 +878,27 @@ def main():
                                for variable_name, variable in ncgu.netcdf_dataset.variables.items()
                                if (set(variable.dimensions) & set(chunk_spec.keys()))
                                } if chunk_spec else {},
-             #dim_range_dict={},
+             #dim_range_dict={'lat': (5,205),'lon': (5,305)},
+             #dim_mask_dict={},
              nc_format=args.format,
              #limit_dim_size=False
              invert_y=invert_y
              )
         
-
 if __name__ == '__main__':
-    main()        
+    console_handler = logging.StreamHandler(sys.stdout)
+    # console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
+    console_formatter = logging.Formatter('%(name)s: %(message)s')
+    console_handler.setFormatter(console_formatter)
+ 
+    if not logger.handlers:
+        logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(logger.name))
+
+    ncu_logger = logging.getLogger('geophys_utils._netcdf_utils')
+    if not ncu_logger.handlers:
+        ncu_logger.addHandler(console_handler)
+        logger.debug('Logging handlers set up for {}'.format(ncu_logger.name))
+
+    main()

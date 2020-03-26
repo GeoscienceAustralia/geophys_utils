@@ -5,15 +5,15 @@ Created on 12 Dec 2019
 '''
 import netCDF4
 import logging
-import sys
-import re
-from geophys_utils import NetCDFPointUtils, NetCDFLineUtils, NetCDFGridUtils
+from geophys_utils._netcdf_point_utils import NetCDFPointUtils
+from geophys_utils._netcdf_line_utils import NetCDFLineUtils
+from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
 
 logger = logging.getLogger(__name__)
 
 
-def get_netcdf_util(netcdf_dataset):
+def get_netcdf_util(netcdf_dataset, debug=False):
     '''
     Function to take a netCDF4 Dataset object, a path to a netCDF file, or an OPeNDAP endpoint
     and return a NetCDFUtils subclass object (i.e. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
@@ -23,6 +23,8 @@ def get_netcdf_util(netcdf_dataset):
             try:
                 _netcdf_dataset = netCDF4.Dataset(netcdf_dataset, 'r')
             except OSError:
+                if not _netcdf_dataset.startswith('http'):
+                    raise
                 _netcdf_dataset = netCDF4.Dataset(netcdf_dataset + '#fillmismatch', 'r')
             netcdf_dataset = _netcdf_dataset
         except Exception as e:
@@ -30,11 +32,11 @@ def get_netcdf_util(netcdf_dataset):
             return 
             
     elif type(netcdf_dataset) != netCDF4.Dataset: # NetCDF4.Dataset object provided
-        raise BaseException('Invalid netcdf_dataset type')
+        raise TypeError('Invalid netcdf_dataset type')
     
     # Dataset has line and line_index variables => must be a line dataset
     if set(['line', 'line_index']) <= set(netcdf_dataset.variables.keys()): 
-        return NetCDFLineUtils(netcdf_dataset)
+        return NetCDFLineUtils(netcdf_dataset, debug=debug)
     
     # Dataset has 2D (or higher dimensionality) variable with grid_mapping attribute and indexing variables   
     elif len([variable 
@@ -44,10 +46,10 @@ def get_netcdf_util(netcdf_dataset):
                   and len(variable.dimensions) >= 2 # Data variable is a grid
                   and set(variable.dimensions) <= set(netcdf_dataset.variables.keys()) # Indexing variables exist
               ]) > 0:
-        return NetCDFGridUtils(netcdf_dataset)
+        return NetCDFGridUtils(netcdf_dataset, debug=debug)
     
     #TODO: Make sure that there are no other tests we could apply here for point datasets
     else:
-        return NetCDFPointUtils(netcdf_dataset)
+        return NetCDFPointUtils(netcdf_dataset, debug=debug)
     
     
