@@ -693,6 +693,8 @@ class NetCDFGridUtils(NetCDFUtils):
         if var_list:
             expanded_var_list = list(set(
                 var_list + 
+                NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                NetCDFUtils.Y_DIM_VARIABLE_NAMES +
                 NetCDFUtils.CRS_VARIABLE_NAMES
                 ))
         else:
