@@ -23,23 +23,34 @@ Created on 14Sep.,2016
 import numpy as np
 import math
 from scipy.ndimage import map_coordinates
-from geophys_utils._crs_utils import get_utm_wkt, transform_coords, get_reprojected_bounds
+from geophys_utils._crs_utils import get_utm_wkt, transform_coords, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import sample_transect
 from geophys_utils._polygon_utils import netcdf2convex_hull
-from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._netcdf_utils import NetCDFUtils, METADATA_CRS
 from shapely.geometry import Polygon, MultiPolygon, asPolygon
+from shapely.geometry.base import BaseGeometry
+import shapely
 from affine import Affine
 import logging
 import argparse
 from distutils.util import strtobool
-from shapely.geometry.base import BaseGeometry
 import netCDF4
 import sys
+import re
 from skimage import measure
 from math import ceil
+from pprint import pformat
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
+
+MAX_CELLS_TO_COMPUTE_SHAPE = 400000000 # Set limit for grids of approximately 20,000 x 20,000
+SHAPE_BUFFER_DISTANCE = None # Distance to buffer (kerf) shape out then in again (in degrees)
+SHAPE_OFFSET = None # Distance to buffer (kerf) final shape outwards (in degrees)
+SHAPE_SIMPLIFY_TOLERANCE = 0.0005 # Length of shortest line in shape (in degrees)
+SHAPE_MAX_POLYGONS=5
+SHAPE_MAX_VERTICES=1000
+SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
 
 
 class NetCDFGridUtils(NetCDFUtils):
@@ -682,6 +693,8 @@ class NetCDFGridUtils(NetCDFUtils):
         if var_list:
             expanded_var_list = list(set(
                 var_list + 
+                NetCDFUtils.X_DIM_VARIABLE_NAMES + 
+                NetCDFUtils.Y_DIM_VARIABLE_NAMES +
                 NetCDFUtils.CRS_VARIABLE_NAMES
                 ))
         else:
@@ -743,9 +756,80 @@ class NetCDFGridUtils(NetCDFUtils):
                     
         finally:
             new_dataset.close()
+            
                        
+    def set_global_attributes(self, compute_shape=False):
+        '''\
+        Function to set  global geometric metadata attributes in netCDF file
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            attribute_dict = dict()
+            attribute_dict['pixel_count'] = self.pixel_count # same as dimensions
+        
+            gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt() # this is wkt of (currently) gda94
+            attribute_dict['geospatial_bounds_crs'] = gda_wkt
+            metadata_bbox = get_reprojected_bounds(self.bounds, self.wkt, gda_wkt) # Reproject bounding box from native CRS to metadata CRS
+        
+            attribute_dict['geospatial_lon_min'] = metadata_bbox[0]
+            attribute_dict['geospatial_lat_min'] = metadata_bbox[1]
+            attribute_dict['geospatial_lon_max'] = metadata_bbox[2]
+            attribute_dict['geospatial_lat_max'] = metadata_bbox[3]
+            attribute_dict['geospatial_lon_units'] = 'degrees'
+            attribute_dict['geospatial_lat_units'] = 'degrees'
+            attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # x
+            attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # y
+        
+            # polygon generation
+            if compute_shape:
+                try:
+                    assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
+                        
+                    logger.debug('Computing concave hull')
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        self.get_concave_hull(to_wkt=gda_wkt), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+                except Exception as e: # if it fails use the convex hull or bounding box instead
+                    logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        asPolygon(self.get_convex_hull(to_wkt=gda_wkt)), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
+                        )
+            
+            logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
+            logger.info('Writing global attributes to netCDF file')
+            for key, value in attribute_dict.items():
+                setattr(self.netcdf_dataset, key, value)
+        except:
+            logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
+            raise
 
-    
+    def set_variable_actual_range_attribute(self):
+        '''\
+        Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            for variable_name, variable in self.netcdf_dataset.variables.items():
+                # Skip all variables which can't be grids
+                if len(variable.dimensions) < 2:
+                    continue
+                
+                # Skip index variables
+                if re.search('_index$', variable_name):
+                    continue
+                
+                try:
+                    variable.actual_range = np.array(
+                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
+                    logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
+                except:
+                    logger.warning('Unable to compute actual_range value for variable {}'.format(variable_name))
+        except:
+            logger.error('Unable to set variable actual_range metadata attributes in netCDF grid dataset')
+            raise        
+        
+
 def main():
     '''
     Main function for quick and dirty testing

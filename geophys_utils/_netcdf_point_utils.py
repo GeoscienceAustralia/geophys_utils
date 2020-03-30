@@ -32,7 +32,7 @@ from pprint import pformat
 from scipy.interpolate import griddata
 from geophys_utils._crs_utils import transform_coords, get_utm_wkt, get_reprojected_bounds, get_spatial_ref_from_wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
-from geophys_utils._netcdf_utils import NetCDFUtils
+from geophys_utils._netcdf_utils import NetCDFUtils, METADATA_CRS
 from geophys_utils._polygon_utils import points2convex_hull
 from geophys_utils._concave_hull import concaveHull
 from shapely.geometry import shape
@@ -41,6 +41,7 @@ from shapely.geometry import Polygon, MultiPoint
 from shapely.geometry.polygon import asPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
+import shapely.wkt
 import logging
 
 # Setup logging handlers if required
@@ -60,6 +61,15 @@ DEFAULT_READ_CHUNK_SIZE = 8192
 # Set this to a number other than zero for testing
 POINT_LIMIT = 0
     
+# Metadata shape generation parameters
+SHAPE_BUFFER_DISTANCE = 0.02 # Distance to buffer (kerf) shape out then in again (in degrees)
+SHAPE_OFFSET = 0.0005 # Distance to buffer (kerf) final shape outwards (in degrees)
+SHAPE_SIMPLIFY_TOLERANCE = 0.0005 # Length of shortest line in shape (in degrees)
+SHAPE_MAX_POLYGONS=5
+SHAPE_MAX_VERTICES=1000
+SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
+
+
 class NetCDFPointUtils(NetCDFUtils):
     '''
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
@@ -1154,6 +1164,102 @@ class NetCDFPointUtils(NetCDFUtils):
         
         finally:
             new_dataset.close()
+
+    def set_global_attributes(self, compute_shape=False):
+        '''\
+        Function to set  global geometric metadata attributes in netCDF file
+        N.B: This will fail if dataset is not writable
+        '''
+        try:
+            metadata_srs = get_spatial_ref_from_wkt(METADATA_CRS)
+            assert metadata_srs.IsGeographic(), 'Unable to set geodetic parameters for this dataset'
+            
+            
+            #===================================================================
+            # # Reopen as writable dataset
+            # filepath = self.netcdf_dataset.filepath()
+            # self.netcdf_dataset.close()
+            # self.netcdf_dataset = netCDF4.Dataset(filepath, 'r+')
+            #===================================================================
+            
+            logger.debug('Setting global geometric metadata attributes in netCDF point dataset with {} points'.format(self.netcdf_dataset.dimensions['point'].size))
+            
+            attribute_dict = dict(zip(['geospatial_lon_min', 'geospatial_lat_min', 'geospatial_lon_max', 'geospatial_lat_max'],
+                              get_reprojected_bounds(self.bounds, self.wkt, METADATA_CRS)
+                              )
+                          )
+            
+            attribute_dict['geospatial_lon_units'] = 'degrees'
+            attribute_dict['geospatial_lat_units'] = 'degrees'
+            
+            attribute_dict['geospatial_bounds_crs'] = metadata_srs.ExportToPrettyWkt()
+            
+            if compute_shape:
+                try:
+                    logger.debug('Computing concave hull')
+                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+                        self.get_concave_hull(
+                            to_wkt=METADATA_CRS, 
+                            buffer_distance=SHAPE_BUFFER_DISTANCE,
+                            offset=SHAPE_OFFSET,
+                            tolerance=SHAPE_SIMPLIFY_TOLERANCE,
+                            max_polygons=SHAPE_MAX_POLYGONS, 
+                            max_vertices=SHAPE_MAX_VERTICES
+                            ), 
+                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+                except Exception as e:
+                    logger.warning('Unable to compute concave hull shape: {}'.format(e))
+                    try:
+                        self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(asPolygon([
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_min']], 
+                            [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_max']],
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_max']], 
+                            [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
+                            ]))
+                    except:
+                        pass
+                            
+            logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
+        
+            logger.debug('Writing global attributes to netCDF file'.format(self.netcdf_dataset.filepath()))
+            for key, value in attribute_dict.items():
+                setattr(self.netcdf_dataset, key, value)
+                
+            logger.debug('Finished setting global geometric metadata attributes in netCDF point dataset')
+        except:
+            logger.error('Unable to set geometric metadata attributes in netCDF point dataset')
+            raise
+
+
+    def set_variable_actual_range_attribute(self):
+        '''\
+        Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
+        N.B: Will fail if dataset is not writable
+        '''
+        self.netcdf_dataset.set_auto_mask(True)
+        
+        try:
+            for variable_name, variable in self.netcdf_dataset.variables.items():
+                # Skip all variables not of point dimensionality
+                if 'point' not in variable.dimensions:
+                    continue
+                
+                # Skip index variables
+                if re.search('_index$', variable_name):
+                    continue
+                
+                try:
+                    variable.actual_range = np.array(
+                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
+                    logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
+                except:
+                    logger.warning('Unable to compute actual_range value for point variable {}'.format(variable_name))
+        except:
+            logger.error('Unable to set variable actual_range metadata attributes in netCDF point dataset')
+            raise
+
+
 
 def main(debug=True):
     '''
