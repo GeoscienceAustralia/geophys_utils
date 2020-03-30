@@ -210,8 +210,6 @@ class NetCDFGridUtils(NetCDFUtils):
         wkt = wkt or self.wkt
         native_coordinates = transform_coords(coordinates, self.wkt, wkt)
 
-        self.pixel_size
-
         # Convert coordinates to same order as array
         if self.YX_order:
             try:
@@ -777,9 +775,11 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['geospatial_lat_max'] = metadata_bbox[3]
             attribute_dict['geospatial_lon_units'] = 'degrees'
             attribute_dict['geospatial_lat_units'] = 'degrees'
-            attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # x
-            attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # y
-        
+            attribute_dict['nominal_pixel_size_lon_degrees'] = self.nominal_pixel_degrees[0]  # lon
+            attribute_dict['nominal_pixel_size_lat_degrees'] = self.nominal_pixel_degrees[1]  # lat
+            attribute_dict['nominal_pixel_size_x_metres'] = self.nominal_pixel_metres[0]  # x
+            attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
+
             # polygon generation
             if compute_shape:
                 try:
