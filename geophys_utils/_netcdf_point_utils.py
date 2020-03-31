@@ -1199,12 +1199,8 @@ class NetCDFPointUtils(NetCDFUtils):
                     logger.debug('Computing concave hull')
                     attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
                         self.get_concave_hull(
-                            to_wkt=METADATA_CRS, 
-                            buffer_distance=SHAPE_BUFFER_DISTANCE,
-                            offset=SHAPE_OFFSET,
-                            tolerance=SHAPE_SIMPLIFY_TOLERANCE,
-                            max_polygons=SHAPE_MAX_POLYGONS, 
-                            max_vertices=SHAPE_MAX_VERTICES
+                            to_wkt=METADATA_CRS
+
                             ), 
                         rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
                 except Exception as e:
