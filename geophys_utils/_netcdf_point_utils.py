@@ -512,6 +512,8 @@ class NetCDFPointUtils(NetCDFUtils):
             Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
             '''
             logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
+
+            #transform_coords(line_vertices, self.wkt, to_wkt))
             offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(
                 tolerance)
             offset_geometry = offset_geometry.buffer(offset - buffer_distance, cap_style=cap_style,
@@ -563,7 +565,7 @@ class NetCDFPointUtils(NetCDFUtils):
 
             return offset_geometry
 
-        return get_offset_geometry(MultiPoint(self._xycoords), buffer_distance, offset, tolerance, cap_style, join_style,
+        return get_offset_geometry(Polygon(self._xycoords), buffer_distance, offset, tolerance, cap_style, join_style,
                                    max_polygons, max_vertices)
 
     def nearest_neighbours(self, coordinates, 
