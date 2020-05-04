@@ -831,7 +831,17 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
                                       for key, value in self.netcdf_dataset.__dict__.items()
                                       if not key.startswith('_')
                                       }
-            
+
+            # Add ga_gravity_metadata for gravity point datasets only
+            try:
+                ga_gravity_metadata = self.netcdf_dataset.variables['ga_gravity_metadata']
+                global_attributes_dict_extra = {key.lower(): str(ga_gravity_metadata.getncattr(key)).strip()
+                                                for key in ga_gravity_metadata.ncattrs()
+                                                if not key.startswith('_')}
+                global_attributes_dict.update(global_attributes_dict_extra)
+            except:
+                pass
+
             # Determine maximum key length for fixed field width
             max_key_length = max([len(key) for key in global_attributes_dict.keys()])
             
