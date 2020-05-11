@@ -1,9 +1,9 @@
 field_names:
   Obsno: {short_name: Obsno, long_name: Observation Number, database_field_name: obsno, dtype: int32, fill_value: -99}
-  Lat: {standard_name: latitude, long_name: Latitude, database_field_name: dlat, dtype: float32, units: degrees_north, fill_value: -99999.9, axis: Y}
-  Long: {standard_name: longitude, long_name: Longitude, database_field_name: dlong, dtype: float32, units: degrees_east, fill_value: -99999.9, axis: X}
+  Lat: {standard_name: latitude, long_name: Latitude, database_field_name: dlat, dtype: float64, units: degrees_north, fill_value: -99999.9, axis: Y}
+  Long: {standard_name: longitude, long_name: Longitude, database_field_name: dlong, dtype: float64, units: degrees_east, fill_value: -99999.9, axis: X}
   Stattype: {short_name: Stattype, long_name: Station Type, database_field_name: STATIONTYPE, dtype: int8, lookup_table: STATIONTYPES, convert_keys_and_data_to_int8: True, fill_value: -99}
-  Grav: {short_name: Grav, long_name: Gravity, database_field_name: GRAV, dtype: float32, units: um/s^2, datum: GRAVDATUM, fill_value: -99999.9}
+  Grav: {short_name: Grav, long_name: Gravity, database_field_name: GRAV, dtype: float64, units: um/s^2, datum: GRAVDATUM, fill_value: -99999.9}
   Gravacc: {short_name: Gravacc, long_name: Gravity Accuracy, database_field_name: GRAVACC, dtype: float32, units: um/s^2, fill_value: -99}
   Locacc: {short_name: Locacc, long_name: Location Accuracy, database_field_name: LOCACC, dtype: float32, units: m, fill_value: -99}
   Gndelev: {short_name: Gndelev, long_name: Ground Elevation, database_field_name: GNDELEV, dtype: float32, units: m, fill_value: -99999.9}

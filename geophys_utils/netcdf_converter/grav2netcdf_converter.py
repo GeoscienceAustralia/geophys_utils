@@ -58,11 +58,11 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
     gravity_metadata_list = [
         # 'ENO', not needed
-        'SURVEYID',
-        'SURVEYNAME',
+        #'SURVEYID', #already in global attributes
+        #'SURVEYNAME', #already in global attributes as title
         'COUNTRYID',
         'STATEGROUP',
-        'STATIONS', #number of stations?
+        'STATIONS', #number of stations? Same as netcdf point dimension.
         # 'GRAVACC', - variable
         #'GRAVDATUM' as variable attribute
         # 'GNDELEVACC', - variable
@@ -593,6 +593,8 @@ def main():
     yaml_sql_settings = yaml.safe_load(open(os.path.splitext(__file__)[0] + '_sql_strings.yml'))
     sql_strings_dict = yaml_sql_settings['sql_strings_dict']
     # execute sql to return surveys to convert to netcdf
+   # print(sql_strings_dict['sql_get_surveyids'])
+    #print(survey_cursor.execute("SELECT COMMENTS FROM ALL_COL_COMMENTS"))
 
     survey_cursor.execute(sql_strings_dict['sql_get_surveyids'])
     
@@ -600,6 +602,8 @@ def main():
     survey_id_list = [re.search('\d+', survey_row[0]).group()
                       for survey_row in survey_cursor
                       ]
+
+    #test 196662 only
 
     logger.debug('Survey count = {}'.format(len(survey_id_list)))
     # Loop through he survey lists to make a netcdf file based off each one.
