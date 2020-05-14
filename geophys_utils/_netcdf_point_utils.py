@@ -1269,8 +1269,8 @@ class NetCDFPointUtils(NetCDFUtils):
                               )
                           )
             
-            attribute_dict['geospatial_lon_units'] = 'degrees'
-            attribute_dict['geospatial_lat_units'] = 'degrees'
+            attribute_dict['geospatial_lon_units'] = 'degree_east'
+            attribute_dict['geospatial_lat_units'] = 'degree_north'
             
             attribute_dict['geospatial_bounds_crs'] = metadata_srs.ExportToPrettyWkt()
             
