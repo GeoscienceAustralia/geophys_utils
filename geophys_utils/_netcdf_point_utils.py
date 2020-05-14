@@ -37,7 +37,7 @@ from geophys_utils._polygon_utils import points2convex_hull
 from geophys_utils._concave_hull import concaveHull
 from shapely.geometry import shape
 from scipy.spatial.ckdtree import cKDTree
-from shapely.geometry import Polygon, MultiPoint
+from shapely.geometry import Polygon, MultiPoint, MultiPolygon
 from shapely.geometry.polygon import asPolygon
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import transform
@@ -117,8 +117,8 @@ class NetCDFPointUtils(NetCDFUtils):
                                            re.sub('\W', '_', os.path.splitext(self.nc_path)[0]))
 
 
-        logger.debug('self.cache_path')
-        logger.debug(self.cache_path)
+        #logger.debug('self.cache_path')
+        #logger.debug(self.cache_path)
         #logger.debug('self.cache_path: {}'.format(self.cache_path))
 
         self.enable_memory_cache = enable_memory_cache
@@ -1189,8 +1189,8 @@ class NetCDFPointUtils(NetCDFUtils):
                               )
                           )
             
-            attribute_dict['geospatial_lon_units'] = 'degrees'
-            attribute_dict['geospatial_lat_units'] = 'degrees'
+            attribute_dict['geospatial_lon_units'] = 'degree_east'
+            attribute_dict['geospatial_lat_units'] = 'degree_north'
             
             attribute_dict['geospatial_bounds_crs'] = metadata_srs.ExportToPrettyWkt()
             
@@ -1199,12 +1199,7 @@ class NetCDFPointUtils(NetCDFUtils):
                     logger.debug('Computing concave hull')
                     attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
                         self.get_concave_hull(
-                            to_wkt=METADATA_CRS, 
-                            buffer_distance=SHAPE_BUFFER_DISTANCE,
-                            offset=SHAPE_OFFSET,
-                            tolerance=SHAPE_SIMPLIFY_TOLERANCE,
-                            max_polygons=SHAPE_MAX_POLYGONS, 
-                            max_vertices=SHAPE_MAX_VERTICES
+                            to_wkt=METADATA_CRS
                             ), 
                         rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
                 except Exception as e:
