@@ -62,7 +62,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         #'SURVEYNAME', #already in global attributes as title
         'COUNTRYID',
         'STATEGROUP',
-        'STATIONS', #number of stations? Same as netcdf point dimension.
+        #'STATIONS', #number of stations? Same as netcdf point dimension.
         # 'GRAVACC', - variable
         #'GRAVDATUM' as variable attribute
         # 'GNDELEVACC', - variable
@@ -94,21 +94,21 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         'OWNER',  # nulls
         'LEGISLATION',  # nulls
         # 'STATE',
-        'PROJ_LEADER',  # nulls
+        #'PROJ_LEADER',  # nulls
         'ON_OFF', #?
         #'STARTDATE', moved to global attributes for enhanced searching
         #'ENDDATE', moved to global attributes for enhanced searching
         'VESSEL_TYPE',  # nulls
         'VESSEL',  # nulls
-        'SPACEMIN',  # can add uom which is metres
-        'SPACEMAX',
+        'SPACEMIN',  # name is changed to SPACEMIN_METRES in the post process script
+        'SPACEMAX', # name is changed to SPACEMAX_METRES in the post process script
         # 'LOCMETHOD', -not needed
         #'ACCURACY',  as point variable
         #'GEODETIC_DATUM',
         #'PROJECTION', # the data is given in the netcdf as gda94 unprojected. The values in the projection are Ellispoids
         # 'QA_CODE', not needed
         #'RELEASEDATE',  # not needed but open for discussion
-        #'COMMENTS',  # not needed but open for discussion
+        'COMMENTS',  # not needed but open for discussion
         # 'DATA_ACTIVITY_CODE',
         # 'NLAT', already in global attributes
         # 'SLAT', already in global attributes
@@ -134,6 +134,9 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         with the key and value information such as accuracy or methodology.
         e.g. 'SUR': 'Positions determined by optical surveying methods or measured on surveyed points.'
         """
+        if table_name == "ELLIPSOIDHGTDATUM":
+            return {"GRS80": "GRS80"}
+
         sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
         keys_and_values_dict = OrderedDict()
@@ -179,6 +182,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         self.sql_strings_dict_from_yaml = sql_strings_dict_from_yaml
 
         self.survey_metadata = self.get_survey_metadata()
+        self.elipsoid_height_datums = []
+        #self.get_ellipsoid_height_datum_keys()
 
     def get_survey_metadata(self):
         """
@@ -196,6 +201,17 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
         return dict(zip(field_names, survey_row))
 
+    def get_ellipsoid_height_datum_keys(self): # only one currently, GRS80
+        formatted_sql = self.sql_strings_dict_from_yaml['get_ellipsoidhgt_datums_lookup']
+        query_result = self.cursor.execute(formatted_sql)
+        keys_and_values_dict = OrderedDict()
+        for s in query_result:
+            # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
+            keys_and_values_dict[s[0]] = s[1]
+        print(keys_and_values_dict)
+        self.elipsoid_height_datums = [datum[0] for datum in survey_row if datum[0] is not None]
+        #return (self.elipsoid_height_datums)
+
     def get_survey_wide_value_from_obs_table(self, field):
         """
         Helper function to retrieve a survey wide value from the observations table. The returning value is tested
@@ -204,7 +220,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         :return: The first value of the specified field of the observations table.
         """
         formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field, "null", self.survey_id)
-        formatted_sql = formatted_sql.replace('select', 'select distinct', 1) # Only retrieve distinct results
+        formatted_sql = formatted_sql.replace('select', 'select distinct', 1)  # Only retrieve distinct results
         formatted_sql = re.sub('order by .*$', '', formatted_sql) # Don't bother sorting
         query_result = self.cursor.execute(formatted_sql)
         value = None
@@ -230,7 +246,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             'geospatial_lon_min': np.min(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_max': np.max(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_units': "degrees_east",
-            'geospatial_long_resolution': "point",
+            'geospatial_lon_resolution': "point",
             'geospatial_lat_min': np.min(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_max': np.max(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_units': "degrees_north",
@@ -296,10 +312,15 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
         for field_value in Grav2NetCDFConverter.settings['field_names'].values():
             if field_value.get('lookup_table'):
+                print(field_value)
                 lookup_dict = self.get_keys_and_values_table(field_value['lookup_table'])
+                print("LOOKUP DCITs")
+                print(lookup_dict)
                 new_dimension_name = field_value['short_name'].lower()
                 dimensions[new_dimension_name] = len(lookup_dict)
                 # print(dimensions[new_dimension_name])
+            # elif field_value.get('create_lookup_table'):
+            #     lookup_dict = {"GRS80": "GRS80"}
             else:
                 pass
         # print(dimensions['point'])
@@ -340,7 +361,9 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             # for i in self.cursor:
             #     data_list.append(
             #         i[0])
-            # print(data_list)
+            print("data_list: {}".format(data_list))
+
+
             return data_list
 
         def generate_ga_metadata_dict():
@@ -383,15 +406,27 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             
             # get the array of numeric foreign key values
             field_data_array = get_data(field_yml_settings_dict)
+            # print("field data array: {}".format(field_data_array))
+            # for lookup_key in field_data_array:
+            #     if lookup_key != field_yml_settings_dict['fill_value']:
+            #         lookup_dict.get(lookup_key)
+            #     else:
+            #         lookup_key = lookup_key
+            #     print(lookup_key)
+            # converted_dict = {}
 
             # transform the data_list into the mapped value.
             transformed_data_list = [lookup_dict.get(lookup_key) for lookup_key in field_data_array]
-                                
+           # transformed_data_list = [lookup_dict.get(lookup_key) if lookup_key != field_yml_settings_dict['fill_value'] else field_yml_settings_dict['fill_value'] for lookup_key in field_data_array]
+            print("transformed_data_list: {}".format(transformed_data_list))
+
             # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
             # the existing value of the table_key_dict in a new dict
+
+
             converted_attributes_dict = {lookup_table_dict[key]: value
                               for key, value in lookup_table_dict.items()}
-            
+            print("converted_attributes_dict: {}".format(converted_attributes_dict))
             #===================================================================
             # converted_dict = {}
             # for keys, values in lookup_table_dict.items():
@@ -401,6 +436,63 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             #===================================================================
 
             return transformed_data_list, converted_attributes_dict
+
+        def handle_key_value_for_ellipsoid_datum(field_yml_settings_dict):
+            """
+
+            :param field_yml_settings_dict: field settings as written in the yml file e.g. {'short_name': 'Ellipsoidhgt', 'dtype':
+            'float32', 'database_field_name': 'ELLIPSOIDHGT', 'long_name': 'Ellipsoid Height', 'units': 'm',
+            'fill_value': -99999.9, 'datum': 'ELLIPSOIDHGTDATUM'}
+            :param lookup_table_dict: Dict of key and values pulled from oracle for tables such as accuracy and
+            methodology.
+            :return:
+            """
+
+            logger.debug('- - - - - - - - - - - - - - - -')
+
+            lookup_table_dict = {0: "GRS80"}
+            # get the keys into a list
+            lookup_key_list = [lookup_key for lookup_key in lookup_table_dict.keys()]
+
+            # create the lookup table to convert variables with strings as keys.
+            lookup_dict = {lookup_key: lookup_key_list.index(lookup_key)
+                           for lookup_key in lookup_key_list}
+
+            # get the array of numeric foreign key values
+            field_data_array = get_data(field_yml_settings_dict)
+
+
+
+            for i, value in enumerate(field_data_array):
+                    # print("i: {}".format(i))
+                    # print("value: {}".format(value))
+                if value is "GRS80":
+                    field_data_array[i] = 0
+                else:
+                    field_data_array[i] = int(field_yml_settings_dict['fill_value'])
+
+            #transformed_data_list
+            # transform the data_list into the mapped value.
+          #  transformed_data_list = [lookup_dict.get(lookup_key) for lookup_key in field_data_array]
+            # transformed_data_list = [lookup_dict.get(lookup_key) if lookup_key != field_yml_settings_dict['fill_value'] else field_yml_settings_dict['fill_value'] for lookup_key in field_data_array]
+           # print("transformed_data_list: {}".format(transformed_data_list))
+
+            # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
+            # the existing value of the table_key_dict in a new dict
+
+            converted_attributes_dict = {lookup_table_dict[key]: value
+                                         for key, value in lookup_table_dict.items()}
+            print("converted_attributes_dict: {}".format(converted_attributes_dict))
+            # ===================================================================
+            # converted_dict = {}
+            # for keys, values in lookup_table_dict.items():
+            #     for map_key, map_value in lookup_dict.items():
+            #         if keys == map_key:
+            #             converted_dict[map_value] = lookup_table_dict[keys]
+            # ===================================================================
+
+            return field_data_array, converted_attributes_dict
+
 
         def get_field_description(target_field):
             """
@@ -439,12 +531,23 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
             for value in list_of_possible_value:
                 logger.debug("Value in list_of_possible_value: " + str(value))
-                # if the field value is in the list of accepted values then add to attributes dict
+                # if the field value is in the list of accepted values then add to attlributes dict
                 if field_yml_settings_dict.get(value):
                     logger.debug("Processing: " + str(value))
 
+
+
+                  #  if value == 'create_lookup_table':
+
+                    #print(value)
                     # some key values are already int8 and don't need to be converted. Thus a flag is included in the
                     if value == 'lookup_table':
+
+                        # # special case
+                        # if field_yml_settings_dict.get('short_name') == 'Elipsoiddatum':
+                        #     converted_data_list, converted_key_value_dict = handle_key_value_for_ellipsoid_datum(field_yml_settings_dict)
+                        #     converted_data_array = np.array(converted_data_list, field_yml_settings_dict['dtype'])
+
                         logger.debug('Converting ' + str(value) + 'string keys to int8 with 0 as 1st index')
                         converted_data_list, converted_key_value_dict = handle_key_value_cases(field_yml_settings_dict,
                                                                     self.get_keys_and_values_table(field_yml_settings_dict.get('lookup_table')))
@@ -452,12 +555,33 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                         logger.debug('Adding converted lookup table as variable attribute...')
                         # this replaces ['comments'] values set in the previous if statement.
                         # attributes_dict['comments'] = str(converted_key_value_dict)
+                        #print('this format')
+                        # print('converted_data_list')
+                        # print(converted_data_list)
+                        print("before converted data list: {}".format(converted_data_list))
+                        print(converted_data_list[0])
+                        #if converted_data_list[0] == None:
+                        for i, value in enumerate(converted_data_list):
+                             # print("i: {}".format(i))
+                             # print("value: {}".format(value))
+                            if value is None:
+                                converted_data_list[i] = int(field_yml_settings_dict['fill_value'])
+                            else:
+                                converted_data_list[i] = value
+                        print("converted data list: {}".format(converted_data_list))
+
+
                         converted_data_array = np.array(converted_data_list, field_yml_settings_dict['dtype'])
+                    #print(converted_data_array)
+
 
                     # for the one case where a column in the observation table (tcdem) needs to be added as the
                     # attribute of varaible in the netcdf file.
                     if value == 'dem' or value == 'datum':
                         # the grav datum needs to be converted from its key value
+                        #if field_yml_settings_dict.get('short_name') == 'Elipsoiddatum':
+
+
                         if field_yml_settings_dict.get('short_name') == 'Grav':
                             gravdatum_key = self.get_survey_wide_value_from_obs_table(field_yml_settings_dict.get(value))
                             attributes_dict[value] = self.get_value_for_key("DESCRIPTION", "GRAVDATUMS", "GRAVDATUM", gravdatum_key)
@@ -470,10 +594,43 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                             else:
                                 pass
 
+                    # elif (value == 'create_lookup_table'):
+                    #     print("FOUND")
+                    #     # make the key lookup table
+                    #     # converted_data_list, converted_key_value_dict
+                    #     logger.debug('- - - - - - - - - - - - - - - -')
+                    #     #logger.debug('handle_key_value_cases() with field value: ' + str(
+                    #     #    field_value) + ' and lookup_table_dict: ' + str(lookup_table_dict))
+                    #
+                    #     # get the keys into a list
+                    #     #lookup_key_list = [lookup_key for lookup_key in lookup_table_dict.keys()]
+                    #     # self.elipsoid_height_datums
+                    #     print('values list')
+                    #     print(self.elipsoid_height_datums)
+                    #     # create the lookup table to convert variables with strings as keys.
+                    #     lookup_dict = {lookup_key: self.elipsoid_height_datums.index(lookup_key)
+                    #                    for lookup_key in self.elipsoid_height_datums}
+                    #     print("ellipsoid lookup dict")
+                    #     print(lookup_dict)
+                    #     # get the array of numeric foreign key values
+                    #     field_data_array = get_data(field_yml_settings_dict)
+                    #     print(field_data_array)
+                    #     # transform the data_list into the mapped value.
+                    #     transformed_data_list = [lookup_dict.get(lookup_key) for lookup_key in field_data_array]
+                    #     print(transformed_data_list)
+                    #     # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
+                    #     # the existing value of the table_key_dict in a new dict
+                    #     converted_attributes_dict = {lookup_table_dict[key]: value
+                    #                                  for key, value in lookup_table_dict.items()}
+                    #     print(converted_attributes_dict)
+
                     # for all other values, simply add them to attributes_dict
                     else:
-                        attributes_dict[value] = field_yml_settings_dict[value]
-                        logger.debug('attributes_dict["{}"] = {}'.format(value, field_yml_settings_dict[value]))
+                        try:
+                            attributes_dict[value] = field_yml_settings_dict[value]
+                            logger.debug('attributes_dict["{}"] = {}'.format(value, field_yml_settings_dict[value]))
+                        except:
+                            print("no go")
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
@@ -529,6 +686,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         
         # Loop through the defined variables in the yaml config and construct as netcdf variables.
         for field_name, field_value in Grav2NetCDFConverter.settings['field_names'].items():
+            print(field_name)
             # convert strings to int or floats for int8 and float32 to get the required data type for the fill value
             if field_value['dtype'] == 'int8':
                 fill_value = int(field_value['fill_value'])
@@ -602,6 +760,8 @@ def main():
     survey_id_list = [re.search('\d+', survey_row[0]).group()
                       for survey_row in survey_cursor
                       ]
+
+
 
     #test 196662 only
 
