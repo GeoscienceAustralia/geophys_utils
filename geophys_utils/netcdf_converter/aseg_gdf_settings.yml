@@ -66,6 +66,7 @@ field_definitions:
   depth_top: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m, dimensions: layer}
   layer_top_depth: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m, dimensions: layer}
   layer_top_elev: {long_name: Elevation of the top of the layer, short_name: layer_top_elevation, units: m, dimensions: layer}
+  depthcelltop: {long_name: Depth to the top of the layer, short_name: layer_top_depth, units: m, dimensions: layer}
   resistivity: {long_name: Layer resistivity, short_name: resistivity,
     units: ohm.m, dimensions: layer}
   conductivity: {long_name: Layer conductivity, short_name: conductivity,

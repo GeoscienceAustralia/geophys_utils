@@ -2,13 +2,13 @@
 
 #===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -24,7 +24,7 @@ import re
 import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
 
-# Define CRS name mappings for 
+# Define CRS name mappings for
 CRS_NAME_MAPPING = {'GDA94': 'EPSG:4283',
                     'EPSG:283': 'EPSG:4283', # EPSG Prefix for UTM zone
                     }
@@ -36,23 +36,23 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
     @return spatial_ref: SpatialReference from WKT
     '''
     spatial_ref = SpatialReference()
-    
+
     # Try to resolve WKT
     result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
     if not result:
         return spatial_ref
 
     # Try to resolve CRS name - either mapped or original
-    result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name) 
+    result = spatial_ref.SetWellKnownGeogCS(CRS_NAME_MAPPING.get(wkt_or_crs_name) or wkt_or_crs_name)
     if not result:
         return spatial_ref
 
     # Try common formulations for UTM zones
-    #TODO: Fix this so it works in the Northern hemisphere 
+    #TODO: Fix this so it works in the Northern hemisphere
     modified_crs_name = re.sub('\s+', '', wkt_or_crs_name.strip().upper())
     utm_match = (re.match('(\w+)/MGAZONE(\d+)', modified_crs_name) or
                  re.match('(\w+)/(\d+)S', modified_crs_name) or
-                 re.match('(EPSG:283)(\d{2})', modified_crs_name) 
+                 re.match('(EPSG:283)(\d{2})', modified_crs_name)
                  )
     if utm_match:
         modified_crs_name = utm_match.group(1)
@@ -73,7 +73,7 @@ def get_coordinate_transformation(from_wkt, to_wkt):
     # Assume native coordinates if no wkt given
     if from_wkt == to_wkt:
         return None
-    
+
     from_spatial_ref = get_spatial_ref_from_wkt(from_wkt)
     to_spatial_ref = get_spatial_ref_from_wkt(to_wkt)
 
@@ -97,14 +97,14 @@ def get_utm_wkt(coordinate, from_wkt):
             return 0
         else:
             return 1
-        
+
     coordinate_array = np.array(coordinate).reshape((1,2))
 
     latlon_coord_trans = get_coordinate_transformation(
         from_wkt, 'EPSG:4326')
     latlon_coord = coordinate if latlon_coord_trans is None else latlon_coord_trans.TransformPoints(
         coordinate_array)[0][0:2]
-        
+
     # Set UTM coordinate reference system
     utm_spatial_ref = SpatialReference()
     utm_spatial_ref.SetWellKnownGeogCS('WGS84')
@@ -124,19 +124,17 @@ def transform_coords(coordinates, from_wkt, to_wkt):
         from_wkt, to_wkt)  # Transform from specified CRS to native CRS
 
     coordinate_array = np.array(coordinates) # Copy coordinates into fresh array
-        
+
     if not coord_trans:  # No transformation required
         return coordinate_array # Return copy of original coordinates
-    
+
     is_single_coordinate = (coordinate_array.shape == (2,))
     # Reshape 1D array into 2D single coordinate array if only one coordinate provided
     if is_single_coordinate:
         coordinate_array = coordinate_array.reshape((1,2))
-        
+
     new_coordinate_array = np.array(coord_trans.TransformPoints(coordinate_array))[:,0:2]
     if is_single_coordinate:
         return new_coordinate_array.reshape((2,))
-    else: 
+    else:
         return new_coordinate_array
-
-
