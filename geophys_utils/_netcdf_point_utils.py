@@ -141,7 +141,7 @@ class NetCDFPointUtils(NetCDFUtils):
         xmax = np.nanmax(xycoords[:,0])
         ymin = np.nanmin(xycoords[:,1])
         ymax = np.nanmax(xycoords[:,1])
-
+        
         # Create nested list of bounding box corner coordinates
         self.native_bbox = [[xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax]]
 
@@ -472,101 +472,21 @@ class NetCDFPointUtils(NetCDFUtils):
         return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
     
     
-    def get_concave_hull_old(self, to_wkt=None, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, smoothness=None):
         """\
-        Returns the concave hull (as a shapely polygon) of all points.
-        Implements abstract base function in NetCDFUtils
+        Returns the concave hull (as a shapely polygon) of all points. 
+        Implements abstract base function in NetCDFUtils 
         @param to_wkt: CRS WKT for shape
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
         hull = concaveHull(transform_coords(self.xycoords, self.wkt, to_wkt))
         result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-
+        
         if smoothness is None:
             return result
-
+        
         return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
 
-
-
-    def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1,
-                         join_style=1, max_polygons=5, max_vertices=1000):
-        """\
-        Returns the concave hull (as a shapely polygon) of points with data.
-        Implements abstract base function in NetCDFUtils
-        @param to_wkt: CRS WKT for shape
-        @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
-        @param offset: Final offset of final shape from original lines
-        @param tolerance: tolerance for simplification
-        @param cap_style: cap_style for buffering. Defaults to round
-        @param join_style: join_style for buffering. Defaults to round
-        @param max_polygons: Maximum number of polygons to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
-        @param max_vertices: Maximum number of vertices to accept. Will keep doubling buffer_distance until under this limit. 0=unlimited.
-        @return shapely.geometry.shape: Geometry of concave hull
-        """
-        assert not max_polygons or buffer_distance > 0, 'buffer_distance must be greater than zero if number of polygons is limited'  # Avoid endless recursion
-
-        def get_offset_geometry(geometry, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons,
-                                max_vertices):
-            '''\
-            Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
-            '''
-            logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
-
-            #transform_coords(line_vertices, self.wkt, to_wkt))
-            offset_geometry = geometry.buffer(buffer_distance, cap_style=cap_style, join_style=join_style).simplify(
-                tolerance)
-            offset_geometry = offset_geometry.buffer(offset - buffer_distance, cap_style=cap_style,
-                                                     join_style=join_style).simplify(tolerance)
-
-            # Discard any internal polygons
-            if type(offset_geometry) == MultiPolygon:
-                polygon_list = []
-                for polygon in offset_geometry:
-                    polygon = Polygon(polygon.exterior)
-                    polygon_is_contained = False
-                    for list_polygon in polygon_list:
-                        polygon_is_contained = list_polygon.contains(polygon)
-                        if polygon_is_contained:
-                            break
-                        elif polygon.contains(list_polygon):
-                            polygon_list.remove(list_polygon)
-                            break
-
-                    if not polygon_is_contained:
-                        polygon_list.append(polygon)
-
-                if len(polygon_list) == 1:
-                    offset_geometry = polygon_list[0]  # Single polygon
-                else:
-                    offset_geometry = MultiPolygon(polygon_list)
-
-            elif type(offset_geometry) == Polygon:
-                offset_geometry = Polygon(offset_geometry.exterior)
-            else:
-                raise ValueError('Unexpected type of geometry: {}'.format(type(offset_geometry)))
-
-            # Keep doubling the buffer distance if there are too many polygons
-            if (
-                    (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
-                    or
-                    (max_vertices and type(offset_geometry) == MultiPolygon and
-                     sum([len(polygon.exterior.coords)
-                          # + sum([len(interior_ring.coords) for interior_ring in polygon.interiors])
-                          for polygon in offset_geometry]) > max_vertices)
-                    or
-                    (max_vertices and type(offset_geometry) == Polygon and
-                     (len(offset_geometry.exterior.coords)
-                     # + sum([len(interior_ring.coords) for interior_ring in offset_geometry.interiors])
-                     ) > max_vertices)
-            ):
-                return get_offset_geometry(geometry, buffer_distance * 2, offset, tolerance, cap_style, join_style,
-                                           max_polygons, max_vertices)
-
-            return offset_geometry
-
-        return get_offset_geometry(Polygon(self._xycoords), buffer_distance, offset, tolerance, cap_style, join_style,
-                                   max_polygons, max_vertices)
 
     def nearest_neighbours(self, coordinates, 
                            wkt=None, 
@@ -1269,8 +1189,8 @@ class NetCDFPointUtils(NetCDFUtils):
                               )
                           )
             
-            attribute_dict['geospatial_lon_units'] = 'degrees_east'
-            attribute_dict['geospatial_lat_units'] = 'degrees_north'
+            attribute_dict['geospatial_lon_units'] = 'degree_east'
+            attribute_dict['geospatial_lat_units'] = 'degree_north'
             
             attribute_dict['geospatial_bounds_crs'] = metadata_srs.ExportToPrettyWkt()
             
@@ -1279,13 +1199,7 @@ class NetCDFPointUtils(NetCDFUtils):
                     logger.debug('Computing concave hull')
                     attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
                         self.get_concave_hull(
-                            to_wkt=METADATA_CRS,
-                            buffer_distance=SHAPE_BUFFER_DISTANCE,
-                            offset=SHAPE_OFFSET,
-                            tolerance=SHAPE_SIMPLIFY_TOLERANCE,
-                            max_polygons=SHAPE_MAX_POLYGONS,
-                            max_vertices=SHAPE_MAX_VERTICES
-
+                            to_wkt=METADATA_CRS
                             ), 
                         rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
                 except Exception as e:

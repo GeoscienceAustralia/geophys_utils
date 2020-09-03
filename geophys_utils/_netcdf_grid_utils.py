@@ -310,7 +310,7 @@ class NetCDFGridUtils(NetCDFUtils):
         # TODO: Check behaviour of scipy.ndimage.map_coordinates adjacent to no-data areas. Should not interpolate no-data value
         # TODO: Make this work for arrays > memory
         max_bytes = max_bytes or 100
-        NetCDFGridUtils.DEFAULT_MAX_BYTES
+        #NetCDFGridUtils.DEFAULT_MAX_BYTES
 
         if variable_name:
             data_variable = self.netcdf_dataset.variables[variable_name]
@@ -774,8 +774,8 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['geospatial_lat_min'] = metadata_bbox[1]
             attribute_dict['geospatial_lon_max'] = metadata_bbox[2]
             attribute_dict['geospatial_lat_max'] = metadata_bbox[3]
-            attribute_dict['geospatial_lon_units'] = 'degree_east'
-            attribute_dict['geospatial_lat_units'] = 'degree_north'
+            attribute_dict['geospatial_lon_units'] = 'degrees_east'
+            attribute_dict['geospatial_lat_units'] = 'degrees_north'
             attribute_dict['nominal_pixel_size_lon_degrees'] = self.nominal_pixel_degrees[0]  # lon
             attribute_dict['nominal_pixel_size_lat_degrees'] = self.nominal_pixel_degrees[1]  # lat
             attribute_dict['nominal_pixel_size_x_metres'] = self.nominal_pixel_metres[0]  # x
