@@ -896,7 +896,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 global_attributes_dict[dimension_name + '_count'] = str(dimension.size)
 
-            logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
+            #logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
 
             for key in sorted(global_attributes_dict.keys()):
                 value = global_attributes_dict[key]
