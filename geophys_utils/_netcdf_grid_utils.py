@@ -780,6 +780,8 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['nominal_pixel_size_lat_degrees'] = self.nominal_pixel_degrees[1]  # lat
             attribute_dict['nominal_pixel_size_x_metres'] = self.nominal_pixel_metres[0]  # x
             attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
+            attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # lon
+            attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # lat
 
             # polygon generation
             if compute_shape:
