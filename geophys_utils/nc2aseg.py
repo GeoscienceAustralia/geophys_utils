@@ -2,13 +2,13 @@
 
 # ===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -896,7 +896,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 global_attributes_dict[dimension_name + '_count'] = str(dimension.size)
 
-            logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
+            #logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
 
             for key in sorted(global_attributes_dict.keys()):
                 value = global_attributes_dict[key]
