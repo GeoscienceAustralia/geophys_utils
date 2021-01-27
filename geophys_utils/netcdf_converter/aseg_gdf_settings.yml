@@ -124,6 +124,18 @@ field_definitions:
     dimensions: low_moment_gate}
   runc_hm_x: {long_name: X-component High Moment gates relative uncertainty, short_name: rel_uncertainty_high_moment_X-component,
     dimensions: high_moment_gate}
+  observed_EMSystem_1_ZS: { long_name: Z-component Low Moment dB/dt observed data, short_name: lmz_observed_EM_data, units: pV/(A.turns.m4),
+          dimensions: low_moment_gate }
+  observed_EMSystem_2_ZS: { long_name: Z-component High Moment dB/dt observed data, short_name: hmz_observed_EM_data, units: pV/(A.turns.m4),
+            dimensions: high_moment_gate }
+  predicted_EMSystem_1_ZS: { long_name: Z-component Low Moment dB/dt predicted data, short_name: lmz_predicted_EM_data, units: pV/(A.turns.m4),
+                            dimensions: low_moment_gate }
+  predicted_EMSystem_2_ZS: { long_name: Z-component High Moment dB/dt predicted data, short_name: hmz_predicted_EM_data, units: pV/(A.turns.m4),
+                              dimensions: high_moment_gate }
+  noise_EMSystem_1_ZS: { long_name: Estimated noise for Z-component Low Moment dB/dt data, short_name: lmz_estimated_EM_noise, units: pV/(A.turns.m4),
+                             dimensions: low_moment_gate }
+  noise_EMSystem_2_ZS: { long_name: Estimated noise for Z-component High Moment dB/dt data, short_name: hmz_esimataed_EM_noise, units: pV/(A.turns.m4),
+                               dimensions: high_moment_gate }
 
 # Known custom .dfn attributes to write into variable attributes with mappings to new names
 # N.B: Do NOT include standard attributes like "NAME", "UNIT" or "UNITS"
