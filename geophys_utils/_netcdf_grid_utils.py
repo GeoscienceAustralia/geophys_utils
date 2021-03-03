@@ -871,15 +871,17 @@ class NetCDFGridUtils(NetCDFUtils):
 
         for i in range(num_of_chunks):
             logger.debug("iteration: {}".format(i))
-            if i < num_of_chunks:  # if first iteration set current_min and max
+            if i == 0:  # if first iteration set current_min and max
                 chunk_min = np.nanmin(variable[0:x_size, y_step * i : y_step * (i+1)])
                 chunk_max = np.nanmax(variable[0:x_size, y_step * i : y_step * (i+1)])
                 current_min = chunk_min
                 current_max = chunk_max
+            elif i > 0 and i < num_of_chunks:
+                chunk_min = np.nanmin(variable[0:x_size, y_step * i : y_step * (i+1)])
+                chunk_max = np.nanmax(variable[0:x_size, y_step * i : y_step * (i+1)])
             else:  # last chunk
                 chunk_min = np.nanmin(variable[0:x_size, y_step * i+ y_residual])
                 chunk_max = np.nanmax(variable[0:x_size, y_step * i+ y_residual])
-
             if chunk_min < current_min:
                 current_min = chunk_min
             if chunk_max > current_max:
