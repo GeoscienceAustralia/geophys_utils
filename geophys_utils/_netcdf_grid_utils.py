@@ -47,7 +47,7 @@ logger.setLevel(logging.INFO) # Initial logging level for this module
 MAX_CELLS_TO_COMPUTE_SHAPE = 400000000 # Set limit for grids of approximately 20,000 x 20,000
 SHAPE_BUFFER_DISTANCE = None # Distance to buffer (kerf) shape out then in again (in degrees)
 SHAPE_OFFSET = None # Distance to buffer (kerf) final shape outwards (in degrees)
-SHAPE_SIMPLIFY_TOLERANCE = 0.0005 # Length of shortest line in shape (in degrees)
+SHAPE_SIMPLIFY_TOLERANCE = 0.05 # Length of shortest line in shape (in degrees)
 SHAPE_MAX_POLYGONS=5
 SHAPE_MAX_VERTICES=1000
 SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
@@ -412,6 +412,8 @@ class NetCDFGridUtils(NetCDFUtils):
         
         # Parameters for shape simplification in pixel sizes
         buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
+       # buffer_distance = 1000000
+        print("buffer dstaince: {}".format(buffer_distance))
         offset = offset or 0.9 # Take final shape half a pixel out from centre coordinates to cover pixel edges
         tolerance = tolerance or 0.5        
         
@@ -455,12 +457,13 @@ class NetCDFGridUtils(NetCDFUtils):
             Helper function to turn an individual contour into shapely Polygon in the correct xy axis order
             @param polygon_vertices: n x 2 array of pixel coordinates forming a polygon
             '''
+            print("CONTOUR TO POLYGON")
             # Note that we need coordinates in xy order, but the polygon vertices are in array order (probably yx)
             if self.YX_order: # yx array order - y-axis flip required
                 reorder_slices = (slice(None, None, None), slice(None, None, -1))
             else: # xy array order - no y-axis flip required
                 reorder_slices = (slice(None, None, None), slice(None, None, None))
-                
+            print(reorder_slices)
             # Create polygon in pixel ordinates, and then buffer outwards by 0.5 pixel widths, and simplify by 0.25 pixel widths
             # Note that this polygon is in array order, i.e. probably yx and not xy, so we need to apply the reorder_slices
             return asPolygon(polygon_vertices[reorder_slices])
@@ -499,6 +502,7 @@ class NetCDFGridUtils(NetCDFUtils):
             '''\
             Helper function to return offset geometry. Will keep trying larger buffer_distance values until there is a manageable number of polygons
             '''
+            print("get offset geo")
             logger.debug('Computing offset geometry with buffer_distance = {}'.format(buffer_distance))
             offset_geometry = (geometry.buffer(
                 buffer_distance, 
@@ -509,7 +513,7 @@ class NetCDFGridUtils(NetCDFUtils):
                     join_style=join_style).simplify(tolerance)
                 )      
             discard_internal_polygons(offset_geometry)
-            
+            print("discard internal polygons")
             # Keep doubling the buffer distance if there are too many polygons
             if (
                 (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
@@ -544,13 +548,21 @@ class NetCDFGridUtils(NetCDFUtils):
         
         # Compute downsampling_stride for downsampling, and use that to create mask_slices
         downsampling_stride = int(max(self.pixel_count) // DOWNSAMPLING_STEP_SIZE) + 1
-        mask_slices = tuple([slice(None, None, downsampling_stride)
-                       for _size in self.data_variable.shape])
 
-        logger.debug('Computing padded mask')
-        padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride))+2 for size in self.data_variable.shape], dtype=np.bool)
-        padded_mask[1:-1,1:-1] = (self.data_variable != self.data_variable._FillValue)[mask_slices] # It's quicker to read all data and mask afterwards
-        
+        if len(self.data_variable_list) > 1:
+            logger.debug('Multiband dataset. Polygon generation must take into account nulls that appear on each band.')
+        combined_array = None
+        combined_array = np.empty([int(ceil(size / downsampling_stride)) for size in self.data_variable.shape])
+        for band in self.data_variable_list:
+            logger.debug('Computing padded mask')
+            mask_slice = tuple([slice(None, None, downsampling_stride) for _size in self.data_variable.shape])
+            padded_mask = np.zeros(shape=[int(ceil(size / downsampling_stride)) + 2 for size in self.data_variable.shape], dtype=np.bool)
+            padded_mask_band = (band != band._FillValue)[mask_slice]
+            combined_array = combined_array + padded_mask_band
+
+        padded_mask[1:-1,1:-1] = combined_array != 0
+
+
         data_proportion = np.count_nonzero(padded_mask[1:-1,1:-1]) / ((padded_mask.shape[0]-2)*(padded_mask.shape[1]-2))
         if data_proportion >= MAX_DATA_PROPORTION:
             logger.debug('More than {:.2f}% of pixels contain data - assuming full grid coverage'.format(data_proportion*100))
@@ -559,7 +571,8 @@ class NetCDFGridUtils(NetCDFUtils):
         # find contours where the high pieces (data) are fully connected
         # that there are no unnecessary holes in the polygons
         # shift the coordinates back by 1 to get original unpadded pixel coordinates
-        logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in self.data_variable.shape)) +
+        logger.debug('Generating contours for grid of size {}'.format(' x '.join(str(size) for size in
+                                                                                 self.data_variable.shape)) +
                      (' downsampled with stride {}.'.format(downsampling_stride) if downsampling_stride > 1 else '.')
                      )
         contours = [(contour - PAD_WIDTH) * downsampling_stride # Shift for padding and compensate for downsampling_stride
@@ -756,7 +769,7 @@ class NetCDFGridUtils(NetCDFUtils):
             new_dataset.close()
             
                        
-    def set_global_attributes(self, compute_shape=False):
+    def set_global_attributes(self, compute_shape=True):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
@@ -782,22 +795,28 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
             attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # lon
             attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # lat
-
             # polygon generation
             if compute_shape:
-                try:
-                    assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
-                        
-                    logger.debug('Computing concave hull')
-                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-                        self.get_concave_hull(to_wkt=gda_wkt), 
-                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-                except Exception as e: # if it fails use the convex hull or bounding box instead
-                    logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
-                    attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-                        asPolygon(self.get_convex_hull(to_wkt=gda_wkt)), 
-                        rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
-                        )
+                attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),  rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+                print(attribute_dict['geospatial_bounds'])
+
+
+
+            #    try:
+            #         assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
+            #         print("num of cells: {}".format(self.pixel_count[0] * self.pixel_count[1]))
+            #         logger.debug('Computing concave hull')
+            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+            #            self.get_concave_hull(to_wkt=gda_wkt),
+            #            rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
+            #
+            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
+            #             asPolygon(self.get_convex_hull(to_wkt=gda_wkt)),
+            #             rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
+            #          )
+            #    except Exception as e: # if it fails use the convex hull or bounding box instead
+            #         logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
+
             
             logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
             logger.info('Writing global attributes to netCDF file')
@@ -807,31 +826,69 @@ class NetCDFGridUtils(NetCDFUtils):
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
 
-    def set_variable_actual_range_attribute(self):
+
+
+    def set_variable_actual_range_attribute(self, num_pixels_to_trigger_iterating=5000000, num_of_chunks=100):
         '''\
         Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
         N.B: This will fail if dataset is not writable
         '''
-        try:
-            for variable_name, variable in self.netcdf_dataset.variables.items():
-                # Skip all variables which can't be grids
-                if len(variable.dimensions) < 2:
-                    continue
-                
-                # Skip index variables
-                if re.search('_index$', variable_name):
-                    continue
-                
-                try:
-                    variable.actual_range = np.array(
-                        [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
-                    logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
-                except:
-                    logger.warning('Unable to compute actual_range value for variable {}'.format(variable_name))
-        except:
-            logger.error('Unable to set variable actual_range metadata attributes in netCDF grid dataset')
-            raise        
+
+        for variable_name, variable in self.netcdf_dataset.variables.items():
+            # Skip all variables which can't be grids
+            if len(variable.dimensions) < 2:
+                continue
+
+            # Skip index variables
+            if re.search('_index$', variable_name):
+                continue
+
+            logger.debug("Total num of pixels: {}".format(self.pixel_count[0] * self.pixel_count[1]))
+            logger.debug("num_pixels_to_trigger_iterating: {}".format(num_pixels_to_trigger_iterating))
+            if (self.pixel_count[0] * self.pixel_count[1] > num_pixels_to_trigger_iterating):
+                logger.debug("Pixel count is greater than array_total_size setting. Iterating through variable to find min, max")
+                min, max = self.iterate_through_data_chunks_and_find_mins_and_maxs(variable=variable, num_of_chunks=num_of_chunks)
+                variable.actual_range = np.array([min, max], dtype=variable.dtype)
+            else:
+                variable.actual_range = np.array(
+                    [np.nanmin(variable[:]), np.nanmax(variable[:])], dtype=variable.dtype)
+                logger.debug('{}.actual_range = {}'.format(variable_name, variable.actual_range))
+            logger.debug("actual range: {}: ".format(variable.actual_range))
+
         
+    def iterate_through_data_chunks_and_find_mins_and_maxs(self, variable, num_of_chunks=10):
+        x_size = self.pixel_count[0]
+        y_size = self.pixel_count[1]
+        y_step = y_size / num_of_chunks
+        y_step = int(y_step)
+        logger.debug("y step: {}".format(y_step))
+        y_residual = y_size - (y_step * num_of_chunks)
+        logger.debug("y residual: {}".format(y_residual))
+        logger.debug("y size: {}".format(y_size))
+
+        current_min = None
+        current_max = None
+
+        for i in range(num_of_chunks):
+            logger.debug("iteration: {}".format(i))
+            if i < num_of_chunks:  # if first iteration set current_min and max
+                chunk_min = np.nanmin(variable[0:x_size, y_step * i : y_step * (i+1)])
+                chunk_max = np.nanmax(variable[0:x_size, y_step * i : y_step * (i+1)])
+                current_min = chunk_min
+                current_max = chunk_max
+            else:  # last chunk
+                chunk_min = np.nanmin(variable[0:x_size, y_step * i+ y_residual])
+                chunk_max = np.nanmax(variable[0:x_size, y_step * i+ y_residual])
+
+            if chunk_min < current_min:
+                current_min = chunk_min
+            if chunk_max > current_max:
+                current_max = chunk_max
+
+            logger.debug("current_max: {}".format(current_max))
+            logger.debug("current_min: {}".format(current_min))
+        return current_min, current_max
+
 
 def main():
     '''

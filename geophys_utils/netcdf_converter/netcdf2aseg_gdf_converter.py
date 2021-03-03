@@ -1,6 +1,11 @@
 '''
 Created on 13 Jun. 2018
 
+########
+THIS IS NO LONGER USED. SEE NC2ASEG in geophys_utils folder
+########
+
+
 @author: u76345
 '''
 

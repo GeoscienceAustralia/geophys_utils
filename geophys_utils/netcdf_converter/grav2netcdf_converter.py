@@ -58,11 +58,11 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
     gravity_metadata_list = [
         # 'ENO', not needed
-        'SURVEYID',
-        'SURVEYNAME',
+        #'SURVEYID', #already in global attributes
+        #'SURVEYNAME', #already in global attributes as title
         'COUNTRYID',
         'STATEGROUP',
-        'STATIONS', #number of stations?
+        #'STATIONS', #number of stations? Same as netcdf point dimension.
         # 'GRAVACC', - variable
         #'GRAVDATUM' as variable attribute
         # 'GNDELEVACC', - variable
@@ -94,21 +94,21 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         'OWNER',  # nulls
         'LEGISLATION',  # nulls
         # 'STATE',
-        'PROJ_LEADER',  # nulls
+        #'PROJ_LEADER',  # nulls
         'ON_OFF', #?
         #'STARTDATE', moved to global attributes for enhanced searching
         #'ENDDATE', moved to global attributes for enhanced searching
         'VESSEL_TYPE',  # nulls
         'VESSEL',  # nulls
-        'SPACEMIN',  # can add uom which is metres
-        'SPACEMAX',
+        'SPACEMIN',  # name is changed to SPACEMIN_METRES in the post process script
+        'SPACEMAX', # name is changed to SPACEMAX_METRES in the post process script
         # 'LOCMETHOD', -not needed
         #'ACCURACY',  as point variable
         #'GEODETIC_DATUM',
         #'PROJECTION', # the data is given in the netcdf as gda94 unprojected. The values in the projection are Ellispoids
         # 'QA_CODE', not needed
         #'RELEASEDATE',  # not needed but open for discussion
-        #'COMMENTS',  # not needed but open for discussion
+        'COMMENTS',  # not needed but open for discussion
         # 'DATA_ACTIVITY_CODE',
         # 'NLAT', already in global attributes
         # 'SLAT', already in global attributes
@@ -128,12 +128,37 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         logger.debug("Yaml load fail")
         settings = {}
 
+    def get_all_ellipsoiddatum_values_table_from_point_data(self):
+        """
+        Search each survey and retrieve the dinstict results for ellidpoisddatum. Use these to make a lookup table,
+        following the existing pattern. Currently all values will be GRS80. However, better not to hardcode it,
+        just in case.
+        :return: dict "{"GRS80": "GRS80"}"
+        """
+
     def get_keys_and_values_table(self, table_name: str):
         """
         Retrieves all data from a specified table, converts into a dictionary, and returns as a string. Used for tables
         with the key and value information such as accuracy or methodology.
         e.g. 'SUR': 'Positions determined by optical surveying methods or measured on surveyed points.'
         """
+        # TODO fix this
+        if table_name == "ELLIPSOIDHGTDATUM":
+            #return {"GRS80": "GRS80"}
+            sql_statement = self.sql_strings_dict_from_yaml['get_ellipsoidhgt_datums_lookup']
+            query_result = self.cursor.execute(sql_statement)
+            keys_and_values_dict = OrderedDict()
+            for s in query_result:
+                # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
+                if s[0] != None:
+                    keys_and_values_dict[s[0]] = s[0]
+            if len(keys_and_values_dict) > 1:
+                logger.debug("More than one value for ellipsoiddatum found.")
+            print("ELLIPSOIDHGTDATUM")
+            print("keys_and_values_dict: {}".format(keys_and_values_dict))
+            return keys_and_values_dict
+
+
         sql_statement = 'select * from gravity.{}'.format(table_name)
         query_result = self.cursor.execute(sql_statement)
         keys_and_values_dict = OrderedDict()
@@ -179,6 +204,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         self.sql_strings_dict_from_yaml = sql_strings_dict_from_yaml
 
         self.survey_metadata = self.get_survey_metadata()
+        self.elipsoid_height_datums = []
+        #self.get_ellipsoid_height_datum_keys()
 
     def get_survey_metadata(self):
         """
@@ -196,6 +223,17 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
         return dict(zip(field_names, survey_row))
 
+    def get_ellipsoid_height_datum_keys(self): # only one currently, GRS80
+        formatted_sql = self.sql_strings_dict_from_yaml['get_ellipsoidhgt_datums_lookup']
+        query_result = self.cursor.execute(formatted_sql)
+        keys_and_values_dict = OrderedDict()
+        for s in query_result:
+            # for every instance in the table, add the 1st and 2nd column as key, value in a python dict
+            keys_and_values_dict[s[0]] = s[1]
+        print(keys_and_values_dict)
+        self.elipsoid_height_datums = [datum[0] for datum in survey_row if datum[0] is not None]
+        #return (self.elipsoid_height_datums)
+
     def get_survey_wide_value_from_obs_table(self, field):
         """
         Helper function to retrieve a survey wide value from the observations table. The returning value is tested
@@ -204,7 +242,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         :return: The first value of the specified field of the observations table.
         """
         formatted_sql = self.sql_strings_dict_from_yaml['get_data'].format('o1.'+field, "null", self.survey_id)
-        formatted_sql = formatted_sql.replace('select', 'select distinct', 1) # Only retrieve distinct results
+        formatted_sql = formatted_sql.replace('select', 'select distinct', 1)  # Only retrieve distinct results
         formatted_sql = re.sub('order by .*$', '', formatted_sql) # Don't bother sorting
         query_result = self.cursor.execute(formatted_sql)
         value = None
@@ -222,7 +260,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         '''
         Concrete method to return dict of global attribute <key>:<value> pairs
         '''        
-        metadata_dict = {'title': self.survey_metadata['SURVEYNAME'],
+        metadata_dict = {
+            'title': self.survey_metadata['SURVEYNAME'],
                          'survey_id': self.survey_id,
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': 'points, gravity, ground digital data, geophysical survey, survey {0}, {1}, {2}, Earth sciences,'
@@ -230,7 +269,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
             'geospatial_lon_min': np.min(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_max': np.max(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_units': "degrees_east",
-            'geospatial_long_resolution': "point",
+            'geospatial_lon_resolution': "point",
             'geospatial_lat_min': np.min(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_max': np.max(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_units': "degrees_north",
@@ -297,6 +336,8 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
         for field_value in Grav2NetCDFConverter.settings['field_names'].values():
             if field_value.get('lookup_table'):
                 lookup_dict = self.get_keys_and_values_table(field_value['lookup_table'])
+                print("LOOKUP DICT: {}".format(lookup_dict))
+
                 new_dimension_name = field_value['short_name'].lower()
                 dimensions[new_dimension_name] = len(lookup_dict)
                 # print(dimensions[new_dimension_name])
@@ -402,6 +443,63 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
             return transformed_data_list, converted_attributes_dict
 
+        def handle_key_value_for_ellipsoid_datum(field_yml_settings_dict):
+            """
+
+            :param field_yml_settings_dict: field settings as written in the yml file e.g. {'short_name': 'Ellipsoidhgt', 'dtype':
+            'float32', 'database_field_name': 'ELLIPSOIDHGT', 'long_name': 'Ellipsoid Height', 'units': 'm',
+            'fill_value': -99999.9, 'datum': 'ELLIPSOIDHGTDATUM'}
+            :param lookup_table_dict: Dict of key and values pulled from oracle for tables such as accuracy and
+            methodology.
+            :return:
+            """
+
+            logger.debug('- - - - - - - - - - - - - - - -')
+
+            lookup_table_dict = {0: "GRS80"}
+            # get the keys into a list
+            lookup_key_list = [lookup_key for lookup_key in lookup_table_dict.keys()]
+
+            # create the lookup table to convert variables with strings as keys.
+            lookup_dict = {lookup_key: lookup_key_list.index(lookup_key)
+                           for lookup_key in lookup_key_list}
+
+            # get the array of numeric foreign key values
+            field_data_array = get_data(field_yml_settings_dict)
+
+
+
+            for i, value in enumerate(field_data_array):
+                    # print("i: {}".format(i))
+                    # print("value: {}".format(value))
+                if value is "GRS80":
+                    field_data_array[i] = 0
+                else:
+                    field_data_array[i] = int(field_yml_settings_dict['fill_value'])
+
+            #transformed_data_list
+            # transform the data_list into the mapped value.
+          #  transformed_data_list = [lookup_dict.get(lookup_key) for lookup_key in field_data_array]
+            # transformed_data_list = [lookup_dict.get(lookup_key) if lookup_key != field_yml_settings_dict['fill_value'] else field_yml_settings_dict['fill_value'] for lookup_key in field_data_array]
+           # print("transformed_data_list: {}".format(transformed_data_list))
+
+            # loop through the table_key_dict and the lookup table. When a match is found add the new mapped key to
+            # the existing value of the table_key_dict in a new dict
+
+            converted_attributes_dict = {lookup_table_dict[key]: value
+                                         for key, value in lookup_table_dict.items()}
+            print("converted_attributes_dict: {}".format(converted_attributes_dict))
+            # ===================================================================
+            # converted_dict = {}
+            # for keys, values in lookup_table_dict.items():
+            #     for map_key, map_value in lookup_dict.items():
+            #         if keys == map_key:
+            #             converted_dict[map_value] = lookup_table_dict[keys]
+            # ===================================================================
+
+            return field_data_array, converted_attributes_dict
+
+
         def get_field_description(target_field):
             """
             Helper function to retrieve the field description from a connected oracle database
@@ -452,6 +550,22 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                         logger.debug('Adding converted lookup table as variable attribute...')
                         # this replaces ['comments'] values set in the previous if statement.
                         # attributes_dict['comments'] = str(converted_key_value_dict)
+                        #print('this format')
+                        # print('converted_data_list')
+                        # print(converted_data_list)
+                        print("before converted data list: {}".format(converted_data_list))
+                        print(converted_data_list[0])
+                        #if converted_data_list[0] == None:
+                        for i, value in enumerate(converted_data_list):
+                             # print("i: {}".format(i))
+                             # print("value: {}".format(value))
+                            if value is None:
+                                converted_data_list[i] = int(field_yml_settings_dict['fill_value'])
+                            else:
+                                converted_data_list[i] = value
+                        print("converted data list: {}".format(converted_data_list))
+
+
                         converted_data_array = np.array(converted_data_list, field_yml_settings_dict['dtype'])
 
                     # for the one case where a column in the observation table (tcdem) needs to be added as the
@@ -472,8 +586,12 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
                     # for all other values, simply add them to attributes_dict
                     else:
-                        attributes_dict[value] = field_yml_settings_dict[value]
-                        logger.debug('attributes_dict["{}"] = {}'.format(value, field_yml_settings_dict[value]))
+                        #TODO fix this
+                        try:
+                            attributes_dict[value] = field_yml_settings_dict[value]
+                            logger.debug('attributes_dict["{}"] = {}'.format(value, field_yml_settings_dict[value]))
+                        except:
+                            print("no go")
                 # if the value isn't in the list of accepted attributes
                 else:
                     logger.debug(str(value) + ' is not found in yaml config or is not set as an accepted attribute.')
@@ -583,8 +701,8 @@ def main():
     # get user input and connect to oracle
     assert len(sys.argv) >= 4, '....'
     nc_out_path = sys.argv[1]
-    u_id = sys.argv[2]
-    oracle_database = sys.argv[3]
+    oracle_database = sys.argv[2]
+    u_id = sys.argv[3]
     pw = sys.argv[4]
     con = cx_Oracle.connect(u_id, pw, oracle_database)
     survey_cursor = con.cursor()
@@ -605,32 +723,35 @@ def main():
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
         logger.debug("Processing for survey: " + str(survey))
-        #try:
-        g2n = Grav2NetCDFConverter(nc_out_path + "/" + str(survey) + '.nc', survey, con, sql_strings_dict)
+        if survey == "201901":
+            #try:
+            #g2n = Grav2NetCDFConverter(nc_out_path + "/" + "P" + str(survey) + '.nc', survey, con, sql_strings_dict)
+            # put a P in front of file names for consistency with other datasets. P for project.
+            g2n = Grav2NetCDFConverter("{0}/P{1}_GNDGRAV.nc".format(nc_out_path, str(survey)), survey, con, sql_strings_dict)
 
-        g2n.convert2netcdf()
-        logger.info('Finished writing netCDF file {}'.format(nc_out_path))
-        logger.info('-------------------------------------------------------------------')
-        logger.info('Global attributes:')
-        logger.info('-------------------------------------------------------------------')
-        for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
-            logger.info(str(key) + ": " + str(value))
-        logger.info('-'*30)
-        logger.info('Dimensions:')
-        logger.info('-'*30)
-        logger.info(g2n.nc_output_dataset.dimensions)
-        logger.info('-'*30)
-        logger.info('Variables:')
-        logger.info('-'*30)
-        logger.info(g2n.nc_output_dataset.variables)
+            g2n.convert2netcdf()
+            logger.info('Finished writing netCDF file {}'.format(nc_out_path))
+            logger.info('-------------------------------------------------------------------')
+            logger.info('Global attributes:')
+            logger.info('-------------------------------------------------------------------')
+            for key, value in iter(g2n.nc_output_dataset.__dict__.items()):
+                logger.info(str(key) + ": " + str(value))
+            logger.info('-'*30)
+            logger.info('Dimensions:')
+            logger.info('-'*30)
+            logger.info(g2n.nc_output_dataset.dimensions)
+            logger.info('-'*30)
+            logger.info('Variables:')
+            logger.info('-'*30)
+            logger.info(g2n.nc_output_dataset.variables)
 
-        #print(g2n.nc_output_dataset.file_format)
-        #print(g2n.nc_output_dataset.variables[''])
-        #print(g2n.nc_output_dataset.variables)
-        # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
-        #     print(data)
-        del g2n
-        # except Exception as e:
+            #print(g2n.nc_output_dataset.file_format)
+            #print(g2n.nc_output_dataset.variables[''])
+            #print(g2n.nc_output_dataset.variables)
+            # for data in g2n.nc_output_dataset.variables['Reliab lookup table']:
+            #     print(data)
+            del g2n
+            # except Exception as e:
 
 
 if __name__ == '__main__':

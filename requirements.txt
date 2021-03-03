@@ -10,3 +10,4 @@ tempfile
 yaml
 unidecode
 zipstream-new
+numexpr

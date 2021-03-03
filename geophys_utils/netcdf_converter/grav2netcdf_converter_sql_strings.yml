@@ -112,3 +112,12 @@ sql_strings_dict:
         and o1.ellipsoidmeterhgt is not null
         and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
         and o2.obsno is null
+  check_all_values_in_survey_consistent:
+    >
+    SELECT DISTINCT {0}
+    FROM gravity.OBSERVATIONS o1
+    WHERE o1.surveyid = {1}
+  get_ellipsoidhgt_datums_lookup:
+    >
+    SELECT DISTINCT ELLIPSOIDHGTDATUM
+    FROM gravity.OBSERVATIONS o1
