@@ -1,12 +1,12 @@
 field_names:
-  Obsno: {short_name: Obsno, long_name: Observation Number, database_field_name: obsno, dtype: int32, fill_value: -99}
-  Stationno: {short_name: Stationno, long_name: Station Number, database_field_name: STATIONNO, dtype: int64, fill_value: -9999}
+  Obsno: {short_name: Obsno, long_name: Observation Number, database_field_name: obsno, dtype: int32, fill_value: -9999.9}
+  Stationno: {short_name: Stationno, long_name: Station Number, database_field_name: STATIONNO, dtype: int64, fill_value: -999999999.9}
   Stattype: {short_name: Stattype, long_name: Station Type, database_field_name: STATIONTYPE, dtype: int8, lookup_table: STATIONTYPES, convert_keys_and_data_to_int8: True, fill_value: -99}
 
   Lat: {standard_name: latitude, long_name: Latitude, database_field_name: dlat, dtype: float64, units: degrees_north, fill_value: -99999.9, axis: Y}
   Long: {standard_name: longitude, long_name: Longitude, database_field_name: dlong, dtype: float64, units: degrees_east, fill_value: -99999.9, axis: X}
   Locmethod: {short_name: Locmethod, long_name: Location Method, database_field_name: LOCMETH, dtype: int8, lookup_table: LOCMETHODS, convert_keys_and_data_to_int8: True, fill_value: -99}
-  Locacc: {short_name: Locacc, long_name: Location Accuracy, database_field_name: LOCACC, dtype: float32, units: m, fill_value: -99}
+  Locacc: {short_name: Locacc, long_name: Location Accuracy, database_field_name: LOCACC, dtype: float32, units: m, fill_value: -99999.9}
   Locaccmethod: {short_name: Locaccmethod, long_name: Location Accuracy Method, database_field_name: LOCACCMETHOD, dtype: int8, lookup_table: ACCURACYMETHOD, fill_value: -99}
 
 ##TODO Spherical Cap Bouguer Anomaly (SCBA) include acryonm? SphericalCapBouguerAnomaly as ncname?
@@ -39,7 +39,7 @@ field_names:
   Ellipsoidhgtacc: {short_name: Ellipsoidhgtacc, long_name: Ellipsoid Height Accuracy, database_field_name: ELLIPSOIDHGTACC, dtype: float32, units: m, fill_value: -99999.9}
   Ellipsoidhgtmeth: {short_name: Ellipsoidhgtmeth, long_name: Ellipsoid Height Method, database_field_name: ELLIPSOIDHGTMETH, dtype: int8, lookup_table: GNDELEVMETHODS, convert_keys_and_data_to_int8: True, fill_value: -99}
   Ellipsoidhgtaccmethod: {short_name: Ellipsoidhgtaccmethod, long_name: Ellipsoid Height Accuracy Method, database_field_name: ELLIPSOIDHGTACCMETHOD, dtype: int8, lookup_table: ACCURACYMETHOD, fill_value: -99}
-  Elipsoiddatum: {short_name: Elipsoiddatum, long_name: Elipsoid Datum, database_field_name: ELLIPSOIDHGTDATUM, dtype: int8, lookup_table: ELLIPSOIDHGTDATUM, convert_keys_and_data_to_int8: True, fill_value: -99}
+  Ellipsoiddatum: {short_name: Ellipsoiddatum, long_name: Ellipsoid Datum, database_field_name: ELLIPSOIDHGTDATUM, dtype: int8, lookup_table: ELLIPSOIDHGTDATUM, convert_keys_and_data_to_int8: True, fill_value: -99}
 
   Tc: {short_name: Tc, long_name: Terrain Correction, database_field_name: TC, dtype: float32, units: um/s^2, dem: TCDEM, fill_value: -99999.9}
   Tcdensity: {short_name: Tcdensity, long_name: TC Density, database_field_name: TCDENSITY, dtype: float32, units: um/s^2, dem: TCDEM, fill_value: -99999.9}

@@ -13,7 +13,7 @@ from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 logger = logging.getLogger(__name__)
 
 
-def get_netcdf_util(netcdf_dataset, debug=False):
+def get_netcdf_util(netcdf_dataset, open_mode='r', debug=False):
     '''
     Function to take a netCDF4 Dataset object, a path to a netCDF file, or an OPeNDAP endpoint
     and return a NetCDFUtils subclass object (i.e. NetCDFPointUtils, NetCDFLineUtils, or NetCDFGridUtils)
@@ -21,11 +21,11 @@ def get_netcdf_util(netcdf_dataset, debug=False):
     if type(netcdf_dataset) == str: # String provided as path to netCDF file
         try:
             try:
-                _netcdf_dataset = netCDF4.Dataset(netcdf_dataset, 'r')
+                _netcdf_dataset = netCDF4.Dataset(netcdf_dataset, open_mode)
             except OSError:
                 if not _netcdf_dataset.startswith('http'):
                     raise
-                _netcdf_dataset = netCDF4.Dataset(netcdf_dataset + '#fillmismatch', 'r')
+                _netcdf_dataset = netCDF4.Dataset(netcdf_dataset + '#fillmismatch', open_mode)
             netcdf_dataset = _netcdf_dataset
         except Exception as e:
             logger.error('Unable to open {}: {}'.format(netcdf_dataset, e))
