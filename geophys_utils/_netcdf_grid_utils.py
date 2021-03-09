@@ -828,7 +828,7 @@ class NetCDFGridUtils(NetCDFUtils):
 
 
 
-    def set_variable_actual_range_attribute(self, num_pixels_to_trigger_iterating=5000000, num_of_chunks=100):
+    def set_variable_actual_range_attribute(self, num_pixels_to_trigger_iterating=5000000, num_of_chunks=50):
         '''\
         Function to set ACDD actual_range attribute in all non-index point-dimensioned variables
         N.B: This will fail if dataset is not writable
@@ -865,23 +865,35 @@ class NetCDFGridUtils(NetCDFUtils):
         y_residual = y_size - (y_step * num_of_chunks)
         logger.debug("y residual: {}".format(y_residual))
         logger.debug("y size: {}".format(y_size))
+        first_min_max_found = False
 
         current_min = None
         current_max = None
 
         for i in range(num_of_chunks):
-            logger.debug("iteration: {}".format(i))
-            if i == 0:  # if first iteration set current_min and max
-                chunk_min = np.nanmin(variable[0:x_size, y_step * i : y_step * (i+1)])
-                chunk_max = np.nanmax(variable[0:x_size, y_step * i : y_step * (i+1)])
+            logger.debug("Iteration: {}".format(i))
+            if i < num_of_chunks:
+                data_chunk = variable[0:x_size, y_step * i: y_step * (i + 1)]
+            else: # last chunk
+                data_chunk = variable[0:x_size, y_step * i+ y_residual]
+
+            # if all masked, skip this chunk
+            if data_chunk.mask.all():
+                logger.debug("data chunk contains only masked data. Continuing to next chunk")
+                continue
+
+            chunk_min = np.nanmin(data_chunk)
+            chunk_max = np.nanmax(data_chunk)
+
+            # if first non masked values found, set the current min and max
+            if (first_min_max_found is False):
+                logger.debug("Non masked data found.")
+                first_min_max_found = True
                 current_min = chunk_min
                 current_max = chunk_max
-            elif i > 0 and i < num_of_chunks:
-                chunk_min = np.nanmin(variable[0:x_size, y_step * i : y_step * (i+1)])
-                chunk_max = np.nanmax(variable[0:x_size, y_step * i : y_step * (i+1)])
-            else:  # last chunk
-                chunk_min = np.nanmin(variable[0:x_size, y_step * i+ y_residual])
-                chunk_max = np.nanmax(variable[0:x_size, y_step * i+ y_residual])
+
+            logger.debug("Data chunk min: {}".format(chunk_min))
+            logger.debug("Data chunk max: {}".format(chunk_max))
             if chunk_min < current_min:
                 current_min = chunk_min
             if chunk_max > current_max:
