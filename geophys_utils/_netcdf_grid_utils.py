@@ -845,7 +845,7 @@ class NetCDFGridUtils(NetCDFUtils):
 
             logger.debug("Total num of pixels: {}".format(self.pixel_count[0] * self.pixel_count[1]))
             logger.debug("num_pixels_to_trigger_iterating: {}".format(num_pixels_to_trigger_iterating))
-            if (iterate_through_data && self.pixel_count[0] * self.pixel_count[1] > num_pixels_to_trigger_iterating):
+            if (iterate_through_data and self.pixel_count[0] * self.pixel_count[1] > num_pixels_to_trigger_iterating):
                 logger.debug("Pixel count is greater than array_total_size setting. Iterating through variable to find min, max")
                 min, max = self.iterate_through_data_chunks_and_find_mins_and_maxs(variable=variable, num_of_chunks=num_of_chunks)
                 variable.actual_range = np.array([min, max], dtype=variable.dtype)
