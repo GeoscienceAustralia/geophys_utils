@@ -445,7 +445,7 @@ class NC2ASEGGDF2(object):
                 data = [None] * (lookup_len) # create a list of the required size to fill in with correct values
                 while i < lookup_len:
                     if variables[0][i] != mask_value_index_var:
-                        data[i] = variables[1][i]
+                        data[i] = variables[1][variables[0][i]]
                     else:
                         data[i] = str(STRING_VAR_NULL_VALUE)
                     i = i + 1
@@ -458,7 +458,7 @@ class NC2ASEGGDF2(object):
             raise BaseException(
                 'Unable to resolve chained lookups (yet): {}'.format([variable.name for variable in variables]))
 
-        # Substitute null_value for _FillValue if required. This
+        # Substitute null_value for _FillValue if required.
         null_value = self.field_definitions[field_name]['format']['null']
         if null_value is not None and hasattr(variables[-1], '_FillValue'):
             data[(data == (variables[-1]._FillValue))] = null_value
