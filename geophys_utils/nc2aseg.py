@@ -445,7 +445,7 @@ class NC2ASEGGDF2(object):
                 data = [None] * (lookup_len) # create a list of the required size to fill in with correct values
                 while i < lookup_len:
                     if variables[0][i] != mask_value_index_var:
-                        data[i] = variables[1][i]
+                        data[i] = variables[1][variables[0][i]]
                     else:
                         data[i] = str(STRING_VAR_NULL_VALUE)
                     i = i + 1
