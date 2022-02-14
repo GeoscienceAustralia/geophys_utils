@@ -470,22 +470,33 @@ class NetCDFPointUtils(NetCDFUtils):
         @param to_wkt: CRS WKT for shape
         '''
         return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
-    
-    
-    def get_concave_hull(self, to_wkt=None, smoothness=None):
+
+    def get_concave_hull(self, to_wkt=None, smoothness=None, clockwise=True):
         """\
-        Returns the concave hull (as a shapely polygon) of all points. 
-        Implements abstract base function in NetCDFUtils 
+        Returns the concave hull (as a shapely polygon) of all points.
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
+        @param clockwise: direction of coordinates in polygon array
         """
         hull = concaveHull(transform_coords(self.xycoords, self.wkt, to_wkt))
-        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-        
+        shapely_polygon = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+
+        # from shapely docs:
+        # A sign of 1.0 means that the coordinates of the product’s exterior ring will be oriented
+        # counter-clockwise and the interior rings (holes) will be oriented clockwise.
+        #
+        # There should not be polygons with interior ring holes and so -1 will be treated as clockwise, and 1 as
+        # counter-clockwise
+        if(clockwise):
+            pol = shapely.geometry.polygon.orient(Polygon(shapely_polygon), -1.0)
+        else: # reverse polygon coordinates - anti-clockwise
+            pol = shapely.geometry.polygon.orient(Polygon(shapely_polygon), 1.0)
+
         if smoothness is None:
-            return result
-        
-        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+            return pol
+
+        return Polygon(pol.buffer(smoothness).exterior).buffer(-smoothness)
 
 
     def nearest_neighbours(self, coordinates, 
@@ -1260,36 +1271,46 @@ def main(debug=True):
     '''
     Main function for quick and dirty testing
     '''
-    netcdf_path = sys.argv[1]
-    
-    netcdf_dataset = netCDF4.Dataset(netcdf_path, 'r')
+    # netcdf_path = sys.argv[1]
+    #
+    # netcdf_dataset = netCDF4.Dataset(netcdf_path, 'r')
+    #
+    # ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug) # Enable debug output here
+    #
+    # # Create mask for last ten points
+    # mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
+    # mask[-10:] = True
+    #
+    # # Set list of fields to read
+    # field_list = None
+    # #field_list = ['latitude', 'longitude', 'obsno', 'reliab']
+    #
+    # point_data_generator = ncpu.all_point_data_generator(field_list, mask)
+    #
+    # # Retrieve point variable attributes first
+    # variable_attributes = next(point_data_generator)
+    # logger.info('variable_attributes: {}'.format(variable_attributes))
+    #
+    # # Use long names instead of variable names where they exist
+    # field_names = [variable_attributes[variable_name].get('long_name') or variable_name
+    #                for variable_name in variable_attributes.keys()]
+    # logger.info('field_names: {}'.format(field_names))
+    #
+    # for point_data in point_data_generator:
+    #     #logger.debug('point_data: {}'.format(pformat(point_data)))
+    #     result_dict = dict(zip(field_names, point_data))
+    #     logger.info('result_dict: {}'.format(result_dict))
 
-    ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug) # Enable debug output here
-    
-    # Create mask for last ten points
-    mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
-    mask[-10:] = True
-    
-    # Set list of fields to read
-    field_list = None
-    #field_list = ['latitude', 'longitude', 'obsno', 'reliab'] 
-    
-    point_data_generator = ncpu.all_point_data_generator(field_list, mask)
-    
-    # Retrieve point variable attributes first
-    variable_attributes = next(point_data_generator)
-    logger.info('variable_attributes: {}'.format(variable_attributes))
+    input_nc_path = "C:/Users/u62231/Desktop/Projects/gadds/reverse_polygon_verticies/P569-line-radiometric.nc"
 
-    # Use long names instead of variable names where they exist
-    field_names = [variable_attributes[variable_name].get('long_name') or variable_name
-                   for variable_name in variable_attributes.keys()]    
-    logger.info('field_names: {}'.format(field_names))
-    
-    for point_data in point_data_generator:
-        #logger.debug('point_data: {}'.format(pformat(point_data)))
-        result_dict = dict(zip(field_names, point_data))
-        logger.info('result_dict: {}'.format(result_dict))
-        
+    ncu = NetCDFPointUtils(input_nc_path,
+                                    debug=True)  # Don't use NetCDFLineUtils - not all variables will be set up
+    print(ncu)
+    print(ncu.crs_variable)
+    try:
+        print(ncu.get_concave_hull())
+    except Exception as e:
+        print('Unable to compute concave hull shape:')
        
 if __name__ == '__main__':
     # Setup logging handlers if required
