@@ -762,7 +762,7 @@ class NetCDFGridUtils(NetCDFUtils):
                                      buffer_distance=None,
                                      offset=None,
                                      tolerance=None,
-                                     max_polygons=10,
+                                     max_polygons=1,
                                      max_vertices=1000,
                                      shape_ordinate_decimal_place=6
                                      ):
