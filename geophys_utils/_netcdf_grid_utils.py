@@ -796,13 +796,13 @@ class NetCDFGridUtils(NetCDFUtils):
             # polygon generation
             if compute_shape:
                 logger.debug('computing geospatial_bounds')
-                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),
-                                                buffer_distance=buffer_distance,
-                                                offset=offset,
-                                                tolerance=tolerance,
-                                                max_polygons=max_polygons,
-                                                max_vertices=max_vertices,
-                                                rounding_precision=shape_ordinate_decimal_place)
+                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
+                                                                                buffer_distance=buffer_distance,
+                                                                                offset=offset,
+                                                                                tolerance=tolerance,
+                                                                                max_polygons=max_polygons,
+                                                                                max_vertices=max_vertices)),
+                                                    rounding_precision=shape_ordinate_decimal_place)
 
                 attribute_dict['geospatial_bounds'] = wkt_polygon
                 logger.debug(attribute_dict['geospatial_bounds'])
