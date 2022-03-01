@@ -44,14 +44,6 @@ from pprint import pformat
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Initial logging level for this module
 
-MAX_CELLS_TO_COMPUTE_SHAPE = 400000000 # Set limit for grids of approximately 20,000 x 20,000
-SHAPE_BUFFER_DISTANCE = None # Distance to buffer (kerf) shape out then in again (in degrees)
-SHAPE_OFFSET = None # Distance to buffer (kerf) final shape outwards (in degrees)
-SHAPE_SIMPLIFY_TOLERANCE = 0.05 # Length of shortest line in shape (in degrees)
-SHAPE_MAX_POLYGONS=5
-SHAPE_MAX_VERTICES=1000
-SHAPE_ORDINATE_DECIMAL_PLACES = 6 # Number of decimal places for shape vertex ordinates
-
 
 class NetCDFGridUtils(NetCDFUtils):
     '''
@@ -409,15 +401,13 @@ class NetCDFGridUtils(NetCDFUtils):
         PAD_WIDTH = 1
         MAX_DATA_PROPORTION = 0.9 # Maximum proportion of data containing pixels vs all pixels to trigger full shape computation
         DOWNSAMPLING_STEP_SIZE = 10000 # Pixels per downsampling_stride increment for downsampling. Used with maximum side length
-        
+
         # Parameters for shape simplification in pixel sizes
         buffer_distance = buffer_distance or max(self.data_variable.shape) // 20 # Tune this to suit overall size of grid
-       # buffer_distance = 1000000
-        print("buffer dstaince: {}".format(buffer_distance))
+
         offset = offset or 0.9 # Take final shape half a pixel out from centre coordinates to cover pixel edges
         tolerance = tolerance or 0.5        
-        
-        
+
         def discard_internal_polygons(geometry):
             '''\
             Helper function to discard internal polygons
@@ -463,7 +453,7 @@ class NetCDFGridUtils(NetCDFUtils):
                 reorder_slices = (slice(None, None, None), slice(None, None, -1))
             else: # xy array order - no y-axis flip required
                 reorder_slices = (slice(None, None, None), slice(None, None, None))
-            print(reorder_slices)
+
             # Create polygon in pixel ordinates, and then buffer outwards by 0.5 pixel widths, and simplify by 0.25 pixel widths
             # Note that this polygon is in array order, i.e. probably yx and not xy, so we need to apply the reorder_slices
             return asPolygon(polygon_vertices[reorder_slices])
@@ -594,7 +584,6 @@ class NetCDFGridUtils(NetCDFUtils):
             else:
                 raise ValueError('Unexpected type of geometry: {}'.format(type(concave_hull)))
             logger.debug('Final shape has {} vertices in {} polygons.'.format(vertex_count, polygon_count))
-            
 
         # Transform from pixel ordinates to to_wkt (via self.wkt using affine_transform)
         return transform_geometry_pixel_to_wkt(concave_hull, to_wkt)  
@@ -769,10 +758,18 @@ class NetCDFGridUtils(NetCDFUtils):
             new_dataset.close()
             
                        
-    def set_global_attributes(self, compute_shape=True):
+    def set_global_attributes(self, compute_shape=True,
+                                     buffer_distance=None,
+                                     offset=None,
+                                     tolerance=None,
+                                     max_polygons=10,
+                                     max_vertices=1000,
+                                     shape_ordinate_decimal_place=6
+                                     ):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
+        All parameters are polygon generation settings
         '''
         try:
 
@@ -795,29 +792,21 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
             attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # lon
             attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # lat
+
             # polygon generation
             if compute_shape:
-                attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),  rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-                print(attribute_dict['geospatial_bounds'])
+                logger.debug('computing geospatial_bounds')
+                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),
+                                                buffer_distance=buffer_distance,
+                                                offset=offset,
+                                                tolerance=tolerance,
+                                                max_polygons=max_polygons,
+                                                max_vertices=max_vertices,
+                                                rounding_precision=shape_ordinate_decimal_place)
 
+                attribute_dict['geospatial_bounds'] = wkt_polygon
+                logger.debug(attribute_dict['geospatial_bounds'])
 
-
-            #    try:
-            #         assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
-            #         print("num of cells: {}".format(self.pixel_count[0] * self.pixel_count[1]))
-            #         logger.debug('Computing concave hull')
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #            self.get_concave_hull(to_wkt=gda_wkt),
-            #            rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-            #
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #             asPolygon(self.get_convex_hull(to_wkt=gda_wkt)),
-            #             rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
-            #          )
-            #    except Exception as e: # if it fails use the convex hull or bounding box instead
-            #         logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
-
-            
             logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
             logger.info('Writing global attributes to netCDF file')
             for key, value in attribute_dict.items():
@@ -825,8 +814,6 @@ class NetCDFGridUtils(NetCDFUtils):
         except:
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
-
-
 
     def set_variable_actual_range_attribute(self, iterate_through_data=False, num_pixels_to_trigger_iterating=5000000, num_of_chunks=50):
         '''\
