@@ -548,13 +548,14 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def set_global_attributes(self, 
                               compute_shape=False,
                               compute_median_sample_spacing=False,
-                              ):
+                              clockwise_polygon_extent=False):
+
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
         '''
         try:
-            super().set_global_attributes(compute_shape) # Call NetCDFPointUtils.set_global_attributes
+            super().set_global_attributes(compute_shape, clockwise_polygon_extent) # Call NetCDFPointUtils.set_global_attributes
             
             attribute_dict = {}
                 

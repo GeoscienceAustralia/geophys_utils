@@ -759,6 +759,7 @@ class NetCDFGridUtils(NetCDFUtils):
             
                        
     def set_global_attributes(self, compute_shape=True,
+                                     clockwise=False,
                                      buffer_distance=None,
                                      offset=None,
                                      tolerance=None,
@@ -796,6 +797,7 @@ class NetCDFGridUtils(NetCDFUtils):
             # polygon generation
             if compute_shape:
                 logger.debug('computing geospatial_bounds')
+                #wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
                 wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
                                                                                 buffer_distance=buffer_distance,
                                                                                 offset=offset,
@@ -804,7 +806,16 @@ class NetCDFGridUtils(NetCDFUtils):
                                                                                 max_vertices=max_vertices)),
                                                     rounding_precision=shape_ordinate_decimal_place)
 
-                attribute_dict['geospatial_bounds'] = wkt_polygon
+                # get wkt polygon as polygon object to set as either clockswise or anticlockwise.
+                pol = shapely.wkt.loads(wkt_polygon)
+                if (clockwise):
+                    logger.info("Keeping default 'geospatial_bounds' as a clockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), -1.0)
+                else:  # reverse polygon coordinates - anti-clockwise
+                    logger.info("Setting 'geospatial_bounds' to anticlockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), 1.0)
+
+                attribute_dict['geospatial_bounds'] = str(wkt_polygon)
                 logger.debug(attribute_dict['geospatial_bounds'])
 
             logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))

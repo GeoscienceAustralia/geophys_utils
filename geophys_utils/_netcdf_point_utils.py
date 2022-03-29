@@ -1176,7 +1176,7 @@ class NetCDFPointUtils(NetCDFUtils):
         finally:
             new_dataset.close()
 
-    def set_global_attributes(self, compute_shape=False):
+    def set_global_attributes(self, compute_shape=False, clockwise_polygon_extent=False):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
@@ -1210,12 +1210,15 @@ class NetCDFPointUtils(NetCDFUtils):
                     logger.debug('Computing concave hull')
                     attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
                         self.get_concave_hull(
-                            to_wkt=METADATA_CRS
+                            to_wkt=METADATA_CRS,
+                            clockwise=clockwise_polygon_extent
                             ), 
                         rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
                 except Exception as e:
                     logger.warning('Unable to compute concave hull shape: {}'.format(e))
+
                     try:
+                        logger.warning('Using mins/maxes to create bounding box as polygon.'.format(e))
                         self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(asPolygon([
                             [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']], 
                             [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_min']], 
