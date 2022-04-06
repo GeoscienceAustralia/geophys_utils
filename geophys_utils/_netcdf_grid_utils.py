@@ -20,6 +20,7 @@ Created on 14Sep.,2016
 
 @author: Alex Ip <Alex.Ip@ga.gov.au>
 '''
+from operator import index
 import numpy as np
 import math
 from scipy.ndimage import map_coordinates
@@ -234,6 +235,11 @@ class NetCDFGridUtils(NetCDFUtils):
 
         return fractional_indices
 
+    def _get_nbytes(self, index_array, start_index, end_index, data_variable): #number of bytes used for an indexing request
+        dx = abs(index_array[end_index,0]-index_array[start_index,0])
+        dy = abs(index_array[end_index,0]-index_array[start_index,0])
+        return dx*dy*data_variable.dtype.itemsize
+
     def get_value_at_coords(self, coordinates, wkt=None,
                             max_bytes=None, variable_name=None):
         '''
@@ -281,21 +287,28 @@ class NetCDFGridUtils(NetCDFUtils):
             result_array = np.ones(
                 shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
             start_index = 0
-            end_index = min(max_points, len(index_array))
-            while True:
+            end_index = 1
+            while self._get_nbytes(index_array, start_index, end_index, data_variable) < max_bytes:
+                end_index += 1
+            end_index = min(end_index, len(index_array))
+            while start_index < len(index_array):
                 # N.B: ".diagonal()" is required because NetCDF doesn't do advanced indexing exactly like numpy
                 # Hack is required to take values from leading diagonal. Requires n^2 elements retrieved instead of n. Not good, but better than whole array
                 # TODO: Think of a better way of doing this
-                value_array[start_index:end_index] = data_variable[
-                    (index_array[start_index:end_index, 0], index_array[start_index:end_index, 1])].diagonal()
-                if end_index == len(index_array):  # Finished
-                    break
+                query_result = data_variable[
+                    (index_array[start_index:end_index, 0], index_array[start_index:end_index, 1])]
+                residx0 = index_array[start_index:end_index,0] - index_array[start_index,0]
+                residx1 = index_array[start_index:end_index,1] - index_array[start_index,1]
+                value_array[start_index:end_index] = query_result[residx0, residx1]
                 start_index = end_index
-                end_index = min(start_index + max_points, len(index_array))
+                end_index = start_index + 1
+                while self._get_nbytes(index_array, start_index, end_index, data_variable) < max_bytes:
+                    end_index += 1
+                end_index = min(end_index, len(index_array))
 
             result_array[mask_array] = value_array
             return list(result_array)
-        except:
+        except IndexError:
             return data_variable[indices[0], indices[1]]
 
     def get_interpolated_value_at_coords(
