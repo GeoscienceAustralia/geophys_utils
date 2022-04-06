@@ -767,9 +767,16 @@ class NetCDFGridUtils(NetCDFUtils):
                     
         finally:
             new_dataset.close()
-            
-                       
-    def set_global_attributes(self, compute_shape=True):
+
+    def set_global_attributes(self, compute_shape=True,
+                                     clockwise_polygon_orient=False,
+                                     buffer_distance=None,
+                                     offset=None,
+                                     tolerance=None,
+                                     max_polygons=1,
+                                     max_vertices=1000,
+                                     shape_ordinate_decimal_place=6
+                                     ):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
@@ -795,29 +802,31 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
             attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # lon
             attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # lat
+
             # polygon generation
             if compute_shape:
-                attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),  rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-                print(attribute_dict['geospatial_bounds'])
+                logger.debug('computing geospatial_bounds')
+                # wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
+                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
+                                                                                buffer_distance=buffer_distance,
+                                                                                offset=offset,
+                                                                                tolerance=tolerance,
+                                                                                max_polygons=max_polygons,
+                                                                                max_vertices=max_vertices)),
+                                                rounding_precision=shape_ordinate_decimal_place)
 
+                # get wkt polygon as polygon object to set as either clockwise or anticlockwise.
+                pol = shapely.wkt.loads(wkt_polygon)
+                if (clockwise_polygon_orient):
+                    logger.info("Keeping default 'geospatial_bounds' as a clockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), -1.0)
+                else:  # reverse polygon coordinates - anti-clockwise
+                    logger.info("Setting 'geospatial_bounds' to anticlockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), 1.0)
 
+                attribute_dict['geospatial_bounds'] = str(wkt_polygon)
+                logger.debug(attribute_dict['geospatial_bounds'])
 
-            #    try:
-            #         assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
-            #         print("num of cells: {}".format(self.pixel_count[0] * self.pixel_count[1]))
-            #         logger.debug('Computing concave hull')
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #            self.get_concave_hull(to_wkt=gda_wkt),
-            #            rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-            #
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #             asPolygon(self.get_convex_hull(to_wkt=gda_wkt)),
-            #             rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
-            #          )
-            #    except Exception as e: # if it fails use the convex hull or bounding box instead
-            #         logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
-
-            
             logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
             logger.info('Writing global attributes to netCDF file')
             for key, value in attribute_dict.items():
@@ -825,8 +834,6 @@ class NetCDFGridUtils(NetCDFUtils):
         except:
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
-
-
 
     def set_variable_actual_range_attribute(self, iterate_through_data=False, num_pixels_to_trigger_iterating=5000000, num_of_chunks=50):
         '''\

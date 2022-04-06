@@ -33,6 +33,7 @@ import netCDF4
 from pprint import pformat
 import shapely.wkt
 from geophys_utils._transect_utils import utm_coords, coords2distance
+from shapely.geometry import Polygon, MultiPolygon, asPolygon
 
 # Setup logging handlers if required
 logger = logging.getLogger(__name__) # Get logger
@@ -544,20 +545,43 @@ class NetCDFLineUtils(NetCDFPointUtils):
         
         return get_offset_geometry(multi_line_string, buffer_distance, offset, tolerance, cap_style, join_style, max_polygons, max_vertices)
 
-
     def set_global_attributes(self, 
                               compute_shape=False,
+                              buffer_distance=0.02,
+                              offset=0.0005,
+                              tolerance=0.0005,
+                              max_polygons=5,
+                              max_vertices=1000,
                               compute_median_sample_spacing=False,
-                              ):
+                              clockwise_polygon_orient=False,
+                              shape_ordinate_decimal_place=6):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
         '''
         try:
-            super().set_global_attributes(compute_shape) # Call NetCDFPointUtils.set_global_attributes
-            
+            super().set_global_attributes(compute_shape=False)  # Call NetCDFPointUtils.set_global_attributes
+
+
             attribute_dict = {}
-                
+            if compute_shape:
+                print("compute shape in lines_utils")
+                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull()),
+                                                rounding_precision=shape_ordinate_decimal_place)
+
+                # get wkt polygon as polygon object to set as either clockwise or anticlockwise.
+                pol = shapely.wkt.loads(wkt_polygon)
+                if (clockwise_polygon_orient):
+                    logger.debug("setting 'geospatial_bounds' as a clockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), -1.0)
+                else:  # reverse polygon coordinates - anti-clockwise
+                    logger.debug("Keeping default setting 'geospatial_bounds' to anticlockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), 1.0)
+
+                attribute_dict['geospatial_bounds'] = str(wkt_polygon)
+                logger.debug(attribute_dict['geospatial_bounds'])
+
+
             if compute_median_sample_spacing:
                 try:
                     logger.debug('Computing median sample spacing in metres')
@@ -795,8 +819,6 @@ class NetCDFLineUtils(NetCDFPointUtils):
         except:
             logger.error('Unable to interpolate and extrapolate missing coordinates in netCDF line dataset')
             raise
-
-                
         
 if __name__ == '__main__':
     # Setup logging handlers if required
