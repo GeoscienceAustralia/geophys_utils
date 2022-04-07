@@ -32,15 +32,19 @@ from shapely.geometry.polygon import Polygon
 netcdf_grid_utils = None
 
 NC_PATH = 'test_grid.nc'    
-MAX_BYTES = 1600
+MAX_BYTES_SM = 100
+MAX_BYTES_LG = 5000
 MAX_ERROR = 0.000001
 TEST_COORDS = (148.213, -36.015)
 TEST_MULTI_COORDS = np.array([[148.213, -36.015], [148.516, -35.316]])
+TEST_MANY_COORDS = np.array([[148.484, -35.352],
+    [148.328, -35.428], [148.436, -35.744], [148.300, -35.436]])
 TEST_INDICES = [1, 1]
 TEST_MULTI_INDICES = [[1, 1], [176, 77]]
 TEST_FRACTIONAL_INDICES = [1.25, 1.25]
 TEST_VALUE = -99999.
 TEST_MULTI_VALUES = [-99999.0, -134.711334229]
+TEST_MANY_VALS = [-136.13321, -31.7626, -58.755764, -90.484276]
 TEST_INTERPOLATED_VALUE = -99997.6171875
     
 class TestNetCDFGridUtilsConstructor(unittest.TestCase):
@@ -81,6 +85,18 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
         print('Testing get_value_at_coords function with multiple coordinates {}'.format(TEST_MULTI_COORDS))
         multi_values = netcdf_grid_utils.get_value_at_coords(TEST_MULTI_COORDS)
         assert (np.abs(np.array(multi_values) - np.array(TEST_MULTI_VALUES)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(multi_values, TEST_MULTI_VALUES)
+
+        print('Testing get_value_at_coords with long coordinate list {}'.format(TEST_MANY_COORDS))
+        many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS)
+        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
+
+        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(TEST_MANY_COORDS, MAX_BYTES_SM))
+        many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS, max_bytes=MAX_BYTES_SM)
+        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
+        
+        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(TEST_MANY_COORDS, MAX_BYTES_LG))
+        many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS, max_bytes=MAX_BYTES_LG)
+        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
 
     def test_get_interpolated_value_at_coords(self):
         print('Testing get_interpolated_value_at_coords function')
