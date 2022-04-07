@@ -258,41 +258,41 @@ class NetCDFGridUtils(NetCDFUtils):
         indices = np.array(self.get_indices_from_coords(coordinates, wkt))
         
 #        return data_variable[indices[:,0], indices[:,1]].diagonal() # This could get too big
-        # try:
-        # Make this a vectorised operation for speed (one query for as many
-        # points as possible)
-        # Array of valid index pairs only
-        index_array = np.array(
-            [index_pair for index_pair in indices if index_pair is not None])
-        assert len(index_array.shape) == 2 and index_array.shape[
-            1] == 2, 'Not an iterable containing index pairs'
-        # Boolean mask indicating which index pairs are valid
-        mask_array = np.array([(index_pair is not None)
-                                for index_pair in indices])
-        # Array of values read from variable
-        value_array = np.ones(shape=(len(index_array)),
-                                dtype=data_variable.dtype) * no_data_value
-        # Final result array including no-data for invalid index pairs
-        result_array = np.ones(
-            shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
-        start_index = 0
-        end_index = _max_index(index_array, start_index, data_variable, max_bytes)
-        while start_index < len(index_array):
-            i00 = min(index_array[start_index,0],index_array[end_index,0])
-            i01 = max(index_array[start_index,0],index_array[end_index,0])+1
-            i10 = min(index_array[start_index,1],index_array[end_index,1])
-            i11 = max(index_array[start_index,1],index_array[end_index,1])+1
-            query_result = data_variable[i00:i01, i10:i11]
-            residx0 = index_array[start_index:end_index+1,0] - index_array[start_index,0]
-            residx1 = index_array[start_index:end_index+1,1] - index_array[start_index,1]
-            value_array[start_index:end_index+1] = query_result[residx0, residx1]
-            start_index = end_index + 1
+        try:
+            # Make this a vectorised operation for speed (one query for as many
+            # points as possible)
+            # Array of valid index pairs only
+            index_array = np.array(
+                [index_pair for index_pair in indices if index_pair is not None])
+            assert len(index_array.shape) == 2 and index_array.shape[
+                1] == 2, 'Not an iterable containing index pairs'
+            # Boolean mask indicating which index pairs are valid
+            mask_array = np.array([(index_pair is not None)
+                                    for index_pair in indices])
+            # Array of values read from variable
+            value_array = np.ones(shape=(len(index_array)),
+                                    dtype=data_variable.dtype) * no_data_value
+            # Final result array including no-data for invalid index pairs
+            result_array = np.ones(
+                shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
+            start_index = 0
             end_index = _max_index(index_array, start_index, data_variable, max_bytes)
+            while start_index < len(index_array):
+                i00 = min(index_array[start_index,0],index_array[end_index,0])
+                i01 = max(index_array[start_index,0],index_array[end_index,0])+1
+                i10 = min(index_array[start_index,1],index_array[end_index,1])
+                i11 = max(index_array[start_index,1],index_array[end_index,1])+1
+                query_result = data_variable[i00:i01, i10:i11]
+                residx0 = index_array[start_index:end_index+1,0] - index_array[start_index,0]
+                residx1 = index_array[start_index:end_index+1,1] - index_array[start_index,1]
+                value_array[start_index:end_index+1] = query_result[residx0, residx1]
+                start_index = end_index + 1
+                end_index = _max_index(index_array, start_index, data_variable, max_bytes)
 
-        result_array[mask_array] = value_array
-        return list(result_array)
-        # except ValueError:
-            # return data_variable[indices[0], indices[1]]
+            result_array[mask_array] = value_array
+            return list(result_array)
+        except:
+            return data_variable[indices[0], indices[1]]
 
     def get_interpolated_value_at_coords(
             self, coordinates, wkt=None, max_bytes=None, variable_name=None):
