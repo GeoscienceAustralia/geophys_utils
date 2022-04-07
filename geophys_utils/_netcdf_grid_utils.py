@@ -243,10 +243,8 @@ class NetCDFGridUtils(NetCDFUtils):
         @parameter max_bytes: Maximum number of bytes to read in a single query. Defaults to NetCDFGridUtils.DEFAULT_MAX_BYTES
         @parameter variable_name: NetCDF variable_name if not default data variable
         '''
-        # Use arbitrary maximum request size of NetCDFGridUtils.DEFAULT_MAX_BYTES
-        # (500,000,000 bytes => 11180 points per query)
-        #TODO: Find a better way of overcoming the netCDF problem where whole rows & columns are retrieved
-        max_bytes = max_bytes or 100  # NetCDFGridUtils.DEFAULT_MAX_BYTES
+        # Use small max request size by default
+        max_bytes = max_bytes or 100
 
         if variable_name:
             data_variable = self.netcdf_dataset.variables[variable_name]
@@ -256,38 +254,39 @@ class NetCDFGridUtils(NetCDFUtils):
         no_data_value = data_variable._FillValue
 
         indices = np.array(self.get_indices_from_coords(coordinates, wkt))
-        
-#        return data_variable[indices[:,0], indices[:,1]].diagonal() # This could get too big
-        try:
-            # Make this a vectorised operation for speed (one query for as many
-            # points as possible)
-            # Array of valid index pairs only
-            index_array = np.array(
-                [index_pair for index_pair in indices if index_pair is not None])
-            assert len(index_array.shape) == 2 and index_array.shape[
-                1] == 2, 'Not an iterable containing index pairs'
-            # Boolean mask indicating which index pairs are valid
-            mask_array = np.array([(index_pair is not None)
-                                    for index_pair in indices])
-            # Array of values read from variable
-            value_array = np.ones(shape=(len(index_array)),
-                                    dtype=data_variable.dtype) * no_data_value
-            # Final result array including no-data for invalid index pairs
-            result_array = np.ones(
-                shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
-            start_index = 0
-            while start_index < len(index_array):
-                end_index, bbox = _get_query_params(index_array, start_index, data_variable, max_bytes)
-                query_result = data_variable[bbox[0]:bbox[1]+1, bbox[2]:bbox[3]+1]
-                residx0 = index_array[start_index:end_index+1,0] - bbox[0]
-                residx1 = index_array[start_index:end_index+1,1] - bbox[2]
-                value_array[start_index:end_index+1] = query_result[residx0, residx1]
-                start_index = end_index + 1
 
-            result_array[mask_array] = value_array
-            return list(result_array)
-        except:
+        if indices.ndim == 1: #single coordinate pair
             return data_variable[indices[0], indices[1]]
+        
+        # Make this a vectorised operation for speed (one query for as many
+        # points as possible)
+        # Array of valid index pairs only
+        index_array = np.array(
+            [index_pair for index_pair in indices if index_pair is not None])
+        assert len(index_array.shape) == 2 and index_array.shape[
+            1] == 2, 'Not an iterable containing index pairs'
+        # Boolean mask indicating which index pairs are valid
+        mask_array = np.array([(index_pair is not None)
+                                for index_pair in indices])
+        # Array of values read from variable
+        value_array = np.ones(shape=(len(index_array)),
+                                dtype=data_variable.dtype) * no_data_value
+        # Final result array including no-data for invalid index pairs
+        result_array = np.ones(
+            shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
+        start_index = 0
+        while start_index < len(index_array):
+            #read up to max_bytes of data_variable containing as many of the next points in
+            #index_array as possible
+            end_index, bbox = _get_query_params(index_array, start_index, data_variable, max_bytes)
+            query_result = data_variable[bbox[0]:bbox[1]+1, bbox[2]:bbox[3]+1]
+            residx0 = index_array[start_index:end_index+1,0] - bbox[0]
+            residx1 = index_array[start_index:end_index+1,1] - bbox[2]
+            value_array[start_index:end_index+1] = query_result[residx0, residx1]
+            start_index = end_index + 1
+
+        result_array[mask_array] = value_array
+        return list(result_array)
 
     def get_interpolated_value_at_coords(
             self, coordinates, wkt=None, max_bytes=None, variable_name=None):
