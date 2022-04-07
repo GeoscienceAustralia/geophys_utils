@@ -276,18 +276,13 @@ class NetCDFGridUtils(NetCDFUtils):
             result_array = np.ones(
                 shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
             start_index = 0
-            end_index = _max_index(index_array, start_index, data_variable, max_bytes)
             while start_index < len(index_array):
-                i00 = min(index_array[start_index,0],index_array[end_index,0])
-                i01 = max(index_array[start_index,0],index_array[end_index,0])+1
-                i10 = min(index_array[start_index,1],index_array[end_index,1])
-                i11 = max(index_array[start_index,1],index_array[end_index,1])+1
-                query_result = data_variable[i00:i01, i10:i11]
-                residx0 = index_array[start_index:end_index+1,0] - index_array[start_index,0]
-                residx1 = index_array[start_index:end_index+1,1] - index_array[start_index,1]
+                end_index, bbox = _get_query_params(index_array, start_index, data_variable, max_bytes)
+                query_result = data_variable[bbox[0]:bbox[1]+1, bbox[2]:bbox[3]+1]
+                residx0 = index_array[start_index:end_index+1,0] - bbox[0]
+                residx1 = index_array[start_index:end_index+1,1] - bbox[2]
                 value_array[start_index:end_index+1] = query_result[residx0, residx1]
                 start_index = end_index + 1
-                end_index = _max_index(index_array, start_index, data_variable, max_bytes)
 
             result_array[mask_array] = value_array
             return list(result_array)
@@ -899,17 +894,36 @@ class NetCDFGridUtils(NetCDFUtils):
             logger.debug("current_min: {}".format(current_min))
         return current_min, current_max
 
-def _max_index(index_array, start_index, data_variable, max_bytes):
+def _get_query_params(index_array, start_index, data_variable, max_bytes):
     #find the maximum ending index to use for a request under max_bytes
+    # and the associated bounding box
+    if start_index >= len(index_array):
+        return start_index
     end_index = start_index
     dbytes = data_variable.dtype.itemsize
-    nbytes = 0
+    nbytes = dbytes
+    bbox = [index_array[start_index,0], index_array[start_index,0],
+        index_array[start_index,1], index_array[start_index,1]]
     while end_index < len(index_array) and nbytes <= max_bytes:
-        dx = abs(index_array[end_index,0]-index_array[start_index,0]) + 1
-        dy = abs(index_array[end_index,0]-index_array[start_index,0]) + 1
-        nbytes = dx*dy*dbytes
         end_index += 1
-    return max(start_index, end_index - 1)
+        if end_index >= len(index_array):
+            break
+        x = index_array[end_index,0]
+        y = index_array[end_index,1]
+        new_bbox = bbox.copy()
+        if x < bbox[0]:
+            new_bbox[0] = x
+        elif x > bbox[1]:
+            new_bbox[1] = x
+        if y < bbox[2]:
+            new_bbox[2] = y
+        elif y > bbox[3]:
+            new_bbox[3] = y
+        nbytes = dbytes*(new_bbox[1]-new_bbox[0]+1)*(new_bbox[3]-new_bbox[2]+1)
+        if nbytes > max_bytes:
+            break
+        bbox=new_bbox
+    return max(start_index, end_index - 1), bbox
 
 def main():
     '''
