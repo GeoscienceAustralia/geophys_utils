@@ -28,6 +28,7 @@ import matplotlib.pyplot as plt
 import cartopy.crs as ccrs
 import cartopy.io.img_tiles as cimgt
 from math import log10, floor, pow
+import sys
 
 def plot_point_dataset(netcdf_point_utils,
                        variable_to_map,
@@ -69,7 +70,6 @@ def plot_point_dataset(netcdf_point_utils,
     utm_zone = abs(utm_zone)
     projection = ccrs.UTM(zone=utm_zone, southern_hemisphere=southern_hemisphere)
     print('utm_zone = {}'.format(utm_zone))
-    #print(utm_coords)
 
     variable = netcdf_point_utils.netcdf_dataset.variables[variable_to_map]
 
@@ -91,8 +91,7 @@ def plot_point_dataset(netcdf_point_utils,
         utm_coords = utm_coords[spatial_mask]
     
     print('{} points in UTM bounding box: {}'.format(np.count_nonzero(spatial_mask), utm_bbox))
-    #print(utm_coords)
-    
+
     colour_array = rescale_array(variable[spatial_mask], 0, 1)
 
     fig = plt.figure(figsize=(30,30))
@@ -103,9 +102,9 @@ def plot_point_dataset(netcdf_point_utils,
 
     #map_image = cimgt.OSM() # https://www.openstreetmap.org/about
     #map_image = cimgt.StamenTerrain() # http://maps.stamen.com/
-    map_image = cimgt.QuadtreeTiles()
-    #print(map_image.__dict__)
-    ax.add_image(map_image, 10)
+    #map_image = cimgt.GoogleTiles(style='satellite')
+
+    #ax.add_image(map_image, 10)
 
     # Compute and set regular tick spacing
     range_x = utm_bbox[2] - utm_bbox[0]
@@ -139,11 +138,10 @@ def plot_point_dataset(netcdf_point_utils,
     try: # not all variables have units. These will fail on the try and produce the map without tick labels.
         cb = plt.colorbar(sc, ticks=[0, 1])
         cb.ax.set_yticklabels([str(np.min(variable[spatial_mask])), str(np.max(variable[spatial_mask]))])  # vertically oriented colorbar
-
         cb.set_label("{} {}".format(variable.long_name, variable.units))
     except:
         pass
-
+    print("show")
     plt.show()
     
 
@@ -151,19 +149,21 @@ def main():
     '''
     main function for quick and dirty testing
     '''
-    # Create NetCDFPointUtils object for specified netCDF dataset
-    netcdf_path = 'http://dapds00.nci.org.au/thredds/dodsC/uc0/rr2_dev/axi547/ground_gravity/point_datasets/201780.nc'
-    #netcdf_path = 'E:\\Temp\\gravity_point_test\\201780.nc'
-    
-    netcdf_dataset = netCDF4.Dataset(netcdf_path)
+    nc_path = sys.argv[1]
+    variable_to_plot = sys.argv[2]
+
+    netcdf_dataset = netCDF4.Dataset(nc_path)
     npu = NetCDFPointUtils(netcdf_dataset)
 
+    print('1D Point variables:\n\t{}'.format('\n\t'.join([key for key, value in netcdf_dataset.variables.items()
+                                                          if value.dimensions == ('point',)])))
     # Plot spatial subset
     plot_point_dataset(npu, 
-                       'Bouguer', 
-                       utm_bbox=[630000,7980000,680000,8030000],
+                       variable_to_plot,
+                       #utm_bbox=[660000,7080000,680000,7330000],
                        colour_scheme='gist_heat',
-                       point_size=50
+                       point_size=30,
+                       point_step=100
                        )
 
 if __name__ == '__main__':
