@@ -98,8 +98,21 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 self.field_definitions = []
                 
                 # DFN lines look like this: "DEFN 1 ST=RECD,RT=; line: I6: NULL=4294967295 , NAME=Line number"
-                dfn_file = open(dfn_path, 'r')
-                for line in dfn_file:
+                dfn_file_contents = open(dfn_path, 'r').readlines()
+                for iline, line in enumerate(dfn_file_contents):
+                    groups = re.search('RT=([A-Z]+);', line)
+                    if(groups and groups[1] != 'COMM'): # skip comment line
+                        semicolon_split_string = [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]
+                        if(len(semicolon_split_string)>2): # multiple columns defined on a single line
+                            dfn_file_contents.pop(iline)
+                            for ipart, part in enumerate(semicolon_split_string[1:]):
+                                new_line = ';'.join([semicolon_split_string[0], part])
+                                dfn_file_contents.insert(iline + ipart, new_line)
+                            # end for
+                            line = dfn_file_contents[iline]
+                        # end if
+                    # end if
+
                     key_value_pairs = {}
                     positional_value_list = []
                     for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]:
