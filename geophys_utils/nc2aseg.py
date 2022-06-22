@@ -193,9 +193,13 @@ class RowValueCache(object):
             return
 
         # Build cache of data value slices keyed by field_name
-        self.cache = {field_name: self.nc2aseggdf.get_data_values(field_name, slice(start_index, end_index))
-                      for field_name in self.field_definitions.keys()
-                      }
+        #Substitute any _FillValue in netcdf file with appropriate pre-determined aseggdf2 null value
+        for field_name in self.field_definitions.keys():
+            self.cache[field_name] = self.nc2aseggdf.get_data_values(field_name, slice(start_index, end_index))
+            netcdf_fill_value = self.nc2aseggdf.get_netcdf_fill_value(field_name)
+            if netcdf_fill_value is not None:
+                ascii_null_value = self.field_definitions[field_name]['format'].get('null')
+                self.cache[field_name][((self.cache[field_name] == netcdf_fill_value))] = ascii_null_value
 
         # logger.debug('self.cache: {}'.format(pformat(self.cache)))
 
@@ -237,6 +241,31 @@ class NC2ASEGGDF2(object):
                  ):
         '''
         '''
+
+        def get_preferred_aseggdf2_integer_width_and_null(data_vals):
+            '''\
+            Helper function to get the preferred ASEG-GDF2 integer field width and nullvalue for given integer array
+            @param data_vals: Integer array with ny _FillValues already removed
+            @return width: Preferred aseggdf2 column width
+            @return nullvalue: Preferred aseggdf2 null value -9 -99 -999 etc
+            '''
+            min_value = np.nanmin(data_vals)
+            max_value = np.nanmax(data_vals)
+            max_abs_value = np.nanmax(np.abs(np.array([min_value,max_value]).astype('float64'))) 
+            #Casted to float64 above for np.abs() in case there is a value at minimum of integer range e.g. -128 and stored data_vals.dtype==int8 - since np.abs(-128) = -128 if stored with dtype==int8
+            assert max_abs_value >= 0
+
+            #logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
+            if max_abs_value > 0:
+               width = int(log10(max_abs_value)) + 1
+            else:
+               width = 1 #If all zeros
+
+            width += 1 # allow for leading space
+            width += 1 # allow -ve sign (at least in the -99... nulls)
+            nullvalue = -(np.power(10,width-2) - 1)
+
+            return width,nullvalue
 
         def build_field_definitions():
             '''\
@@ -350,30 +379,29 @@ class NC2ASEGGDF2(object):
                                         variable_name)  # Sanitisation shouldn't be necessary, but we'll do it anyway
 
                 variable_definition['field_name'] = field_name
-
+                
                 # Add definition to allow subsequent self.get_data_values(field_name) call
                 self.field_definitions[field_name] = variable_definition
 
                 if ADJUST_INTEGER_FIELD_WIDTH and 'int' in str(
                         dtype):  # Field is some kind of integer - adjust format for data
-                    # logger.debug('\tChecking values to adjust integer field width for variable {}'.format(variable_name))
-                    max_abs_value = np.nanmax(np.abs(self.get_data_values(field_name)))
-                    min_value = np.nanmin(self.get_data_values(field_name))
-                    # logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
 
-                    if max_abs_value > 0:
-                        width = int(log10(max_abs_value)) + 2  # allow for leading space
-                        if min_value < 0:
-                            width += 1  # allow for "-"
-                    else:
-                        width = 2
+                    # Array data_vals is temporary array for holding computing good aseggdf2 null value
+                    data_vals = self.get_data_values(field_name)
 
-                    if width != format_dict['width']:
-                        logger.debug(
-                            '\tAdjusting integer field width from {} to {} for variable {}'.format(format_dict['width'],
-                                                                                                   width,
-                                                                                                   variable_name))
+                    # Subset the array to only non-nulls
+                    netcdf_fill_value = self.get_netcdf_fill_value(variable_name)
+                    if netcdf_fill_value is not None:
+                        data_vals = data_vals[data_vals != netcdf_fill_value]
+
+                    # Get preferred width and fnullvalue
+                    logger.debug('\tChecking values to adjust integer field width for variable {}'.format(variable_name))
+                    width,nullvalue = get_preferred_aseggdf2_integer_width_and_null(data_vals)
+
+                    if (format_dict['width'] != width) or (format_dict['null'] !=  nullvalue):
+                        #logger.debug('\tAdjusting integer field width from {} to {} for variable {}'.format(format_dict['width'],width,variable_name))
                         format_dict['width'] = width
+                        format_dict['null'] =  nullvalue
                         format_dict['aseg_gdf_format'] = 'I{}'.format(width)
                         format_dict['python_format'] = '{{:>{}d}}'.format(width)
 
@@ -410,6 +438,19 @@ class NC2ASEGGDF2(object):
 
         # set reporting increment to nice number giving 100 - 199 progress reports
         self.line_report_increment = (10.0 ** int(log10(self.ncpu.point_count / 50))) / 2.0
+
+    def get_netcdf_fill_value(self, field_name):
+        '''\
+        Function to return the netcdf _FillValue attribute of a field
+        @param field_name: Variable name to query (key in self.field_definitions)
+        @return fv: _FillValue if any, otherwise None
+        '''
+        fv = None
+        variables = self.field_definitions[field_name]['variables']
+        if hasattr(variables[-1], '_FillValue'):
+           fv = variables[-1]._FillValue
+
+        return fv
 
     def get_data_values(self, field_name, point_slice=slice(None, None, None)):
         '''\
@@ -457,11 +498,6 @@ class NC2ASEGGDF2(object):
         else:
             raise BaseException(
                 'Unable to resolve chained lookups (yet): {}'.format([variable.name for variable in variables]))
-
-        # Substitute null_value for _FillValue if required. This
-        null_value = self.field_definitions[field_name]['format']['null']
-        if null_value is not None and hasattr(variables[-1], '_FillValue'):
-            data[(data == (variables[-1]._FillValue))] = null_value
 
         return data
 
@@ -866,7 +902,11 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             dat_out_file = open(dat_out_path, mode='w')
             for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows,
                                                        point_mask):
-                dat_out_file.write(chunk_buffer + '\n')
+                #Newline '+ \n' removed as it creats unwanted blank line at end of each chunk on Windows
+                #This may not be the case on linux
+                #May be netter to change line 859 <chunk_buffer_string = '\n'.join(chunk_line_list) + '\n'  # Yield a chunk of lines>
+                #dat_out_file.write(chunk_buffer + '\n')
+                dat_out_file.write(chunk_buffer)
             dat_out_file.close()
             self.info_output('Finished writing .dat file {}'.format(dat_out_path))
 
