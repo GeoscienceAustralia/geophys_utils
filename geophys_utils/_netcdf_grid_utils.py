@@ -243,10 +243,8 @@ class NetCDFGridUtils(NetCDFUtils):
         @parameter max_bytes: Maximum number of bytes to read in a single query. Defaults to NetCDFGridUtils.DEFAULT_MAX_BYTES
         @parameter variable_name: NetCDF variable_name if not default data variable
         '''
-        # Use arbitrary maximum request size of NetCDFGridUtils.DEFAULT_MAX_BYTES
-        # (500,000,000 bytes => 11180 points per query)
-        #TODO: Find a better way of overcoming the netCDF problem where whole rows & columns are retrieved
-        max_bytes = max_bytes or 100  # NetCDFGridUtils.DEFAULT_MAX_BYTES
+        # Use small max request size by default
+        max_bytes = max_bytes or 100
 
         if variable_name:
             data_variable = self.netcdf_dataset.variables[variable_name]
@@ -256,47 +254,39 @@ class NetCDFGridUtils(NetCDFUtils):
         no_data_value = data_variable._FillValue
 
         indices = np.array(self.get_indices_from_coords(coordinates, wkt))
-        
-#        return data_variable[indices[:,0], indices[:,1]].diagonal() # This could get too big
 
-        # Allow for the fact that the NetCDF advanced indexing will pull back
-        # n^2 cells rather than n
-        max_points = max(
-            int(math.sqrt(max_bytes / data_variable.dtype.itemsize)), 1)
-        try:
-            # Make this a vectorised operation for speed (one query for as many
-            # points as possible)
-            # Array of valid index pairs only
-            index_array = np.array(
-                [index_pair for index_pair in indices if index_pair is not None])
-            assert len(index_array.shape) == 2 and index_array.shape[
-                1] == 2, 'Not an iterable containing index pairs'
-            # Boolean mask indicating which index pairs are valid
-            mask_array = np.array([(index_pair is not None)
-                                   for index_pair in indices])
-            # Array of values read from variable
-            value_array = np.ones(shape=(len(index_array)),
-                                  dtype=data_variable.dtype) * no_data_value
-            # Final result array including no-data for invalid index pairs
-            result_array = np.ones(
-                shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
-            start_index = 0
-            end_index = min(max_points, len(index_array))
-            while True:
-                # N.B: ".diagonal()" is required because NetCDF doesn't do advanced indexing exactly like numpy
-                # Hack is required to take values from leading diagonal. Requires n^2 elements retrieved instead of n. Not good, but better than whole array
-                # TODO: Think of a better way of doing this
-                value_array[start_index:end_index] = data_variable[
-                    (index_array[start_index:end_index, 0], index_array[start_index:end_index, 1])].diagonal()
-                if end_index == len(index_array):  # Finished
-                    break
-                start_index = end_index
-                end_index = min(start_index + max_points, len(index_array))
-
-            result_array[mask_array] = value_array
-            return list(result_array)
-        except:
+        if indices.ndim == 1: #single coordinate pair
             return data_variable[indices[0], indices[1]]
+        
+        # Make this a vectorised operation for speed (one query for as many
+        # points as possible)
+        # Array of valid index pairs only
+        index_array = np.array(
+            [index_pair for index_pair in indices if index_pair is not None])
+        assert len(index_array.shape) == 2 and index_array.shape[
+            1] == 2, 'Not an iterable containing index pairs'
+        # Boolean mask indicating which index pairs are valid
+        mask_array = np.array([(index_pair is not None)
+                                for index_pair in indices])
+        # Array of values read from variable
+        value_array = np.ones(shape=(len(index_array)),
+                                dtype=data_variable.dtype) * no_data_value
+        # Final result array including no-data for invalid index pairs
+        result_array = np.ones(
+            shape=(len(mask_array)), dtype=data_variable.dtype) * no_data_value
+        start_index = 0
+        while start_index < len(index_array):
+            #read up to max_bytes of data_variable containing as many of the next points in
+            #index_array as possible
+            end_index, bbox = _get_query_params(index_array, start_index, data_variable, max_bytes)
+            query_result = data_variable[bbox[0]:bbox[1]+1, bbox[2]:bbox[3]+1]
+            residx0 = index_array[start_index:end_index+1,0] - bbox[0]
+            residx1 = index_array[start_index:end_index+1,1] - bbox[2]
+            value_array[start_index:end_index+1] = query_result[residx0, residx1]
+            start_index = end_index + 1
+
+        result_array[mask_array] = value_array
+        return list(result_array)
 
     def get_interpolated_value_at_coords(
             self, coordinates, wkt=None, max_bytes=None, variable_name=None):
@@ -767,9 +757,16 @@ class NetCDFGridUtils(NetCDFUtils):
                     
         finally:
             new_dataset.close()
-            
-                       
-    def set_global_attributes(self, compute_shape=True):
+
+    def set_global_attributes(self, compute_shape=True,
+                                     clockwise_polygon_orient=False,
+                                     buffer_distance=None,
+                                     offset=None,
+                                     tolerance=None,
+                                     max_polygons=1,
+                                     max_vertices=1000,
+                                     shape_ordinate_decimal_place=6
+                                     ):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
@@ -795,29 +792,31 @@ class NetCDFGridUtils(NetCDFUtils):
             attribute_dict['nominal_pixel_size_y_metres'] = self.nominal_pixel_metres[1]  # y
             attribute_dict['geospatial_lon_resolution'] = self.nominal_pixel_degrees[0]  # lon
             attribute_dict['geospatial_lat_resolution'] = self.nominal_pixel_degrees[1]  # lat
+
             # polygon generation
             if compute_shape:
-                attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt)),  rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-                print(attribute_dict['geospatial_bounds'])
+                logger.debug('computing geospatial_bounds')
+                # wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
+                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull(to_wkt=gda_wkt,
+                                                                                buffer_distance=buffer_distance,
+                                                                                offset=offset,
+                                                                                tolerance=tolerance,
+                                                                                max_polygons=max_polygons,
+                                                                                max_vertices=max_vertices)),
+                                                rounding_precision=shape_ordinate_decimal_place)
 
+                # get wkt polygon as polygon object to set as either clockwise or anticlockwise.
+                pol = shapely.wkt.loads(wkt_polygon)
+                if (clockwise_polygon_orient):
+                    logger.info("Keeping default 'geospatial_bounds' as a clockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), -1.0)
+                else:  # reverse polygon coordinates - anti-clockwise
+                    logger.info("Setting 'geospatial_bounds' to anticlockwise orientation")
+                    wkt_polygon = shapely.geometry.polygon.orient(Polygon(pol), 1.0)
 
+                attribute_dict['geospatial_bounds'] = str(wkt_polygon)
+                logger.debug(attribute_dict['geospatial_bounds'])
 
-            #    try:
-            #         assert self.pixel_count[0] * self.pixel_count[1] <= MAX_CELLS_TO_COMPUTE_SHAPE, 'Too many cells in {} grid to compute concave hull'.format(' x '.join([str(size) for size in self.pixel_count]))
-            #         print("num of cells: {}".format(self.pixel_count[0] * self.pixel_count[1]))
-            #         logger.debug('Computing concave hull')
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #            self.get_concave_hull(to_wkt=gda_wkt),
-            #            rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
-            #
-            #         attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
-            #             asPolygon(self.get_convex_hull(to_wkt=gda_wkt)),
-            #             rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES
-            #          )
-            #    except Exception as e: # if it fails use the convex hull or bounding box instead
-            #         logger.warning('Unable to compute concave hull shape: {}. Using convex hull for geospatial_bounds.'.format(e))
-
-            
             logger.debug('attribute_dict = {}'.format(pformat(attribute_dict)))
             logger.info('Writing global attributes to netCDF file')
             for key, value in attribute_dict.items():
@@ -825,8 +824,6 @@ class NetCDFGridUtils(NetCDFUtils):
         except:
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
-
-
 
     def set_variable_actual_range_attribute(self, iterate_through_data=False, num_pixels_to_trigger_iterating=5000000, num_of_chunks=50):
         '''\
@@ -903,6 +900,36 @@ class NetCDFGridUtils(NetCDFUtils):
             logger.debug("current_min: {}".format(current_min))
         return current_min, current_max
 
+def _get_query_params(index_array, start_index, data_variable, max_bytes):
+    #find the maximum ending index to use for a request under max_bytes
+    # and the associated bounding box
+    if start_index >= len(index_array):
+        return start_index
+    end_index = start_index
+    dbytes = data_variable.dtype.itemsize
+    nbytes = dbytes
+    bbox = [index_array[start_index,0], index_array[start_index,0],
+        index_array[start_index,1], index_array[start_index,1]]
+    while end_index < len(index_array) and nbytes <= max_bytes:
+        end_index += 1
+        if end_index >= len(index_array):
+            break
+        x = index_array[end_index,0]
+        y = index_array[end_index,1]
+        new_bbox = bbox.copy()
+        if x < bbox[0]:
+            new_bbox[0] = x
+        elif x > bbox[1]:
+            new_bbox[1] = x
+        if y < bbox[2]:
+            new_bbox[2] = y
+        elif y > bbox[3]:
+            new_bbox[3] = y
+        nbytes = dbytes*(new_bbox[1]-new_bbox[0]+1)*(new_bbox[3]-new_bbox[2]+1)
+        if nbytes > max_bytes:
+            break
+        bbox=new_bbox
+    return max(start_index, end_index - 1), bbox
 
 def main():
     '''

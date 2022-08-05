@@ -472,7 +472,7 @@ class NetCDFPointUtils(NetCDFUtils):
         return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
     
     
-    def get_concave_hull(self, to_wkt=None, smoothness=None):
+    def get_concave_hull(self, to_wkt=None, smoothness=None, clockwise_polygon_orient=False):
         """\
         Returns the concave hull (as a shapely polygon) of all points. 
         Implements abstract base function in NetCDFUtils 
@@ -480,12 +480,23 @@ class NetCDFPointUtils(NetCDFUtils):
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
         hull = concaveHull(transform_coords(self.xycoords, self.wkt, to_wkt))
-        result = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
-        
+        shapely_polygon = shape({'type': 'Polygon', 'coordinates': [hull.tolist()]})
+
+        # from shapely docs:
+        # A sign of 1.0 means that the coordinates of the product’s exterior ring will be oriented
+        # counter-clockwise and the interior rings (holes) will be oriented clockwise.
+        #
+        # There should not be polygons with interior ring holes and so -1 will be treated as clockwise, and 1 as
+        # counter-clockwise
+        if clockwise_polygon_orient:
+            pol = shapely.geometry.polygon.orient(Polygon(shapely_polygon), -1.0)
+        else: # reverse polygon coordinates - anti-clockwise
+            pol = shapely.geometry.polygon.orient(Polygon(shapely_polygon), 1.0)
+
         if smoothness is None:
-            return result
+            return pol
         
-        return Polygon(result.buffer(smoothness).exterior).buffer(-smoothness)
+        return Polygon(pol.buffer(smoothness).exterior).buffer(-smoothness)
 
 
     def nearest_neighbours(self, coordinates, 
@@ -1165,7 +1176,7 @@ class NetCDFPointUtils(NetCDFUtils):
         finally:
             new_dataset.close()
 
-    def set_global_attributes(self, compute_shape=False):
+    def set_global_attributes(self, compute_shape=False, clockwise_polygon_orient=False):
         '''\
         Function to set  global geometric metadata attributes in netCDF file
         N.B: This will fail if dataset is not writable
@@ -1199,8 +1210,9 @@ class NetCDFPointUtils(NetCDFUtils):
                     logger.debug('Computing concave hull')
                     attribute_dict['geospatial_bounds'] = shapely.wkt.dumps(
                         self.get_concave_hull(
-                            to_wkt=METADATA_CRS
-                            ), 
+                            to_wkt=METADATA_CRS,
+                            clockwise_polygon_orient=clockwise_polygon_orient
+                            ),
                         rounding_precision=SHAPE_ORDINATE_DECIMAL_PLACES)
                 except Exception as e:
                     logger.warning('Unable to compute concave hull shape: {}'.format(e))
