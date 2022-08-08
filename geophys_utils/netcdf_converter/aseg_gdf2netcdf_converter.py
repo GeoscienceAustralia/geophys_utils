@@ -125,47 +125,58 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                     positional_value_list.append(definition[0])
     
                     logger.debug('line: {}\nkey_value_pairs: {}\npositional_value_list: {}'.format(line.strip(), pformat(key_value_pairs), pformat(positional_value_list))) 
-                
+
                     # Column definition
                     if key_value_pairs.get('RT') in ['', 'DATA'] and (positional_value_list 
                                                             and positional_value_list[0] != 'END DEFN'): 
                         short_name = positional_value_list[0].lower()
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
-                        units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
-                        long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
-                        fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
-                        
-                        # Parse format to determine columns, data type and numeric format
-                        dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
-                                    
-                        field_definition = {'short_name': short_name,
-                                      'format': fmt,
-                                      'long_name': long_name,
-                                      'dtype': dtype,
-                                      'columns': columns,
-                                      'width_specifier': width_specifier, 
-                                      'decimal_places': decimal_places
-                                      }
-                        if units:
-                            field_definition['units'] = units
-                        if fill_value is not None:
-                            field_definition['fill_value'] = fill_value
-                             
-                        
-                        # Set variable attributes in field definition
-                        variable_attribute_dict = {attribute_name: key_value_pairs.get(key.upper())
-                            for key, attribute_name in self.settings['variable_attributes'].items()
-                            if key_value_pairs.get(key.upper()) is not None
-                                                   }
-                        
-                        # Store aseg_gdf_format in variable attributes
-                        variable_attribute_dict['aseg_gdf_format'] = fmt 
 
-                        if variable_attribute_dict:
-                            field_definition['variable_attributes'] = variable_attribute_dict    
-                        
-                        self.field_definitions.append(field_definition)
-                        
+                        self.recordtypewidth = 0
+                        if short_name == 'rt' and fmt == 'A4': # We will skipp th record type field 'rt'
+                            self.record_type_width = 4 
+                        else : 
+                            units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
+                            long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
+                            fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
+                            epsg_code = key_value_pairs.get('EPSGCODE') 
+                                                        
+                            # Parse format to determine columns, data type and numeric format
+                            dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
+                                        
+                            field_definition = {'short_name': short_name,
+                                          'format': fmt,
+                                          'long_name': long_name,
+                                          'dtype': dtype,
+                                          'columns': columns,
+                                          'width_specifier': width_specifier, 
+                                          'decimal_places': decimal_places
+                                          }
+                            if units:
+                                field_definition['units'] = units
+
+                            if fill_value is not None:
+                                field_definition['fill_value'] = fill_value
+                                 
+                            if epsg_code is not None:
+                                field_definition['epsg_code'] = epsg_code
+                            
+                            # Set variable attributes in field definition
+                            variable_attribute_dict = {attribute_name: key_value_pairs.get(key.upper())
+                                for key, attribute_name in self.settings['variable_attributes'].items()
+                                if key_value_pairs.get(key.upper()) is not None
+                                                       }
+                            
+                            # Remove for now
+                            # Store aseg_gdf_format in variable attributes
+                            # variable_attribute_dict['aseg_gdf_format'] = fmt 
+
+                            if variable_attribute_dict:
+                                field_definition['variable_attributes'] = variable_attribute_dict    
+                            
+                            self.field_definitions.append(field_definition)
+                        #end if 
+
                                     
                     # Set CRS from projection name
                     elif not self.spatial_ref:
@@ -262,14 +273,16 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         chunksizes=(CACHE_CHUNK_ROWS, columns)
                         
                     logger.debug('\tCreating cache variable {} with dtype {} and dimension(s) {}'.format(short_name, field_definition['dtype'], field_dimensions))
+
                     self._nc_cache_dataset.createVariable(varname=short_name,
                                                           datatype=field_definition['dtype'],
                                                           dimensions=field_dimensions,
                                                           chunksizes=chunksizes,
                                                           **NetCDFVariable.DEFAULT_VARIABLE_PARAMETERS
-                                                          )
+                                                          )                        
                     self.column_count += columns
-                    
+
+
                 try: # Do a sync now to force an error if there are dimension/variable naming conflicts
                     self._nc_cache_dataset.sync()
                     logger.debug('NetCDF sync completed')
@@ -305,21 +318,25 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 '''
                 row_list = []
                 line_column_count = 0
-                start_char_index = 0
+                start_char_index = self.record_type_width # will be 0 for RT=; and 4 if RT=DATA;
                 for field_definition in self.field_definitions:
                     short_name = field_definition['short_name']
                     columns = field_definition['columns']
                     dtype = field_definition['dtype']
-                    aseg_gdf_format = field_definition['format']
+
+                    # Remove for now
+                    #aseg_gdf_format = field_definition['format']
+
                     column_list = []
                     for _column_offset in range(columns):
                         end_char_index = start_char_index + field_definition['width_specifier']
                         value_string = line[start_char_index:end_char_index]
                         
+                        # No longer needed since skipping 'rt' field
                         # Work-around for badly formatted files with first entry too short
-                        if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
-                            value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
-                            end_char_index = start_char_index + len(value_string) # Adjust character offset for next column
+                        #if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
+                        #    value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
+                        #    end_char_index = start_char_index + len(value_string) # Adjust character offset for next column
                         
                         value_string = value_string.strip()
                         try:
@@ -343,7 +360,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             row_list.append(column_list[0]) 
                         else:
                             row_list.append(column_list) 
-                            
+                     
                 #logger.debug('row_list: {}'.format(row_list))
                 if line_column_count != self.column_count:
                     logger.warning('Invalid number of columns found: Expected {}, found {}. Skipping line'.format(self.column_count, line_column_count))
@@ -616,7 +633,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
                         field_definition['variable_attributes'] = variable_attributes
-                    variable_attributes['aseg_gdf_format'] = precision_change_result[0]
+                    #Remove for now
+                    #variable_attributes['aseg_gdf_format'] = precision_change_result[0]
                 else: # Data type unchanged
                     logger.debug('Datatype for variable {} not changed'.format(short_name))
                     # Try truncating original fill value
@@ -794,9 +812,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     'geospatial_lat_units': "degrees North",
                 })
 
-                for cvar in [lon_var, lat_var]:
-                    cvar.setncattr('IntrepidProjectionString', 'GEODETIC')
-                    cvar.setncattr('IntrepidDatumString', 'GDA94')
+                # Set for removal
+                #for cvar in [lon_var, lat_var]:
+                #    cvar.setncattr('IntrepidProjectionString', 'GEODETIC')
+                #    cvar.setncattr('IntrepidDatumString', 'GDA94')
                 # end for
 
             elif set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys()): # CRS is in UTM
@@ -1039,9 +1058,14 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             units = field_definition.get('units')
             if units:
                 field_attributes['units'] = units
-                
+
+            epsg_code = field_definition.get('epsg_code')
+            if epsg_code:
+                field_attributes['epsg_code'] = epsg_code
+
             # Append any recognised variable attributes read from .dfn
             field_attributes.update(field_definition.get('variable_attributes') or {})
+            print(field_attributes)
                 
             dtype = field_definition.get('dtype')
                 

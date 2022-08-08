@@ -26,7 +26,8 @@ def dfrexp(f):
     # Compute decimal exponent
     if type(f) == np.ndarray:
         fexp = np.zeros(shape=f.shape, dtype='int32')
-        fexp[f != 0] = np.ceil(np.log10(np.abs(f[f != 0]))).astype('int32')
+        fexp[f != 0] = np.ceil(np.log10(np.abs((f[f != 0]).astype('float64')))).astype('int32')
+        #Casted to float64 above for np.abs() in case there is a value at minimum of integer range e.g. -128 and stored data_vals.dtype==int8 - since np.abs(-128) = -128 if stored with dtype==int8
     else: # Scalar
         fexp = int(ceil(log10(abs(f)))) if f != 0 else 0
             
@@ -137,9 +138,8 @@ def aseg_gdf_format2dtype(aseg_gdf_format):
         assert dtype, 'Invalid floating point format of {}.{}'.format(width_specifier, decimal_places)                                    
     
     elif aseg_dtype_code == 'A':
-        assert not decimal_places, 'String format cannot be defined with fractional digits'
+        assert not decimal_places, 'String format cannot be defined with fractional digits'        
         dtype = '<U{}'.format(width_specifier) # Numpy fixed-length string type
-        
     else:
         raise BaseException('Unhandled ASEG-GDF dtype code {}'.format(aseg_dtype_code))
     
