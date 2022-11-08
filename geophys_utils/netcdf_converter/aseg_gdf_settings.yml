@@ -68,9 +68,11 @@ field_definitions:
 variable_attributes:
   DATUM: datum_name
   PROJECTION: projection_name
+  EPSGCODE: epsgcode
+  DESC: desc
 
 # String containing comma-separated list of keywords
-keywords: geophysics, airborne, AEM, conductivity 
+keywords: geophysics, airborne
 
 # List of possible dimension field names definining dimension sizes. 
 # Uses overridden short_name values (if set)

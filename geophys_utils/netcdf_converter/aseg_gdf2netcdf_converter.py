@@ -35,6 +35,7 @@ import tempfile
 import netCDF4
 import logging
 import locale
+import warnings
 
 from geophys_utils.netcdf_converter import ToNetCDFConverter, NetCDFVariable
 from geophys_utils import get_spatial_ref_from_wkt
@@ -45,7 +46,8 @@ from geophys_utils import transform_coords
 locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.UTF-8'
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO) # Logging level for this module
+logger.setLevel(logging.DEBUG) # Logging level for this module
+#logging.basicConfig() 
 
 TEMP_DIR = tempfile.gettempdir()
 #TEMP_DIR = 'D:\Temp'
@@ -56,6 +58,7 @@ POINT_LIMIT = 0
 
 # Number of rows per chunk in temporary netCDF cache file
 CACHE_CHUNK_ROWS = 16384
+
 
 class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
     '''
@@ -93,24 +96,57 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             Function to read raw field definitions from .dfn file
             Will set self.dimensions as an Ordereddict of dimension sizes keyed by dimension name
             '''
+
+            def fatal_parsing_error(filename,msg):
+                logger.error('ERROR: Fatal parsing error of file: {}'.format(filename))
+                logger.error(msg)
+                exit(1)
+
             def parse_dfn_file(dfn_path):
                 self.info_output('Reading definitions file {}'.format(dfn_path))
                 self.field_definitions = []
                 
                 # DFN lines look like this: "DEFN 1 ST=RECD,RT=; line: I6: NULL=4294967295 , NAME=Line number"
                 dfn_file = open(dfn_path, 'r')
+               
+                line_count = 0
                 for line in dfn_file:
+                    line_count += 1
                     key_value_pairs = {}
                     positional_value_list = []
                     for semicolon_split_string in [semicolon_split_string.strip() for semicolon_split_string in line.split(';')]:
-                        for colon_split_string in [colon_split_string.strip() for colon_split_string in semicolon_split_string.split(':')]:
-                            for comma_split_string in [comma_split_string.strip() for comma_split_string in colon_split_string.split(',')]:
+                        field_definition = semicolon_split_string
+
+                        if ':' not in field_definition:
+                            # Definition Field
+                            for comma_split_string in [comma_split_string.strip() for comma_split_string in field_definition.split(',')]:
                                 definition = [equals_split_string.strip() for equals_split_string in comma_split_string.split('=')]
                                 if len(definition) == 2:
                                     key_value_pairs[definition[0]] = definition[1]
                                 elif len(definition) == 1:
                                     positional_value_list.append(definition[0])
-    
+                        else:
+                            # Formatting Field
+                            format_entries = [colon_split_string.strip() for colon_split_string in field_definition.split(':')]
+                            # TODO - this if statement is unreachable code - need to fix (scan format_entries for empty strings)
+                            if len(format_entries) < 2:
+                                fatal_parsing_error(dfn_path, 'Line {}, FORMAT field requires at least 2 colon separated entries'.format(line_count))
+                            field_name = format_entries[0]
+                            format_description = format_entries[1]
+                            positional_value_list.append(field_name)
+                            positional_value_list.append(format_description)
+                            other_field_attributes = None
+                            if len(format_entries) == 3:
+                                other_field_attributes = format_entries[2]  
+                                other_field_attribute = [coma_split_string.strip() for coma_split_string in other_field_attributes.split(',')]
+                                for other_field in other_field_attribute:
+                                    possible_name_value_pair = [equals_split_string.strip() for equals_split_string in other_field.split('=')]
+                                    if len(possible_name_value_pair) == 2:
+                                        key_value_pairs[possible_name_value_pair[0]] = possible_name_value_pair[1]
+                                    else:
+                                        # fatal_parsing_error(dfn_path, 'Unrecognised name=value pair in other_field_attributes.  Line {}, Unrecognised value; "{}"\r\nPlease note comments are not supported.'.format(line_count,possible_name_value_pair[0]))
+                                        logger.error('Ignoring comment: Line {} of {}; "{}"'.format(line_count,dfn_path,possible_name_value_pair[0]))
+
                     logger.debug('line: {}\nkey_value_pairs: {}\npositional_value_list: {}'.format(line.strip(), pformat(key_value_pairs), pformat(positional_value_list))) 
                 
                     # Column definition
@@ -145,8 +181,12 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             if key_value_pairs.get(key.upper()) is not None
                                                    }
                         
-                        # Store aseg_gdf_format in variable attributes
-                        variable_attribute_dict['aseg_gdf_format'] = fmt 
+                        # Store aseg_gdf_format in variable attributes (no longer do this)
+                        # variable_attribute_dict['aseg_gdf_format'] = fmt 
+
+                        if 'RT' in variable_attribute_dict:
+                            if variable_attribute_dict.get('RT') == '':
+                                del variable_attribute_dict['RT']
 
                         if variable_attribute_dict:
                             field_definition['variable_attributes'] = variable_attribute_dict    
@@ -173,8 +213,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             if projection_name:
                                 self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
                                 logger.debug('CRS set from .dfn file DATUM NAME attribute {}'.format(projection_name))
+                                
                                 break # Nothing more to do
-                            
+
             # Start of get_field_definitions function
             parse_dfn_file(dfn_path)
             
@@ -192,11 +233,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             if not self.spatial_ref:
                 try:
                     field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
-                    crs_string = field_definition['variable_attributes']['datum_name']
+                    variable_attributes = field_definition['variable_attributes']
+                    if 'datum_name' in variable_attributes:
+                        crs_string = variable_attributes['datum_name']
+                    if 'epsgcode' in variable_attributes:
+                        crs_string = 'EPSG:' + variable_attributes['epsgcode']
                     self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
                     logger.debug('CRS set from latitude variable datum_name attribute {}'.format(crs_string))
                 except:
-                    logger.debug('Unable to set CRS from latitude datum_name attribute')               
+                    logger.debug('Unable to set CRS from latitude datum_name or epsgcode attribute')               
 
             assert self.spatial_ref, 'Coordinate Reference System undefined'
             logger.debug('self.spatial_ref: {}'.format(self.spatial_ref.ExportToPrettyWkt()))
@@ -603,7 +648,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     variable_attributes = field_definition.get('variable_attributes') or {}
                     if not variable_attributes:
                         field_definition['variable_attributes'] = variable_attributes
-                    variable_attributes['aseg_gdf_format'] = precision_change_result[0]
+                    #variable_attributes['aseg_gdf_format'] = precision_change_result[0]  (no longer save this)
                 else: # Data type unchanged
                     logger.debug('Datatype for variable {} not changed'.format(short_name))
                     # Try truncating original fill value

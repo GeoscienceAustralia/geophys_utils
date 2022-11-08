@@ -12,6 +12,7 @@ import numpy as np
 from collections import OrderedDict
 from math import ceil, log10
 import logging
+import warnings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO) # Logging level for this module
@@ -26,6 +27,7 @@ def dfrexp(f):
     # Compute decimal exponent
     if type(f) == np.ndarray:
         fexp = np.zeros(shape=f.shape, dtype='int32')
+        warnings.simplefilter("ignore") # Added to suppress warnings
         fexp[f != 0] = np.ceil(np.log10(np.abs(f[f != 0]))).astype('int32')
     else: # Scalar
         fexp = int(ceil(log10(abs(f)))) if f != 0 else 0
