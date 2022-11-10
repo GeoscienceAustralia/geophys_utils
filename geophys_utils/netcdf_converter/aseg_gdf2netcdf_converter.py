@@ -744,7 +744,6 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             'history': 'Converted from ASEG-GDF file {} using definitions file {}'.format(self.dat_path,
                                                                                      self.dfn_path),
             'date_created': datetime.now().isoformat(),
-            'CreationTime': datetime.now().strftime("%A")[:3] + ' ' + datetime.now().strftime("%B %d %H:%M:%S %Y"),
             'geospatial_east_resolution': "point",
             'geospatial_north_resolution': "point",
             }
@@ -766,25 +765,6 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                     'geospatial_lat_units': "degrees North",
                     })
 
-            if set(['longitude_gda94', 'latitude_gda94']) <= set(self.nc_output_dataset.variables.keys()):
-                lon_var = self.nc_output_dataset.variables['longitude_gda94']
-                lat_var = self.nc_output_dataset.variables['latitude_gda94']
-                coordinates[:, 0] = lon_var[:]
-                coordinates[:, 1] = lat_var[:]
-
-                metadata_dict.update({
-                    'geospatial_lon_min': np.min(coordinates[:, 0]),
-                    'geospatial_lon_max': np.max(coordinates[:, 0]),
-                    'geospatial_lon_units': "degrees East",
-                    'geospatial_lat_min': np.min(coordinates[:, 1]),
-                    'geospatial_lat_max': np.max(coordinates[:, 1]),
-                    'geospatial_lat_units': "degrees North",
-                })
-
-                for cvar in [lon_var, lat_var]:
-                    cvar.setncattr('IntrepidProjectionString', 'GEODETIC')
-                    cvar.setncattr('IntrepidDatumString', 'GDA94')
-                # end for
 
             elif set(['easting', 'northing']) <= set(self.nc_output_dataset.variables.keys()): # CRS is in UTM
                 coordinates[:,0] = self.nc_output_dataset.variables['easting'][:]
@@ -984,7 +964,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             
             lookup_array, index_start_indices, index_array, index_point_counts = np.unique(raw_data, 
                                                                               return_index=True, 
-                                                                              return_inverse=True,
+                                                                              return_inverse=True, 
                                                                               return_counts=True
                                                                               )            
             
