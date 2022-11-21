@@ -45,6 +45,7 @@ CRS_NAME_MAPPING = {
     'WGS84': 'EPSG:4326',
     'AGD84': 'EPSG:4203',
     'AGD66': 'EPSG:4202',
+    'GDA2020': 'EPSG:7844',
     }
 
 def get_spatial_ref_from_wkt(wkt_or_crs_name):
