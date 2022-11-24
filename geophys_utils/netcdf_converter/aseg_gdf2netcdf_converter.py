@@ -102,6 +102,10 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 logger.error(msg)
                 exit(1)
 
+            def nonfatal_parsing_error(filename,msg):
+                logger.error('Warning: Non-Fatal parsing error of file: {}'.format(filename))
+                logger.error(msg)
+
             def parse_dfn_file(dfn_path):
                 self.info_output('Reading definitions file {}'.format(dfn_path))
                 self.field_definitions = []
@@ -154,49 +158,55 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                                             and positional_value_list[0] != 'END DEFN'): 
                         short_name = positional_value_list[0].lower()
                         fmt = positional_value_list[1] if len(positional_value_list) >= 2 else None
-                        units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
-                        long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
-                        fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
-                        
-                        # Parse format to determine columns, data type and numeric format
-                        dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
+
+                        if short_name.upper() == 'RT' and fmt == 'A4': # We will skip the record type field 'rt'
+                            self.record_type_width = 4 
+                        else: 
+
+                            units = key_value_pairs.get('UNITS') or key_value_pairs.get('UNIT')
+                            long_name = key_value_pairs.get('NAME') or (positional_value_list[2] if len(positional_value_list) >= 3 else None)
+                            fill_value = float(key_value_pairs.get('NULL')) if key_value_pairs.get('NULL') is not None else None
+                            
+                            # Parse format to determine columns, data type and numeric format
+                            dtype, columns, width_specifier, decimal_places = aseg_gdf_format2dtype(fmt)
                                     
-                        field_definition = {'short_name': short_name,
-                                      'format': fmt,
-                                      'long_name': long_name,
-                                      'dtype': dtype,
-                                      'columns': columns,
-                                      'width_specifier': width_specifier, 
-                                      'decimal_places': decimal_places
-                                      }
-                        if units:
-                            field_definition['units'] = units
-                        if fill_value is not None:
-                            field_definition['fill_value'] = fill_value
+                            field_definition = {'short_name': short_name,
+                                          'format': fmt,
+                                          'long_name': long_name,
+                                          'dtype': dtype,
+                                          'columns': columns,
+                                          'width_specifier': width_specifier, 
+                                          'decimal_places': decimal_places
+                                          }
+                            if units:
+                                field_definition['units'] = units
+                            if fill_value is not None:
+                                field_definition['fill_value'] = fill_value
                              
-                        variable_attribute_dict = {}
+                            variable_attribute_dict = {}
 
-                        for key, attribute_val in key_value_pairs.items():
-                            if (key.upper() in self.settings['variable_attributes']):
-                                variable_attribute_dict[self.settings['variable_attributes'][key.upper()]] = attribute_val
-                            elif (key.upper()[:4] not in ['DATA','UNIT','NAME','NULL','DEFN']):
-                                variable_attribute_dict[key] = attribute_val
+                            for key, attribute_val in key_value_pairs.items():
+                                if (key.upper() in self.settings['variable_attributes']):
+                                    variable_attribute_dict[self.settings['variable_attributes'][key.upper()]] = attribute_val
+                                elif (key.upper() not in ['RT', 'DATA', 'UNIT', 'UNITS', 'NAME', 'NULL'] and key.upper()[:4] not in ['DEFN']):
+                                    variable_attribute_dict[key] = attribute_val
 
-                        # No longer Store aseg_gdf_format in variable attributes (no longer do this)
-                        # variable_attribute_dict['aseg_gdf_format'] = fmt 
+                            # No longer Store aseg_gdf_format in variable attributes (no longer do this)
+                            # variable_attribute_dict['aseg_gdf_format'] = fmt 
 
-                        if 'RT' in variable_attribute_dict and not variable_attribute_dict.get('RT'):
-                            del variable_attribute_dict['RT']
+                            if 'RT' in variable_attribute_dict and not variable_attribute_dict.get('RT'):
+                                del variable_attribute_dict['RT']
 
-                        if variable_attribute_dict:
-                            field_definition['variable_attributes'] = variable_attribute_dict    
+                            if variable_attribute_dict:
+                                field_definition['variable_attributes'] = variable_attribute_dict    
                         
-                        self.field_definitions.append(field_definition)
+                            self.field_definitions.append(field_definition)
                         
                     elif (key_value_pairs.get('RT') == 'PROJ'):
-                        fatal_parsing_error(dfn_path, 'Line {}, PROJ tags no longer supported in dfn files - please remove'.format(line_count))
+                        nonfatal_parsing_error(dfn_path, 'Line {}, Warning: PROJ tags no longer supported in dfn files - please remove'.format(line_count))
                     elif (key_value_pairs.get('RT') == 'COMM'):
-                        fatal_parsing_error(dfn_path, 'Line {}, COMM tags no longer supported in dfn files - please remove'.format(line_count))
+                        # COMM tags to now be ignored
+                        pass
 
 
             # Start of get_field_definitions function
@@ -212,22 +222,28 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
                         
-            field_definition_lat = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
-            variable_attributes_lat = field_definition_lat['variable_attributes']
-            field_definition_lng = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'longitude'][0]
-            variable_attributes_lng = field_definition_lng['variable_attributes']
+            lat_field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude']
+            lng_field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'longitude']
+            variable_attributes_lat = None
+            variable_attributes_lng = None
 
-            if 'epsgcode' not in variable_attributes_lat or not variable_attributes_lat['epsgcode']:
-                fatal_parsing_error(dfn_path, 'No variable attribute called EPSGCODE found against LATITUDE field definition.  EPSGCODE is required for both LATITUDE and LONGITUDE.')
-            if 'epsgcode' not in variable_attributes_lng or not variable_attributes_lng['epsgcode']:
-                fatal_parsing_error(dfn_path, 'No variable attribute called EPSGCODE found against LONGITUDE field definition.  EPSGCODE is required for both LATITUDE and LONGITUDE')
-            if variable_attributes_lat['epsgcode'] != variable_attributes_lng['epsgcode']:
+            if lat_field_definition:
+                field_definition_lat = lat_field_definition[0]
+                if not self.epsgcode and 'variable_attributes' in field_definition_lat and 'epsgcode' in field_definition_lat['variable_attributes']:
+                    variable_attributes_lat = field_definition_lat['variable_attributes']
+                    self.epsgcode = variable_attributes_lat['epsgcode']
+
+            if lng_field_definition:
+                field_definition_lng = lng_field_definition[0]
+                if not self.epsgcode and 'variable_attributes' in field_definition_lng and 'epsgcode' in field_definition_lng['variable_attributes']:
+                    variable_attributes_lng = field_definition_lng['variable_attributes']
+                    self.epsgcode = variable_attributes_lng['epsgcode']
+
+            if variable_attributes_lat and 'epsgcode' in variable_attributes_lat and variable_attributes_lng and 'epsgcode' in variable_attributes_lng and variable_attributes_lat['epsgcode'] != variable_attributes_lng['epsgcode']:
                 fatal_parsing_error(dfn_path,'Variable attribute EPSGCODE for LATITUDE and LONGITUDE mismatch.  The same EPSGCODE should be passed for both LATITUDE and LONGITUDE')
 
-            self.epsgcode = variable_attributes_lat['epsgcode']
-
-            if not self.spatial_ref:
-                self.spatial_ref = get_spatial_ref_from_wkt('EPSG:'+self.epsgcode)
+            if not self.spatial_ref and self.epsgcode:
+                self.spatial_ref = get_spatial_ref_from_wkt('EPSG:'+str(self.epsgcode))
                 logger.debug('CRS set from latitude variable epsgcode attribute {}'.format(self.epsgcode))
 
             assert self.spatial_ref, 'Coordinate Reference System undefined'
@@ -325,7 +341,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                 '''
                 row_list = []
                 line_column_count = 0
-                start_char_index = 0
+                # start_char_index = 0
+                start_char_index = self.record_type_width # will be 0 for RT=; and 4 if RT=DATA;
                 for field_definition in self.field_definitions:
                     short_name = field_definition['short_name']
                     columns = field_definition['columns']
@@ -336,10 +353,11 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         end_char_index = start_char_index + field_definition['width_specifier']
                         value_string = line[start_char_index:end_char_index]
                         
+                        # No longer needed since skipping 'rt' field
                         # Work-around for badly formatted files with first entry too short
-                        if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
-                            value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
-                            end_char_index = start_char_index + len(value_string) # Adjust character offset for next column
+                        #if not aseg_gdf_format.startswith('A') and ' ' in value_string.strip(): # Not a string field and has a space in the middle
+                        #    value_string = re.match('\s*\S*', value_string).group(0) # Strip anything after non-leading whitespace character
+                        #    end_char_index = start_char_index + len(value_string) # Adjust character offset for next column
                         
                         value_string = value_string.strip()
                         try:
@@ -685,6 +703,8 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             self.spatial_ref = None
 
         self.epsgcode = None
+
+        self.record_type_width = 0
 
         self.dimensions = OrderedDict()
 
@@ -1130,20 +1150,31 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         and recompute global attributes
         '''
 
-        #default_crs_wkt = self.settings['default_crs_wkt']  # default_crs_wkt 
-        # TODO.  Removed/deprecated from settings file dependency
-        # TODO.  However, now only looks at latitude/epsgcode - so no reprojection will take place
-        # TODO:  Probably needs a revisit to this code section
+        epsg_val = None
         latitude_var = self.nc_output_dataset.variables.get('latitude')
-        epsg_val = latitude_var.getncattr('epsgcode')
-        default_crs_wkt = 'EPSG:'+str(epsg_val)
+        if latitude_var:
+            try:
+                epsg_val = latitude_var.getncattr('epsgcode')
+            except:
+                pass
+        if not epsg_val:
+            easting_var = self.nc_output_dataset.variables.get('easting')
+            if easting_var:
+                try:
+                    epsg_val = easting_var.getncattr('epsgcode')
+                except:
+                    pass
+        if epsg_val:
+            default_crs_wkt = 'EPSG:'+str(epsg_val)
+        else:
+            default_crs_wkt = self.settings['default_crs_wkt']  # default_crs_wkt 
         
         crs_var = self.nc_output_dataset.variables.get('crs')
 
         transverse_mercator_var = self.nc_output_dataset.variables.get('transverse_mercator')
         logger.debug('crs_var: {}'.format(crs_var))
         logger.debug('transverse_mercator_var: {}'.format(transverse_mercator_var))
-        
+
         # If dataset has UTM coordinates and not unprojected ones
         if (transverse_mercator_var is not None 
             and crs_var is None
