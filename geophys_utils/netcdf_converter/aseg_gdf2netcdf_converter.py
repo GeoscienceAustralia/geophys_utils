@@ -200,6 +200,15 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                             if variable_attribute_dict:
                                 field_definition['variable_attributes'] = variable_attribute_dict    
                         
+                            if 'epsgcode' in variable_attribute_dict:
+                                discard = None
+                                try:
+                                    discard = get_spatial_ref_from_wkt('EPSG:'+str(variable_attribute_dict['epsgcode']))
+                                except:
+                                    discard = None
+                                if not discard:
+                                    fatal_parsing_error(dfn_path, 'Line {}, Non-valid EPSGCODE detected "{}"'.format(line_count, variable_attribute_dict['epsgcode']))
+
                             self.field_definitions.append(field_definition)
                         
                     elif (key_value_pairs.get('RT') == 'PROJ'):
@@ -229,15 +238,17 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
 
             if lat_field_definition:
                 field_definition_lat = lat_field_definition[0]
-                if not self.epsgcode and 'variable_attributes' in field_definition_lat and 'epsgcode' in field_definition_lat['variable_attributes']:
+                if 'variable_attributes' in field_definition_lat and 'epsgcode' in field_definition_lat['variable_attributes']:
                     variable_attributes_lat = field_definition_lat['variable_attributes']
-                    self.epsgcode = variable_attributes_lat['epsgcode']
+                    if not self.epsgcode:
+                        self.epsgcode = variable_attributes_lat['epsgcode']
 
             if lng_field_definition:
                 field_definition_lng = lng_field_definition[0]
-                if not self.epsgcode and 'variable_attributes' in field_definition_lng and 'epsgcode' in field_definition_lng['variable_attributes']:
+                if 'variable_attributes' in field_definition_lng and 'epsgcode' in field_definition_lng['variable_attributes']:
                     variable_attributes_lng = field_definition_lng['variable_attributes']
-                    self.epsgcode = variable_attributes_lng['epsgcode']
+                    if not self.epsgcode:
+                        self.epsgcode = variable_attributes_lng['epsgcode']
 
             if variable_attributes_lat and 'epsgcode' in variable_attributes_lat and variable_attributes_lng and 'epsgcode' in variable_attributes_lng and variable_attributes_lat['epsgcode'] != variable_attributes_lng['epsgcode']:
                 fatal_parsing_error(dfn_path,'Variable attribute EPSGCODE for LATITUDE and LONGITUDE mismatch.  The same EPSGCODE should be passed for both LATITUDE and LONGITUDE')
