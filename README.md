@@ -9,17 +9,17 @@ Feedback, suggestions or contributions will be gratefully accepted.
 The content of this repository is licensed for use under the [Apache 2.0 License](http://www.apache.org/licenses/LICENSE-2.0). See the [license deed](https://github.com/GeoscienceAustralia/geophys_utils/blob/master/LICENSE) for full details.
 
 ## Contacts
-**Geoscience Australia**  
-*Publisher*  
-<http://www.ga.gov.au>  
-<clientservices@ga.gov.au>  
+**Geoscience Australia**
+*Publisher*
+<http://www.ga.gov.au>
+<clientservices@ga.gov.au>
 
-**Alex Ip**  
-*Principal Author*  
-<alex.ip@ga.gov.au>  
+**Alex Ip**
+*Principal Author*
+<alex@trentham.net.au>
 <https://orcid.org/0000-0001-8937-8904>
 
-**Andrew Turner**  
-*Contributing Author*  
-<andrew.turner@ga.gov.au>  
+**Andrew Turner**
+*Contributing Author*
+<andrew.turner@ga.gov.au>
 <https://orcid.org/0000-0001-5085-8783>

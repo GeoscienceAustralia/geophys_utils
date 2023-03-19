@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 """
 Main unit for test module
 Unit tests for ncskosdump and ld_functions against a modified NetCDF file

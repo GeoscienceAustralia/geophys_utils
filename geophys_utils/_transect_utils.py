@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,14 +14,16 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 '''
 Created on 23Nov.,2016
 
 @author: u76345
 '''
-import numpy as np
 import math
+
+import numpy as np
+
 from ._crs_utils import get_utm_wkt, transform_coords
 
 
@@ -32,7 +34,7 @@ def line_length(line):
     
     @return length: Distance between start & end points in native units
     '''
-    return math.sqrt(math.pow(line[1][0] - line[0][0], 2.0) + 
+    return math.sqrt(math.pow(line[1][0] - line[0][0], 2.0) +
                      math.pow(line[1][1] - line[0][1], 2.0))
 
 
@@ -50,7 +52,7 @@ def point_along_line(line, distance):
     if proportion < 0 or proportion > 1:
         return None
 
-    return tuple([line[0][dim_index] + proportion * 
+    return tuple([line[0][dim_index] + proportion *
                   (line[1][dim_index] - line[0][dim_index]) for dim_index in range(2)])
 
 
@@ -62,7 +64,7 @@ def utm_coords(coordinate_array, wkt):
     @return wkt: WKT for UTM CRS
     @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
     '''
-    native_centre_coords = (np.nanmean(coordinate_array[:,0]), np.nanmean(coordinate_array[:,1]))
+    native_centre_coords = (np.nanmean(coordinate_array[:, 0]), np.nanmean(coordinate_array[:, 1]))
     utm_wkt = get_utm_wkt(native_centre_coords, wkt)
     return utm_wkt, np.array(transform_coords(coordinate_array, wkt, utm_wkt))
 
@@ -79,7 +81,7 @@ def coords2distance(coordinate_array):
     cumulative_distance = 0.0
     distance_array[0] = cumulative_distance
     last_point = coordinate_array[0]
-    
+
     for coord_index in range(1, coord_count):
         point = coordinate_array[coord_index]
         distance = math.sqrt(math.pow(point[0] - last_point[0], 2.0) + math.pow(point[1] - last_point[1], 2.0))
@@ -87,10 +89,10 @@ def coords2distance(coordinate_array):
         cumulative_distance += distance
         distance_array[coord_index] = cumulative_distance
         last_point = point
-        
+
     return distance_array
-    
-    
+
+
 def sample_transect(transect_vertices, wkt, sample_metres):
     '''
     Function to return a list of sample points sample_metres apart along lines between transect vertices
@@ -108,7 +110,7 @@ def sample_transect(transect_vertices, wkt, sample_metres):
     residual = 0
     for vertex_index in range(len(utm_transect_vertices) - 1):
         utm_line = (utm_transect_vertices[
-                    vertex_index], utm_transect_vertices[vertex_index + 1])
+                        vertex_index], utm_transect_vertices[vertex_index + 1])
         # print 'utm_line = %s' % (utm_line,)
         utm_line_length = line_length(utm_line)
         # print 'utm_line_length = %s' % utm_line_length
@@ -139,7 +141,7 @@ def sample_transect(transect_vertices, wkt, sample_metres):
 
         try:
             sample_point_array = np.stack([np.linspace(start_point[dim_index], end_point[
-                                          dim_index], sample_count + 1) for dim_index in range(2)]).transpose()
+                dim_index], sample_count + 1) for dim_index in range(2)]).transpose()
             # print 'sample_point_array.shape = %s' %
             # (sample_point_array.shape,)
         except Exception as e:

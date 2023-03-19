@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 '''
 Functions to obtain edge points and convex hull vertices from a gridded NetCDF dataset
 
@@ -22,19 +22,20 @@ Created on 12Sep.,2016
 
 @author: Alex Ip
 '''
-import numpy as np
-import math
-from scipy import ndimage
-import shapely.geometry as geometry
-from shapely.ops import cascaded_union, polygonize
-from scipy.spatial import Delaunay
-from ._array_pieces import array_pieces
-from skimage import filters
-
 import logging
+import math
+
+import numpy as np
+import shapely.geometry as geometry
+from scipy import ndimage
+from scipy.spatial import Delaunay
+from shapely.ops import cascaded_union, polygonize
+
+from ._array_pieces import array_pieces
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG) # Initial logging level for this module
+logger.setLevel(logging.DEBUG)  # Initial logging level for this module
+
 
 def get_grid_edge_points(grid_array, dimension_ordinates, nodata_value, max_bytes=None):
     '''
@@ -52,77 +53,79 @@ def get_grid_edge_points(grid_array, dimension_ordinates, nodata_value, max_byte
     edge_point_list = []  # Complete list of edge points (unknown length)
     for piece_array, array_offset in array_pieces(grid_array, max_bytes=max_bytes):
         dimension_subset = [dimension_ordinates[dim_index][array_offset[dim_index]:array_offset[
-            dim_index] + piece_array.shape[dim_index]] for dim_index in range(2)]
+                                                                                       dim_index] + piece_array.shape[
+                                                                                       dim_index]] for dim_index in
+                            range(2)]
 
         # Convert masked array to plain array
         if isinstance(piece_array, np.ma.core.MaskedArray):
             piece_array = piece_array.data
 
         unpadded_piece_shape = piece_array.shape
-        #logger.debug('array_offset = {}, unpadded_piece_shape = {}, piece_array.size = {}'.format(
+        # logger.debug('array_offset = {}, unpadded_piece_shape = {}, piece_array.size = {}'.format(
         #    array_offset, unpadded_piece_shape, piece_array.size))
 
         # Convert to padded boolean True=data/False=no-data array
         piece_array = np.pad((piece_array != nodata_value), pad_width=1, mode='constant', constant_values=False)
-        
+
         piece_slices = tuple([slice(*[
-            0 if array_offset[dim_index] == 0 else 1, # Trim padding away if not on lower limit
-            piece_array.shape[dim_index]-1 # Trim off higher end padding
-            ])
-            for dim_index in range(2)
-            ])
-        
-        #logger.debug(piece_slices)
-        #logger.debug('piece_array = {}'.format(piece_array))
-        piece_array = piece_array[piece_slices] # Trim away padding on internal edges if required
-        #logger.debug('piece_array = {}'.format(piece_array))
-        
+            0 if array_offset[dim_index] == 0 else 1,  # Trim padding away if not on lower limit
+            piece_array.shape[dim_index] - 1  # Trim off higher end padding
+        ])
+                              for dim_index in range(2)
+                              ])
+
+        # logger.debug(piece_slices)
+        # logger.debug('piece_array = {}'.format(piece_array))
+        piece_array = piece_array[piece_slices]  # Trim away padding on internal edges if required
+        # logger.debug('piece_array = {}'.format(piece_array))
+
         # Set upper edges to false to get complete edge detection
-        piece_array[-1,:] = False
-        piece_array[:,-1] = False
-        #logger.debug('piece_array = {}'.format(piece_array))
-        
+        piece_array[-1, :] = False
+        piece_array[:, -1] = False
+        # logger.debug('piece_array = {}'.format(piece_array))
+
         edge_mask = (ndimage.filters.maximum_filter(piece_array, size=2, mode='constant', cval=False) !=
                      ndimage.filters.minimum_filter(piece_array, size=2, mode='constant', cval=False))
-        
-        #edge_mask = filters.sobel(grid_array).astype(np.bool)
-        
-        #logger.debug('edge_mask = {}'.format(edge_mask))
+
+        # edge_mask = filters.sobel(grid_array).astype(np.bool)
+
+        # logger.debug('edge_mask = {}'.format(edge_mask))
 
         # Detect indices of data/no-data edge points in an n x 2 array
         edge_point_indices = np.transpose(np.array(np.where(edge_mask)))
-        
-        #logger.debug('{}\n{}'.format(edge_point_indices.shape, edge_point_indices))
-        
+
+        # logger.debug('{}\n{}'.format(edge_point_indices.shape, edge_point_indices))
+
         # Remove index offset introduced by padding lower edges
         for dim_index in range(2):
             if array_offset[dim_index] == 0:
-                #logger.debug('removing offset for dimension {}'.format(dim_index))
-                edge_point_indices[:,dim_index] = edge_point_indices[:,dim_index] - 1
-                
-        #logger.debug('edge_point_indices.shape = {}\nedge_point_indices = {}'.format(edge_point_indices.shape, edge_point_indices))    
-                
-        # Discard any false edge points detected on inner piece edges
-        edge_point_indices = edge_point_indices[np.where(np.all((edge_point_indices < unpadded_piece_shape), axis = 1))]
-                
-        #logger.debug('edge_point_indices.shape = {}\nedge_point_indices = {}'.format(edge_point_indices.shape, edge_point_indices))
+                # logger.debug('removing offset for dimension {}'.format(dim_index))
+                edge_point_indices[:, dim_index] = edge_point_indices[:, dim_index] - 1
 
-        if edge_point_indices.shape[0]: # If any edge points found
+        # logger.debug('edge_point_indices.shape = {}\nedge_point_indices = {}'.format(edge_point_indices.shape, edge_point_indices))
+
+        # Discard any false edge points detected on inner piece edges
+        edge_point_indices = edge_point_indices[np.where(np.all((edge_point_indices < unpadded_piece_shape), axis=1))]
+
+        # logger.debug('edge_point_indices.shape = {}\nedge_point_indices = {}'.format(edge_point_indices.shape, edge_point_indices))
+
+        if edge_point_indices.shape[0]:  # If any edge points found
             piece_edge_points = np.zeros(edge_point_indices.shape, dimension_ordinates[0].dtype)
-            #logger.debug('piece_edge_points = {}'.format(piece_edge_points))
+            # logger.debug('piece_edge_points = {}'.format(piece_edge_points))
             # TODO: Do something more general here to account for YX or XY dimension order - this is for YX only
             pixel_offset = [0.0, 0.0]
             for dim_index in range(2):
-                piece_edge_points[:,1-dim_index] = dimension_subset[dim_index][edge_point_indices[:,dim_index]]
-                pixel_offset[1-dim_index] = (dimension_subset[dim_index][1] - dimension_subset[dim_index][0]) / 2.0
-                
-            #logger.debug('pixel_offset = {}'.format(pixel_offset))    
-            #logger.debug('piece_edge_points = {}'.format(piece_edge_points))    
-            piece_edge_points = piece_edge_points - np.array(pixel_offset) # Apply half pixel offset
-            #logger.debug('offset piece_edge_points = {}'.format(piece_edge_points))
-            edge_point_list.append(piece_edge_points)            
-            #logger.debug('{} edge points found for piece'.format(piece_edge_points.shape[0]))
-        #else:
+                piece_edge_points[:, 1 - dim_index] = dimension_subset[dim_index][edge_point_indices[:, dim_index]]
+                pixel_offset[1 - dim_index] = (dimension_subset[dim_index][1] - dimension_subset[dim_index][0]) / 2.0
+
+            # logger.debug('pixel_offset = {}'.format(pixel_offset))
+            # logger.debug('piece_edge_points = {}'.format(piece_edge_points))
+            piece_edge_points = piece_edge_points - np.array(pixel_offset)  # Apply half pixel offset
+            # logger.debug('offset piece_edge_points = {}'.format(piece_edge_points))
+            edge_point_list.append(piece_edge_points)
+            # logger.debug('{} edge points found for piece'.format(piece_edge_points.shape[0]))
+        # else:
         #    logger.debug('No edge points found for piece')
 
     return np.concatenate(edge_point_list, axis=0)
@@ -142,12 +145,12 @@ def get_netcdf_edge_points(netcdf_dataset, max_bytes=None):
     except:
         raise Exception(
             'Unable to determine data variable (must have "grid_mapping" attribute')
-# print 'Variable %s has shape %s' % (data_variable.name,
-# data_variable.shape)
+    # print 'Variable %s has shape %s' % (data_variable.name,
+    # data_variable.shape)
 
     assert len(data_variable.dimensions) == 2, '%s is not 2D' % data_variable.name
     dimension_ordinates = [netcdf_dataset.variables[
-        data_variable.dimensions[dim_index]] for dim_index in range(2)]
+                               data_variable.dimensions[dim_index]] for dim_index in range(2)]
     nodata_value = data_variable._FillValue
 
     return get_grid_edge_points(data_variable, dimension_ordinates, nodata_value, max_bytes)
@@ -170,7 +173,7 @@ def points2convex_hull(point_list, dilation=0, tolerance=0):
 
     if tolerance != 0:
         convex_hull = convex_hull.simplify(tolerance)
-    
+
     # Convert polygon to list
     try:
         return [coordinates for coordinates in convex_hull.exterior.coords]
@@ -200,7 +203,7 @@ def netcdf2convex_hull(netcdf_dataset, max_bytes=None):
         netcdf_dataset, max_bytes), avg_pixel_size, avg_pixel_size)
 
 
-#=========================================================================
+# =========================================================================
 # def netcdf2concave_hull(netcdf_dataset, max_bytes=None):
 #     '''
 #     Function to return a list of vertex coordinates in the convex hull around data-containing areas of the NetCDF dataset
@@ -221,7 +224,7 @@ def netcdf2convex_hull(netcdf_dataset, max_bytes=None):
 #     alpha = 1
 #
 #     return points2alpha_shape(edge_points, alpha, avg_pixel_size, avg_pixel_size)
-#=========================================================================
+# =========================================================================
 
 
 def points2alpha_shape(points, alpha, dilation=0, tolerance=0):
@@ -262,9 +265,9 @@ def points2alpha_shape(points, alpha, dilation=0, tolerance=0):
         pb = coords[ib]
         pc = coords[ic]
         # Lengths of sides of triangle
-        a = math.sqrt((pa[0] - pb[0])**2 + (pa[1] - pb[1])**2)
-        b = math.sqrt((pb[0] - pc[0])**2 + (pb[1] - pc[1])**2)
-        c = math.sqrt((pc[0] - pa[0])**2 + (pc[1] - pa[1])**2)
+        a = math.sqrt((pa[0] - pb[0]) ** 2 + (pa[1] - pb[1]) ** 2)
+        b = math.sqrt((pb[0] - pc[0]) ** 2 + (pb[1] - pc[1]) ** 2)
+        c = math.sqrt((pc[0] - pa[0]) ** 2 + (pc[1] - pa[1]) ** 2)
         # Semiperimeter of triangle
         s = (a + b + c) / 2.0
         try:

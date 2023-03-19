@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,16 +14,18 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 '''
 Created on 15Aug.,2016
 
 @author: Alex
 '''
-import sys
 import os
+import sys
+
 import netCDF4
 import numpy as np
+
 from geophys_utils._array_pieces import array_pieces
 
 
@@ -44,7 +46,7 @@ class DataStats(object):
         '''
         assert netcdf_dataset or netcdf_path, 'Either netcdf_dataset or netcdf_path must be defined'
         assert not (
-            netcdf_dataset and netcdf_path), 'netcdf_dataset and netcdf_path cannot both be defined'
+                netcdf_dataset and netcdf_path), 'netcdf_dataset and netcdf_path cannot both be defined'
 
         netcdf_path = os.path.abspath(netcdf_path) if netcdf_path else None
         netcdf_dataset = netcdf_dataset or netCDF4.Dataset(netcdf_path, 'r')
@@ -98,20 +100,20 @@ class DataStats(object):
 
                 weighted_mean += np.nanmean(piece_array) * piece_size
                 length_read += piece_size
-            #==================================================================
+            # ==================================================================
             # else:
             #     print 'Empty array'
-            #==================================================================
+            # ==================================================================
 
         self._data_stats['mean'] = weighted_mean / length_read if length_read else None
 
-        #===================================================================
+        # ===================================================================
         # #TODO: Implement something clever for these
         # self._data_stats['median'] = np.NaN
         # self._data_stats['std_dev'] = np.NaN
         # self._data_stats['percentile_1'] = np.NaN
         # self._data_stats['percentile_99'] = np.NaN
-        #===================================================================
+        # ===================================================================
 
     # TODO: Do something nicer than this to get at the values, A property
     # might be good.
@@ -124,6 +126,7 @@ def main():
     for netcdf_path in sys.argv[1:]:
         datastats = DataStats(netcdf_path)
         print(','.join([str(datastats.value(key)) for key in DataStats.key_list]))
+
 
 if __name__ == '__main__':
     main()
