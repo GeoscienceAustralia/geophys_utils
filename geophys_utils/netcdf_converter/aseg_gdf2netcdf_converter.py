@@ -174,30 +174,47 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                         if fill_value is not None:
                             field_definition['fill_value'] = fill_value
                              
-                        variable_attribute_dict = {}
-
-                        for key, attribute_val in key_value_pairs.items():
-                            if (key.upper() in self.settings['variable_attributes']):
-                                variable_attribute_dict[self.settings['variable_attributes'][key.upper()]] = attribute_val
-                            elif (key.upper()[:4] not in ['DATA','UNIT','NAME','NULL','DEFN']):
-                                variable_attribute_dict[key] = attribute_val
-
-                        # No longer Store aseg_gdf_format in variable attributes (no longer do this)
+                        
+                        # Set variable attributes in field definition
+                        variable_attribute_dict = {attribute_name: key_value_pairs.get(key.upper())
+                            for key, attribute_name in self.settings['variable_attributes'].items()
+                            if key_value_pairs.get(key.upper()) is not None
+                                                   }
+                        
+                        # Store aseg_gdf_format in variable attributes (no longer do this)
                         # variable_attribute_dict['aseg_gdf_format'] = fmt 
 
-                        if 'RT' in variable_attribute_dict and not variable_attribute_dict.get('RT'):
-                            del variable_attribute_dict['RT']
+                        if 'RT' in variable_attribute_dict:
+                            if variable_attribute_dict.get('RT') == '':
+                                del variable_attribute_dict['RT']
 
                         if variable_attribute_dict:
                             field_definition['variable_attributes'] = variable_attribute_dict    
                         
                         self.field_definitions.append(field_definition)
                         
-                    elif (key_value_pairs.get('RT') == 'PROJ'):
-                        fatal_parsing_error(dfn_path, 'Line {}, PROJ tags no longer supported in dfn files - please remove'.format(line_count))
-                    elif (key_value_pairs.get('RT') == 'COMM'):
-                        fatal_parsing_error(dfn_path, 'Line {}, COMM tags no longer supported in dfn files - please remove'.format(line_count))
-
+                                    
+                    # Set CRS from projection name
+                    elif not self.spatial_ref:
+                        if (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'COORDSYS'): # As per ASEG standard                       
+                            projection_name = key_value_pairs.get('NAME')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file COORDSYS COMMENT attribute {}'.format(projection_name))
+                                break # Nothing more to do
+                        elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'PROJNAME'): # Non-standard                        
+                            projection_name = key_value_pairs.get('COMMENT')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file PROJNAME NAME attribute {}'.format(projection_name))
+                                break # Nothing more to do
+                        elif (key_value_pairs.get('RT') == 'PROJ') and (positional_value_list[0] == 'DATUM'): # Unprojected                         
+                            projection_name = key_value_pairs.get('NAME')
+                            if projection_name:
+                                self.spatial_ref = get_spatial_ref_from_wkt(projection_name)
+                                logger.debug('CRS set from .dfn file DATUM NAME attribute {}'.format(projection_name))
+                                
+                                break # Nothing more to do
 
             # Start of get_field_definitions function
             parse_dfn_file(dfn_path)
@@ -212,27 +229,22 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
             logger.debug('self.dimensions: {}'.format(pformat(self.dimensions)))
             logger.debug('self.field_definitions: {}'.format(pformat(self.field_definitions)))
                         
-            field_definition_lat = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
-            variable_attributes_lat = field_definition_lat['variable_attributes']
-            field_definition_lng = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'longitude'][0]
-            variable_attributes_lng = field_definition_lng['variable_attributes']
-
-            if 'epsgcode' not in variable_attributes_lat or not variable_attributes_lat['epsgcode']:
-                fatal_parsing_error(dfn_path, 'No variable attribute called EPSGCODE found against LATITUDE field definition.  EPSGCODE is required for both LATITUDE and LONGITUDE.')
-            if 'epsgcode' not in variable_attributes_lng or not variable_attributes_lng['epsgcode']:
-                fatal_parsing_error(dfn_path, 'No variable attribute called EPSGCODE found against LONGITUDE field definition.  EPSGCODE is required for both LATITUDE and LONGITUDE')
-            if variable_attributes_lat['epsgcode'] != variable_attributes_lng['epsgcode']:
-                fatal_parsing_error(dfn_path,'Variable attribute EPSGCODE for LATITUDE and LONGITUDE mismatch.  The same EPSGCODE should be passed for both LATITUDE and LONGITUDE')
-
-            self.epsgcode = variable_attributes_lat['epsgcode']
-
+            # Check for CRS definition in latitude field - need to do this after short_name has potentially been remapped
             if not self.spatial_ref:
-                self.spatial_ref = get_spatial_ref_from_wkt('EPSG:'+self.epsgcode)
-                logger.debug('CRS set from latitude variable epsgcode attribute {}'.format(self.epsgcode))
+                try:
+                    field_definition = [field_definition for field_definition in self.field_definitions if field_definition['short_name'] == 'latitude'][0]
+                    variable_attributes = field_definition['variable_attributes']
+                    if 'datum_name' in variable_attributes:
+                        crs_string = variable_attributes['datum_name']
+                    if 'epsgcode' in variable_attributes:
+                        crs_string = 'EPSG:' + variable_attributes['epsgcode']
+                    self.spatial_ref = get_spatial_ref_from_wkt(crs_string)
+                    logger.debug('CRS set from latitude variable datum_name attribute {}'.format(crs_string))
+                except:
+                    logger.debug('Unable to set CRS from latitude datum_name or epsgcode attribute')               
 
             assert self.spatial_ref, 'Coordinate Reference System undefined'
             logger.debug('self.spatial_ref: {}'.format(self.spatial_ref.ExportToPrettyWkt()))
-
         
         def read_data_file(): 
             '''
@@ -684,8 +696,6 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         else:
             self.spatial_ref = None
 
-        self.epsgcode = None
-
         self.dimensions = OrderedDict()
 
         self.settings_path = settings_path or os.path.join(os.path.dirname(__file__), 
@@ -1129,17 +1139,9 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
         This will create crs, longitude and latitude variables for unprojected CRS, 
         and recompute global attributes
         '''
-
-        #default_crs_wkt = self.settings['default_crs_wkt']  # default_crs_wkt 
-        # TODO.  Removed/deprecated from settings file dependency
-        # TODO.  However, now only looks at latitude/epsgcode - so no reprojection will take place
-        # TODO:  Probably needs a revisit to this code section
-        latitude_var = self.nc_output_dataset.variables.get('latitude')
-        epsg_val = latitude_var.getncattr('epsgcode')
-        default_crs_wkt = 'EPSG:'+str(epsg_val)
+        default_crs_wkt = self.settings['default_crs_wkt']
         
         crs_var = self.nc_output_dataset.variables.get('crs')
-
         transverse_mercator_var = self.nc_output_dataset.variables.get('transverse_mercator')
         logger.debug('crs_var: {}'.format(crs_var))
         logger.debug('transverse_mercator_var: {}'.format(transverse_mercator_var))

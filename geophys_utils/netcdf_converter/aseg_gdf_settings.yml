@@ -66,6 +66,8 @@ field_definitions:
 # Known custom .dfn attributes to write into variable attributes with mappings to new names
 # N.B: Do NOT include standard attributes like "NAME", "UNIT" or "UNITS"
 variable_attributes:
+  DATUM: datum_name
+  PROJECTION: projection_name
   EPSGCODE: epsgcode
   DESC: desc
 
@@ -79,11 +81,11 @@ dimension_fields: [layer, low_moment_gate, high_moment_gate]
 
 # List of possible lookup field names to indicate which fields need to be turned into lookup arrays
 # Uses overridden short_name values (if set)
-lookup_fields: [line]
+lookup_fields: [line, flight]
 
 # List of possible ASEG-GDF fields to be ignored (i.e. not output to netCDF) 
 # Uses overridden short_name values (if set)
-ignored_fields: [rt, geosoft_fltline] # e.g. Proj_CGG, Proj_Client
+ignored_fields: [] # e.g. Proj_CGG, Proj_Client
 
 # NetCDF variable name to ASEG-GDF field name mappings for ASEG-GDF output
 aseg_field_mapping:
@@ -91,7 +93,6 @@ aseg_field_mapping:
   latitude: LATITUDE
   easting: EASTING
   northing: NORTHING
-
-# WKT for unprojected CRS if only UTM provided 
-# (currently deprecated - may need to be reinstated for output CRS projection code)
-# default_crs_wkt: GDA94
+  
+# WKT for unprojected CRS if only UTM provided
+default_crs_wkt: GDA94
