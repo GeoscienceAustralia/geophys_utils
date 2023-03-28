@@ -81,7 +81,7 @@ EXCLUDE_NAME_REGEXES = (['.*_index$', 'ga_.*metadata', 'latitude.+', 'longitude.
                         )
 
 # List of regular expressions for variable attributes to include in .dfn file
-INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['EPSGCODE']
+INCLUDE_VARIABLE_ATTRIBUTE_REGEXES = ['Intrepid.+']
 
 # From Ross Brodie's email to Alex Ip, sent: Monday, 24 February 2020 4:27 PM
 ASEG_GDF_FORMAT = {
