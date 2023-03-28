@@ -24,13 +24,9 @@ import re
 import numpy as np
 from osgeo.osr import SpatialReference, CoordinateTransformation
 import logging
-import os
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-#logger.setLevel(logging.DEBUG)
-#logging.basicConfig() 
-
 
 from osgeo import __version__ as osgeo_version
 
@@ -65,26 +61,7 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
         return spatial_ref
     
     # Try to resolve WKT
-
-    # ImportFromWkt writes errors to stderr instead of throwing an exception
-    # Temp disable stderr
-    null_fds = [os.open(os.devnull, os.O_RDWR) for x in range(2)]
-    # save the current file descriptors to a tuple
-    save = os.dup(1), os.dup(2)
-    # put /dev/null fds on 1 and 2
-    os.dup2(null_fds[0], 1)
-    os.dup2(null_fds[1], 2)
-
-    # Rogue function call in relation to stderr instead of throwing an exception
     result = spatial_ref.ImportFromWkt(wkt_or_crs_name)
-
-    # restore output file descriptors
-    os.dup2(save[0], 1)
-    os.dup2(save[1], 2)
-    # close the temporary fds
-    os.close(null_fds[0])
-    os.close(null_fds[1])
-
     if not result:
         logger.debug('CRS determined using SpatialReference.ImportFromWkt({})'.format(wkt_or_crs_name))
         return spatial_ref
