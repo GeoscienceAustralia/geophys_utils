@@ -18,7 +18,7 @@
 '''
 Created on 8Dec.,2016
 
-@author: u76345
+@author: Alex Ip
 '''
 import os
 import re

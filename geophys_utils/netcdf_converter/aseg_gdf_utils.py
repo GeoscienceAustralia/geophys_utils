@@ -4,7 +4,7 @@ Refer to https://www.aseg.org.au/sites/default/files/pdf/ASEG-GDF2-REV4.pdf for 
 
 Created on 19 Jun. 2018
 
-@author: u76345
+@author: Alex Ip
 '''
 
 import logging

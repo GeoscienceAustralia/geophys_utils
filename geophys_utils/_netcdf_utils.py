@@ -20,7 +20,7 @@ NetCDFUtils class implementing useful functionality against netCDF files
 
 Created on 2Mar.,2017
 
-@author: u76345
+@author: Alex Ip
 '''
 import abc
 import argparse

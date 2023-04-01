@@ -6,7 +6,7 @@ THIS IS NO LONGER USED. SEE NC2ASEG in geophys_utils folder
 ########
 
 
-@author: u76345
+@author: Alex Ip
 '''
 
 import argparse

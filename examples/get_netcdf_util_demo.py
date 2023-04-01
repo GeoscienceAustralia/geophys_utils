@@ -1,7 +1,7 @@
 '''
 Created on 13 Dec 2019
 
-@author: u76345
+@author: Alex Ip
 '''
 import logging
 import re

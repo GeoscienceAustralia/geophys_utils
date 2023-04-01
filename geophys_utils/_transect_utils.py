@@ -18,7 +18,7 @@
 '''
 Created on 23Nov.,2016
 
-@author: u76345
+@author: Alex Ip
 '''
 import math
 

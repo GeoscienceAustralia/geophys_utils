@@ -18,7 +18,7 @@
 '''
 Created on 23Feb.,2017
 
-@author: u76345
+@author: Alex Ip
 '''
 import copy
 import logging
