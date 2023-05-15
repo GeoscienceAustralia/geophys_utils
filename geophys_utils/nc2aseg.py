@@ -626,11 +626,22 @@ class NC2ASEGGDF2(object):
                 if field_definition['columns'] > 1:  # Need to pre-pend number of columns to format string
                     aseg_gdf_format = '{}{}'.format(field_definition['columns'], aseg_gdf_format)
 
-                yield self.create_dfn_line(rt='',
-                                           name=field_name,
-                                           aseg_gdf_format=aseg_gdf_format,
-                                           definition=definition,
-                                           )
+                #Need to append the EPSG code to latitude and longitude variables 
+                epsg_code = self.spatial_ref.GetAuthorityCode('GEOGCS')
+                
+                if field_name in('latitude', 'longitude'):
+                    definition = definition + ', epsgcode={}'.format(epsg_code)
+                    yield self.create_dfn_line(rt='',
+                                               name=field_name,
+                                               aseg_gdf_format=aseg_gdf_format,
+                                               definition=definition,
+                                               )
+                else: 
+                    yield self.create_dfn_line(rt='',
+                                               name=field_name,
+                                               aseg_gdf_format=aseg_gdf_format,
+                                               definition=definition,
+                                               )
 
             # Write 'END DEFN'
             yield self.create_dfn_line(rt='',
