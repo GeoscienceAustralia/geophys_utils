@@ -11,15 +11,18 @@ The content of this repository is licensed for use under the [Apache 2.0 License
 ## Contacts
 **Geoscience Australia**
 *Publisher*
-<http://www.ga.gov.au>
+<https://www.ga.gov.au>
 <clientservices@ga.gov.au>
 
 **Alex Ip**
 *Principal Author*
-<alex@trentham.net.au>
+<mailto://alex@trentham.net.au>
 <https://orcid.org/0000-0001-8937-8904>
 
 **Andrew Turner**
 *Contributing Author*
-<andrew.turner@ga.gov.au>
 <https://orcid.org/0000-0001-5085-8783>
+
+**James Wallace**
+*Maintainer*
+<james.wallace@ga.gov.au>
