@@ -21,6 +21,8 @@ dependencies = [
     "netCDF4==1.6.2",
     "gdal==3.6.4",
     "affine==2.3.0",
+    "cartopy==0.21.1",
+    "matplotlib==3.6.2",
     "numexpr==2.8.4",
     "owslib==0.29.2",
     "pyyaml==6.0",
@@ -30,8 +32,6 @@ dependencies = [
     "shapely==1.8.4",
     "unidecode==1.2.0",
     "zipstream-new==1.1.8",
-    # "cartopy==0.21.1",
-    # "matplotlib==3.6.2",
 ]
 [project.urls]
 "Homepage" = "https://github.com/geoscienceaustralia/geophys_utils"

@@ -1,3 +1,4 @@
+# alexip/geophys_utils:0.1.0 contains geophys_utils v0.1.0 and all dependencies
 FROM python:3.9-alpine
 
 ENV PYTHONDONTWRITEBYTECODE 1
@@ -31,9 +32,6 @@ RUN mkdir /geophys_utils
 WORKDIR /geophys_utils
 COPY . /geophys_utils
 
-# Install geophys_utils from disk
+# Install geophys_utils package from disk
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -e .
-
-#RUN adduser -D user
-#USER user
