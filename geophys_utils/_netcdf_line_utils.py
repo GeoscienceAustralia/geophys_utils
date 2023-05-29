@@ -29,8 +29,7 @@ import netCDF4
 import numpy as np
 import shapely.wkt
 from scipy.spatial.distance import pdist
-from shapely.geometry import Polygon, LineString, MultiLineString
-from shapely.geometry import Polygon, MultiPolygon, asPolygon
+from shapely.geometry import LineString, MultiLineString, Polygon, MultiPolygon
 
 from geophys_utils._crs_utils import transform_coords
 from geophys_utils._netcdf_point_utils import NetCDFPointUtils
@@ -571,7 +570,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             attribute_dict = {}
             if compute_shape:
                 print("compute shape in lines_utils")
-                wkt_polygon = shapely.wkt.dumps(asPolygon(self.get_concave_hull()),
+                wkt_polygon = shapely.wkt.dumps(Polygon(self.get_concave_hull()),
                                                 rounding_precision=shape_ordinate_decimal_place)
 
                 # get wkt polygon as polygon object to set as either clockwise or anticlockwise.

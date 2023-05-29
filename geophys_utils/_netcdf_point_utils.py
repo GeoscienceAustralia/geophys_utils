@@ -37,7 +37,7 @@ from scipy.spatial.ckdtree import cKDTree
 from shapely.geometry import Polygon, MultiPoint
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
-from shapely.geometry.polygon import asPolygon
+from shapely.geometry.polygon import Polygon
 from shapely.ops import transform
 
 from geophys_utils._concave_hull import concaveHull
@@ -270,7 +270,7 @@ class NetCDFPointUtils(NetCDFUtils):
             logger.debug('native_crs_bounds = {}'.format(native_crs_bounds))
 
             # Shortcut the whole process if the extents are within the bounds geometry       
-            if asPolygon(self.native_bbox).within(native_crs_bounds):
+            if Polygon(self.native_bbox).within(native_crs_bounds):
                 logger.debug('Dataset is completely contained within bounds')
                 return np.ones(shape=(len(coordinates),), dtype=np.bool)
 
@@ -1231,7 +1231,7 @@ class NetCDFPointUtils(NetCDFUtils):
                 except Exception as e:
                     logger.warning('Unable to compute concave hull shape: {}'.format(e))
                     try:
-                        self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(asPolygon([
+                        self.netcdf_dataset.geospatial_bounds = shapely.wkt.dumps(Polygon([
                             [attribute_dict['geospatial_lon_min'], attribute_dict['geospatial_lat_min']],
                             [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_min']],
                             [attribute_dict['geospatial_lon_max'], attribute_dict['geospatial_lat_max']],
