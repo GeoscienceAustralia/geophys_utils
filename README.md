@@ -9,12 +9,16 @@ Feedback, suggestions or contributions will be gratefully accepted.
 
 # Docker deployment
 There is a Dockerfile in the project root directory which will allow you to create a fresh Docker image from the 
-current source code using the command ```docker build --progress=plain -t <image_name>:<image_tag> .``` 
+current source code using the command ```docker build --progress=plain -t <image_name>:<image_tag> docker/Dockerfile``` 
 in the project root directory. 
 Note that the build can take some time (>1hr) due to the extensive dependencies for large packages such as GDAL, NetCDF, 
 and SciPy.
 
-Alternatively, you can pull a pre-made image using the command ```docker pull alexip/geophys_utils:0.1.0```
+Alternatively, you can pull a pre-made image using the following commands:
+```
+docker pull alexip/geophys_utils:latest
+docker run -it --name gu-test alexip/geophys_utils:latest /bin/sh
+```
 
 ## License
 The content of this repository is licensed for use under the 

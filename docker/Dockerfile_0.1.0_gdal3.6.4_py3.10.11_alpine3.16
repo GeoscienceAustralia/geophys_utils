@@ -1,7 +1,7 @@
 # alexip/geophys_utils:0.1.0 contains geophys_utils v0.1.0 and all dependencies
 # GDAL Docker image sourced from https://github.com/OSGeo/gdal/
 
-FROM ghcr.io/osgeo/gdal:alpine-normal-3.5.3
+FROM ghcr.io/osgeo/gdal:alpine-normal-3.6.4
 
 ENV PYTHONUNBUFFERED=1
 
@@ -35,8 +35,6 @@ WORKDIR /geophys_utils
 COPY .. /geophys_utils
 
 # Install geophys_utils package from disk
-# need to force scikit-image==0.19.3 due to broken scipy==1.9.1 dependency
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade setuptools wheel && \
-    pip install scikit-image==0.19.3  && \
     pip install --no-cache-dir -e .
