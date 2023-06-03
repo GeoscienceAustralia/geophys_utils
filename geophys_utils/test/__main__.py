@@ -23,10 +23,18 @@ Created on 15/11/2016
 
 @author: Alex Ip
 """
-from geophys_utils.test import test_array_pieces, test_crs_utils, test_data_stats, test_netcdf_grid_utils
+from geophys_utils.test import \
+    test_array_pieces, \
+    test_crs_utils, \
+    test_data_stats, \
+    test_netcdf_grid_utils, \
+    test_netcdf_line_utils, \
+    test_netcdf_point_utils
 
 # Run all tests
 test_array_pieces.main()
 test_crs_utils.main()
 test_data_stats.main()
 test_netcdf_grid_utils.main()
+test_netcdf_line_utils.main()
+test_netcdf_point_utils.main()

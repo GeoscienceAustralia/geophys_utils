@@ -32,7 +32,7 @@ RUN apk add --update --no-cache \
 # Take a complete copy of the project directory into /geophys_utils
 RUN mkdir /geophys_utils
 WORKDIR /geophys_utils
-COPY .. /geophys_utils
+COPY . /geophys_utils
 
 # Install geophys_utils package from disk
 # need to force scikit-image==0.19.3 due to broken scipy==1.9.1 dependency
