@@ -17,7 +17,8 @@ RUN mkdir /geophys_utils
 WORKDIR /geophys_utils
 COPY . /geophys_utils
 
-# Install geophys_utils package from disk
-RUN pip install --no-cache-dir --upgrade pip && \
+# Fix certificates issue, upgrade install utilities and install geophys_utils package from disk
+RUN mkdir -p /etc/pki/tls/certs/ && ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade setuptools wheel && \
     pip install --no-cache-dir -e .
