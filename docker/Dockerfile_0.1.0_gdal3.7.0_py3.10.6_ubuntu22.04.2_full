@@ -12,13 +12,24 @@ RUN apt update -y && \
         libgeos-dev \
         python3-pip
 
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --upgrade setuptools wheel && \
+    pip install -r requirements.txt
+
 # Take a complete copy of the project directory into /geophys_utils
 RUN mkdir /geophys_utils
 WORKDIR /geophys_utils
 COPY . /geophys_utils
 
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/geophys_utils:$PYTHONPATH"
+
 # Fix certificates issue, upgrade install utilities and install geophys_utils package from disk
 RUN mkdir -p /etc/pki/tls/certs/ && ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt && \
-    pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir --upgrade setuptools wheel && \
     pip install --no-cache-dir -e .
+    echo $(scripts=$(find ./bin -type f -not -path '*.bat'); for script in $scripts; do cp $script /opt/venv/bin/$(basename $script); chmod 755 /opt/venv/bin/$(basename $script); done)
