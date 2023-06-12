@@ -11,7 +11,7 @@ RUN apt update -y && \
     apt install -y \
         libgeos-dev \
         python3-pip \
-        apt install python3.10-venv
+        python3.10-venv
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
