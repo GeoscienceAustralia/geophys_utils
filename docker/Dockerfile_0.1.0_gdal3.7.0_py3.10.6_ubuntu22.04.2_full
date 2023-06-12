@@ -10,7 +10,8 @@ RUN apt update -y && \
     apt upgrade -y && \
     apt install -y \
         libgeos-dev \
-        python3-pip
+        python3-pip \
+        apt install python3.10-venv
 
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
@@ -30,5 +31,5 @@ ENV PYTHONPATH="/geophys_utils:$PYTHONPATH"
 
 # Fix certificates issue, upgrade install utilities and install geophys_utils package from disk
 RUN mkdir -p /etc/pki/tls/certs/ && ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt && \
-    pip install --no-cache-dir -e .
+    pip install --no-cache-dir -e . && \
     echo $(scripts=$(find ./bin -type f -not -path '*.bat'); for script in $scripts; do cp $script /opt/venv/bin/$(basename $script); chmod 755 /opt/venv/bin/$(basename $script); done)
