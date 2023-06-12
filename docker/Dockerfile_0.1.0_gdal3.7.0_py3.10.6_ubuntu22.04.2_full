@@ -26,8 +26,7 @@ RUN mkdir /geophys_utils
 WORKDIR /geophys_utils
 COPY . /geophys_utils
 
-ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH="/geophys_utils:$PYTHONPATH"
+ENV PYTHONPATH="/geophys_utils:$PYTHONPATH"
 
 # Fix certificates issue, upgrade install utilities and install geophys_utils package from disk
 RUN mkdir -p /etc/pki/tls/certs/ && ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt && \
