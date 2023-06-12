@@ -1,7 +1,7 @@
 # alexip/geophys_utils:0.1.0 contains geophys_utils v0.1.0 and all dependencies
 # GDAL Docker image sourced from https://github.com/OSGeo/gdal/
 
-FROM ghcr.io/osgeo/gdal:alpine-normal-3.5.3 AS build
+FROM ghcr.io/osgeo/gdal:alpine-normal-3.7.0 AS build
 
 ENV PYTHONUNBUFFERED=1
 
@@ -34,17 +34,15 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Install dependencies
-# need to force scikit-image==0.19.3 due to broken scipy==1.9.1 dependency
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir --upgrade setuptools wheel && \
-    pip install scikit-image==0.19.3  && \
-    pip install -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # Create runtime image
-FROM ghcr.io/osgeo/gdal:alpine-normal-3.5.3 AS runtime
+FROM ghcr.io/osgeo/gdal:alpine-normal-3.7.0 AS runtime
 
-RUN apk update && apk upgrade && \
+RUN apk update && apk upgrade --no-cache && \
     apk add --update --no-cache \
         'hdf5' \
         'netcdf' \
@@ -61,7 +59,8 @@ WORKDIR /geophys_utils
 COPY . /geophys_utils
 
 ENV PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH="/geophys_utils:$PYTHONPATH"
+    PYTHONPATH="/geophys_utils:$PYTHONPATH" \
+    PYTHONUNBUFFERED=1
 
 # Install geophys_utils package from current source
 RUN pip install --no-cache-dir -e . && \
