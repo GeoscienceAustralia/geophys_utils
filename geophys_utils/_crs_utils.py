@@ -15,11 +15,11 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 # ===============================================================================
-'''
+"""
 Created on 16Nov.,2016
 
 @author: Alex Ip
-'''
+"""
 import logging
 import re
 
@@ -42,15 +42,16 @@ CRS_NAME_MAPPING = {
     'WGS84': 'EPSG:4326',
     'AGD84': 'EPSG:4203',
     'AGD66': 'EPSG:4202',
+    'GDA2020': 'EPSG:7844',
 }
 
 
 def get_spatial_ref_from_wkt(wkt_or_crs_name):
-    '''
+    """
     Function to return SpatialReference object for supplied WKT
     @param wkt: Well-known text or CRS name for SpatialReference, including "EPSG:XXXX"
     @return spatial_ref: SpatialReference from WKT
-    '''
+    """
     if not wkt_or_crs_name:
         return None
 
@@ -106,18 +107,18 @@ def get_spatial_ref_from_wkt(wkt_or_crs_name):
 
 
 def get_wkt_from_spatial_ref(spatial_ref):
-    '''
+    """
     Function to return OGC WKT for supplied Proj instance
-    '''
+    """
     return spatial_ref.ExportToWkt()
 
 
 def get_coordinate_transformation(from_wkt, to_wkt):
-    '''
+    """
     Use GDAL to obtain a CoordinateTransformation object to transform coordinates between CRSs or None if no transformation required.
     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform
-    '''
+    """
     # Assume native coordinates if no wkt given
     if not to_wkt or from_wkt == to_wkt:
         return None
@@ -139,11 +140,11 @@ def get_coordinate_transformation(from_wkt, to_wkt):
 
 
 def get_utm_wkt(coordinate, from_wkt):
-    '''
+    """
     Function to return CRS for UTM zone of specified coordinates.
     Used to transform coords to metres
     @param coordinate: single coordinate pair
-    '''
+    """
 
     def utm_getZone(longitude):
         return (int(1 + (longitude + 180.0) / 6.0))
@@ -171,12 +172,12 @@ def get_utm_wkt(coordinate, from_wkt):
 
 
 def transform_coords(coordinates, from_wkt, to_wkt):
-    '''
+    """
     Convert coordinates between specified coordinate reference systems
     @parameter coordinates: iterable collection of coordinate pairs or single coordinate pair
     @parameter from_wkt: WKT or "EPSG:nnnn" string from which to transform. Defaults to native NetCDF CRS
     @parameter to_wkt: WKT or "EPSG:nnnn" string to which to transform. Defaults to native NetCDF CRS
-    '''
+    """
     # TODO: Deal with this in a more high-level way
     POINT_CHUNK_SIZE = 1048576  # Number of points to check at any one time to keep memory usage down
 
@@ -213,14 +214,14 @@ def transform_coords(coordinates, from_wkt, to_wkt):
 
 
 def get_reprojected_bounds(bounds, from_wkt, to_wkt):
-    '''
+    """
     Function to take a bounding box specified in one CRS and return its smallest containing bounding box in a new CRS
     @parameter bounds: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS from_wkt
     @parameter from_wkt: WKT for CRS from which to transform bounds
     @parameter to_wkt: WKT for CRS to which to transform bounds
     
     @return reprojected_bounding_box: bounding box specified as tuple(xmin, ymin, xmax, ymax) in CRS to_wkt
-    '''
+    """
     # if (to_wkt is None) or (from_wkt is None) or (to_wkt == from_wkt):
     if to_wkt == from_wkt:
         return bounds
