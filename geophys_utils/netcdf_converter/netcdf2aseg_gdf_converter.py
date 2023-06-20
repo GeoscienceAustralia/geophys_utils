@@ -136,7 +136,7 @@ class RowCache(object):
         self.index_range = end_index - start_index
 
         if point_mask is None:  # No point_mask defined - take all points in range
-            subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+            subset_mask = np.ones(shape=(self.index_range,), dtype=bool)
         else:
             subset_mask = point_mask[start_index:end_index]
             self.index_range = np.count_nonzero(subset_mask)
@@ -826,7 +826,7 @@ Usage: python {} <options> <nc_in_path> [<dat_out_path>]'.format(os.path.basenam
     point_mask = None  # Process all points
     # ===========================================================================
     # # Temporary point_mask for testing - only take every 1000th point
-    # point_mask = np.zeros(shape=(netcdf2aseg_gdf_converter.total_points,), dtype='bool')
+    # point_mask = np.zeros(shape=(netcdf2aseg_gdf_converter.total_points,), dtype=bool)
     # point_mask[1:netcdf2aseg_gdf_converter.total_points:1000] = True
     # ===========================================================================
 

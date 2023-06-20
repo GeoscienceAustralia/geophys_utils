@@ -877,7 +877,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  dimensions=[field_definition['short_name']],
                                  fill_value=-1,
                                  attributes=variable_attributes,
-                                 dtype='int32',
+                                 dtype=np.int32,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -889,7 +889,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  fill_value=-1,
                                  attributes={'long_name': 'zero-based index of the first point in each {}'.format(
                                      field_definition['short_name'])},
-                                 dtype='int32',
+                                 dtype=np.int32,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -901,7 +901,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  fill_value=-1,
                                  attributes={
                                      'long_name': 'number of points in each {}'.format(field_definition['short_name'])},
-                                 dtype='int32',
+                                 dtype=np.int32,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -935,7 +935,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  dimensions=[short_name],
                                  fill_value=None,
                                  attributes=variable_attributes,
-                                 dtype='str' if (lookup_array.dtype == object) else lookup_array.dtype,
+                                 dtype=str if (lookup_array.dtype == object) else lookup_array.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
                                  )
@@ -950,7 +950,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                  attributes={'long_name': 'zero-based index of value in {}'.format(short_name),
                                              'lookup': short_name
                                              },
-                                 dtype='int8' if len(lookup_array) < 128 else 'int32' if len(
+                                 dtype=np.int8 if len(lookup_array) < 128 else 'int32' if len(
                                      lookup_array) < 32768 else index_array.dtype,
                                  chunk_size=self.default_chunk_size,
                                  variable_parameters=self.default_variable_parameters
@@ -976,7 +976,7 @@ class ASEGGDF2NetCDFConverter(ToNetCDFConverter):
                                   dimensions=[],
                                   fill_value=None,
                                   attributes=variable_attributes,
-                                  dtype='str' if lookup_array.dtype == object else lookup_array.dtype,
+                                  dtype=str if lookup_array.dtype == object else lookup_array.dtype,
                                   chunk_size=self.default_chunk_size,
                                   variable_parameters=self.default_variable_parameters
                                   )

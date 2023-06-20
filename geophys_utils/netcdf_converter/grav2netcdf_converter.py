@@ -646,7 +646,7 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
                              dimensions=[],  # Scalar
                              fill_value=None,
                              attributes=generate_ga_metadata_dict(),
-                             dtype='int8'  # Byte datatype
+                             dtype=np.int8  # Byte datatype
                              )
 
         # ---------------------------------------------------------------------------

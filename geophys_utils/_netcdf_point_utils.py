@@ -714,7 +714,7 @@ class NetCDFPointUtils(NetCDFUtils):
         logger.debug('counts: {}'.format(counts))
 
         # Build mask
-        index_mask = np.zeros(shape=(point_count,), dtype='bool')
+        index_mask = np.zeros(shape=(point_count,), dtype=bool)
         for lookup_index in range(len(lookup_indices)):
             index_mask[start_indices[lookup_index]:start_indices[lookup_index] + counts[lookup_index]] = True
 
@@ -766,7 +766,7 @@ class NetCDFPointUtils(NetCDFUtils):
         index_range = end_index - start_index
 
         if mask is None:  # No mask defined - take all points in range
-            subset_mask = np.ones(shape=(index_range,), dtype='bool')
+            subset_mask = np.ones(shape=(index_range,), dtype=bool)
         else:
             subset_mask = mask[start_index:end_index]
 
@@ -806,7 +806,7 @@ class NetCDFPointUtils(NetCDFUtils):
         index_range = end_index - start_index
 
         if mask is None:  # No mask defined - take all points in range
-            subset_mask = np.ones(shape=(index_range,), dtype='bool')
+            subset_mask = np.ones(shape=(index_range,), dtype=bool)
         else:
             subset_mask = mask[start_index:end_index]
             index_range = np.count_nonzero(subset_mask)
@@ -1291,7 +1291,7 @@ def main(debug=True):
     ncpu = NetCDFPointUtils(netcdf_dataset, debug=debug)  # Enable debug output here
 
     # Create mask for last ten points
-    mask = np.zeros(shape=(ncpu.point_count,), dtype='bool')
+    mask = np.zeros(shape=(ncpu.point_count,), dtype=bool)
     mask[-10:] = True
 
     # Set list of fields to read

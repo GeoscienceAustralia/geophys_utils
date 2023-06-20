@@ -49,7 +49,7 @@ def plot_survey_points(netcdf_point_utils,  # NetCDFPointUtils object wrapping a
             np.max(utm_coords[:, 0]),
             np.max(utm_coords[:, 1])
         ]
-        spatial_mask = np.ones(shape=variable.shape, dtype='Bool')
+        spatial_mask = np.ones(shape=variable.shape, dtype=bool)
     else:
         spatial_mask = np.logical_and(np.logical_and((utm_bbox[0] <= utm_coords[:, 0]),
                                                      (utm_coords[:, 0] <= utm_bbox[2])),

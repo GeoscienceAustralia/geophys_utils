@@ -233,7 +233,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         else:  # Scalar
             # Synthesize line_indices array with all zeroes for single value
             line_indices = np.zeros(shape=(self.point_count,),
-                                    dtype='int8'
+                                    dtype=np.int8
                                     )
 
         return line_indices

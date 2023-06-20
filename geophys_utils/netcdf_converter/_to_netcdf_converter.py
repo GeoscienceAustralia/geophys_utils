@@ -315,9 +315,9 @@ class ToNetCDFConverter(object):
         increment = (max_value - min_value) / self.nc_output_dataset.dimensions[dimension_name].size
 
         if descending:
-            data_array = np.arange(max_value, min_value, -increment, dtype='float64')
+            data_array = np.arange(max_value, min_value, -increment, dtype=np.float64)
         else:
-            data_array = np.arange(min_value, max_value, increment, dtype='float64')
+            data_array = np.arange(min_value, max_value, increment, dtype=np.float64)
 
         return NetCDFVariable(short_name=dimension_name,
                               data=data_array,
@@ -408,7 +408,7 @@ class ToNetCDFConverter(object):
                               fill_value=None,
                               chunk_size=0,
                               attributes=crs_attributes,
-                              dtype='int8'  # Byte datatype
+                              dtype=np.int8  # Byte datatype
                               )
 
     def convert2netcdf(self):

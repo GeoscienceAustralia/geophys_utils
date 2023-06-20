@@ -96,7 +96,7 @@ class PointSet:
         self.points = points
 
         # keep track of which points are currently still under consideration
-        self.registry = np.full((npoints,), fill_value=False, dtype='bool')
+        self.registry = np.full((npoints,), fill_value=False, dtype=bool)
 
         # Only use first occurrence of unique values
         _unique_values, unique_value_indices = np.unique(points, return_index=True, axis=0)

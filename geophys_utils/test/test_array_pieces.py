@@ -34,7 +34,7 @@ class TestArrayPieces(unittest.TestCase):
     def test_array_pieces(self):
         print('Testing array_pieces function')
         # create 100 x 100 array with unique elements
-        test_array = np.reshape(np.arange(0, 10000, dtype='int16'), (100, 100))
+        test_array = np.reshape(np.arange(0, 10000, dtype=np.int16), (100, 100))
         sixteenth_bytes = test_array.dtype.itemsize * reduce(lambda x, y: x * y / 16, test_array.shape)
         overlap = 10
 

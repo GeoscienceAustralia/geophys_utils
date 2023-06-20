@@ -182,7 +182,7 @@ class RowValueCache(object):
         self.index_range = end_index - start_index
 
         if point_mask is None:  # No point_mask defined - take all points in range
-            subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+            subset_mask = np.ones(shape=(self.index_range,), dtype=bool)
         else:
             subset_mask = point_mask[start_index:end_index]
             self.index_range = np.count_nonzero(subset_mask)

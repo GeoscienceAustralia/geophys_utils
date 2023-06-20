@@ -110,7 +110,7 @@ GEOGCS["GDA94",
                              attributes={'units': 'random crap',
                                          'long_name': 'random numbers between 0 and 1'
                                          },
-                             dtype='float32'
+                             dtype=np.float32
                              )
 
         return
