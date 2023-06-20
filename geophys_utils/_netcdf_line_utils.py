@@ -745,12 +745,12 @@ class NetCDFLineUtils(NetCDFPointUtils):
             line_end_indices[-1] = len(self.line_index)
             line_end_indices = line_end_indices - 1
 
-            bad_coord_start_mask = np.ones(shape=bad_coord_mask.shape, dtype=np.bool)  # Make first element True
+            bad_coord_start_mask = np.ones(shape=bad_coord_mask.shape, dtype=bool)  # Make first element True
             bad_coord_start_mask[1:] = ~bad_coord_mask[0:-1]  # Copy all cells shifted rightward
             bad_coord_start_mask[:] = np.logical_and(bad_coord_mask, bad_coord_start_mask)
             bad_coord_start_indices = np.where(bad_coord_start_mask)[0]
 
-            bad_coord_end_mask = np.ones(shape=bad_coord_mask.shape, dtype=np.bool)  # Make last element True
+            bad_coord_end_mask = np.ones(shape=bad_coord_mask.shape, dtype=bool)  # Make last element True
             bad_coord_end_mask[0:-1] = ~bad_coord_mask[1:]  # Copy inverted cells shifted leftward
             bad_coord_end_mask[:] = np.logical_and(bad_coord_mask, bad_coord_end_mask)
             bad_coord_end_indices = np.where(bad_coord_end_mask)[0]

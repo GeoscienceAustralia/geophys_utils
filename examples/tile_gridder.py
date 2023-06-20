@@ -120,7 +120,7 @@ class TileGridder(object):
             return
 
         for dataset in sorted(self.dataset_values.keys()):
-            filter_mask = np.zeros(shape=(self.dataset_values[dataset]['coordinates'].shape[0],), dtype=np.bool)
+            filter_mask = np.zeros(shape=(self.dataset_values[dataset]['coordinates'].shape[0],), dtype=bool)
             for filter_value in self.filter_value_list:
                 filter_mask = np.logical_or(filter_mask,
                                             (self.dataset_values[dataset][self.filter_variable_name] == filter_value))

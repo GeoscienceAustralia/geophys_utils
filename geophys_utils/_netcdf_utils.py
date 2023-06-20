@@ -181,7 +181,7 @@ class NetCDFUtils(object):
 
                     dim_mask = dim_mask_dict.get(dimension_name)
                     if dim_mask is None:
-                        dim_mask = np.ones(shape=(variable.shape[dimension_index],), dtype=np.bool)
+                        dim_mask = np.ones(shape=(variable.shape[dimension_index],), dtype=bool)
                     else:
                         assert dim_mask.shape == (
                         source_dimension.size,), 'Dimension mask must be a 1D boolean mask of size {}'.format(

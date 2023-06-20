@@ -229,7 +229,7 @@ class NetCDFPointUtils(NetCDFUtils):
             :param geometry: (multi)polygon
             :return mask: Boolean array of size n 
             """
-            mask = np.zeros(shape=(points.shape[0]), dtype=np.bool)
+            mask = np.zeros(shape=(points.shape[0]), dtype=bool)
 
             chunk_start_index = 0
             while chunk_start_index < len(points):
@@ -272,7 +272,7 @@ class NetCDFPointUtils(NetCDFUtils):
             # Shortcut the whole process if the extents are within the bounds geometry       
             if Polygon(self.native_bbox).within(native_crs_bounds):
                 logger.debug('Dataset is completely contained within bounds')
-                return np.ones(shape=(len(coordinates),), dtype=np.bool)
+                return np.ones(shape=(len(coordinates),), dtype=bool)
 
             bounds_half_size = abs(np.array([native_crs_bounds.bounds[2] - native_crs_bounds.bounds[0],
                                              native_crs_bounds.bounds[3] - native_crs_bounds.bounds[1]])) / 2.0
