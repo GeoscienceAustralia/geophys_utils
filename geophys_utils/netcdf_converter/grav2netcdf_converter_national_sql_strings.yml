@@ -1,0 +1,244 @@
+sql_strings_dict:
+  sql_get_surveyids:
+    >
+    select Surveyid from gravity.GRAVSURVEYS gs
+    where exists (select o1.Surveyid from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = gs.surveyid
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+    -- and gs.surveyid = '201780' -- *** Use this for testing only ***
+    order by gs.SURVEYID
+  sql_get_count_surveyids:
+    >
+    select count(Surveyid) from gravity.GRAVSURVEYS gs
+    where exists (select o1.Surveyid from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = gs.surveyid
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+    -- and gs.surveyid = '201780' -- *** Use this for testing only ***
+    order by gs.SURVEYID
+  get_survey_metadata:
+    >
+    select * from gravity.GRAVSURVEYS gs
+    inner join a.surveys using(eno)
+    where
+    gs.surveyid = {0}
+    and exists
+    (select o1.* from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = {0}
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.dlat is not null
+    and o1.dlong is not null
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+  get_national_survey_metadata:
+    >
+    select a.SURVEYNAME, a.SURVEYID, gs.LAYOUT, a.SURVEYTYPE, a.OWNER, a.OPERATOR, a.CONTRACTOR, a.PROCESSOR, a.ON_OFF,
+    a.SPACEMIN, a.SPACEMAX, gs.STATIONS, a.STARTDATE, a.ENDDATE
+    from gravity.GRAVSURVEYS gs
+    inner join a.surveys a using(eno)
+    where exists
+    (select o1.* from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = gs.surveyid
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.dlat is not null
+    and o1.dlong is not null
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+    order by gs.SURVEYID
+  get_national_survey_metadata_order_by_startdate:
+    >
+    select a.STARTDATE
+    from gravity.GRAVSURVEYS gs
+    inner join a.surveys a using(eno)
+    where exists
+    (select o1.* from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = gs.surveyid
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.dlat is not null
+    and o1.dlong is not null
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+    order by a.STARTDATE
+  get_national_survey_metadata_order_by_enddate_desc:
+    >
+    select a.ENDDATE
+    from gravity.GRAVSURVEYS gs
+    inner join a.surveys a using(eno)
+    where exists
+    (select o1.* from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+    on
+    o1.surveyid = o2.surveyid
+    and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+    and o1.geodetic_datum = o2.geodetic_datum
+    and o1.dlat = o2.dlat
+    and o1.dlong = o2.dlong
+    and o1.access_code = o2.access_code
+    and o1.status = o2.status
+    where
+    o1.surveyid = gs.surveyid
+    and o1.status = 'A'
+    and o1.access_code = 'O'
+    and o1.dlat is not null
+    and o1.dlong is not null
+    and o1.grav is not null
+    and o1.gndelev is not null
+    and o1.meterhgt is not null
+    and o1.nvalue is not null
+    and o1.ellipsoidhgt is not null
+    and o1.ellipsoidmeterhgt is not null
+    and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+    and o2.obsno is null)
+    order by a.ENDDATE DESC
+  get_data:
+    >
+    select NVL({0}, {1}) from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+      on
+      o1.surveyid = o2.surveyid
+      and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+      and o1.geodetic_datum = o2.geodetic_datum
+      and o1.dlat = o2.dlat
+      and o1.dlong = o2.dlong
+      and o1.access_code = o2.access_code
+      and o1.status = o2.status
+        where
+        o1.surveyid = {2}
+        and o1.status = 'A'
+        and o1.access_code = 'O'
+        and o1.grav is not null
+        and o1.gndelev is not null
+        and o1.meterhgt is not null
+        and o1.nvalue is not null
+        and o1.ellipsoidhgt is not null
+        and o1.ellipsoidmeterhgt is not null
+        and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+        and o2.obsno is null
+      order by o1.obsno
+  get_field_description:
+    >
+    SELECT COMMENTS
+    FROM ALL_COL_COMMENTS
+    WHERE TABLE_NAME = 'OBSERVATIONS'
+    AND COLUMN_NAME = '{}'
+  get_dimensions:
+    >
+    select count(*) from gravity.OBSERVATIONS o1
+    left join gravity.OBSERVATIONS o2
+      on
+      o1.surveyid = o2.surveyid
+      and (o1.entrydate > o2.entrydate OR(o1.entrydate = o2.entrydate and o1.obsno > o2.obsno))
+      and o1.geodetic_datum = o2.geodetic_datum
+      and o1.dlat = o2.dlat
+      and o1.dlong = o2.dlong
+      and o1.access_code = o2.access_code
+      and o1.status = o2.status
+        where
+        o1.surveyid = {}
+        and o1.status = 'A'
+        and o1.access_code = 'O'
+        and o1.grav is not null
+        and o1.gndelev is not null
+        and o1.meterhgt is not null
+        and o1.nvalue is not null
+        and o1.ellipsoidhgt is not null
+        and o1.ellipsoidmeterhgt is not null
+        and o1.eno in (select eno from a.surveys where countryid is null or countryid = 'AUS')
+        and o2.obsno is null
+  check_all_values_in_survey_consistent:
+    >
+    SELECT DISTINCT {0}
+    FROM gravity.OBSERVATIONS o1
+    WHERE o1.surveyid = {1}
+  get_ellipsoidhgt_datums_lookup:
+    >
+    SELECT DISTINCT ELLIPSOIDHGTDATUM
+    FROM gravity.OBSERVATIONS o1
