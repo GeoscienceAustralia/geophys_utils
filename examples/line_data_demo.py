@@ -8,7 +8,7 @@ from scipy.interpolate import griddata
 from geophys_utils import CSWUtils
 from geophys_utils import NetCDFLineUtils
 from geophys_utils import date_string2datetime
-from geophys_utils import transform_coords, get_spatial_ref_from_wkt
+from geophys_utils import transform_coords, get_spatial_ref_from_wkt, get_reprojected_bounds
 
 # Setup proxy as required
 GA_STAFF_WIFI = False
@@ -19,8 +19,9 @@ if GA_STAFF_WIFI:
 
 # N.B: GA internal CSW addresses will need port forwarding to work from the NCI
 # Also, dev.public.ecat.ga.gov.au requires a hack to csw_utils and owslib to overcome certificate problem
-DEFAULT_CSW_URL = 'https://dev.public.ecat.ga.gov.au/geonetwork/srv/eng/csw'  # GA's internally-facing development eCat
-# csw_url = 'https://ecat.ga.gov.au/geonetwork/srv/eng/csw' # GA's externally-facing eCat
+# DEFAULT_CSW_URL = 'https://dev.public.ecat.ga.gov.au/geonetwork/srv/eng/csw'  # GA's internally-facing development eCat
+DEFAULT_CSW_URL = 'https://ecat.ga.gov.au/geonetwork/srv/eng/csw'  # GA's externally-facing eCat
+csw_url = 'https://ecat.ga.gov.au/geonetwork/srv/eng/csw'  # GA's externally-facing eCat
 # csw_url = 'https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw' # GA's internally-facing eCat
 # csw_url = 'http://geonetworkrr2.nci.org.au/geonetwork/srv/eng/csw' # NCI GeoNetwork
 
@@ -38,8 +39,8 @@ WGS84_WKT = get_spatial_ref_from_wkt('EPSG:4326').ExportToWkt()
 # utm_wkt = get_utm_wkt(centre_coords, wgs84_wkt)
 # reprojected_bounding_box = np.array(transform_coords(((bounds[0], bounds[1]), (bounds[2], bounds[1]), (bounds[2], bounds[3]), (bounds[0], bounds[3])), wgs84_wkt, utm_wkt))
 # utm_bounds = [min(reprojected_bounding_box[:,0]),
-#              min(reprojected_bounding_box[:,1]), 
-#              max(reprojected_bounding_box[:,0]), 
+#              min(reprojected_bounding_box[:,1]),
+#              max(reprojected_bounding_box[:,0]),
 #              max(reprojected_bounding_box[:,1])]
 
 # print wgs84_wkt
@@ -58,11 +59,7 @@ def get_netcdf_datasets(keywords,
     '''
     csw_url = csw_url or DEFAULT_CSW_URL
     # create a csw_utils object and populate the parameters with search parameters
-    # N.B: "verify" parameter requires hack to geophys_utils.csw_utils, owslib.csw & owslib.utils 
-    try:
-        cswu = CSWUtils(csw_url)
-    except:
-        cswu = CSWUtils(csw_url, verify=False)
+    cswu = CSWUtils(csw_url)
 
     if start_date_string:
         start_datetime = date_string2datetime(start_date_string)
@@ -86,13 +83,13 @@ def get_netcdf_datasets(keywords,
                                                        # max_total_records=2000
                                                        )
                    ]
-    print('{} matching dataset records found from CSW'.format(len(record_list)))
+    print(f'{len(record_list)} matching dataset records found from CSW')
 
     netcdf_list = [distribution['url']
                    for distribution in cswu.get_netcdf_urls(record_list)
                    ]
 
-    print('{} NetCDF distributions found'.format(len(netcdf_list)))
+    print(f'{len(netcdf_list)} NetCDF distributions found')
 
     return netcdf_list
 
@@ -106,25 +103,25 @@ def dataset_point_generator(dataset_list,
                             max_points=None
                             ):
     '''
-    Generator yielding coordinates and values of the specified variable for all points from the supplied dataset list 
+    Generator yielding coordinates and values of the specified variable for all points from the supplied dataset list
     which fall within bounds
     '''
     line_dataset_count = 0
     for dataset in dataset_list:
         line_data = {}
-        print('Reading and reprojecting points from line dataset %s'.format(dataset))
+        print(f'Reading and reprojecting points from line dataset {dataset}')
         try:
             nc_dataset = Dataset(dataset)
             mag_awags_variable = nc_dataset.variables[variable_name]
             netcdf_line_utils = NetCDFLineUtils(nc_dataset)
 
-            reprojected_bounds = netcdf_line_utils.get_reprojected_bounds(wgs84_bounds, WGS84_WKT,
-                                                                          netcdf_line_utils.wkt)
+            reprojected_bounds = get_reprojected_bounds(wgs84_bounds, WGS84_WKT,
+                                                        netcdf_line_utils.wkt)
             # print netcdf_line_utils.__dict__
 
             if flight_lines_only:
                 print('Excluding tie-lines')
-                line_numbers = nc_dataset.variables['line'][nc_dataset.variables['flag_linetype'][:] == 2]
+                line_numbers = nc_dataset.variables['line'][nc_dataset.variables['lineType'][:] == 2]
                 line_mask = np.zeros(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
                 for _line_number, single_line_mask in netcdf_line_utils.get_line_masks(line_numbers):
                     line_mask = np.logical_or(line_mask, single_line_mask)
@@ -132,38 +129,49 @@ def dataset_point_generator(dataset_list,
                 line_mask = np.ones(shape=nc_dataset.variables[variable_name].shape, dtype=bool)
 
             print('Computing spatial mask')
-            selection_indices = np.where(np.logical_and(netcdf_line_utils.get_spatial_mask(reprojected_bounds),
-                                                        line_mask
-                                                        ))[0]
-            print('{}/{} points found in bounding box'.format(len(selection_indices), len(mag_awags_variable)))
+            selection_mask = np.logical_and(netcdf_line_utils.get_spatial_mask(reprojected_bounds),
+                                            line_mask
+                                            )
+            selection_count = np.count_nonzero(selection_mask)
+            print(f'{selection_count}/{len(mag_awags_variable)} points found in bounding box')
 
             # Enforce min/max point counts
-            if min_points and len(selection_indices) < min_points:
-                print('Skipping dataset with < {} points'.format(min_points))
+            if min_points and selection_count < min_points:
+                print(f'Skipping dataset with < {min_points} points')
                 continue
-            if max_points and len(selection_indices) > max_points:
-                print('Skipping dataset with > {} points'.format(max_points))
+            if max_points and selection_count > max_points:
+                print(f'Skipping dataset with > {max_points} points')
                 continue
 
-            coordinates = np.array(transform_coords(netcdf_line_utils.xycoords[selection_indices],
+            print('Transforming coordinates')
+            coordinates = np.array(transform_coords(netcdf_line_utils.xycoords[selection_mask],
                                                     netcdf_line_utils.wkt,
                                                     coordinate_wkt))
-            values = mag_awags_variable[selection_indices]
+            print(f'Transformed coordinates: {coordinates}')
 
+            print('Extracting values')
+            values = mag_awags_variable[selection_mask]
+            print(f'Extracted values: {values}')
+
+            print('Checking mask')
             mask = np.ma.getmask(values)
             if mask is not np.ma.nomask:
-                print('Discarding %d invalid values'.format(np.count_nonzero(mask)))
+                print(f'Discarding {np.count_nonzero(mask)} invalid values')
                 values = values[~mask].data
                 coordinates = coordinates[~mask]
-                print("{} valid points were found".format(values.shape[0]))
+                print(f"{values.shape[0]} valid points were found")
 
             line_dataset_count += 1
+            print('Yielding dataset')
             yield dataset, coordinates, values
 
         except Exception as e:
-            print('Unable to read line dataset {}: {}'.format(dataset, e.message))
+            print(f'Unable to read line dataset {dataset}: {e}')
         finally:
-            del netcdf_line_utils
+            try:
+                del netcdf_line_utils
+            except:
+                pass
 
 
 def get_points_from_dict(dataset_point_dict):
@@ -181,7 +189,7 @@ def get_points_from_dict(dataset_point_dict):
     all_values = np.array(all_values)
     all_coordinates = np.array(all_coordinates)
     assert all_values.shape[0] == all_coordinates.shape[0], 'Mismatched coordinate and value counts'
-    print("A total of {} points were read from {} line datasets".format(all_values.shape[0], len(dataset_point_dict)))
+    print(f"A total of {all_values.shape[0]} points were read from {len(dataset_point_dict)} line datasets")
 
     return all_coordinates, all_values
 
@@ -209,7 +217,7 @@ def get_points_from_datasets(dataset_list,
     all_values = np.array(all_values)
     all_coordinates = np.array(all_coordinates)
     assert all_values.shape[0] == all_coordinates.shape[0], 'Mismatched coordinate and value counts'
-    print("A total of {} points were read from {} line datasets".format(all_values.shape[0], len(dataset_list)))
+    print(f"A total of {all_values.shape[0]} points were read from {len(dataset_list)} line datasets")
 
     return all_coordinates, all_values
 
@@ -255,12 +263,12 @@ def grid_points(coordinates,
     point_subset_mask = np.zeros(shape=values.shape, dtype=bool)
     point_subset_mask[0:-1:point_step] = True
     point_subset_mask = np.logical_and(spatial_subset_mask, point_subset_mask)
-    assert point_subset_mask.any(), 'No points found within grid bounds %s' % grid_bounds
+    assert point_subset_mask.any(), f'No points found within grid bounds {grid_bounds}'
 
     grid_coordinates = grid_coordinates[point_subset_mask]
 
     # Interpolate required values to the grid - Note yx ordering for image
-    print("Interpolating {} points".format(grid_coordinates.shape[0]))
+    print(f"Interpolating {grid_coordinates.shape[0]} points")
     grid_array = griddata(grid_coordinates[:, ::-1],
                           values[point_subset_mask],
                           (grid_y, grid_x),
