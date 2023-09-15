@@ -8,6 +8,15 @@ An overview of the netCDF encodings for grid, point and line geophysical data ca
 
 Any feedback, suggestions or contributions will be gratefully accepted.
 
+# Binder deployment
+Click this button to launch an example notebook in the ARDC Binder service:
+
+[![Binder](https://mybinder.org/badge_logo.svg)](https://binderhub.rc.nectar.org.au/v2/gh/alex-ip/geophys_utils/binder_docker_test?labpath=geophys_utils%2Fexamples%2F10_gravity_point_discovery_and_access_demo.ipynb)
+
+Note that the BinderHub deployment uses a prebuilt base image providing a Conda environment with GDAL, netCDF4 and 
+other dependencies to speed up the overall build process. The Dockerfile in the root of this repository is used to 
+create the notebook container for geophys_utils in BinderHub.
+
 # Docker deployment
 There is a docker directory in the project root which contains Dockerfiles which will allow you to create fresh Docker 
 images from the current source code using the command

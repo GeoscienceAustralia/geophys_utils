@@ -1,0 +1,43 @@
+FROM ubuntu:22.04
+
+ENV PYTHONUNBUFFERED=1
+
+# N.B: We are working as root for the container instead of ec2-user for the EC2 instance
+WORKDIR /geophys_utils
+
+RUN apt update -y && \
+    apt upgrade -y && \
+    apt install -y \
+        wget && \
+    echo "export PATH=\"$PATH:/usr/local/bin\"" | tee /etc/profile.d/setup_path.sh && \
+    echo "export LD_LIBRARY_PATH=\"/usr/local/lib:$LD_LIBRARY_PATH\"" | tee -a /etc/profile.d/setup_path.sh && \
+    echo "export PROJ_LIB=\"/miniconda/share/proj:$PROJ_LIB\"" | tee -a /etc/profile.d/setup_path.sh && \
+    . /etc/profile.d/setup_path.sh
+
+# Download & install miniconda
+RUN wget https://repo.anaconda.com/miniconda/Miniconda3-py310_23.3.1-0-Linux-x86_64.sh && \
+    chmod 755 Miniconda3-py310_23.3.1-0-Linux-x86_64.sh
+
+RUN ./Miniconda3-py310_23.3.1-0-Linux-x86_64.sh -b -p /miniconda && \
+    eval "$(/miniconda/bin/conda shell.bash hook)" && \
+    /miniconda/bin/conda init && \
+    rm Miniconda3-py310_23.3.1-0-Linux-x86_64.sh
+
+# Install python 3.10
+COPY environment.yml .
+RUN  export PATH="/miniconda/bin:/miniconda/condabin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/bin:$PATH" && \
+    export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH" && \
+    export PROJ_LIB="/miniconda/share/proj:$PROJ_LIB" && \
+    conda update -y --name base -c defaults conda && \
+    conda update -y --name base --all && \
+    conda env update --name base --file environment.yml
+
+# Take a complete copy of the project directory into /geophys_utils (could do a git pull)
+COPY . /geophys_utils
+
+# install geophys_utils and set up scripts
+RUN /miniconda/bin/pip install -e /geophys_utils && \
+    for script in $(ls bin/* | grep -v '\.bat$'); \
+        do chmod 755 "${script}"; \
+        ln -s "$(pwd)/${script}" /usr/local/sbin/$(basename "${script}"); \
+    done
