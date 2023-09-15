@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Ip
+    given-names: Alex
+    orcid: https://orcid.org/0000-0001-8937-8904
+title: "Geophysics Utilities for netCDF encodings"
+version: 0.1.0
+date-released: 2016-11-16
