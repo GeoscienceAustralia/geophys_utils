@@ -517,7 +517,7 @@ class CSWUtils(object):
         for record_dict in dataset_dict_generator:
             distribution_dict = None
             for file_distribution in record_dict['distributions']:
-                if 'file' in file_distribution['protocol'].lower():
+                if 'file' in file_distribution.get('protocol', '').lower():
                     match = re.match('(^file://)*(.*\.nc)$', file_distribution['url'])
                     try:
                         file_distribution['url'] = match.group(2)  # Ignore any leading "file://"
