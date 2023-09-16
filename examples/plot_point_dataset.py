@@ -24,6 +24,7 @@ import sys
 from math import log10, floor, pow
 
 import cartopy.crs as ccrs
+import cartopy.io.img_tiles as cimgt
 import matplotlib.pyplot as plt
 import netCDF4
 import numpy as np
@@ -105,9 +106,9 @@ def plot_point_dataset(netcdf_point_utils,
 
     # map_image = cimgt.OSM() # https://www.openstreetmap.org/about
     # map_image = cimgt.StamenTerrain() # http://maps.stamen.com/
-    # map_image = cimgt.GoogleTiles(style='satellite')
+    map_image = cimgt.GoogleTiles(style='satellite')
 
-    # ax.add_image(map_image, 10)
+    ax.add_image(map_image, 10)
 
     # Compute and set regular tick spacing
     range_x = utm_bbox[2] - utm_bbox[0]
