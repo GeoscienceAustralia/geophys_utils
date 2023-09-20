@@ -22,23 +22,23 @@ Created on 8 Mar 2020
 '''
 
 import argparse
-import numpy as np
-import re
-import os
-import sys
-from datetime import datetime
-from pprint import pformat
-import tempfile
-import logging
 import locale
-from math import log10
-from collections import OrderedDict
-from functools import reduce
+import logging
+import os
+import re
+import sys
+import tempfile
 import zipfile
+from collections import OrderedDict
+from datetime import datetime
+from functools import reduce
+from math import log10
+
+import numpy as np
 import zipstream
 
-from geophys_utils import get_spatial_ref_from_wkt
 from geophys_utils import NetCDFPointUtils
+from geophys_utils import get_spatial_ref_from_wkt
 
 locale.setlocale(locale.LC_ALL, '')  # Use '' for auto, or force e.g. to 'en_US.UTF-8'
 
@@ -182,7 +182,7 @@ class RowValueCache(object):
         self.index_range = end_index - start_index
 
         if point_mask is None:  # No point_mask defined - take all points in range
-            subset_mask = np.ones(shape=(self.index_range,), dtype='bool')
+            subset_mask = np.ones(shape=(self.index_range,), dtype=bool)
         else:
             subset_mask = point_mask[start_index:end_index]
             self.index_range = np.count_nonzero(subset_mask)
@@ -193,7 +193,7 @@ class RowValueCache(object):
             return
 
         # Build cache of data value slices keyed by field_name
-        #Substitute any _FillValue in netcdf file with appropriate pre-determined aseggdf2 null value
+        # Substitute any _FillValue in netcdf file with appropriate pre-determined aseggdf2 null value
         for field_name in self.field_definitions.keys():
             self.cache[field_name] = self.nc2aseggdf.get_data_values(field_name, slice(start_index, end_index))
             netcdf_fill_value = self.nc2aseggdf.get_netcdf_fill_value(field_name)
@@ -251,21 +251,21 @@ class NC2ASEGGDF2(object):
             '''
             min_value = np.nanmin(data_vals)
             max_value = np.nanmax(data_vals)
-            max_abs_value = np.nanmax(np.abs(np.array([min_value,max_value]).astype('float64'))) 
-            #Casted to float64 above for np.abs() in case there is a value at minimum of integer range e.g. -128 and stored data_vals.dtype==int8 - since np.abs(-128) = -128 if stored with dtype==int8
+            max_abs_value = np.nanmax(np.abs(np.array([min_value, max_value]).astype('float64')))
+            # Casted to float64 above for np.abs() in case there is a value at minimum of integer range e.g. -128 and stored data_vals.dtype==int8 - since np.abs(-128) = -128 if stored with dtype==int8
             assert max_abs_value >= 0
 
-            #logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
+            # logger.debug('\tMaximum absolute value = {}, minimum value = {}'.format(max_abs_value, min_value))
             if max_abs_value > 0:
-               width = int(log10(max_abs_value)) + 1
+                width = int(log10(max_abs_value)) + 1
             else:
-               width = 1 #If all zeros
+                width = 1  # If all zeros
 
-            width += 1 # allow for leading space
-            width += 1 # allow -ve sign (at least in the -99... nulls)
-            nullvalue = -(np.power(10,width-2) - 1)
+            width += 1  # allow for leading space
+            width += 1  # allow -ve sign (at least in the -99... nulls)
+            nullvalue = -(np.power(10, width - 2) - 1)
 
-            return width,nullvalue
+            return width, nullvalue
 
         def build_field_definitions():
             '''\
@@ -284,7 +284,7 @@ class NC2ASEGGDF2(object):
                     continue
 
                 if len(variable.dimensions) == 1 and variable.dimensions != (
-                'point',):  # Non-point indexed array variable, e.g.flight(line)
+                        'point',):  # Non-point indexed array variable, e.g.flight(line)
                     # Need to work backwards from variable to point indexed variable
                     try:
                         try:
@@ -379,7 +379,7 @@ class NC2ASEGGDF2(object):
                                         variable_name)  # Sanitisation shouldn't be necessary, but we'll do it anyway
 
                 variable_definition['field_name'] = field_name
-                
+
                 # Add definition to allow subsequent self.get_data_values(field_name) call
                 self.field_definitions[field_name] = variable_definition
 
@@ -395,13 +395,14 @@ class NC2ASEGGDF2(object):
                         data_vals = data_vals[data_vals != netcdf_fill_value]
 
                     # Get preferred width and fnullvalue
-                    logger.debug('\tChecking values to adjust integer field width for variable {}'.format(variable_name))
-                    width,nullvalue = get_preferred_aseggdf2_integer_width_and_null(data_vals)
+                    logger.debug(
+                        '\tChecking values to adjust integer field width for variable {}'.format(variable_name))
+                    width, nullvalue = get_preferred_aseggdf2_integer_width_and_null(data_vals)
 
-                    if (format_dict['width'] != width) or (format_dict['null'] !=  nullvalue):
-                        #logger.debug('\tAdjusting integer field width from {} to {} for variable {}'.format(format_dict['width'],width,variable_name))
+                    if (format_dict['width'] != width) or (format_dict['null'] != nullvalue):
+                        # logger.debug('\tAdjusting integer field width from {} to {} for variable {}'.format(format_dict['width'],width,variable_name))
                         format_dict['width'] = width
-                        format_dict['null'] =  nullvalue
+                        format_dict['null'] = nullvalue
                         format_dict['aseg_gdf_format'] = 'I{}'.format(width)
                         format_dict['python_format'] = '{{:>{}d}}'.format(width)
 
@@ -448,7 +449,7 @@ class NC2ASEGGDF2(object):
         fv = None
         variables = self.field_definitions[field_name]['variables']
         if hasattr(variables[-1], '_FillValue'):
-           fv = variables[-1]._FillValue
+            fv = variables[-1]._FillValue
 
         return fv
 
@@ -468,8 +469,8 @@ class NC2ASEGGDF2(object):
             else:  # Scalar
                 # Broadcast scalar to required array shape
                 data = np.array([variables[0][:]] * (
-                            ((point_slice.stop or self.total_points) - (point_slice.start or 0)) // (
-                                point_slice.step or 1)))
+                        ((point_slice.stop or self.total_points) - (point_slice.start or 0)) // (
+                        point_slice.step or 1)))
         elif len(variables) == 2:  # Index & Lookup variables
 
             mask_value_index_var = getattr(variables[0], "_FillValue")
@@ -478,12 +479,13 @@ class NC2ASEGGDF2(object):
             # check if the index variable contains any masked values
             # If so return a list of where the masked values are replaced with the STRING_VAR_NULL_VALUE
             # and non masked values are given their corresponding value in the lookup table
-            #TODO this may be needed for lines also if any line variables contain masked values for lookup tables
+            # TODO this may be needed for lines also if any line variables contain masked values for lookup tables
             if np.any(variables[0][:] == mask_value_index_var):
-                logger.debug("Variable '{}' contains one or more masked values. Converting masked value/s to {}".format(variables[0].name, STRING_VAR_NULL_VALUE))
+                logger.debug("Variable '{}' contains one or more masked values. Converting masked value/s to {}".format(
+                    variables[0].name, STRING_VAR_NULL_VALUE))
                 i = 0
                 lookup_len = len(variables[0][:])
-                data = [None] * (lookup_len) # create a list of the required size to fill in with correct values
+                data = [None] * (lookup_len)  # create a list of the required size to fill in with correct values
                 while i < lookup_len:
                     if variables[0][i] != mask_value_index_var:
                         data[i] = variables[1][variables[0][i]]
@@ -902,10 +904,10 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             dat_out_file = open(dat_out_path, mode='w')
             for chunk_buffer in chunk_buffer_generator(row_value_cache, python_format_list, cache_chunk_rows,
                                                        point_mask):
-                #Newline '+ \n' removed as it creats unwanted blank line at end of each chunk on Windows
-                #This may not be the case on linux
-                #May be netter to change line 859 <chunk_buffer_string = '\n'.join(chunk_line_list) + '\n'  # Yield a chunk of lines>
-                #dat_out_file.write(chunk_buffer + '\n')
+                # Newline '+ \n' removed as it creats unwanted blank line at end of each chunk on Windows
+                # This may not be the case on linux
+                # May be netter to change line 859 <chunk_buffer_string = '\n'.join(chunk_line_list) + '\n'  # Yield a chunk of lines>
+                # dat_out_file.write(chunk_buffer + '\n')
                 dat_out_file.write(chunk_buffer)
             dat_out_file.close()
             self.info_output('Finished writing .dat file {}'.format(dat_out_path))
@@ -936,7 +938,7 @@ PROJGDA94 / MGA zone 54 GRS 1980  6378137.0000  298.257222  0.000000  Transverse
             for dimension_name, dimension in self.netcdf_dataset.dimensions.items():
                 global_attributes_dict[dimension_name + '_count'] = str(dimension.size)
 
-            #logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
+            # logger.debug('global_attributes_dict = {}'.format(pformat(global_attributes_dict)))
 
             for key in sorted(global_attributes_dict.keys()):
                 value = global_attributes_dict[key]

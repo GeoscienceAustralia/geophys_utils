@@ -1,0 +1,22 @@
+name: geophys_utils
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - gdal
+  - affine
+  - cartopy
+  - matplotlib
+  - numexpr
+  - owslib
+  - pyyaml
+  - requests
+  - scikit-image
+  - scipy
+  - shapely
+  - unidecode
+  - pip:
+    - netCDF4
+    - zipstream-new
