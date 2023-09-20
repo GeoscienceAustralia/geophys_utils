@@ -561,12 +561,19 @@ class NetCDFUtils(object):
         if not self._netcdf_dataset:
             logger.debug('Opening netCDF dataset {}'.format(self.nc_path))
             if self.opendap:
+                logger.debug('Opendap')
                 try:
+                    logger.debug('Try assign dataset')
                     self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+                    logger.debug('Dataset assigned')
                 except OSError:
+                    logger.debug('Exception OSError')
                     self._netcdf_dataset = netCDF4.Dataset(self.nc_path + '#fillmismatch', mode="r") # Work-around for _FillValue mismatch: https://github.com/Unidata/netcdf-c/issues/1299
+                    logger.debug('Exception OSError Dataset assigned')
             else:
+                logger.debug('Not Opendap')
                 self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+                logger.debug('Not Opendap Dataset assigned')
 
         return self._netcdf_dataset
     
