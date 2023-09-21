@@ -572,7 +572,11 @@ class NetCDFUtils(object):
                     logger.debug('Exception OSError Dataset assigned')
             else:
                 logger.debug('Not Opendap')
-                self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+                try:
+                    self._netcdf_dataset = netCDF4.Dataset(self.nc_path, mode="r")
+                except Exception as e:
+                    logger.debug('Exception: {}'.format(e))
+                    
                 logger.debug('Not Opendap Dataset assigned')
 
         return self._netcdf_dataset
