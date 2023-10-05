@@ -904,23 +904,28 @@ def main():
                       for survey_row in survey_cursor
                       ]
 
-    logger.debug('Survey count = {}'.format(len(survey_id_list)))
+    len_survey_id_list = len(survey_id_list)
+    index_last_item = len_survey_id_list-1
+
+    logger.debug('Survey count = {}'.format(len_survey_id_list))
 
     for survey in survey_id_list:
-        # On the first iteration of the loop create the dimensions, variables and global attributes and write the data
-        # for the first survey into the variables.
+        # For the first survey create the dimensions and variables and write the data into the variables.
         survey_index = survey_id_list.index(survey)
         if survey_index == 0:
-
             logger.debug("Creating initial national file on survey: " + str(survey))
             g2n = Grav2NetCDFConverter("{}/NATIONAL_GNDGRAV.nc".format(nc_out_path), survey, survey_index, con, sql_strings_dict)
             g2n.convert2netcdf()
             del g2n
-        elif 0 < survey_index < 4:
+
+        # On all subsequent surveys prior to the last survey append the data for the survey to the end of the variables.
+        elif 0 < survey_index < index_last_item:
             g2n = Grav2NetCDFConverter("{}/NATIONAL_GNDGRAV.nc".format(nc_out_path), survey, survey_index, con, sql_strings_dict)
             g2n.append_data2netcdf()
             del g2n
-        elif survey_index == 4:
+
+        # On the last survey append the data for the survey to the end of the variables and set the global attributes.
+        elif survey_index == index_last_item:
             g2n = Grav2NetCDFConverter("{}/NATIONAL_GNDGRAV.nc".format(nc_out_path), survey, survey_index, con, sql_strings_dict)
             g2n.append_data2netcdf()
             g2n.set_global_attributes()
