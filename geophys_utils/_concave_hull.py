@@ -5,13 +5,15 @@ Calculate the concave hull of a set of points.
 Adapted from Adriano Moreira and Maribel Yasmina Santos 2007.
 """
 
+import logging
+
 import numpy as np
 import scipy.spatial as spt
 from matplotlib.path import Path
-import logging
 
 logger = logging.getLogger(__name__)
 logger.level = logging.INFO
+
 
 def bbox(a, b):
     return {
@@ -69,8 +71,8 @@ def lineSegmentTouchesOrCrossesLine(a, b, c, d):
     """
     return isPointOnLine(a, b, c) or \
            isPointOnLine(a, b, d) or \
-          (isPointRightOfLine(a, b, c) ^
-           isPointRightOfLine(a, b, d))
+           (isPointRightOfLine(a, b, c) ^
+            isPointRightOfLine(a, b, d))
 
 
 def doLinesIntersect(a, b, c, d):
@@ -90,25 +92,24 @@ class PointSet:
         """
         npoints, ndim = points.shape
         assert ndim == 2, 'Coordinates must be 2D, not {}D'.format(ndim)
-        
+
         self.points = points
-        
+
         # keep track of which points are currently still under consideration
-        self.registry = np.full((npoints, ), fill_value=False, dtype='bool')
-        
+        self.registry = np.full((npoints,), fill_value=False, dtype=bool)
+
         # Only use first occurrence of unique values
         _unique_values, unique_value_indices = np.unique(points, return_index=True, axis=0)
         self.registry[unique_value_indices] = True
-        
+
         # Ignore any coordinates containing NaN
-        self.registry[np.any(np.isnan(points), axis=1)] = False 
-        
+        self.registry[np.any(np.isnan(points), axis=1)] = False
+
         self.npoints = np.count_nonzero(self.registry)
-        
+
         self.tree = spt.cKDTree(self.points, leafsize=10)
 
-        #assert False, 'ABORT'
-
+        # assert False, 'ABORT'
 
     def __getitem__(self, index):
         return self.points[index]
@@ -254,8 +255,10 @@ def concave_hull_indices(dataset, k):
     p = Path(point_set.points[hull, :])
 
     # Check whether all valid points are contained
-    pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)], radius=0.0000000001) # Check filtered points with no NaNs
-    logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained), np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
+    pContained = p.contains_points(dataset[np.all(~np.isnan(dataset), axis=1)],
+                                   radius=0.0000000001)  # Check filtered points with no NaNs
+    logger.debug('{}/{} valid points contained'.format(np.count_nonzero(pContained),
+                                                       np.count_nonzero(np.all(~np.isnan(dataset), axis=1))))
     if not pContained.all():
         return None
 
@@ -267,14 +270,14 @@ def concaveHull(dataset):
     Generate n x 2 array of coordinates for vertices of concave hull
     '''
     logger.debug('dataset length in concaveHull(): {}'.format(len(dataset)))
-    
-    points = np.unique(dataset[~np.any(np.isnan(dataset), axis=1)], axis=0) # Purge duplicates and NaNs
+
+    points = np.unique(dataset[~np.any(np.isnan(dataset), axis=1)], axis=0)  # Purge duplicates and NaNs
     logger.debug('{} valid points used for concave hull generation'.format(len(points)))
-    
-    lowest_good_k = len(points) # Assume that convex hull is always OK
+
+    lowest_good_k = len(points)  # Assume that convex hull is always OK
     best_point_indices = None
-    highest_bad_k = 2 # Lowest valid k = 3
-    
+    highest_bad_k = 2  # Lowest valid k = 3
+
     # Perform binary search
     while lowest_good_k - highest_bad_k > 1:
         k = int((lowest_good_k + highest_bad_k) / 2.0)
@@ -286,12 +289,11 @@ def concaveHull(dataset):
             best_point_indices = point_indices
             lowest_good_k = k
             logger.debug('Concave hull generation succeeded for k={}'.format(k))
-            
-    if not best_point_indices: # Try using all points if no valid shape found
+
+    if not best_point_indices:  # Try using all points if no valid shape found
         k = len(points)
         best_point_indices = concave_hull_indices(points, k)
-        
-    assert best_point_indices, 'Unable to determine concave hull'    
+
+    assert best_point_indices, 'Unable to determine concave hull'
     logger.debug('Best concave hull generated with k={}'.format(lowest_good_k))
     return points[best_point_indices, :]
-

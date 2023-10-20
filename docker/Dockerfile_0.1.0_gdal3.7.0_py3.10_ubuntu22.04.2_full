@@ -1,0 +1,49 @@
+# alexip/geophys_utils:0.1.0 contains geophys_utils v0.1.0 and all dependencies
+# GDAL Docker image sourced from https://github.com/OSGeo/gdal/
+
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.7.0 AS build
+
+ENV PYTHONUNBUFFERED=1
+
+# System dependencies for geophys_utils 0.1.0 / GDAL 3.7.0 Python 3.10
+RUN apt update -y && \
+    apt upgrade -y && \
+    apt install -y \
+        libgeos-dev \
+        python3-pip \
+        python3.10-venv
+
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --upgrade setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+
+# Create runtime image
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.7.0 AS runtime
+
+# Upgrade OS, fix certificates issue, install system requirements
+RUN apt update -y && \
+    apt upgrade -y && \
+    mkdir -p /etc/pki/tls/certs/ && ln -s /etc/ssl/certs/ca-certificates.crt /etc/pki/tls/certs/ca-bundle.crt && \
+    apt install -y python3.10-venv && \
+    apt clean
+
+COPY --from=build /opt/venv /opt/venv
+
+# Take a complete copy of the project directory into /geophys_utils (could do a git pull)
+RUN mkdir /geophys_utils
+WORKDIR /geophys_utils
+COPY . /geophys_utils
+
+ENV PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/geophys_utils:$PYTHONPATH" \
+    PYTHONUNBUFFERED=1
+
+# Fix certificates issue, upgrade install utilities and install geophys_utils package from disk
+RUN pip install --no-cache-dir -e . && \
+    echo $(scripts=$(find ./bin -type f -not -path '*.bat'); for script in $scripts; do cp $script /opt/venv/bin/$(basename $script); chmod 755 /opt/venv/bin/$(basename $script); done)

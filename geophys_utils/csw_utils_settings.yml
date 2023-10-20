@@ -14,7 +14,7 @@
 #    limitations under the License.
 #===============================================================================
 # YAML settings file for csw_utils
---- 
+---
 DEFAULT_CSW_URLS: # List of CSW URLs to query
   - "https://ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's externally-facing eCat
 #  - "https://internal.ecat.ga.gov.au/geonetwork/srv/eng/csw" # GA's internal eCat
@@ -24,14 +24,14 @@ ENVIRONMENT_VARIABLES: # Environment variables defined as key-value pairs
   HTTP_PROXY: ""
   HTTPS_PROXY: ""
   NO_PROXY: ""
-#  HTTP_PROXY: "http://proxy.ga.gov.au:8080"
-#  HTTPS_PROXY: "https://proxy.ga.gov.au:8080"
-#  HTTP_PROXY: "http://user:password@proxy.ga.gov.au:8080"
-#  HTTPS_PROXY: "https://user:password@proxy.ga.gov.au:8080"
-#  NO_PROXY: "intranet.ga.gov.au"
-#  HTTP_PROXY: "http://sun-web-intdev.ga.gov.au:2710"
-#  HTTPS_PROXY: "https://sun-web-intdev.ga.gov.au:2710"
-  
+  #  HTTP_PROXY: "http://proxy.ga.gov.au:8080"
+  #  HTTPS_PROXY: "https://proxy.ga.gov.au:8080"
+  #  HTTP_PROXY: "http://user:password@proxy.ga.gov.au:8080"
+  #  HTTPS_PROXY: "https://user:password@proxy.ga.gov.au:8080"
+  #  NO_PROXY: "intranet.ga.gov.au"
+  #  HTTP_PROXY: "http://sun-web-intdev.ga.gov.au:2710"
+  #  HTTPS_PROXY: "https://sun-web-intdev.ga.gov.au:2710"
+
 DEFAULT_TIMEOUT: 30 # Timeout in seconds
 DEFAULT_CRS: "CRS84" # Unprojected WGS84 with lon-lat ordering. See https://gis.stackexchange.com/questions/124050/how-do-i-specify-the-lon-lat-ordering-in-csw-bounding-box-request
 DEFAULT_MAXQUERYRECORDS: 100 # Retrieve only this many datasets per CSW query per server
@@ -43,11 +43,11 @@ DEFAULT_RECORD_TYPES: # List of record types to return (empty means return all)
 OUTPUT_DEFAULTS: # Parameters governing the defaults for printed output
   DEFAULT_PROTOCOLS: # List of protocols to display by default. * = wildcard
     - "file"
-    
+
   DEFAULT_FIELDS: # List of fields to display by default. * = wildcard
     - "protocol"
     - "url"
     - "title"
-    
+
   DEFAULT_DELIMITER: "\t" # Delimiter character used to separate fields
   DEFAULT_SHOW_HEADER_ROW: False # Boolean flag indicating whether to show header row containing field labels

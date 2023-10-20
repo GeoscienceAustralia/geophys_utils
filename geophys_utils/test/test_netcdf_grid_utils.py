@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 """
 Unit tests for geophys_utils._netcdf_grid_utils against a NetCDF file
 
@@ -22,23 +22,25 @@ Created on 15/11/2016
 
 @author: Alex Ip
 """
-import unittest
 import os
+import unittest
+
 import netCDF4
 import numpy as np
-from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 from shapely.geometry.polygon import Polygon
+
+from geophys_utils._netcdf_grid_utils import NetCDFGridUtils
 
 netcdf_grid_utils = None
 
-NC_PATH = 'test_grid.nc'    
+NC_PATH = 'test_grid.nc'
 MAX_BYTES_SM = 100
 MAX_BYTES_LG = 5000
 MAX_ERROR = 0.000001
 TEST_COORDS = (148.213, -36.015)
 TEST_MULTI_COORDS = np.array([[148.213, -36.015], [148.516, -35.316]])
 TEST_MANY_COORDS = np.array([[148.484, -35.352],
-    [148.328, -35.428], [148.436, -35.744], [148.300, -35.436]])
+                             [148.328, -35.428], [148.436, -35.744], [148.300, -35.436]])
 TEST_INDICES = [1, 1]
 TEST_MULTI_INDICES = [[1, 1], [176, 77]]
 TEST_FRACTIONAL_INDICES = [1.25, 1.25]
@@ -46,57 +48,72 @@ TEST_VALUE = -99999.
 TEST_MULTI_VALUES = [-99999.0, -134.711334229]
 TEST_MANY_VALS = [-136.13321, -31.7626, -58.755764, -90.484276]
 TEST_INTERPOLATED_VALUE = -99997.6171875
-    
+
+
 class TestNetCDFGridUtilsConstructor(unittest.TestCase):
     """Unit tests for TestNetCDFGridUtils Constructor.
     N.B: This should be run first"""
-    
+
     def test_netcdf_grid_utils_constructor(self):
         print('Testing NetCDFGridUtils constructor')
         global netcdf_grid_utils
-        
+
         nc_path = os.path.join(os.path.dirname(__file__), NC_PATH)
         nc_dataset = netCDF4.Dataset(nc_path)
         netcdf_grid_utils = NetCDFGridUtils(nc_dataset)
-    
+
+
 class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
     """Unit tests for geophys_utils._netcdf_grid_utils functions"""
-    
+
     def test_get_indices_from_coords(self):
         print('Testing get_indices_from_coords function with single coordinate {}'.format(TEST_COORDS))
         indices = netcdf_grid_utils.get_indices_from_coords(TEST_COORDS)
-        assert (indices == np.array(TEST_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(indices, TEST_INDICES)
+        assert (indices == np.array(TEST_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(indices,
+                                                                                                     TEST_INDICES)
 
         print('Testing get_indices_from_coords function with multi coordinates {}'.format(TEST_MULTI_COORDS))
         multi_indices = netcdf_grid_utils.get_indices_from_coords(TEST_MULTI_COORDS)
-        assert (multi_indices == np.array(TEST_MULTI_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(multi_indices, TEST_MULTI_INDICES)
+        assert (multi_indices == np.array(TEST_MULTI_INDICES)).all, 'Incorrect indices: {} instead of {}'.format(
+            multi_indices, TEST_MULTI_INDICES)
 
     def test_get_fractional_indices_from_coords(self):
         print('Testing get_fractional_indices_from_coords function')
         indices = netcdf_grid_utils.get_fractional_indices_from_coords(TEST_COORDS)
         for ordinate_index in range(len(indices)):
-            assert round(indices[ordinate_index], 6) == TEST_FRACTIONAL_INDICES[ordinate_index], 'Fractional index incorrect'
+            assert round(indices[ordinate_index], 6) == TEST_FRACTIONAL_INDICES[
+                ordinate_index], 'Fractional index incorrect'
 
     def test_get_value_at_coords(self):
         print('Testing get_value_at_coords function with single coordinate {}'.format(TEST_COORDS))
         value = netcdf_grid_utils.get_value_at_coords(TEST_COORDS)
         assert value[0] == TEST_VALUE, 'Incorrect retrieved value: {} instead of {}'.format(value.data, TEST_VALUE)
-        
+
         print('Testing get_value_at_coords function with multiple coordinates {}'.format(TEST_MULTI_COORDS))
         multi_values = netcdf_grid_utils.get_value_at_coords(TEST_MULTI_COORDS)
-        assert (np.abs(np.array(multi_values) - np.array(TEST_MULTI_VALUES)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(multi_values, TEST_MULTI_VALUES)
+        assert (np.abs(np.array(multi_values) - np.array(
+            TEST_MULTI_VALUES)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(multi_values,
+                                                                                                         TEST_MULTI_VALUES)
 
         print('Testing get_value_at_coords with long coordinate list {}'.format(TEST_MANY_COORDS))
         many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS)
-        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
+        assert (np.abs(np.array(many_values) - np.array(
+            TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values,
+                                                                                                      TEST_MANY_VALS)
 
-        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(TEST_MANY_COORDS, MAX_BYTES_SM))
+        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(
+            TEST_MANY_COORDS, MAX_BYTES_SM))
         many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS, max_bytes=MAX_BYTES_SM)
-        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
-        
-        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(TEST_MANY_COORDS, MAX_BYTES_LG))
+        assert (np.abs(np.array(many_values) - np.array(
+            TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values,
+                                                                                                      TEST_MANY_VALS)
+
+        print('Testing get_value_at_coords with long coordinate list {} and request size {} bytes'.format(
+            TEST_MANY_COORDS, MAX_BYTES_LG))
         many_values = netcdf_grid_utils.get_value_at_coords(TEST_MANY_COORDS, max_bytes=MAX_BYTES_LG)
-        assert (np.abs(np.array(many_values) - np.array(TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values, TEST_MANY_VALS)
+        assert (np.abs(np.array(many_values) - np.array(
+            TEST_MANY_VALS)) < MAX_ERROR).all(), 'Incorrect retrieved value: {} instead of {}'.format(many_values,
+                                                                                                      TEST_MANY_VALS)
 
     def test_get_interpolated_value_at_coords(self):
         print('Testing get_interpolated_value_at_coords function')
@@ -105,8 +122,8 @@ class TestNetCDFGridUtilsFunctions1(unittest.TestCase):
 
     def test_sample_transect(self):
         print('Testing sample_transect function')
-        #TODO: Finish this!
-        #transect_samples = netcdf_grid_utils.sample_transect(transect_vertices, crs=None, sample_metres=None)
+        # TODO: Finish this!
+        # transect_samples = netcdf_grid_utils.sample_transect(transect_vertices, crs=None, sample_metres=None)
 
     def test_concave_hull(self):
         print('Testing concave hull')
@@ -131,6 +148,7 @@ def test_suite():
 # Define main function
 def main():
     unittest.TextTestRunner(verbosity=2).run(test_suite())
+
 
 if __name__ == '__main__':
     main()
