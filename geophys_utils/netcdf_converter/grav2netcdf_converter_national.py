@@ -393,15 +393,15 @@ class Grav2NetCDFConverter(ToNetCDFConverterNational):
         logger.debug(latest_end_date - earliest_start_date)
 
         metadata_dict = {
-            'title': "Australian National Ground Gravity Compilation 2024",
+            'title': "Australian National Ground Gravity Compilation 2023",
             'Conventions': "CF-1.6,ACDD-1.3",
             'keywords': "points, gravity, geophysical survey, Earth sciences, geophysics, geoscientific Information",
-            'geospatial_lon_min': 111,
-            'geospatial_lon_max': 156,
+            'geospatial_lon_min': np.min(self.nc_output_dataset.variables['longitude']),
+            'geospatial_lon_max': np.max(self.nc_output_dataset.variables['longitude']),
             'geospatial_lon_units': "degrees_east",
             'geospatial_lon_resolution': "point",
-            'geospatial_lat_min': -6,
-            'geospatial_lat_max': 45,
+            'geospatial_lat_min': np.min(self.nc_output_dataset.variables['latitude']),
+            'geospatial_lat_max': np.max(self.nc_output_dataset.variables['latitude']),
             'geospatial_lat_units': "degrees_north",
             'geospatial_lat_resolution': "point",
             'history': "Pulled from point gravity database at Geoscience Australia",
