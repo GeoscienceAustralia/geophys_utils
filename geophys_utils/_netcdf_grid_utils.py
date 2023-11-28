@@ -2,13 +2,13 @@
 
 # ===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -381,7 +381,7 @@ class NetCDFGridUtils(NetCDFUtils):
     def get_convex_hull(self, to_wkt=None):
         '''\
         Function to return n x 2 array of coordinates for convex hull based on line start/end points
-        Implements abstract base function in NetCDFUtils 
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         '''
         try:
@@ -403,8 +403,8 @@ class NetCDFGridUtils(NetCDFUtils):
                          max_vertices=1000
                          ):
         """\
-        Returns the concave hull (as a shapely polygon) of grid edge points with data. 
-        Implements abstract base function in NetCDFUtils 
+        Returns the concave hull (as a shapely polygon) of grid edge points with data.
+        Implements abstract base function in NetCDFUtils
         Note that all distance parameters are in pixel units, not in destination CRS units
         @param to_wkt: CRS WKT for shape
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
@@ -696,19 +696,19 @@ class NetCDFGridUtils(NetCDFUtils):
              invert_y=None,
              ):
         '''
-        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+        Function to copy a netCDF dataset to another one with potential changes to size, format,
             variable creation options and datatypes.
-            
-            @param nc_out_path: path to netCDF output file 
+
+            @param nc_out_path: path to netCDF output file
             @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
                 e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
-            @param variable_options_dict: dict containing any overrides for per-variable variable creation 
+            @param variable_options_dict: dict containing any overrides for per-variable variable creation
                 options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
                 compression to variable 'sst'
             @param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
             @param dim_mask_dict: dict of boolean arrays keyed by dimension name
-            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
-                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
+            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET',
+                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
             @param invert_y: Boolean parameter indicating whether copied Y axis should be Southwards positive (None means same as source)
@@ -1009,7 +1009,8 @@ def main():
               variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension)
                                                                     for dimension in variable.dimensions
                                                                     ],
-                                                     'zlib': bool(args.complevel),
+                                                     # 'zlib': bool(args.complevel), # 28.Nov.2023 depcrecated
+                                                     'compression': 'zlib' if args.complevel else 'None',
                                                      'complevel': args.complevel
                                                      }
                                      for variable_name, variable in ncgu.netcdf_dataset.variables.items()

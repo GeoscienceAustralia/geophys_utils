@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # ===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -76,7 +76,8 @@ class NetCDFPointUtils(NetCDFUtils):
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
     '''
     CACHE_VARIABLE_PARAMETERS = {'complevel': 4,
-                                 'zlib': True,
+                                 # 'zlib': True, # 28.Nov.2023 depcrecated
+                                 'compression': 'zlib',
                                  'fletcher32': True,
                                  'shuffle': True,
                                  'endian': 'little',
@@ -93,7 +94,7 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         NetCDFPointUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a point dataset
-        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default
         @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not.
         @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''
@@ -227,7 +228,7 @@ class NetCDFPointUtils(NetCDFUtils):
             N.B: points and geometry must be in the same CRS
             :param points: 2 x n array of input coordinates
             :param geometry: (multi)polygon
-            :return mask: Boolean array of size n 
+            :return mask: Boolean array of size n
             """
             mask = np.zeros(shape=(points.shape[0]), dtype=bool)
 
@@ -269,7 +270,7 @@ class NetCDFPointUtils(NetCDFUtils):
 
             logger.debug('native_crs_bounds = {}'.format(native_crs_bounds))
 
-            # Shortcut the whole process if the extents are within the bounds geometry       
+            # Shortcut the whole process if the extents are within the bounds geometry
             if Polygon(self.native_bbox).within(native_crs_bounds):
                 logger.debug('Dataset is completely contained within bounds')
                 return np.ones(shape=(len(coordinates),), dtype=bool)
@@ -327,13 +328,13 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to grid points in a specified bounding rectangle to a regular grid of the specified resolution and crs
         @parameter grid_resolution: cell size of regular grid in grid CRS units
         @parameter variables: Single variable name string or list of multiple variable name strings. Defaults to all point variables
-        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates 
+        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates
         @parameter reprojected_grid_bounds: Spatial bounding box of area to grid in grid coordinates
-        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
-        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
+        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
         @parameter grid_wkt: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
-        
+
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
         @return wkt: WKT for grid coordinate reference system.
@@ -392,7 +393,7 @@ class NetCDFPointUtils(NetCDFUtils):
         coordinates = self.xycoords[point_subset_mask]
         # Reproject coordinates if required
         if grid_wkt is not None:
-            # N.B: Be careful about XY vs YX coordinate order         
+            # N.B: Be careful about XY vs YX coordinate order
             coordinates = np.array(transform_coords(coordinates[:], self.wkt, grid_wkt))
 
         # Interpolate required values to the grid - Note YX ordering for image
@@ -424,12 +425,12 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to grid points in a specified native bounding rectangle to a regular grid of the specified resolution in its local UTM CRS
         @parameter grid_resolution: cell size of regular grid in metres (UTM units)
         @parameter variables: Single variable name string or list of multiple variable name strings. Defaults to all point variables
-        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates 
-        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'. 
-        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html 
+        @parameter native_grid_bounds: Spatial bounding box of area to grid in native coordinates
+        @parameter resampling_method: Resampling method for gridding. 'linear' (default), 'nearest' or 'cubic'.
+        See https://docs.scipy.org/doc/scipy/reference/generated/scipy.interpolate.griddata.html
         @parameter grid_wkt: WKT for grid coordinate reference system. Defaults to native CRS
         @parameter point_step: Sampling spacing for points. 1 (default) means every point, 2 means every second point, etc.
-        
+
         @return grids: dict of grid arrays keyed by variable name if parameter 'variables' value was a list, or
         a single grid array if 'variable' parameter value was a string
         @return wkt: WKT for grid coordinate reference system (i.e. local UTM zone)
@@ -454,9 +455,9 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to convert coordinates to the appropriate UTM CRS
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
         @param wkt: WKT for source CRS - default to native
-       
+
         @return wkt: WKT for UTM CRS - default to native
-        @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs 
+        @return coordinate_array: Array of shape (n, 2) containing UTM coordinate pairs
         '''
         wkt = wkt or self.wkt
         return utm_coords(coordinate_array, wkt)
@@ -466,7 +467,7 @@ class NetCDFPointUtils(NetCDFUtils):
         Function to calculate cumulative distance in metres from coordinates in specified CRS
         @param coordinate_array: Array of shape (n, 2) or iterable containing coordinate pairs
         @param wkt: WKT for coordinate CRS - default to native
-        
+
         @return distance_array: Array of shape (n) containing cumulative distances from first coord
         '''
         wkt = wkt or self.wkt  # Default to native CRS for coordinates
@@ -477,15 +478,15 @@ class NetCDFPointUtils(NetCDFUtils):
     def get_convex_hull(self, to_wkt=None):
         '''
         Function to return vertex coordinates of a convex hull polygon around all points
-        Implements abstract base function in NetCDFUtils 
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         '''
         return points2convex_hull(transform_coords(self.xycoords, self.wkt, to_wkt))
 
     def get_concave_hull(self, to_wkt=None, smoothness=None, clockwise_polygon_orient=False):
         """\
-        Returns the concave hull (as a shapely polygon) of all points. 
-        Implements abstract base function in NetCDFUtils 
+        Returns the concave hull (as a shapely polygon) of all points.
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         @param smoothness: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         """
@@ -516,14 +517,14 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         Function to determine nearest neighbours using cKDTree
         N.B: All distances are expressed in the native dataset CRS
-        
+
         @param coordinates: two-element XY coordinate tuple, list or array
         @param wkt: Well-known text of coordinate CRS - defaults to native dataset CRS
         @param points_required: Number of points to retrieve. Default=1
-        @param max_distance: Maximum distance to search from target coordinate - 
+        @param max_distance: Maximum distance to search from target coordinate -
             STRONGLY ADVISED TO SPECIFY SENSIBLE VALUE OF max_distance TO LIMIT SEARCH AREA
         @param secondary_mask: Boolean array of same shape as point array used to filter points. None = no filter.
-        
+
         @return distances: distances from the target coordinate for each of the points_required nearest points
         @return indices: point indices for each of the points_required nearest points
         '''
@@ -792,12 +793,12 @@ class NetCDFPointUtils(NetCDFUtils):
         '''
         Generator to optionally yield variable attributes followed by all point data for the specified point index range
         Used to retrieve data as chunks for outputting as point-wise lists of lists
-        @param start_index: start point index of range to read 
+        @param start_index: start point index of range to read
         @param end_index: end point index of range to read. Defaults to number of points
-        @param field_list: Optional list of field names to read. Default is None for all variables 
+        @param field_list: Optional list of field names to read. Default is None for all variables
         @param mask: Optional Boolean mask array to subset points
         @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to False
-        
+
         @yield variable_attributes: dict of netCDF variable attributes. Optionally the first item yielded if yield_variable_attributes_first is True
         @yield point_value_list: List of single values for 1D variables or sub-lists for 2D variables for a single point
         '''
@@ -904,11 +905,11 @@ class NetCDFPointUtils(NetCDFUtils):
                                  yield_variable_attributes_first=True):
         '''
         Generator to yield variable attributes followed by lists of values for all points
-        @param field_list: Optional list of field names to read. Default is None for all variables 
+        @param field_list: Optional list of field names to read. Default is None for all variables
         @param mask: Optional Boolean mask array to subset points
         @param read_chunk_size: Number of points to read from the netCDF per chunk (for greater efficiency than single point reads)
         @param yield_variable_attributes_first: Boolean flag to determine whether variable attribute dict is yielded first. Defaults to True
-        
+
         @yield variable_attributes: dict of netCDF variable attributes. Optionally the first item yielded if yield_variable_attributes_first is True
         @yield point_value_list: List of single values for 1D variables or sub-lists for 2D variables for a single point
         '''
@@ -1092,10 +1093,10 @@ class NetCDFPointUtils(NetCDFUtils):
              to_crs=None
              ):
         '''
-        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+        Function to copy a netCDF dataset to another one with potential changes to size, format,
             variable creation options and datatypes.
-            
-            @param nc_out_path: path to netCDF output file 
+
+            @param nc_out_path: path to netCDF output file
             @param to_crs: WKT of destination CRS
 
         '''

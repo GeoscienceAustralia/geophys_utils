@@ -2,13 +2,13 @@
 
 # ===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -47,7 +47,8 @@ POINT_STRIDE = 10  # Number of points to skip when computing median sample spaci
 DEFAULT_CHUNK_SPEC = {'point': 1024}
 
 DEFAULT_VAR_OPTIONS = {'complevel': 5,
-                       'zlib': True,
+                       #'zlib': True, # 28.Nov.2023 depcrecated
+                       'compression': 'zlib',
                        'fletcher32': True,
                        'shuffle': True,
                        'endian': 'little',
@@ -69,7 +70,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         '''
         NetCDFLineUtils Constructor
         @parameter netcdf_dataset: netCDF4.Dataset object containing a line dataset
-        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default 
+        @parameter enable_disk_cache: Boolean parameter indicating whether local cache file should be used, or None for default
         @parameter enable_memory_cache: Boolean parameter indicating whether values should be cached in memory or not.
         @parameter debug: Boolean parameter indicating whether debug output should be turned on or not
         '''
@@ -95,7 +96,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param line_numbers: list of integer line number or single integer line number, or None for all lines
         @param subset_mask: optional Boolean mask for subset (e.g. spatial mask)
         @param get_contiguous_lines: Boolean flag indicating whether masked gaps in lines should be included
-        
+
         @return line_number: line number for single line
         @return line_mask: Boolean mask for single line
 
@@ -151,10 +152,10 @@ class NetCDFLineUtils(NetCDFPointUtils):
         @param line_numbers: list of integer line number or single integer line number
         @param variables: list of variable name strings or single variable name string. None returns all variables
         @param bounds: Spatial bounds for point selection
-        @param bounds_wkt: WKT for bounds Coordinate Reference System 
+        @param bounds_wkt: WKT for bounds Coordinate Reference System
         @param subsampling_distance: Minimum subsampling_distance expressed in native coordinate units (e.g. degrees)
         @param get_contiguous_lines: Boolean flag indicating whether masked gaps in lines should be included
-        
+
         @return line_number: line number for single line
         @return: dict containing coords and values for required variables keyed by variable name
         '''
@@ -425,7 +426,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
             # logger.debug('Found {}/{} valid points in line index {}'.format(np.count_nonzero(valid_coord_mask), len(line_indices), line_index))
             line_indices = line_indices[valid_coord_mask]  # Filter out NaN ordinates
 
-            # Take samples between first and last valid line indices            
+            # Take samples between first and last valid line indices
             sampling_increment = max(1, int(len(line_indices) / line_divisions))
             line_sample_indices_set |= set([line_indices[sample_index]
                                             for sample_index in range(0, len(line_indices), sampling_increment)])
@@ -437,7 +438,7 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def get_convex_hull(self, to_wkt=None):
         '''\
         Function to return n x 2 array of coordinates for convex hull based on line start/end points
-        Implements abstract base function in NetCDFUtils 
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         '''
         points = transform_coords(self.get_line_sample_points(), self.wkt, to_wkt)
@@ -474,8 +475,8 @@ class NetCDFLineUtils(NetCDFPointUtils):
     def get_concave_hull(self, to_wkt=None, buffer_distance=0.02, offset=0.0005, tolerance=0.0005, cap_style=1,
                          join_style=1, max_polygons=5, max_vertices=1000):
         """\
-        Returns the concave hull (as a shapely polygon) of points with data. 
-        Implements abstract base function in NetCDFUtils 
+        Returns the concave hull (as a shapely polygon) of points with data.
+        Implements abstract base function in NetCDFUtils
         @param to_wkt: CRS WKT for shape
         @param buffer_distance: distance to buffer (kerf) initial shape outwards then inwards to simplify it
         @param offset: Final offset of final shape from original lines

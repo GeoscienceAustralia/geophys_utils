@@ -51,7 +51,8 @@ def main():
              variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension)
                                                                    for dimension in variable.dimensions
                                                                    ],
-                                                    'zlib': bool(args.complevel),
+                                                    # 'zlib': bool(args.complevel), # 28.Nov.2023 depcrecated
+                                                    'compression': 'zlib' if args.complevel else 'None',
                                                     'complevel': args.complevel
                                                     }
                                     for variable_name, variable in ncu.netcdf_dataset.variables.items()

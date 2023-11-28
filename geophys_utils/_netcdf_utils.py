@@ -2,13 +2,13 @@
 
 # ===============================================================================
 #    Copyright 2017 Geoscience Australia
-# 
+#
 #    Licensed under the Apache License, Version 2.0 (the "License");
 #    you may not use this file except in compliance with the License.
 #    You may obtain a copy of the License at
-# 
+#
 #        http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 #    Unless required by applicable law or agreed to in writing, software
 #    distributed under the License is distributed on an "AS IS" BASIS,
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -56,7 +56,8 @@ class NetCDFUtils(object):
                           'albers_conical_equal_area']  # TODO: See if we can make this exhaustive
 
     DEFAULT_COPY_OPTIONS = {'complevel': 4,
-                            'zlib': True,
+                            # 'zlib': True, # 28.Nov.2023 depcrecated
+                            'compression': 'zlib',
                             'fletcher32': True,
                             'shuffle': True,
                             'endian': 'little',
@@ -120,19 +121,19 @@ class NetCDFUtils(object):
              empty_var_list=[],
              ):
         '''
-        Function to copy a netCDF dataset to another one with potential changes to size, format, 
+        Function to copy a netCDF dataset to another one with potential changes to size, format,
             variable creation options and datatypes.
-            
-            @param nc_out_path: path to netCDF output file 
+
+            @param nc_out_path: path to netCDF output file
             @param datatype_map_dict: dict containing any maps from source datatype to new datatype.
                 e.g. datatype_map_dict={'uint64': 'uint32'}  would convert all uint64 variables to uint32.
-            @param variable_options_dict: dict containing any overrides for per-variable variable creation 
+            @param variable_options_dict: dict containing any overrides for per-variable variable creation
                 options. e.g. variable_options_dict={'sst': {'complevel': 2, 'zlib': True}} would apply
                 compression to variable 'sst'
             @param dim_range_dict: dict of (start, end+1) tuples keyed by dimension name
             @param dim_mask_dict: dict of boolean arrays keyed by dimension name
-            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET', 
-                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.  
+            @param nc_format: output netCDF format - 'NETCDF3_CLASSIC', 'NETCDF3_64BIT_OFFSET',
+                'NETCDF3_64BIT_DATA', 'NETCDF4_CLASSIC', or 'NETCDF4'. Defaults to same as input format.
             @param limit_dim_size: Boolean flag indicating whether unlimited dimensions should be fixed
             @param var_list: List of strings denoting variable names for variables which should be copied
             @param empty_var_list: List of strings denoting variable names for variables which should be created but not copied
@@ -219,7 +220,8 @@ class NetCDFUtils(object):
                     dtype = 'i1'
 
                 # Start off by copying options from input variable (if specified)
-                var_options = input_variable.filters() or {}
+                # var_options = input_variable.filters() or {} # 28.Nov.2023 Commenting out as it is returning depcrecated options
+                var_options = {}
 
                 # Chunking is defined outside the filters() result
                 chunking = input_variable.chunking()
@@ -297,7 +299,7 @@ class NetCDFUtils(object):
                         ))
 
                         # Build list of full dimension masks for this variable
-                        # We are using None instead of all-true masks because of the issue described in 
+                        # We are using None instead of all-true masks because of the issue described in
                         # https://github.com/numpy/numpy/issues/13255
                         # This results in extra dimensions, but the piece assignment operation doesn't care
                         # See the behaviour described in https://stackoverflow.com/questions/1408311/numpy-array-slice-using-none
@@ -439,7 +441,7 @@ class NetCDFUtils(object):
 
                                 # logger.debug('piece_dim_masks = {}'.format(pformat(piece_dim_masks)))
 
-                                # N.B: Nones in piece_dim_mask for unmasked dimensions will result in newaxis dimensions, but shape doesn't matter                               
+                                # N.B: Nones in piece_dim_mask for unmasked dimensions will result in newaxis dimensions, but shape doesn't matter
                                 output_variable[piece_write_slices] = input_variable[piece_read_slices][piece_dim_masks]
                                 # logger.debug('output_variable[piece_write_slices] = {}'.format(output_variable[piece_write_slices]))
 
@@ -449,7 +451,7 @@ class NetCDFUtils(object):
                 else:
                     logger.debug('\tNot copying data for variable %s' % variable_name)
 
-            # Copy global attributes  
+            # Copy global attributes
             logger.debug("Copying global attributes: %s" % ', '.join(self.netcdf_dataset.__dict__.keys()))
             for item, value in self.netcdf_dataset.__dict__.items():
                 if type(value) == str:
@@ -722,7 +724,8 @@ def main():
              variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension)
                                                                    for dimension in variable.dimensions
                                                                    ],
-                                                    'zlib': bool(args.complevel),
+                                                    # 'zlib': bool(args.complevel), # 28.Nov.2023 depcrecated
+                                                    'compression': 'zlib' if args.complevel else 'None',
                                                     'complevel': args.complevel
                                                     }
                                     for variable_name, variable in ncu.netcdf_dataset.variables.items()
