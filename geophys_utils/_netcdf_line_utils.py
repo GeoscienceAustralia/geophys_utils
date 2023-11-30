@@ -47,7 +47,7 @@ POINT_STRIDE = 10  # Number of points to skip when computing median sample spaci
 DEFAULT_CHUNK_SPEC = {'point': 1024}
 
 DEFAULT_VAR_OPTIONS = {'complevel': 5,
-                       #'zlib': True, # 28.Nov.2023 depcrecated
+                       #'zlib': True, # Wangchen, 30.Nov.2023 depcrecated replaced with compression='zlib'
                        'compression': 'zlib',
                        'fletcher32': True,
                        'shuffle': True,

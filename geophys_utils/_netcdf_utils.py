@@ -56,7 +56,7 @@ class NetCDFUtils(object):
                           'albers_conical_equal_area']  # TODO: See if we can make this exhaustive
 
     DEFAULT_COPY_OPTIONS = {'complevel': 4,
-                            # 'zlib': True, # 28.Nov.2023 depcrecated
+                            # 'zlib': True, # Wangchen, 30.Nov.2023 depcrecated replaced with compression='zlib'
                             'compression': 'zlib',
                             'fletcher32': True,
                             'shuffle': True,
@@ -220,8 +220,11 @@ class NetCDFUtils(object):
                     dtype = 'i1'
 
                 # Start off by copying options from input variable (if specified)
-                # var_options = input_variable.filters() or {} # 28.Nov.2023 Commenting out as it is returning depcrecated options
-                var_options = {}
+                var_options = input_variable.filters() or {}
+                # Wangchen, 30.Nov.2023 removing depcrecated keys
+                depcrecated_keys = ("zlib", "szip", "zstd", "bzip2", "blosc")
+                for keys in depcrecated_keys:
+                    var_options.pop(keys, None)
 
                 # Chunking is defined outside the filters() result
                 chunking = input_variable.chunking()
@@ -724,7 +727,7 @@ def main():
              variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension)
                                                                    for dimension in variable.dimensions
                                                                    ],
-                                                    # 'zlib': bool(args.complevel), # 28.Nov.2023 depcrecated
+                                                    # 'zlib': bool(args.complevel), # Wangchen, 30.Nov.2023 depcrecated replaced with compression='zlib'
                                                     'compression': 'zlib' if args.complevel else 'None',
                                                     'complevel': args.complevel
                                                     }

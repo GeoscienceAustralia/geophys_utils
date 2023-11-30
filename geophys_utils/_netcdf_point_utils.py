@@ -76,7 +76,7 @@ class NetCDFPointUtils(NetCDFUtils):
     NetCDFPointUtils class to do various fiddly things with NetCDF geophysics point data files.
     '''
     CACHE_VARIABLE_PARAMETERS = {'complevel': 4,
-                                 # 'zlib': True, # 28.Nov.2023 depcrecated
+                                 # 'zlib': True, # Wangchen, 30.Nov.2023 depcrecated replaced with compression='zlib'
                                  'compression': 'zlib',
                                  'fletcher32': True,
                                  'shuffle': True,
