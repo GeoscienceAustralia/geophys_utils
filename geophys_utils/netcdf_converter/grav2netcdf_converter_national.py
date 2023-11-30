@@ -809,11 +809,12 @@ class Grav2NetCDFConverter(ToNetCDFConverterNational):
                              )
 
         yield NetCDFVariableNational(short_name='survey_metadata_index',
-                             data=np.array([self.survey_index] * self.point_count, dtype='int8'),
+                             data=np.array([self.survey_index] * self.point_count, dtype='int32'),
                              dimensions=['point'],
-                             fill_value=int('-99'),
+                             fill_value=int('-9999'),
                              attributes={'long_name': 'zero-based index of value in survey_metadata',
-                                         'lookup': 'survey_metadata'
+                                         'lookup': 'survey_metadata',
+                                         'dtype': 'int32'
                                          },
                              national=True
                              )

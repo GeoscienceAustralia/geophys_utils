@@ -10,6 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
+assert len(sys.argv) == 5, '....'
 nc_path = sys.argv[1]
 oracle_db = sys.argv[2]
 u_id = sys.argv[3]
