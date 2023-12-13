@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +14,7 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 """
 Author: Roger Edberg (roger.edberg@ga.gov.au)
 Functions for BiLinear Recursive Bisection (BLRB).
@@ -23,12 +23,14 @@ All shape references here follow the numpy convention (nrows, ncols), which
 makes some of the code harder to follow.
 """
 
-import numpy, logging
+import logging
+import numpy
 
 logger = logging.getLogger('root.' + __name__)
 
 DEFAULT_ORIGIN = (0, 0)
-DEFAULT_SHAPE  = (8, 8)
+DEFAULT_SHAPE = (8, 8)
+
 
 def bilinear(shape, fUL, fUR, fLR, fLL, dtype=numpy.float64):
     """
@@ -61,7 +63,7 @@ def bilinear(shape, fUL, fUR, fLR, fLL, dtype=numpy.float64):
     s /= (shape[0] - 1.0)
     t /= (shape[1] - 1.0)
 
-    return s * (t*fLR + (1.0 - t)*fLL) + (1.0 - s) * (t*fUR + (1.0 - t)*fUL)
+    return s * (t * fLR + (1.0 - t) * fLL) + (1.0 - s) * (t * fUR + (1.0 - t) * fUL)
 
 
 def indices(origin=DEFAULT_ORIGIN, shape=DEFAULT_SHAPE):
@@ -103,10 +105,10 @@ def subdivide(origin=DEFAULT_ORIGIN, shape=DEFAULT_SHAPE):
     jc = origin[1] + shape[1] / 2
 
     return {
-        'UL': [ (i0, j0), (i0, jc), (ic, j0), (ic, jc) ],
-        'LL': [ (ic, j0), (ic, jc), (ie, j0), (ie, jc) ],
-        'UR': [ (i0, jc), (i0, je), (ic, jc), (ic, je) ],
-        'LR': [ (ic, jc), (ic, je), (ie, jc), (ie, je) ],
+        'UL': [(i0, j0), (i0, jc), (ic, j0), (ic, jc)],
+        'LL': [(ic, j0), (ic, jc), (ie, j0), (ie, jc)],
+        'UR': [(i0, jc), (i0, je), (ic, jc), (ic, je)],
+        'LR': [(ic, jc), (ic, je), (ie, jc), (ie, je)],
     }
 
 
@@ -145,7 +147,7 @@ def interpolate_block(origin=DEFAULT_ORIGIN, shape=DEFAULT_SHAPE, eval_func=None
     if grid is None:
         return bilinear(shape, fUL, fUR, fLR, fLL)
 
-    grid[i0:i1+1, j0:j1+1] = bilinear(shape, fUL, fUR, fLR, fLL)
+    grid[i0:i1 + 1, j0:j1 + 1] = bilinear(shape, fUL, fUR, fLR, fLL)
 
 
 def interpolate_grid(depth=0, origin=DEFAULT_ORIGIN, shape=DEFAULT_SHAPE, eval_func=None, grid=None):

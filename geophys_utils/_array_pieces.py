@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-#===============================================================================
+# ===============================================================================
 #    Copyright 2017 Geoscience Australia
 # 
 #    Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,18 +14,20 @@
 #    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
-#===============================================================================
+# ===============================================================================
 '''
 process_array.py
 Created on 1 Sep,2016
 
 @author: Alex Ip
 '''
-import sys
-import netCDF4
-import math
 import itertools
+import math
+import sys
 from functools import reduce
+
+import netCDF4
+
 
 def array_pieces(ndarray, max_bytes=None, overlap=0):
     '''
@@ -46,7 +48,7 @@ def array_pieces(ndarray, max_bytes=None, overlap=0):
 
     # Determine overall array size in bytes
     array_bytes = ndarray.dtype.itemsize * \
-        reduce(lambda x, y: x * y, array_shape)
+                  reduce(lambda x, y: x * y, array_shape)
 
     if array_bytes > max_bytes:  # Multiple pieces required
         # Determine number of divisions in each axis required to keep pieces
@@ -74,25 +76,24 @@ def array_pieces(ndarray, max_bytes=None, overlap=0):
                        for index in range(array_dimensions)]
 
         # Iterate over every piece of array
-        for piece_indices in itertools.product(*[range(axis_pieces[dimension_index]) 
+        for piece_indices in itertools.product(*[range(axis_pieces[dimension_index])
                                                  for dimension_index in range(array_dimensions)]):
-            
             # Compute base start indices with no overlap
             start_indices = [piece_indices[dimension_index] * piece_shape[dimension_index]
                              for dimension_index in range(array_dimensions)]
-            
+
             # Compute end indices plus overlap from start indices
             end_indices = [min(start_indices[dimension_index] + piece_shape[dimension_index] + overlap,
-                               array_shape[dimension_index]) 
+                               array_shape[dimension_index])
                            for dimension_index in range(array_dimensions)]
-            
+
             # Subtract overlap from base start indices 
             start_indices = [max(0, start_indices[dimension_index] - overlap)
                              for dimension_index in range(array_dimensions)]
-            
-            array_slices = [slice(start_indices[dimension_index],
-                                  end_indices[dimension_index])
-                            for dimension_index in range(array_dimensions)]
+
+            array_slices = tuple([slice(start_indices[dimension_index],
+                                        end_indices[dimension_index])
+                                  for dimension_index in range(array_dimensions)])
 
             piece_array = ndarray[array_slices]
             yield piece_array, tuple(start_indices)
@@ -121,10 +122,12 @@ def main():
     for piece_array, array_offset in array_pieces(data_variable, overlap=0):
         piece_count += 1
         piece_bytes = data_variable.dtype.itemsize * \
-            reduce(lambda x, y: x * y, piece_array.shape)
-        print('piece_array.shape = %s, array_offset = %s, piece_bytes = %d'.format(piece_array.shape, array_offset, piece_bytes))
+                      reduce(lambda x, y: x * y, piece_array.shape)
+        print('piece_array.shape = %s, array_offset = %s, piece_bytes = %d'.format(piece_array.shape, array_offset,
+                                                                                   piece_bytes))
 
     print('piece_count = %s'.format(piece_count))
+
 
 if __name__ == '__main__':
     main()

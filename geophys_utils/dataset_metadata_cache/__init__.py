@@ -7,10 +7,11 @@ from ._dataset_metadata_cache import settings, DatasetMetadataCache, Dataset, Di
 from ._postgres_dataset_metadata_cache import PostgresDatasetMetadataCache
 from ._sqlite_dataset_metadata_cache import SQLiteDatasetMetadataCache
 
-def get_dataset_metadata_cache(db_engine='SQLite', *args, **kwargs):  
+
+def get_dataset_metadata_cache(db_engine='SQLite', *args, **kwargs):
     '''
     Class factory function to return subclass of DatasetMetadataCache for specified db_engine
-    ''' 
+    '''
     if db_engine == 'SQLite':
         return SQLiteDatasetMetadataCache(*args, **kwargs)
     elif db_engine == 'Postgres':
