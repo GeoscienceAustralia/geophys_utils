@@ -238,8 +238,8 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('Checking spatial containment for points {} to {} of {}'.format(chunk_start_index,
                                                                                              chunk_end_index - 1,
                                                                                              len(points)))
-                intersection_points = np.array(
-                    MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry))
+                intersection_points = np.array([point.coords for point in 
+                    MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry).geoms])
 
                 # TODO: Find out if there's a better way of getting the mask from the intersection points
                 # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
