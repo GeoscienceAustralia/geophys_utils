@@ -261,6 +261,11 @@ class NetCDFUtils(object):
                                 input_variable.dimensions[dimension_index]],
                             dest_dim_size[input_variable.dimensions[dimension_index]])
 
+                if isinstance(dtype, netCDF4._netCDF4.VLType):
+                    # Disallowed filters for variable-length(vlen) datatypes
+                    # https://github.com/Unidata/netcdf4-python/issues/1205
+                    [var_options.pop(key, None) for key in ("compression", "complevel", "shuffle", "fletcher32", "endian")]
+                    
                 options_string = ' with options: %s' % ', '.join(
                     ['%s=%s' % item for item in var_options.items()]) if var_options else ''
                 logger.debug("Copying variable %s from datatype %s to datatype %s%s" % (variable_name,
