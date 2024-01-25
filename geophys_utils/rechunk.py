@@ -51,7 +51,7 @@ def main():
              variable_options_dict={variable_name: {'chunksizes': [chunk_spec.get(dimension)
                                                                    for dimension in variable.dimensions
                                                                    ],
-                                                    # 'zlib': bool(args.complevel), # Wangchen, 30.Nov.2023 depcrecated replaced with compression='zlib'
+                                                    # 'zlib': bool(args.complevel), # depcrecated replaced with compression='zlib'
                                                     'compression': 'zlib' if args.complevel else 'None',
                                                     'complevel': args.complevel
                                                     }
