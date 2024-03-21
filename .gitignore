@@ -64,7 +64,11 @@ target/
 # iPython checkpoints
 *-checkpoint.ipynb
 
+# Temporary files
+/Temp/
+
 # Tiling tests
 examples/dataset_lists
 examples/point_lists
 examples/tiles
+
