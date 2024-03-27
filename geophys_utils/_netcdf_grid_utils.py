@@ -522,7 +522,7 @@ class NetCDFGridUtils(NetCDFUtils):
             discard_internal_polygons(offset_geometry)
             # Keep doubling the buffer distance if there are too many polygons
             if (
-                    (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
+                    (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry.geoms) > max_polygons)
                     or
                     (max_vertices and type(offset_geometry) == MultiPolygon and
                      sum([len(polygon.exterior.coords)
