@@ -453,7 +453,7 @@ class NetCDFGridUtils(NetCDFUtils):
                 else:
                     external_geometry = MultiPolygon(polygon_list)
 
-                logger.debug('{} internal polygons discarded.'.format(len(geometry) - len(polygon_list)))
+                logger.debug('{} internal polygons discarded.'.format(len(geometry.geoms) - len(polygon_list)))
 
             elif type(geometry) == Polygon:
                 external_geometry = Polygon(geometry.exterior)
