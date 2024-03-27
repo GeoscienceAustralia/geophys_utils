@@ -434,7 +434,7 @@ class NetCDFGridUtils(NetCDFUtils):
             '''
             if type(geometry) == MultiPolygon:
                 polygon_list = []
-                for polygon in geometry:
+                for polygon in geometry.geoms:
                     polygon = Polygon(polygon.exterior)
                     polygon_is_contained = False
                     for list_polygon in polygon_list:
