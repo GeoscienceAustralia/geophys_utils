@@ -434,7 +434,7 @@ class NetCDFGridUtils(NetCDFUtils):
             '''
             if type(geometry) == MultiPolygon:
                 polygon_list = []
-                for polygon in geometry:
+                for polygon in geometry.geoms:
                     polygon = Polygon(polygon.exterior)
                     polygon_is_contained = False
                     for list_polygon in polygon_list:
@@ -453,7 +453,7 @@ class NetCDFGridUtils(NetCDFUtils):
                 else:
                     external_geometry = MultiPolygon(polygon_list)
 
-                logger.debug('{} internal polygons discarded.'.format(len(geometry) - len(polygon_list)))
+                logger.debug('{} internal polygons discarded.'.format(len(geometry.geoms) - len(polygon_list)))
 
             elif type(geometry) == Polygon:
                 external_geometry = Polygon(geometry.exterior)
@@ -522,7 +522,7 @@ class NetCDFGridUtils(NetCDFUtils):
             discard_internal_polygons(offset_geometry)
             # Keep doubling the buffer distance if there are too many polygons
             if (
-                    (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry) > max_polygons)
+                    (max_polygons and type(offset_geometry) == MultiPolygon and len(offset_geometry.geoms) > max_polygons)
                     or
                     (max_vertices and type(offset_geometry) == MultiPolygon and
                      sum([len(polygon.exterior.coords)
