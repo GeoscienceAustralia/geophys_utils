@@ -7,7 +7,7 @@ matplotlib==3.7.1
 numexpr==2.8.4
 owslib==0.24.1
 pyyaml==6.0
-requests==2.29.0
+requests==2.32.0
 scikit-image==0.19.3
 scipy==1.10.1
 shapely==2.0.1
