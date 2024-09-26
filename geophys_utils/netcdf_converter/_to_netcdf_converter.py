@@ -33,6 +33,14 @@ import osgeo
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)  # Initial logging level for this module
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.DEBUG)
+# Create a formatter for log messages
+logger_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# Add the Formatter to the Handler
+console_handler.setFormatter(logger_formatter)
+# Add the Handler to the Logger
+logger.addHandler(console_handler)
 
 from geophys_utils import get_spatial_ref_from_wkt
 
