@@ -676,12 +676,18 @@ class Grav2NetCDFConverter(ToNetCDFConverter):
 
                 dim_name = field_value['short_name'].lower()
 
-                # Yield lookup table with same name as field
+                # Yield lookup table with same name as field.
+                # NOTE: Set compression to False for these string based lookup tables to override the default filters in
+                # the base class or an error will be returned when creating the variables. Compression is no longer
+                # supported for strings in the NetCDF4 python library v1.6.2. It was actually never supported, but it
+                # just never used to return an error.
+                # https://github.com/Unidata/netcdf4-python/issues/1205
                 yield NetCDFVariable(short_name=dim_name,
                                      data=lookup_table_array,
                                      dimensions=[dim_name],
                                      fill_value=fill_value,
-                                     attributes=attributes
+                                     attributes=attributes,
+                                     variable_parameters={'compression': False}
                                      )
 
                 # Yield index table with name of <field_name>_index 
@@ -732,7 +738,7 @@ def main():
     # Loop through he survey lists to make a netcdf file based off each one.
     for survey in survey_id_list:
         logger.debug("Processing for survey: " + str(survey))
-        if survey == "201901":
+        if survey == "201460":
             # try:
             # g2n = Grav2NetCDFConverter(nc_out_path + "/" + "P" + str(survey) + '.nc', survey, con, sql_strings_dict)
             # put a P in front of file names for consistency with other datasets. P for project.
