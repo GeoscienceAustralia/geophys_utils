@@ -248,8 +248,10 @@ class NetCDFPointUtils(NetCDFUtils):
                 # point coords.
                 if isinstance(mp_intersect, MultiPoint):
                     intersection_points = np.array([point.coords for point in mp_intersect.geoms])
+                    logger.debug('Object type (MultiPoint) returned by MultiPoint intersection method')
                 elif isinstance(mp_intersect, Point):
                     intersection_points = np.array([mp_intersect.coords])
+                    logger.debug('Object type (Point) returned by MultiPoint intersection method')
                 else:
                     raise BaseException('Object type returned by MultiPoint intersection method not supported')
 
