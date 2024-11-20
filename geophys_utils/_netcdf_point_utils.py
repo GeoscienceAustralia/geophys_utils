@@ -34,7 +34,7 @@ import numpy as np
 import shapely.wkt
 from scipy.interpolate import griddata
 from scipy.spatial.ckdtree import cKDTree
-from shapely.geometry import Polygon, MultiPoint
+from shapely.geometry import Polygon, MultiPoint, Point
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import Polygon
@@ -238,8 +238,22 @@ class NetCDFPointUtils(NetCDFUtils):
                 logger.debug('Checking spatial containment for points {} to {} of {}'.format(chunk_start_index,
                                                                                              chunk_end_index - 1,
                                                                                              len(points)))
-                intersection_points = np.array([point.coords for point in 
-                    MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry).geoms])
+
+                mp_intersect = MultiPoint(points[slice(chunk_start_index, chunk_end_index)]).intersection(geometry)
+
+                # The intersection() method on a MultiPoint object will return a MultiPoint object if there are multiple
+                # points found in the intersection but will return a Point object if there is only a single point found.
+                # MultiPoint or Point objects are no longer iterable in Shapely 2.0+ and Point objects don't support the
+                # new geoms attribute, so we need to check the type returned and deal with it accordingly to extract the
+                # point coords.
+                if isinstance(mp_intersect, MultiPoint):
+                    intersection_points = np.array([point.coords for point in mp_intersect.geoms])
+                    logger.debug('Object type (MultiPoint) returned by MultiPoint intersection method')
+                elif isinstance(mp_intersect, Point):
+                    intersection_points = np.array([mp_intersect.coords])
+                    logger.debug('Object type (Point) returned by MultiPoint intersection method')
+                else:
+                    raise BaseException('Object type returned by MultiPoint intersection method not supported')
 
                 # TODO: Find out if there's a better way of getting the mask from the intersection points
                 # Note that this method would have some issues with duplicated coordinates, but there shouldn't be any
