@@ -853,7 +853,7 @@ class NetCDFGridUtils(NetCDFUtils):
         except:
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
-        sys.exit("Stopping at end of set_global_attributes")
+
     def set_variable_actual_range_attribute(self, iterate_through_data=False, num_pixels_to_trigger_iterating=5000000,
                                             num_of_chunks=50):
         '''\
