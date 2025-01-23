@@ -152,8 +152,8 @@ class NetCDFGridUtils(NetCDFUtils):
                            abs(self.GeoTransform[5])]
 
         self.pixel_count = list(self.data_variable.shape)
-        type(self.pixel_count[0])
-        type(self.pixel_count[1])
+        logger.info(type(self.pixel_count[0]))
+        logger.info(type(self.pixel_count[1]))
 
         if self.YX_order:
             self.pixel_size.reverse()
@@ -804,7 +804,7 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
 
             attribute_dict = dict()
-            attribute_dict['pixel_count'] = self.pixel_count  # same as dimensions
+            attribute_dict['pixel_count'] = np.array(self.pixel_count)  # same as dimensions
 
             gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt()  # this is wkt of (currently) gda94
             attribute_dict['geospatial_bounds_crs'] = gda_wkt
