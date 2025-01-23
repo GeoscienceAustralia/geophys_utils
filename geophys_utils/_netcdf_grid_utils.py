@@ -152,9 +152,6 @@ class NetCDFGridUtils(NetCDFUtils):
                            abs(self.GeoTransform[5])]
 
         self.pixel_count = list(self.data_variable.shape)
-        logger.info(self.pixel_count)
-        logger.info(type(self.pixel_count[0]))
-        logger.info(type(self.pixel_count[1]))
 
         if self.YX_order:
             self.pixel_size.reverse()
@@ -805,9 +802,6 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
 
             attribute_dict = dict()
-            logger.info(self.pixel_count)
-            logger.info(type(self.pixel_count[0]))
-            logger.info(type(self.pixel_count[1]))
             attribute_dict['pixel_count'] = np.array(self.pixel_count).astype('int32')  # same as dimensions
 
             gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt()  # this is wkt of (currently) gda94
@@ -859,7 +853,7 @@ class NetCDFGridUtils(NetCDFUtils):
         except:
             logger.error('Unable to set geometric metadata attributes in netCDF grid dataset')
             raise
-
+        sys.exit("Stopping at end of set_global_attributes")
     def set_variable_actual_range_attribute(self, iterate_through_data=False, num_pixels_to_trigger_iterating=5000000,
                                             num_of_chunks=50):
         '''\
