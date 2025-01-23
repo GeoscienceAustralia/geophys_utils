@@ -151,8 +151,7 @@ class NetCDFGridUtils(NetCDFUtils):
         self.pixel_size = [abs(self.GeoTransform[1]),
                            abs(self.GeoTransform[5])]
 
-        # Cast pixel_count array as dtype int32 as int64 (LL) is not accepted by the NCI
-        self.pixel_count = list(self.data_variable.shape.astype('int32'))
+        self.pixel_count = list(self.data_variable.shape)
 
         if self.YX_order:
             self.pixel_size.reverse()
@@ -803,7 +802,7 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
 
             attribute_dict = dict()
-            attribute_dict['pixel_count'] = self.pixel_count  # same as dimensions
+            attribute_dict['pixel_count'] = self.pixel_count.astype('int32')  # same as dimensions
 
             gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt()  # this is wkt of (currently) gda94
             attribute_dict['geospatial_bounds_crs'] = gda_wkt
