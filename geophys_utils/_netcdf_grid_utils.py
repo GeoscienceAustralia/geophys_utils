@@ -151,7 +151,8 @@ class NetCDFGridUtils(NetCDFUtils):
         self.pixel_size = [abs(self.GeoTransform[1]),
                            abs(self.GeoTransform[5])]
 
-        self.pixel_count = list(self.data_variable.shape)
+        # Cast pixel_count array as dtype int32 as int64 (LL) is not accepted by the NCI
+        self.pixel_count = list(self.data_variable.shape.astype('int32'))
 
         if self.YX_order:
             self.pixel_size.reverse()
