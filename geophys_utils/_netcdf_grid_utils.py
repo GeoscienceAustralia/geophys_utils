@@ -802,7 +802,7 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
 
             attribute_dict = dict()
-            attribute_dict['pixel_count'] = map(int, self.pixel_count)  # same as dimensions
+            attribute_dict['pixel_count'] = list(map(int, self.pixel_count))  # same as dimensions
 
             gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt()  # this is wkt of (currently) gda94
             attribute_dict['geospatial_bounds_crs'] = gda_wkt
