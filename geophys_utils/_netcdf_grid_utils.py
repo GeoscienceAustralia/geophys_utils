@@ -802,6 +802,10 @@ class NetCDFGridUtils(NetCDFUtils):
         try:
 
             attribute_dict = dict()
+            # Previously the pixel_count attribute value was set here as self.pixel_count which is a list of integers
+            # in python but gets converted to a numpy.ndarray with a dtype of int64 (LL) when the attribute is set in
+            # the netCDF file using setattr below. The NCI does not accept int64 (LL) so to fix this we convert the list
+            # to a numpy.ndarray here and cast the dtype to int32.
             attribute_dict['pixel_count'] = np.array(self.pixel_count).astype('int32')  # same as dimensions
 
             gda_wkt = get_spatial_ref_from_wkt(METADATA_CRS).ExportToPrettyWkt()  # this is wkt of (currently) gda94
